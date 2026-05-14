@@ -1,4 +1,4 @@
-"use server";
+﻿"use server";
 
 import { createClient } from "@/lib/supabase/server";
 
@@ -6,6 +6,38 @@ type ActionResult = {
   ok: boolean;
   error?: string;
 };
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown error";
+}
+
+async function requireAdmin() {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { supabase, error: "Unauthorized" };
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+
+  if (profileError) {
+    return { supabase, error: profileError.message };
+  }
+
+  if (!profile || profile.role !== "admin") {
+    return { supabase, error: "Forbidden" };
+  }
+
+  return { supabase, error: null };
+}
 
 export async function getWhitelist() {
   const supabase = await createClient();
@@ -29,28 +61,10 @@ export async function getWhitelist() {
 
 export async function addWhitelistEmail(email: string): Promise<ActionResult> {
   try {
-    const supabase = await createClient();
+    const { supabase, error: authError } = await requireAdmin();
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return { ok: false, error: "Unauthorized" };
-    }
-
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("user_id", user.id)
-      .single();
-
-    if (profileError) {
-      return { ok: false, error: profileError.message };
-    }
-
-    if (!profile || profile.role !== "admin") {
-      return { ok: false, error: "Forbidden" };
+    if (authError) {
+      return { ok: false, error: authError };
     }
 
     const normalizedEmail = email.trim().toLowerCase();
@@ -68,35 +82,17 @@ export async function addWhitelistEmail(email: string): Promise<ActionResult> {
     }
 
     return { ok: true };
-  } catch (e: any) {
-    return { ok: false, error: e.message ?? "Unknown error" };
+  } catch (error: unknown) {
+    return { ok: false, error: getErrorMessage(error) };
   }
 }
 
 export async function deleteWhitelistEmail(email: string): Promise<ActionResult> {
   try {
-    const supabase = await createClient();
+    const { supabase, error: authError } = await requireAdmin();
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return { ok: false, error: "Unauthorized" };
-    }
-
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("user_id", user.id)
-      .single();
-
-    if (profileError) {
-      return { ok: false, error: profileError.message };
-    }
-
-    if (!profile || profile.role !== "admin") {
-      return { ok: false, error: "Forbidden" };
+    if (authError) {
+      return { ok: false, error: authError };
     }
 
     const normalizedEmail = email.trim().toLowerCase();
@@ -114,7 +110,7 @@ export async function deleteWhitelistEmail(email: string): Promise<ActionResult>
     }
 
     return { ok: true };
-  } catch (e: any) {
-    return { ok: false, error: e.message ?? "Unknown error" };
+  } catch (error: unknown) {
+    return { ok: false, error: getErrorMessage(error) };
   }
 }

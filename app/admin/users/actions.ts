@@ -1,4 +1,4 @@
-"use server";
+﻿"use server";
 
 import { createClient } from "@/lib/supabase/server";
 
@@ -6,6 +6,10 @@ type ActionResult = {
   ok: boolean;
   error?: string;
 };
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown error";
+}
 
 export async function getUsers() {
   const supabase = await createClient();
@@ -88,7 +92,7 @@ export async function updateUserRole(
     }
 
     return { ok: true };
-  } catch (e: any) {
-    return { ok: false, error: e.message ?? "Unknown error" };
+  } catch (error: unknown) {
+    return { ok: false, error: getErrorMessage(error) };
   }
 }

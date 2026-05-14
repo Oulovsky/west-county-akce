@@ -1,8 +1,13 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { RealtimePostgresInsertPayload } from "@supabase/supabase-js";
 import { createBrowserClient } from "@/lib/supabase";
+
+type AuditLogMeta = {
+  old_role?: string | null;
+  new_role?: string | null;
+};
 
 type AuditLogItem = {
   id: number;
@@ -13,7 +18,7 @@ type AuditLogItem = {
   target_type: string;
   target_id: string | null;
   target_label: string | null;
-  meta: any;
+  meta: AuditLogMeta | null;
 };
 
 function getActionLabel(action: string) {
@@ -39,16 +44,12 @@ function formatDate(date: string) {
 }
 
 export default function AuditLog({ logs: initialLogs }: { logs: AuditLogItem[] }) {
-  const [logs, setLogs] = useState(initialLogs);
+  const [realtimeLogs, setRealtimeLogs] = useState<AuditLogItem[]>([]);
   const [actionFilter, setActionFilter] = useState("");
   const [userFilter, setUserFilter] = useState("");
   const [targetFilter, setTargetFilter] = useState("");
 
-  useEffect(() => {
-    setLogs(initialLogs);
-  }, [initialLogs]);
-
-  useEffect(() => {
+  useMemo(() => {
     const supabase = createBrowserClient();
 
     const channel = supabase
@@ -61,7 +62,7 @@ export default function AuditLog({ logs: initialLogs }: { logs: AuditLogItem[] }
           table: "admin_audit_log",
         },
         (payload: RealtimePostgresInsertPayload<AuditLogItem>) => {
-          setLogs((prev) => [payload.new as AuditLogItem, ...prev]);
+          setRealtimeLogs((prev) => [payload.new as AuditLogItem, ...prev]);
         }
       )
       .subscribe();
@@ -70,6 +71,10 @@ export default function AuditLog({ logs: initialLogs }: { logs: AuditLogItem[] }
       void supabase.removeChannel(channel);
     };
   }, []);
+
+  const logs = useMemo(() => {
+    return [...realtimeLogs, ...initialLogs];
+  }, [realtimeLogs, initialLogs]);
 
   const actionOptions = useMemo(() => {
     return Array.from(new Set(logs.map((l) => l.action))).sort();

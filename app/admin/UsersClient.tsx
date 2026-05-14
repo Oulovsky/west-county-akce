@@ -1,11 +1,17 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Toast from "@/components/Toast";
 import { updateUserRole } from "./users/actions";
 
-export default function UsersClient({ users }: { users: any[] }) {
+type UserRow = {
+  user_id: string;
+  email: string;
+  role: string;
+};
+
+export default function UsersClient({ users }: { users: UserRow[] }) {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();

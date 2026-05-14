@@ -1,11 +1,15 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Toast from "@/components/Toast";
 import { addWhitelistEmail, deleteWhitelistEmail } from "./whitelist/actions";
 
-export default function WhitelistClient({ whitelist }: { whitelist: any[] }) {
+type WhitelistRow = {
+  email: string;
+};
+
+export default function WhitelistClient({ whitelist }: { whitelist: WhitelistRow[] }) {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -40,7 +44,7 @@ export default function WhitelistClient({ whitelist }: { whitelist: any[] }) {
 
   return (
     <div>
-      <form action={handleAdd} className="flex gap-2 mb-4">
+      <form action={handleAdd} className="mb-4 flex gap-2">
         <input
           type="email"
           name="email"
