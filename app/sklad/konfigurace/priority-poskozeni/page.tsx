@@ -33,7 +33,7 @@ export default function Page() {
   const editRef = useRef<HTMLInputElement | null>(null);
 
   async function load() {
-    
+    setLoading(true);
 
     const { data, error } = await supabase.rpc("get_priority_poskozeni_full");
 
@@ -75,17 +75,20 @@ export default function Page() {
   useEffect(() => {
     if (!editingId) return;
 
-    const id = editingId;
+    const currentEditingId = editingId;
 
-    function handleMouseDown(e: MouseEvent) {
-      const target = e.target as Node | null;
+    function handleMouseDown(event: MouseEvent) {
+      const target = event.target as Node | null;
+
       if (!editRef.current) return;
       if (target && editRef.current.contains(target)) return;
-      void save(id);
+
+      void save(currentEditingId);
     }
 
-    function handleEscape(e: KeyboardEvent) {
-      if (e.key !== "Escape") return;
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+
       setEditingId(null);
       setDraft("");
     }
@@ -101,6 +104,7 @@ export default function Page() {
 
   async function create() {
     const trimmed = newName.trim();
+
     if (!trimmed) return;
 
     setCreating(true);
@@ -118,6 +122,7 @@ export default function Page() {
 
     setNewName("");
     setOpen(false);
+
     await load();
   }
 
@@ -128,8 +133,9 @@ export default function Page() {
 
   async function save(id: string) {
     const trimmed = draft.trim();
+
     if (!trimmed) {
-      alert("NĂˇzev je povinnĂ˝.");
+      alert("Název je povinný.");
       return;
     }
 
@@ -149,11 +155,14 @@ export default function Page() {
 
     setEditingId(null);
     setDraft("");
+
     await load();
   }
 
   async function remove(id: string) {
-    if (!window.confirm("Smazat prioritu?")) return;
+    const ok = window.confirm("Smazat prioritu?");
+
+    if (!ok) return;
 
     setRemovingId(id);
 
@@ -174,6 +183,7 @@ export default function Page() {
   function handleDragStart(e: React.DragEvent<HTMLDivElement>, id: string) {
     setDraggingId(id);
     setDragOverId(null);
+
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", id);
   }
@@ -185,27 +195,41 @@ export default function Page() {
 
   function handleDragEnter(targetId: string) {
     if (!draggingId || draggingId === targetId) return;
+
     setDragOverId(targetId);
   }
 
-  function handleDragOver(e: React.DragEvent<HTMLDivElement>, id: string) {
+  function handleDragOver(e: React.DragEvent<HTMLDivElement>, targetId: string) {
     e.preventDefault();
-    if (!draggingId || draggingId === id) return;
-    if (dragOverId !== id) {
-      setDragOverId(id);
+
+    if (!draggingId || draggingId === targetId) return;
+
+    if (dragOverId !== targetId) {
+      setDragOverId(targetId);
     }
   }
 
-  async function handleDrop(id: string) {
-    if (!draggingId || draggingId === id) {
+  function handleDragLeave(e: React.DragEvent<HTMLDivElement>, targetId: string) {
+    const related = e.relatedTarget as Node | null;
+
+    if (related && e.currentTarget.contains(related)) return;
+
+    if (dragOverId === targetId) {
+      setDragOverId(null);
+    }
+  }
+
+  async function handleDrop(targetId: string) {
+    if (!draggingId || draggingId === targetId) {
       setDraggingId(null);
       setDragOverId(null);
       return;
     }
 
     const newOrder = [...data];
-    const from = newOrder.findIndex((i) => i.priorita_id === draggingId);
-    const to = newOrder.findIndex((i) => i.priorita_id === id);
+
+    const from = newOrder.findIndex((item) => item.priorita_id === draggingId);
+    const to = newOrder.findIndex((item) => item.priorita_id === targetId);
 
     if (from < 0 || to < 0) {
       setDraggingId(null);
@@ -214,14 +238,16 @@ export default function Page() {
     }
 
     const [moved] = newOrder.splice(from, 1);
+
     newOrder.splice(to, 0, moved);
 
     setData(newOrder);
+
     setDraggingId(null);
     setDragOverId(null);
 
     const { error } = await supabase.rpc("set_priority_poskozeni_poradi", {
-      p_ids: newOrder.map((i) => i.priorita_id),
+      p_ids: newOrder.map((item) => item.priorita_id),
     });
 
     if (error) {
@@ -237,10 +263,11 @@ export default function Page() {
     <div className="w-full py-7">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold text-white">Priority poĹˇkozenĂ­</h1>
+          <h1 className="text-3xl font-bold text-white">Priority poškození</h1>
+
           <div className="text-sm text-slate-400">
-            SprĂˇva priorit poĹˇkozenĂ­. Enter uloĹľĂ­, Esc zruĹˇĂ­, klik mimo takĂ©
-            uloĹľĂ­. PoĹ™adĂ­ mÄ›nĂ­Ĺˇ pĹ™etaĹľenĂ­m.
+            Správa priorit poškození. Enter uloží, Esc zruší, klik mimo také
+            uloží. Pořadí měníš přetažením.
           </div>
         </div>
 
@@ -249,38 +276,39 @@ export default function Page() {
             href="/sklad/konfigurace"
             className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 font-semibold text-white transition hover:bg-slate-800"
           >
-            ZpÄ›t
+            Zpět
           </Link>
 
           <button
             onClick={() => setOpen(true)}
             className="rounded-xl border border-blue-600 bg-blue-600 px-4 py-3 font-semibold text-white transition hover:bg-blue-500"
           >
-            PĹ™idat
+            Přidat
           </button>
         </div>
       </div>
 
       {loading ? (
-        <div className="text-slate-300">NaÄŤĂ­tĂˇm...</div>
+        <div className="text-slate-300">Načítám...</div>
       ) : (
         <div className="grid gap-3">
-          {data.map((p) => {
-            const isEditing = editingId === p.priorita_id;
-            const isSaving = savingId === p.priorita_id;
-            const isRemoving = removingId === p.priorita_id;
-            const isDragging = draggingId === p.priorita_id;
-            const isDragOver = dragOverId === p.priorita_id;
+          {data.map((item) => {
+            const isEditing = editingId === item.priorita_id;
+            const isSaving = savingId === item.priorita_id;
+            const isRemoving = removingId === item.priorita_id;
+            const isDragging = draggingId === item.priorita_id;
+            const isDragOver = dragOverId === item.priorita_id;
 
             return (
               <div
-                key={p.priorita_id}
+                key={item.priorita_id}
                 draggable={!isEditing && !isSaving && !isRemoving}
-                onDragStart={(e) => handleDragStart(e, p.priorita_id)}
+                onDragStart={(e) => handleDragStart(e, item.priorita_id)}
                 onDragEnd={handleDragEnd}
-                onDragEnter={() => handleDragEnter(p.priorita_id)}
-                onDragOver={(e) => handleDragOver(e, p.priorita_id)}
-                onDrop={() => void handleDrop(p.priorita_id)}
+                onDragEnter={() => handleDragEnter(item.priorita_id)}
+                onDragOver={(e) => handleDragOver(e, item.priorita_id)}
+                onDragLeave={(e) => handleDragLeave(e, item.priorita_id)}
+                onDrop={() => void handleDrop(item.priorita_id)}
               >
                 <div
                   style={{
@@ -312,8 +340,9 @@ export default function Page() {
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
                                 e.preventDefault();
-                                void save(p.priorita_id);
+                                void save(item.priorita_id);
                               }
+
                               if (e.key === "Escape") {
                                 e.preventDefault();
                                 setEditingId(null);
@@ -324,7 +353,7 @@ export default function Page() {
                           />
                         ) : (
                           <div className="text-lg font-semibold text-white">
-                            {p.nazev}
+                            {item.nazev}
                           </div>
                         )}
                       </div>
@@ -332,20 +361,20 @@ export default function Page() {
                       <div className="flex gap-2">
                         <button
                           onClick={() =>
-                            isEditing ? void save(p.priorita_id) : startEdit(p)
+                            isEditing ? void save(item.priorita_id) : startEdit(item)
                           }
                           disabled={isSaving || isRemoving}
                           className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
                         >
-                          {isSaving ? "UklĂˇdĂˇm..." : isEditing ? "UloĹľit" : "Upravit"}
+                          {isSaving ? "Ukládám..." : isEditing ? "Uložit" : "Upravit"}
                         </button>
 
                         <button
-                          onClick={() => void remove(p.priorita_id)}
+                          onClick={() => void remove(item.priorita_id)}
                           disabled={isSaving || isRemoving}
                           className="rounded-xl border border-red-500/40 px-4 py-2 font-semibold text-red-300 transition hover:bg-red-500/10 hover:text-red-200 disabled:opacity-60"
                         >
-                          {isRemoving ? "MaĹľu..." : "Smazat"}
+                          {isRemoving ? "Mažu..." : "Smazat"}
                         </button>
                       </div>
                     </div>
@@ -363,7 +392,7 @@ export default function Page() {
           if (creating) return;
           setOpen(false);
         }}
-        title="NovĂˇ priorita"
+        title="Nová priorita"
         widthClassName="max-w-xl"
       >
         <div className="grid gap-3">
@@ -371,7 +400,7 @@ export default function Page() {
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-blue-500"
-            placeholder="NĂˇzev priority"
+            placeholder="Název priority"
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -386,7 +415,7 @@ export default function Page() {
               disabled={creating}
               className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 font-semibold text-white disabled:opacity-60"
             >
-              ZruĹˇit
+              Zrušit
             </button>
 
             <button
@@ -394,7 +423,7 @@ export default function Page() {
               disabled={creating || !newName.trim()}
               className="rounded-xl border border-blue-600 bg-blue-600 px-4 py-3 font-semibold text-white disabled:opacity-60"
             >
-              {creating ? "UklĂˇdĂˇm..." : "UloĹľit"}
+              {creating ? "Ukládám..." : "Uložit"}
             </button>
           </div>
         </div>
@@ -402,6 +431,3 @@ export default function Page() {
     </div>
   );
 }
-
-
-

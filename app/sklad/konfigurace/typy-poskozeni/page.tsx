@@ -79,13 +79,16 @@ export default function Page() {
 
     function handleMouseDown(event: MouseEvent) {
       const target = event.target as Node | null;
+
       if (!editRef.current) return;
       if (target && editRef.current.contains(target)) return;
+
       void save(currentEditingId);
     }
 
     function handleEscape(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
+
       setEditingId(null);
       setDraft("");
     }
@@ -101,6 +104,7 @@ export default function Page() {
 
   async function create() {
     const trimmed = newName.trim();
+
     if (!trimmed) return;
 
     setCreating(true);
@@ -118,6 +122,7 @@ export default function Page() {
 
     setNewName("");
     setOpen(false);
+
     await load();
   }
 
@@ -130,7 +135,7 @@ export default function Page() {
     const trimmed = draft.trim();
 
     if (!trimmed) {
-      alert("NĂˇzev je povinnĂ˝.");
+      alert("Název je povinný.");
       return;
     }
 
@@ -150,11 +155,13 @@ export default function Page() {
 
     setEditingId(null);
     setDraft("");
+
     await load();
   }
 
   async function remove(id: string) {
-    const ok = window.confirm("Smazat typ poĹˇkozenĂ­?");
+    const ok = window.confirm("Smazat typ poškození?");
+
     if (!ok) return;
 
     setRemovingId(id);
@@ -188,12 +195,15 @@ export default function Page() {
 
   function handleDragEnter(targetId: string) {
     if (!draggingId || draggingId === targetId) return;
+
     setDragOverId(targetId);
   }
 
   function handleDragOver(e: React.DragEvent<HTMLDivElement>, targetId: string) {
     e.preventDefault();
+
     if (!draggingId || draggingId === targetId) return;
+
     if (dragOverId !== targetId) {
       setDragOverId(targetId);
     }
@@ -201,6 +211,7 @@ export default function Page() {
 
   function handleDragLeave(e: React.DragEvent<HTMLDivElement>, targetId: string) {
     const related = e.relatedTarget as Node | null;
+
     if (related && e.currentTarget.contains(related)) return;
 
     if (dragOverId === targetId) {
@@ -216,6 +227,7 @@ export default function Page() {
     }
 
     const newOrder = [...data];
+
     const from = newOrder.findIndex((item) => item.typ_id === draggingId);
     const to = newOrder.findIndex((item) => item.typ_id === targetId);
 
@@ -226,9 +238,11 @@ export default function Page() {
     }
 
     const [moved] = newOrder.splice(from, 1);
+
     newOrder.splice(to, 0, moved);
 
     setData(newOrder);
+
     setDraggingId(null);
     setDragOverId(null);
 
@@ -251,10 +265,11 @@ export default function Page() {
     <div className="w-full py-7">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold text-white">Typy poĹˇkozenĂ­</h1>
+          <h1 className="text-3xl font-bold text-white">Typy poškození</h1>
+
           <div className="text-sm text-slate-400">
-            SprĂˇva typĹŻ poĹˇkozenĂ­. Enter uloĹľĂ­, Esc zruĹˇĂ­, klik mimo takĂ©
-            uloĹľĂ­. PoĹ™adĂ­ mÄ›nĂ­Ĺˇ pĹ™etaĹľenĂ­m.
+            Správa typů poškození. Enter uloží, Esc zruší, klik mimo také
+            uloží. Pořadí měníš přetažením.
           </div>
         </div>
 
@@ -263,20 +278,20 @@ export default function Page() {
             href="/sklad/konfigurace"
             className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 font-semibold text-white"
           >
-            ZpÄ›t
+            Zpět
           </Link>
 
           <button
             onClick={() => setOpen(true)}
             className="rounded-xl border border-blue-600 bg-blue-600 px-4 py-3 font-semibold text-white"
           >
-            PĹ™idat
+            Přidat
           </button>
         </div>
       </div>
 
       {loading ? (
-        <div className="text-slate-300">NaÄŤĂ­tĂˇm...</div>
+        <div className="text-slate-300">Načítám...</div>
       ) : (
         <div className="grid gap-3">
           {data.map((item) => {
@@ -352,14 +367,14 @@ export default function Page() {
                           }
                           className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-white"
                         >
-                          {isSaving ? "UklĂˇdĂˇm..." : isEditing ? "UloĹľit" : "Upravit"}
+                          {isSaving ? "Ukládám..." : isEditing ? "Uložit" : "Upravit"}
                         </button>
 
                         <button
                           onClick={() => void remove(item.typ_id)}
                           className="rounded-xl border border-red-500 px-4 py-2 text-red-300"
                         >
-                          {isRemoving ? "MaĹľu..." : "Smazat"}
+                          {isRemoving ? "Mažu..." : "Smazat"}
                         </button>
                       </div>
                     </div>
@@ -374,14 +389,14 @@ export default function Page() {
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title="NovĂ˝ typ poĹˇkozenĂ­"
+        title="Nový typ poškození"
       >
         <div className="grid gap-4">
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white"
-            placeholder="NĂˇzev typu poĹˇkozenĂ­"
+            placeholder="Název typu poškození"
           />
 
           <button
@@ -389,12 +404,10 @@ export default function Page() {
             disabled={creating || !newName.trim()}
             className="rounded-xl border border-blue-600 bg-blue-600 px-4 py-3 text-white disabled:opacity-60"
           >
-            {creating ? "UklĂˇdĂˇm..." : "UloĹľit"}
+            {creating ? "Ukládám..." : "Uložit"}
           </button>
         </div>
       </Modal>
     </div>
   );
 }
-
-

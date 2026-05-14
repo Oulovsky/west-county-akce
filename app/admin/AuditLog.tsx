@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RealtimePostgresInsertPayload } from "@supabase/supabase-js";
 import { createBrowserClient } from "@/lib/supabase";
 
@@ -37,6 +37,7 @@ function getActionStyle(action: string) {
 
 function formatDate(date: string) {
   const d = new Date(date);
+
   return d.toLocaleString("cs-CZ", {
     dateStyle: "short",
     timeStyle: "short",
@@ -49,23 +50,24 @@ export default function AuditLog({ logs: initialLogs }: { logs: AuditLogItem[] }
   const [userFilter, setUserFilter] = useState("");
   const [targetFilter, setTargetFilter] = useState("");
 
-  useMemo(() => {
+  useEffect(() => {
     const supabase = createBrowserClient();
 
-    const channel = supabase
-      .channel("admin-audit-log")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "admin_audit_log",
-        },
-        (payload: RealtimePostgresInsertPayload<AuditLogItem>) => {
-          setRealtimeLogs((prev) => [payload.new as AuditLogItem, ...prev]);
-        }
-      )
-      .subscribe();
+    const channel = supabase.channel("admin-audit-log");
+
+    channel.on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "admin_audit_log",
+      },
+      (payload: RealtimePostgresInsertPayload<AuditLogItem>) => {
+        setRealtimeLogs((prev) => [payload.new, ...prev]);
+      }
+    );
+
+    void channel.subscribe();
 
     return () => {
       void supabase.removeChannel(channel);
@@ -77,26 +79,29 @@ export default function AuditLog({ logs: initialLogs }: { logs: AuditLogItem[] }
   }, [realtimeLogs, initialLogs]);
 
   const actionOptions = useMemo(() => {
-    return Array.from(new Set(logs.map((l) => l.action))).sort();
+    return Array.from(new Set(logs.map((log) => log.action))).sort();
   }, [logs]);
 
   const filteredLogs = useMemo(() => {
-    return logs.filter((log) => {
-      const a = !actionFilter || log.action === actionFilter;
+    const userQuery = userFilter.toLowerCase();
+    const targetQuery = targetFilter.toLowerCase();
 
-      const u =
-        !userFilter ||
+    return logs.filter((log) => {
+      const actionMatches = !actionFilter || log.action === actionFilter;
+
+      const userMatches =
+        !userQuery ||
         (log.actor_email || log.actor_user_id || "")
           .toLowerCase()
-          .includes(userFilter.toLowerCase());
+          .includes(userQuery);
 
-      const t =
-        !targetFilter ||
+      const targetMatches =
+        !targetQuery ||
         (log.target_label || log.target_id || "")
           .toLowerCase()
-          .includes(targetFilter.toLowerCase());
+          .includes(targetQuery);
 
-      return a && u && t;
+      return actionMatches && userMatches && targetMatches;
     });
   }, [logs, actionFilter, userFilter, targetFilter]);
 
@@ -109,9 +114,9 @@ export default function AuditLog({ logs: initialLogs }: { logs: AuditLogItem[] }
           className="rounded-lg border border-[#334155] bg-[#081225] px-3 py-2 text-slate-200 outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">Všechny akce</option>
-          {actionOptions.map((a) => (
-            <option key={a} value={a}>
-              {getActionLabel(a)}
+          {actionOptions.map((action) => (
+            <option key={action} value={action}>
+              {getActionLabel(action)}
             </option>
           ))}
         </select>

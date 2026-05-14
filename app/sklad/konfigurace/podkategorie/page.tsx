@@ -152,7 +152,7 @@ export default function Page() {
     const trimmed = draftName.trim();
 
     if (!trimmed) {
-      alert("NĂˇzev je povinnĂ˝.");
+      alert("Název je povinný.");
       return;
     }
 
@@ -299,8 +299,8 @@ export default function Page() {
         <div className="space-y-2">
           <h1 className="text-3xl font-bold text-white">Podkategorie</h1>
           <div className="text-sm text-slate-400">
-            SprĂˇva podkategoriĂ­ navĂˇzanĂ˝ch na hlavnĂ­ kategorie. Enter uloĹľĂ­, Esc
-            zruĹˇĂ­, klik mimo takĂ© uloĹľĂ­. PoĹ™adĂ­ mÄ›nĂ­Ĺˇ pĹ™etaĹľenĂ­m v rĂˇmci jednĂ©
+            Správa podkategorií navázaných na hlavní kategorie. Enter uloží, Esc
+            zruší, klik mimo také uloží. Pořadí měníš přetažením v rámci jedné
             kategorie.
           </div>
         </div>
@@ -310,7 +310,7 @@ export default function Page() {
             href="/sklad/konfigurace"
             className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 font-semibold text-white transition hover:bg-slate-800"
           >
-            ZpÄ›t na konfiguraci
+            Zpět na konfiguraci
           </Link>
 
           <button
@@ -318,13 +318,13 @@ export default function Page() {
             onClick={() => setOpen(true)}
             className="rounded-xl border border-blue-600 bg-blue-600 px-4 py-3 font-semibold text-white transition hover:bg-blue-500"
           >
-            PĹ™idat
+            Přidat
           </button>
         </div>
       </div>
 
       {loading ? (
-        <div className="text-slate-300">NaÄŤĂ­tĂˇm...</div>
+        <div className="text-slate-300">Načítám...</div>
       ) : (
         <div className="grid gap-6">
           {grouped.map((kat) => (
@@ -334,7 +334,7 @@ export default function Page() {
 
                 {kat.items.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-slate-700 px-4 py-4 text-sm text-slate-400">
-                    Kategorie zatĂ­m nemĂˇ ĹľĂˇdnou podkategorii.
+                    Kategorie zatím nemá žádnou podkategorii.
                   </div>
                 ) : (
                   <div className="grid gap-3">
@@ -453,7 +453,7 @@ export default function Page() {
                                     disabled={isSaving || isRemoving}
                                     className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
                                   >
-                                    {isSaving ? "UklĂˇdĂˇm..." : isEditing ? "UloĹľit" : "Upravit"}
+                                    {isSaving ? "Ukládám..." : isEditing ? "Uložit" : "Upravit"}
                                   </button>
 
                                   <button
@@ -464,7 +464,7 @@ export default function Page() {
                                     disabled={isSaving || isRemoving}
                                     className="rounded-xl border border-red-500/40 px-4 py-2 font-semibold text-red-300 transition hover:bg-red-500/10 hover:text-red-200 disabled:opacity-60"
                                   >
-                                    {isRemoving ? "MaĹľu..." : "Smazat"}
+                                    {isRemoving ? "Mažu..." : "Smazat"}
                                   </button>
                                 </div>
                               </div>
@@ -487,7 +487,7 @@ export default function Page() {
           if (creating) return;
           setOpen(false);
         }}
-        title="NovĂˇ podkategorie"
+        title="Nová podkategorie"
         widthClassName="max-w-xl"
       >
         <div className="grid gap-4">
@@ -507,7 +507,7 @@ export default function Page() {
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="NĂˇzev podkategorie"
+            placeholder="Název podkategorie"
             className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-blue-500"
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -524,7 +524,7 @@ export default function Page() {
               disabled={creating}
               className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 font-semibold text-white disabled:opacity-60"
             >
-              ZruĹˇit
+              Zrušit
             </button>
 
             <button
@@ -533,7 +533,7 @@ export default function Page() {
               disabled={creating || !newName.trim() || !newKategorieId}
               className="rounded-xl border border-blue-600 bg-blue-600 px-4 py-3 font-semibold text-white disabled:opacity-60"
             >
-              {creating ? "UklĂˇdĂˇm..." : "UloĹľit"}
+              {creating ? "Ukládám..." : "Uložit"}
             </button>
           </div>
         </div>
@@ -541,5 +541,3 @@ export default function Page() {
     </div>
   );
 }
-
-
