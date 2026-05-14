@@ -1,4 +1,6 @@
-"use client";
+﻿"use client";
+
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -107,7 +109,7 @@ export default function Page() {
     const trimmed = draft.trim();
 
     if (!trimmed) {
-      alert("Název je povinný.");
+      alert("NĂˇzev je povinnĂ˝.");
       return;
     }
 
@@ -230,7 +232,7 @@ export default function Page() {
         <div className="space-y-2">
           <h1 className="text-3xl font-bold text-white">Jednotky</h1>
           <div className="text-sm text-slate-400">
-            Správa jednotek (ks, m, pár...). Enter uloží, Esc zruší, klik mimo také uloží. Pořadí měníš přetažením.
+            SprĂˇva jednotek (ks, m, pĂˇr...). Enter uloĹľĂ­, Esc zruĹˇĂ­, klik mimo takĂ© uloĹľĂ­. PoĹ™adĂ­ mÄ›nĂ­Ĺˇ pĹ™etaĹľenĂ­m.
           </div>
         </div>
 
@@ -239,20 +241,20 @@ export default function Page() {
             href="/sklad/konfigurace"
             className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 font-semibold text-white"
           >
-            Zpět
+            ZpÄ›t
           </Link>
 
           <button
             onClick={() => setOpen(true)}
             className="rounded-xl border border-blue-600 bg-blue-600 px-4 py-3 font-semibold text-white"
           >
-            Přidat
+            PĹ™idat
           </button>
         </div>
       </div>
 
       {loading ? (
-        <div className="text-slate-300">Načítám...</div>
+        <div className="text-slate-300">NaÄŤĂ­tĂˇm...</div>
       ) : (
         <div className="grid gap-3">
           {data.map((j) => {
@@ -298,7 +300,7 @@ export default function Page() {
                         }
                         className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-white"
                       >
-                        {isEditing ? "Uložit" : "Upravit"}
+                        {isEditing ? "UloĹľit" : "Upravit"}
                       </button>
 
                       <button
@@ -316,7 +318,7 @@ export default function Page() {
         </div>
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Nová jednotka">
+      <Modal open={open} onClose={() => setOpen(false)} title="NovĂˇ jednotka">
         <div className="grid gap-4">
           <input
             value={newName}
@@ -328,10 +330,12 @@ export default function Page() {
             onClick={() => void create()}
             className="rounded-xl border border-blue-600 bg-blue-600 px-4 py-3 text-white"
           >
-            Uložit
+            UloĹľit
           </button>
         </div>
       </Modal>
     </div>
   );
 }
+
+

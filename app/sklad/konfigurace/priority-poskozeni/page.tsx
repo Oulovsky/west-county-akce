@@ -1,4 +1,6 @@
-"use client";
+﻿"use client";
+
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -31,7 +33,7 @@ export default function Page() {
   const editRef = useRef<HTMLInputElement | null>(null);
 
   async function load() {
-    setLoading(true);
+    
 
     const { data, error } = await supabase.rpc("get_priority_poskozeni_full");
 
@@ -127,7 +129,7 @@ export default function Page() {
   async function save(id: string) {
     const trimmed = draft.trim();
     if (!trimmed) {
-      alert("Název je povinný.");
+      alert("NĂˇzev je povinnĂ˝.");
       return;
     }
 
@@ -235,10 +237,10 @@ export default function Page() {
     <div className="w-full py-7">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold text-white">Priority poškození</h1>
+          <h1 className="text-3xl font-bold text-white">Priority poĹˇkozenĂ­</h1>
           <div className="text-sm text-slate-400">
-            Správa priorit poškození. Enter uloží, Esc zruší, klik mimo také
-            uloží. Pořadí měníš přetažením.
+            SprĂˇva priorit poĹˇkozenĂ­. Enter uloĹľĂ­, Esc zruĹˇĂ­, klik mimo takĂ©
+            uloĹľĂ­. PoĹ™adĂ­ mÄ›nĂ­Ĺˇ pĹ™etaĹľenĂ­m.
           </div>
         </div>
 
@@ -247,20 +249,20 @@ export default function Page() {
             href="/sklad/konfigurace"
             className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 font-semibold text-white transition hover:bg-slate-800"
           >
-            Zpět
+            ZpÄ›t
           </Link>
 
           <button
             onClick={() => setOpen(true)}
             className="rounded-xl border border-blue-600 bg-blue-600 px-4 py-3 font-semibold text-white transition hover:bg-blue-500"
           >
-            Přidat
+            PĹ™idat
           </button>
         </div>
       </div>
 
       {loading ? (
-        <div className="text-slate-300">Načítám...</div>
+        <div className="text-slate-300">NaÄŤĂ­tĂˇm...</div>
       ) : (
         <div className="grid gap-3">
           {data.map((p) => {
@@ -335,7 +337,7 @@ export default function Page() {
                           disabled={isSaving || isRemoving}
                           className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
                         >
-                          {isSaving ? "Ukládám..." : isEditing ? "Uložit" : "Upravit"}
+                          {isSaving ? "UklĂˇdĂˇm..." : isEditing ? "UloĹľit" : "Upravit"}
                         </button>
 
                         <button
@@ -343,7 +345,7 @@ export default function Page() {
                           disabled={isSaving || isRemoving}
                           className="rounded-xl border border-red-500/40 px-4 py-2 font-semibold text-red-300 transition hover:bg-red-500/10 hover:text-red-200 disabled:opacity-60"
                         >
-                          {isRemoving ? "Mažu..." : "Smazat"}
+                          {isRemoving ? "MaĹľu..." : "Smazat"}
                         </button>
                       </div>
                     </div>
@@ -361,7 +363,7 @@ export default function Page() {
           if (creating) return;
           setOpen(false);
         }}
-        title="Nová priorita"
+        title="NovĂˇ priorita"
         widthClassName="max-w-xl"
       >
         <div className="grid gap-3">
@@ -369,7 +371,7 @@ export default function Page() {
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-blue-500"
-            placeholder="Název priority"
+            placeholder="NĂˇzev priority"
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -384,7 +386,7 @@ export default function Page() {
               disabled={creating}
               className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 font-semibold text-white disabled:opacity-60"
             >
-              Zrušit
+              ZruĹˇit
             </button>
 
             <button
@@ -392,7 +394,7 @@ export default function Page() {
               disabled={creating || !newName.trim()}
               className="rounded-xl border border-blue-600 bg-blue-600 px-4 py-3 font-semibold text-white disabled:opacity-60"
             >
-              {creating ? "Ukládám..." : "Uložit"}
+              {creating ? "UklĂˇdĂˇm..." : "UloĹľit"}
             </button>
           </div>
         </div>
@@ -400,3 +402,6 @@ export default function Page() {
     </div>
   );
 }
+
+
+

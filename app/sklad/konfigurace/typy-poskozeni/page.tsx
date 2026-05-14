@@ -1,4 +1,6 @@
-"use client";
+﻿"use client";
+
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -128,7 +130,7 @@ export default function Page() {
     const trimmed = draft.trim();
 
     if (!trimmed) {
-      alert("Název je povinný.");
+      alert("NĂˇzev je povinnĂ˝.");
       return;
     }
 
@@ -152,7 +154,7 @@ export default function Page() {
   }
 
   async function remove(id: string) {
-    const ok = window.confirm("Smazat typ poškození?");
+    const ok = window.confirm("Smazat typ poĹˇkozenĂ­?");
     if (!ok) return;
 
     setRemovingId(id);
@@ -249,10 +251,10 @@ export default function Page() {
     <div className="w-full py-7">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold text-white">Typy poškození</h1>
+          <h1 className="text-3xl font-bold text-white">Typy poĹˇkozenĂ­</h1>
           <div className="text-sm text-slate-400">
-            Správa typů poškození. Enter uloží, Esc zruší, klik mimo také
-            uloží. Pořadí měníš přetažením.
+            SprĂˇva typĹŻ poĹˇkozenĂ­. Enter uloĹľĂ­, Esc zruĹˇĂ­, klik mimo takĂ©
+            uloĹľĂ­. PoĹ™adĂ­ mÄ›nĂ­Ĺˇ pĹ™etaĹľenĂ­m.
           </div>
         </div>
 
@@ -261,20 +263,20 @@ export default function Page() {
             href="/sklad/konfigurace"
             className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 font-semibold text-white"
           >
-            Zpět
+            ZpÄ›t
           </Link>
 
           <button
             onClick={() => setOpen(true)}
             className="rounded-xl border border-blue-600 bg-blue-600 px-4 py-3 font-semibold text-white"
           >
-            Přidat
+            PĹ™idat
           </button>
         </div>
       </div>
 
       {loading ? (
-        <div className="text-slate-300">Načítám...</div>
+        <div className="text-slate-300">NaÄŤĂ­tĂˇm...</div>
       ) : (
         <div className="grid gap-3">
           {data.map((item) => {
@@ -350,14 +352,14 @@ export default function Page() {
                           }
                           className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-white"
                         >
-                          {isSaving ? "Ukládám..." : isEditing ? "Uložit" : "Upravit"}
+                          {isSaving ? "UklĂˇdĂˇm..." : isEditing ? "UloĹľit" : "Upravit"}
                         </button>
 
                         <button
                           onClick={() => void remove(item.typ_id)}
                           className="rounded-xl border border-red-500 px-4 py-2 text-red-300"
                         >
-                          {isRemoving ? "Mažu..." : "Smazat"}
+                          {isRemoving ? "MaĹľu..." : "Smazat"}
                         </button>
                       </div>
                     </div>
@@ -372,14 +374,14 @@ export default function Page() {
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title="Nový typ poškození"
+        title="NovĂ˝ typ poĹˇkozenĂ­"
       >
         <div className="grid gap-4">
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white"
-            placeholder="Název typu poškození"
+            placeholder="NĂˇzev typu poĹˇkozenĂ­"
           />
 
           <button
@@ -387,10 +389,12 @@ export default function Page() {
             disabled={creating || !newName.trim()}
             className="rounded-xl border border-blue-600 bg-blue-600 px-4 py-3 text-white disabled:opacity-60"
           >
-            {creating ? "Ukládám..." : "Uložit"}
+            {creating ? "UklĂˇdĂˇm..." : "UloĹľit"}
           </button>
         </div>
       </Modal>
     </div>
   );
 }
+
+
