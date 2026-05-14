@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -144,16 +144,16 @@ function getKusStatus(kus: KusRow, poskozeni: PoskozeniRow[]) {
 
   if (blokuje) {
     return {
-      text: "blokováno",
+      text: "blokovĂˇno",
       className: "border-red-700 bg-red-950 text-red-200",
       blokovano: 1,
-      pouzitelne: "✕",
+      pouzitelne: "âś•",
     };
   }
 
   if (otevrene.length > 0) {
     return {
-      text: "poškozeno, použitelné",
+      text: "poĹˇkozeno, pouĹľitelnĂ©",
       className: "border-amber-700 bg-amber-950 text-amber-200",
       blokovano: 0,
       pouzitelne: "!",
@@ -164,7 +164,7 @@ function getKusStatus(kus: KusRow, poskozeni: PoskozeniRow[]) {
     text: "OK",
     className: "border-emerald-700 bg-emerald-950 text-emerald-200",
     blokovano: 0,
-    pouzitelne: "✓",
+    pouzitelne: "âś“",
   };
 }
 
@@ -242,13 +242,13 @@ export default async function SkladDetailPage({ params }: PageProps) {
     const akceCena = akceCenaRaw === "" ? null : Number(akceCenaRaw);
     const rent = rentRaw === "" ? null : Number(rentRaw);
 
-    if (!skladovaPolozkaId) throw new Error("Chybí ID skladové položky.");
-    if (!nazev) throw new Error("Název je povinný.");
-    if (!jednotka) throw new Error("Jednotka je povinná.");
-    if (!Number.isFinite(kusy) || kusy < 0) throw new Error("Celkem musí být číslo 0 nebo vyšší.");
-    if (pozice !== null && !Number.isFinite(pozice)) throw new Error("Pozice musí být číslo.");
-    if (akceCena !== null && !Number.isFinite(akceCena)) throw new Error("Akce musí být číslo.");
-    if (rent !== null && !Number.isFinite(rent)) throw new Error("Rent musí být číslo.");
+    if (!skladovaPolozkaId) throw new Error("ChybĂ­ ID skladovĂ© poloĹľky.");
+    if (!nazev) throw new Error("NĂˇzev je povinnĂ˝.");
+    if (!jednotka) throw new Error("Jednotka je povinnĂˇ.");
+    if (!Number.isFinite(kusy) || kusy < 0) throw new Error("Celkem musĂ­ bĂ˝t ÄŤĂ­slo 0 nebo vyĹˇĹˇĂ­.");
+    if (pozice !== null && !Number.isFinite(pozice)) throw new Error("Pozice musĂ­ bĂ˝t ÄŤĂ­slo.");
+    if (akceCena !== null && !Number.isFinite(akceCena)) throw new Error("Akce musĂ­ bĂ˝t ÄŤĂ­slo.");
+    if (rent !== null && !Number.isFinite(rent)) throw new Error("Rent musĂ­ bĂ˝t ÄŤĂ­slo.");
 
     const detailRes = await supabase.rpc("update_skladova_polozka_detail", {
       p_id: skladovaPolozkaId,
@@ -286,7 +286,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
     const skladovaPolozkaId = String(formData.get("skladova_polozka_id") || "");
     const nazev = String(formData.get("nazev") || "Kus").trim();
 
-    if (!skladovaPolozkaId) throw new Error("Chybí ID skladové položky.");
+    if (!skladovaPolozkaId) throw new Error("ChybĂ­ ID skladovĂ© poloĹľky.");
 
     const { data: maxRows, error: maxError } = await supabase
       .from("sklad_polozky_kusy")
@@ -323,7 +323,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
     const skladovaPolozkaId = String(formData.get("skladova_polozka_id") || "");
     const kusId = String(formData.get("kus_id") || "");
 
-    if (!skladovaPolozkaId || !kusId) throw new Error("Chybí ID položky nebo kusu.");
+    if (!skladovaPolozkaId || !kusId) throw new Error("ChybĂ­ ID poloĹľky nebo kusu.");
 
     const { error: poskozeniError } = await supabase
       .from("hlaseni_poskozeni")
@@ -352,7 +352,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
     const supabase = await createClient();
     const skladovaPolozkaId = String(formData.get("skladova_polozka_id") || "");
 
-    if (!skladovaPolozkaId) throw new Error("Chybí ID skladové položky.");
+    if (!skladovaPolozkaId) throw new Error("ChybĂ­ ID skladovĂ© poloĹľky.");
 
     await supabase.from("hlaseni_poskozeni").delete().eq("skladova_polozka_id", skladovaPolozkaId);
     await supabase.from("sklad_polozky_kusy").delete().eq("skladova_polozka_id", skladovaPolozkaId);
@@ -381,8 +381,8 @@ export default async function SkladDetailPage({ params }: PageProps) {
     const priorita = String(formData.get("priorita") || "").trim();
     const blokujePouziti = formData.get("blokuje_pouziti") === "true";
 
-    if (!skladovaPolozkaId) throw new Error("Chybí ID skladové položky.");
-    if (!kusId) throw new Error("Vyber konkrétní kus.");
+    if (!skladovaPolozkaId) throw new Error("ChybĂ­ ID skladovĂ© poloĹľky.");
+    if (!kusId) throw new Error("Vyber konkrĂ©tnĂ­ kus.");
 
     const { error } = await supabase.from("hlaseni_poskozeni").insert({
       skladova_polozka_id: skladovaPolozkaId,
@@ -448,12 +448,12 @@ export default async function SkladDetailPage({ params }: PageProps) {
             href="/sklad"
             className="inline-flex items-center text-sm font-medium text-slate-300 transition hover:text-white"
           >
-            ← Zpět na sklad
+            â† ZpÄ›t na sklad
           </Link>
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-6 text-slate-200">
-          Položka nenalezena.
+          PoloĹľka nenalezena.
         </div>
       </div>
     );
@@ -495,7 +495,11 @@ export default async function SkladDetailPage({ params }: PageProps) {
   const typyPoskozeni = (typyRaw ?? []) as TypPoskozeniOption[];
   const priority = (priorityRaw ?? []) as PrioritaOption[];
 
-  const celkemKusu = kusy.length;
+  const evidovanyPocetKusu = kusy.length;
+  const celkemKusu =
+    evidovanyPocetKusu > 0
+      ? evidovanyPocetKusu
+      : toNumber(row.celkem_k_dispozici);
 
   const otevrenaBlokujiciPoskozeni = poskozeni.filter(
     (p) => !p.datum_uzavreni && p.blokuje_pouziti
@@ -535,7 +539,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
           href="/sklad"
           className="inline-flex items-center text-sm font-medium text-slate-300 transition hover:text-white"
         >
-          ← Zpět na sklad
+          â† ZpÄ›t na sklad
         </Link>
 
         <form action={smazatPolozku}>
@@ -548,7 +552,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
             type="submit"
             className="rounded-xl border border-red-700 bg-red-950 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-900"
           >
-            Smazat hlavní položku
+            Smazat hlavnĂ­ poloĹľku
           </button>
         </form>
       </div>
@@ -558,7 +562,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
           <div className="bg-slate-950/30 px-3 pt-3">
             <div className={headerGridClassName}>
               <div className="flex items-center px-2">
-                <span className={headerBoxClassName()}>Název</span>
+                <span className={headerBoxClassName()}>NĂˇzev</span>
               </div>
 
               <div className="flex items-center px-2">
@@ -578,11 +582,11 @@ export default async function SkladDetailPage({ params }: PageProps) {
               </div>
 
               <div className={centerCellClassName}>
-                <span className={headerBoxClassName("justify-center text-center")}>Blokováno</span>
+                <span className={headerBoxClassName("justify-center text-center")}>BlokovĂˇno</span>
               </div>
 
               <div className={centerCellClassName}>
-                <span className={headerBoxClassName("justify-center text-center")}>Použitelné</span>
+                <span className={headerBoxClassName("justify-center text-center")}>PouĹľitelnĂ©</span>
               </div>
 
               <div className={centerCellClassName}>
@@ -756,7 +760,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
                           : "border-slate-700 bg-slate-950 text-slate-100",
                       ].join(" ")}
                     >
-                      {row.aktivni ? "aktivní" : "neaktivní"}
+                      {row.aktivni ? "aktivnĂ­" : "neaktivnĂ­"}
                     </span>
                   </div>
 
@@ -766,7 +770,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
                       form={editFormId}
                       className="h-12 w-full rounded-xl border border-emerald-700 bg-emerald-900 px-3 text-sm font-semibold text-white transition hover:bg-emerald-800"
                     >
-                      Uložit
+                      UloĹľit
                     </button>
                   </div>
                 </div>
@@ -786,7 +790,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
                     type="submit"
                     className="rounded-xl border border-blue-700 bg-blue-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800"
                   >
-                    + Přidat kus
+                    + PĹ™idat kus
                   </button>
                 </form>
               </div>
@@ -797,7 +801,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
                 </div>
               ) : kusy.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/30 px-4 py-8 text-center text-sm text-slate-400">
-                  Pro tuto položku zatím nejsou založené jednotlivé kusy.
+                  Pro tuto poloĹľku zatĂ­m nejsou zaloĹľenĂ© jednotlivĂ© kusy.
                 </div>
               ) : (
                 <div className="grid gap-2">
@@ -911,7 +915,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
         <div className="flex flex-col gap-5">
           <div className="grid gap-5 xl:grid-cols-2">
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-              <h2 className="mb-4 text-lg font-semibold text-white">Základní info</h2>
+              <h2 className="mb-4 text-lg font-semibold text-white">ZĂˇkladnĂ­ info</h2>
 
               <div className="grid gap-3 text-sm text-slate-200">
                 <div className="grid grid-cols-[140px_1fr] gap-3">
@@ -935,21 +939,21 @@ export default async function SkladDetailPage({ params }: PageProps) {
                 </div>
 
                 <div className="grid grid-cols-[140px_1fr] gap-3">
-                  <div className="text-slate-500">Na skladě celkem</div>
+                  <div className="text-slate-500">Na skladÄ› celkem</div>
                   <div>
                     {formatNumber(celkemKusu)} {row.jednotka}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-[140px_1fr] gap-3">
-                  <div className="text-slate-500">Blokováno poškozením</div>
+                  <div className="text-slate-500">BlokovĂˇno poĹˇkozenĂ­m</div>
                   <div>
                     {formatNumber(poskozeneKusy)} {row.jednotka}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-[140px_1fr] gap-3">
-                  <div className="text-slate-500">Použitelné</div>
+                  <div className="text-slate-500">PouĹľitelnĂ©</div>
                   <div>
                     {formatNumber(pouzitelneKusy)} {row.jednotka}
                   </div>
@@ -972,7 +976,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
                 </div>
 
                 <div className="grid grid-cols-[140px_1fr] gap-3">
-                  <div className="text-slate-500">Vytvořeno</div>
+                  <div className="text-slate-500">VytvoĹ™eno</div>
                   <div>{formatDateTime(row.vytvoreno_dne)}</div>
                 </div>
 
@@ -990,9 +994,9 @@ export default async function SkladDetailPage({ params }: PageProps) {
           >
             <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-white">Evidence poškození</h2>
+                <h2 className="text-lg font-semibold text-white">Evidence poĹˇkozenĂ­</h2>
                 <p className="text-sm text-slate-400">
-                  Filtrace přehledu poškození pro tuto položku.
+                  Filtrace pĹ™ehledu poĹˇkozenĂ­ pro tuto poloĹľku.
                 </p>
               </div>
 
@@ -1000,7 +1004,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
                 href="/sklad/poskozeni"
                 className="inline-flex items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-slate-800"
               >
-                Centrální přehled poškození
+                CentrĂˇlnĂ­ pĹ™ehled poĹˇkozenĂ­
               </Link>
             </div>
 
@@ -1021,12 +1025,12 @@ export default async function SkladDetailPage({ params }: PageProps) {
         <div className="flex flex-col gap-5">
           <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
             <h2 className="mb-4 text-lg font-semibold text-white">
-              Nahlásit poškození
+              NahlĂˇsit poĹˇkozenĂ­
             </h2>
 
             {typyError || priorityError ? (
               <div className="rounded-xl border border-red-800 bg-red-950/40 px-4 py-4 text-sm text-red-200">
-                Chyba konfigurace poškození:{" "}
+                Chyba konfigurace poĹˇkozenĂ­:{" "}
                 {[typyError?.message, priorityError?.message].filter(Boolean).join(" | ")}
               </div>
             ) : (
@@ -1034,7 +1038,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
                 <input type="hidden" name="skladova_polozka_id" value={row.skladova_polozka_id} />
 
                 <div>
-                  <div className="mb-2 text-sm text-slate-300">Konkrétní kus</div>
+                  <div className="mb-2 text-sm text-slate-300">KonkrĂ©tnĂ­ kus</div>
                   <select
                     name="kus_id"
                     required
@@ -1051,10 +1055,10 @@ export default async function SkladDetailPage({ params }: PageProps) {
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <div className="mb-2 text-sm text-slate-300">Typ poškození</div>
+                    <div className="mb-2 text-sm text-slate-300">Typ poĹˇkozenĂ­</div>
                     <select
                       name="typ_poskozeni"
-                      defaultValue={slugifyCz(typyPoskozeni[0]?.nazev ?? "mechanické")}
+                      defaultValue={slugifyCz(typyPoskozeni[0]?.nazev ?? "mechanickĂ©")}
                       className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none"
                     >
                       {typyPoskozeni.length > 0 ? (
@@ -1065,10 +1069,10 @@ export default async function SkladDetailPage({ params }: PageProps) {
                         ))
                       ) : (
                         <>
-                          <option value="mechanicke">mechanické</option>
-                          <option value="elektricke">elektrické</option>
-                          <option value="vizualni">vizuální</option>
-                          <option value="jine">jiné</option>
+                          <option value="mechanicke">mechanickĂ©</option>
+                          <option value="elektricke">elektrickĂ©</option>
+                          <option value="vizualni">vizuĂˇlnĂ­</option>
+                          <option value="jine">jinĂ©</option>
                         </>
                       )}
                     </select>
@@ -1078,7 +1082,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
                     <div className="mb-2 text-sm text-slate-300">Priorita</div>
                     <select
                       name="priorita"
-                      defaultValue={slugifyCz(priority[1]?.nazev ?? priority[0]?.nazev ?? "střední")}
+                      defaultValue={slugifyCz(priority[1]?.nazev ?? priority[0]?.nazev ?? "stĹ™ednĂ­")}
                       className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none"
                     >
                       {priority.length > 0 ? (
@@ -1089,10 +1093,10 @@ export default async function SkladDetailPage({ params }: PageProps) {
                         ))
                       ) : (
                         <>
-                          <option value="nizka">nízká</option>
-                          <option value="stredni">střední</option>
-                          <option value="vysoka">vysoká</option>
-                          <option value="kriticka">kritická</option>
+                          <option value="nizka">nĂ­zkĂˇ</option>
+                          <option value="stredni">stĹ™ednĂ­</option>
+                          <option value="vysoka">vysokĂˇ</option>
+                          <option value="kriticka">kritickĂˇ</option>
                         </>
                       )}
                     </select>
@@ -1101,7 +1105,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
 
                 <label className="inline-flex w-fit items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-200">
                   <input type="checkbox" name="blokuje_pouziti" value="true" defaultChecked className="h-4 w-4" />
-                  <span>Blokuje použití</span>
+                  <span>Blokuje pouĹľitĂ­</span>
                 </label>
 
                 <div>
@@ -1109,7 +1113,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
                   <textarea
                     name="popis"
                     rows={5}
-                    placeholder="Co je poškozené, jak se to projevuje..."
+                    placeholder="Co je poĹˇkozenĂ©, jak se to projevuje..."
                     className="min-h-[120px] w-full resize-y rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none"
                   />
                 </div>
@@ -1119,7 +1123,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
                     type="submit"
                     className="inline-flex items-center justify-center rounded-xl border border-amber-700 bg-amber-800 px-4 py-3 text-sm font-semibold text-white transition hover:bg-amber-700"
                   >
-                    Nahlásit poškození
+                    NahlĂˇsit poĹˇkozenĂ­
                   </button>
                 </div>
               </form>
@@ -1127,16 +1131,16 @@ export default async function SkladDetailPage({ params }: PageProps) {
           </section>
 
           <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-            <h2 className="mb-4 text-lg font-semibold text-white">Další</h2>
+            <h2 className="mb-4 text-lg font-semibold text-white">DalĹˇĂ­</h2>
 
             <div className="grid gap-3 text-sm text-slate-200">
               <div className="grid grid-cols-[120px_1fr] gap-3">
-                <div className="text-slate-500">Poznámka</div>
+                <div className="text-slate-500">PoznĂˇmka</div>
                 <div>{row.poznamka ?? "-"}</div>
               </div>
 
               <div className="grid grid-cols-[120px_1fr] gap-3">
-                <div className="text-slate-500">Vytvořeno</div>
+                <div className="text-slate-500">VytvoĹ™eno</div>
                 <div>{formatDateTime(row.vytvoreno_dne)}</div>
               </div>
 
@@ -1151,3 +1155,4 @@ export default async function SkladDetailPage({ params }: PageProps) {
     </div>
   );
 }
+
