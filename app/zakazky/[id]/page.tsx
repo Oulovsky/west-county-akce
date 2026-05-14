@@ -41,6 +41,29 @@ type TechnikaSummaryRow = {
   mnozstvi: number | string;
 };
 
+type TechnikaSummaryRawRow = {
+  skladova_polozka_id: string;
+  mnozstvi: number | string;
+  skladove_polozky:
+    | {
+        nazev: string | null;
+      }
+    | {
+        nazev: string | null;
+      }[]
+    | null;
+};
+
+function getSkladovaPolozkaNazev(
+  value: TechnikaSummaryRawRow["skladove_polozky"]
+) {
+  if (Array.isArray(value)) {
+    return value[0]?.nazev ?? "-";
+  }
+
+  return value?.nazev ?? "-";
+}
+
 type RealizaceRow = {
   realizace_id: string;
   zakazka_id: string;
@@ -291,5 +314,6 @@ export default async function ZakazkaDetailPage({ params }: PageProps) {
     </div>
   );
 }
+
 
 

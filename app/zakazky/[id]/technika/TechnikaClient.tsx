@@ -1,6 +1,8 @@
 ﻿"use client";
 
-import { useEffect, useMemo } from "react";
+/* eslint-disable react-hooks/set-state-in-effect */
+
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/lib/supabase";
@@ -56,7 +58,11 @@ export default function TechnikaClient({
   uberAction: (formData: FormData) => Promise<void>;
   canEdit: boolean;
 }) {
-  const data = initialData;
+  const [data, setData] = useState<Radek[]>(initialData);
+
+  useEffect(() => {
+    setData(initialData);
+  }, [initialData]);
 
   useEffect(() => {
     async function refreshPlanned() {
@@ -288,4 +294,5 @@ export default function TechnikaClient({
     </div>
   );
 }
+
 

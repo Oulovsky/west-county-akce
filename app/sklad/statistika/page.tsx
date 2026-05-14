@@ -26,7 +26,11 @@ export default function SkladStatistikaPage() {
   useEffect(() => {
     let active = true;
 
-    void supabase.rpc("get_statistika_poskozeni").then(({ data, error }) => {
+    async function load() {
+      const result = await supabase.rpc("get_statistika_poskozeni");
+      const rows = result.data as Row[] | null;
+      const error = result.error;
+
       if (!active) return;
 
       if (error) {
@@ -35,9 +39,11 @@ export default function SkladStatistikaPage() {
         return;
       }
 
-      setData((data ?? []) as Row[]);
+      setData(rows ?? []);
       setLoaded(true);
-    });
+    }
+
+    void load();
 
     return () => {
       active = false;
