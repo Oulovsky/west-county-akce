@@ -1,10 +1,25 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+
+type RouteContext = {
+  params: Promise<{
+    id: string;
+  }>;
+};
+
+type AddTemplateBody = {
+  templateId?: string;
+  quantity?: number | string;
+};
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Chyba";
+}
 
 async function recomputeZakazkaItems(zakazkaId: string) {
   await supabase
@@ -49,18 +64,19 @@ async function recomputeZakazkaItems(zakazkaId: string) {
   }
 }
 
-export async function POST(req: NextRequest, context: any) {
+export async function POST(req: NextRequest, context: RouteContext) {
   try {
     const params = await context.params;
     const zakazkaId = params.id;
 
-    const body = await req.json();
-    const { templateId, quantity } = body;
+    const body = (await req.json()) as AddTemplateBody;
+    const templateId = String(body.templateId || "");
+    const quantity = Number(body.quantity || 1);
 
     const { error } = await supabase.from("zakazka_templates").insert({
       zakazka_id: zakazkaId,
       template_id: templateId,
-      quantity: quantity || 1,
+      quantity,
     });
 
     if (error) {
@@ -70,9 +86,9 @@ export async function POST(req: NextRequest, context: any) {
     await recomputeZakazkaItems(zakazkaId);
 
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: e?.message || "Chyba" },
+      { error: getErrorMessage(error) },
       { status: 500 }
     );
   }
