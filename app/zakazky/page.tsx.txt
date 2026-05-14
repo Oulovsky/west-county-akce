@@ -1,0 +1,84 @@
+import Link from "next/link"
+import { supabase } from "@/lib/supabase"
+
+export default async function ZakazkyPage() {
+  const { data: zakazky, error } = await supabase
+    .from("zakazky")
+    .select("*")
+    .order("datum_od", { ascending: true })
+
+  if (error) {
+    return <div>Chyba: {error.message}</div>
+  }
+
+  const { data: technika } = await supabase
+    .from("technika_na_zakazce")
+    .select("zakazka_id, mnozstvi")
+
+  const mapaKusu = new Map<string, number>()
+
+  ;(technika || []).forEach((t: any) => {
+    mapaKusu.set(
+      t.zakazka_id,
+      (mapaKusu.get(t.zakazka_id) || 0) + Number(t.mnozstvi || 0)
+    )
+  })
+
+  return (
+    <div>
+      <h1>Zakázky</h1>
+
+      <Link href="/zakazky/nova">
+        <button
+          style={{
+            marginTop: "10px",
+            padding: "10px 15px",
+            background: "#2563eb",
+            border: "none",
+            borderRadius: "6px",
+            color: "white",
+            cursor: "pointer"
+          }}
+        >
+          + Nová zakázka
+        </button>
+      </Link>
+
+      <div style={{ display: "grid", gap: "10px", marginTop: "20px" }}>
+        {zakazky?.map((z: any) => {
+          const kusy = mapaKusu.get(z.zakazka_id) || 0
+
+          return (
+            <Link
+              key={z.zakazka_id}
+              href={`/zakazky/${z.zakazka_id}`}
+              style={{ textDecoration: "none", color: "inherit" }}
+            >
+              <div
+                style={{
+                  padding: "15px",
+                  background: "#1e1e1e",
+                  borderRadius: "8px",
+                  border: "1px solid #333",
+                  cursor: "pointer"
+                }}
+              >
+                <div style={{ fontSize: "18px", fontWeight: "bold" }}>
+                  {z.cislo_zakazky} – {z.nazev}
+                </div>
+
+                <div style={{ opacity: 0.7 }}>
+                  {z.misto} | {z.datum_od} → {z.datum_do}
+                </div>
+
+                <div style={{ marginTop: "6px", opacity: 0.85 }}>
+                  Technika: {kusy} ks
+                </div>
+              </div>
+            </Link>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
