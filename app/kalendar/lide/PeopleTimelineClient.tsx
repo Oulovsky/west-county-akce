@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -164,7 +164,7 @@ function formatBlockLabel(value?: string | null) {
 
   if (raw === "sklad" || raw === "logistika") return "Sklad / logistika";
   if (raw === "stavba") return "Stavba";
-  if (raw === "bourani") return "Bourání";
+  if (raw === "bourani") return "BourĂˇnĂ­";
   return "Akce";
 }
 
@@ -196,7 +196,7 @@ export default function PeopleTimelineClient({
         const json = await res.json();
 
         if (!res.ok) {
-          throw new Error(json?.error || "Nepodařilo se načíst data");
+          throw new Error(json?.error || "NepodaĹ™ilo se naÄŤĂ­st data");
         }
 
         if (!cancelled) {
@@ -204,7 +204,7 @@ export default function PeopleTimelineClient({
         }
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Neznámá chyba");
+          setError(e instanceof Error ? e.message : "NeznĂˇmĂˇ chyba");
           setData([]);
         }
       } finally {
@@ -221,7 +221,7 @@ export default function PeopleTimelineClient({
     };
   }, [from, to]);
 
-  const grouped = useMemo<UserGroup[]>((() => {
+  const grouped = useMemo<UserGroup[]>(() => {
     const map = new Map<string, UserGroup>();
 
     for (const item of data) {
@@ -233,7 +233,10 @@ export default function PeopleTimelineClient({
         });
       }
 
-      map.get(item.user_id)!.items.push(item as TimelineItem);
+      map.get(item.user_id)!.items.push({
+        ...item,
+        conflict: false,
+      });
     }
 
     return Array.from(map.values())
@@ -242,22 +245,21 @@ export default function PeopleTimelineClient({
         items: buildItemsWithConflicts(group.items),
       }))
       .sort((a, b) => a.user_name.localeCompare(b.user_name, "cs"));
-  }) as () => UserGroup[], [data]);
+  }, [data]);
 
-  const rangeStart = startOfDay(from);
-  const rangeEnd = endOfDay(to);
+  const rangeStart = useMemo(() => startOfDay(from), [from]);
+  const rangeEnd = useMemo(() => endOfDay(to), [to]);
   const totalDays = diffDaysInclusive(rangeStart, rangeEnd);
   const totalRangeMs = Math.max(1, rangeEnd.getTime() - rangeStart.getTime());
-  const rangeStartTime = rangeStart.getTime();
 
   const days = useMemo(() => {
     return Array.from({ length: totalDays }, (_, i) => addDays(rangeStart, i));
-  }, [rangeStartTime, totalDays]);
+  }, [rangeStart, totalDays]);
 
   const today = startOfDay(new Date()).getTime();
 
   if (loading) {
-    return <div className="text-sm text-zinc-300">Načítám timeline lidí…</div>;
+    return <div className="text-sm text-zinc-300">NaÄŤĂ­tĂˇm timeline lidĂ­â€¦</div>;
   }
 
   if (error) {
@@ -267,7 +269,7 @@ export default function PeopleTimelineClient({
   if (grouped.length === 0) {
     return (
       <div className="text-sm text-zinc-400">
-        V zadaném období nejsou žádná přiřazení lidí.
+        V zadanĂ©m obdobĂ­ nejsou ĹľĂˇdnĂˇ pĹ™iĹ™azenĂ­ lidĂ­.
       </div>
     );
   }
@@ -275,14 +277,14 @@ export default function PeopleTimelineClient({
   return (
     <div className="relative w-full" onMouseLeave={() => setHovered(null)}>
       <div className="mb-4 text-sm text-zinc-400">
-        Období: {rangeStart.toLocaleDateString("cs-CZ")} –{" "}
+        ObdobĂ­: {rangeStart.toLocaleDateString("cs-CZ")} â€“{" "}
         {rangeEnd.toLocaleDateString("cs-CZ")}
       </div>
 
       <div className="overflow-hidden rounded-xl border border-zinc-800 bg-[#0b1220]">
         <div className="grid" style={{ gridTemplateColumns: "170px 1fr" }}>
           <div className="border-b border-r border-zinc-800 bg-[#0f172a] p-3 text-sm font-semibold text-white">
-            Lidé
+            LidĂ©
           </div>
 
           <div
@@ -324,7 +326,7 @@ export default function PeopleTimelineClient({
               <div key={user.user_id} className="contents">
                 <div className="border-b border-r border-zinc-800 bg-[#0f172a] px-4 py-5">
                   <div className="text-base text-slate-200">
-                    {nameParts.firstName || "—"}
+                    {nameParts.firstName || "â€”"}
                   </div>
                   <div className="text-2xl font-bold leading-tight text-white">
                     {nameParts.lastName || ""}
@@ -383,8 +385,8 @@ export default function PeopleTimelineClient({
                         people: [item.user_name],
                         statusLabel: item.conflict ? "Kolize" : "Bez kolize",
                         statusTone: item.conflict ? "orange" : "blue",
-                        warningLabel: item.conflict ? "Kolize s jinou zakázkou" : null,
-                        metaLabel: `Přiřazení: ${formatBlockLabel(item.typ_bloku)}`,
+                        warningLabel: item.conflict ? "Kolize s jinou zakĂˇzkou" : null,
+                        metaLabel: `PĹ™iĹ™azenĂ­: ${formatBlockLabel(item.typ_bloku)}`,
                       };
 
                       return (
