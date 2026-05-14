@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -21,25 +21,27 @@ function formatNumber(value: number | string | null | undefined): string {
 
 export default function SkladStatistikaPage() {
   const [data, setData] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  async function load() {
-    setLoading(true);
-
-    const { data, error } = await supabase.rpc("get_statistika_poskozeni");
-
-    if (error) {
-      console.error(error);
-      setLoading(false);
-      return;
-    }
-
-    setData((data ?? []) as Row[]);
-    setLoading(false);
-  }
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    void load();
+    let active = true;
+
+    void supabase.rpc("get_statistika_poskozeni").then(({ data, error }) => {
+      if (!active) return;
+
+      if (error) {
+        console.error(error);
+        setLoaded(true);
+        return;
+      }
+
+      setData((data ?? []) as Row[]);
+      setLoaded(true);
+    });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const totalBlokovane = useMemo(
@@ -115,7 +117,7 @@ export default function SkladStatistikaPage() {
         </div>
       </div>
 
-      {loading ? (
+      {!loaded ? (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-6 text-sm text-slate-300">
           Načítám...
         </div>
