@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/lib/supabase";
@@ -63,9 +63,7 @@ export default function NakladkaClient({
 }) {
   const [data, setData] = useState<Radek[]>(initialData);
   const [compareMode, setCompareMode] = useState<"auto" | "manual">("auto");
-  const [selectedCompareZakazkaId, setSelectedCompareZakazkaId] = useState(
-    autoCompareZakazkaId ?? compareOptions[0]?.zakazka_id ?? ""
-  );
+  const [selectedCompareZakazkaId, setSelectedCompareZakazkaId] = useState("");
 
   const holdTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const holdIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -79,17 +77,17 @@ export default function NakladkaClient({
     }
   }, [initialData, zakazkaId]);
 
-  useEffect(() => {
-    if (!selectedCompareZakazkaId) {
-      setSelectedCompareZakazkaId(autoCompareZakazkaId ?? compareOptions[0]?.zakazka_id ?? "");
-      return;
+  const stopHold = useCallback(() => {
+    if (holdTimeoutRef.current) {
+      clearTimeout(holdTimeoutRef.current);
+      holdTimeoutRef.current = null;
     }
 
-    const exists = compareOptions.some((item) => item.zakazka_id === selectedCompareZakazkaId);
-    if (!exists) {
-      setSelectedCompareZakazkaId(autoCompareZakazkaId ?? compareOptions[0]?.zakazka_id ?? "");
+    if (holdIntervalRef.current) {
+      clearInterval(holdIntervalRef.current);
+      holdIntervalRef.current = null;
     }
-  }, [autoCompareZakazkaId, compareOptions, selectedCompareZakazkaId]);
+  }, []);
 
   useEffect(() => {
     const channel = supabase
@@ -127,7 +125,7 @@ export default function NakladkaClient({
       stopHold();
       void supabase.removeChannel(channel);
     };
-  }, [zakazkaId]);
+  }, [stopHold, zakazkaId]);
 
   function makeFormData(r: Radek) {
     const fd = new FormData();
@@ -183,18 +181,6 @@ export default function NakladkaClient({
         void runAction(action, r, delta);
       }, 500);
     }, 500);
-  }
-
-  function stopHold() {
-    if (holdTimeoutRef.current) {
-      clearTimeout(holdTimeoutRef.current);
-      holdTimeoutRef.current = null;
-    }
-
-    if (holdIntervalRef.current) {
-      clearInterval(holdIntervalRef.current);
-      holdIntervalRef.current = null;
-    }
   }
 
   async function handleClick(
@@ -256,7 +242,7 @@ export default function NakladkaClient({
 
       const naAute = current?.nalozeno ?? 0;
       const planDalsi = next?.plan ?? 0;
-      const nazev = current?.nazev ?? next?.nazev ?? "Neznámá položka";
+      const nazev = current?.nazev ?? next?.nazev ?? "NeznĂˇmĂˇ poloĹľka";
 
       const nechatNaAute = Math.min(naAute, planDalsi);
       const vylozit = Math.max(naAute - planDalsi, 0);
@@ -295,18 +281,18 @@ export default function NakladkaClient({
     <div className="space-y-6">
       <Card>
         <div className="grid gap-3 md:grid-cols-3">
-          <StatBox label="Plán celkem" value={`${celkemPlan} ks`} />
-          <StatBox label="Naloženo celkem" value={`${celkemNalozeno} ks`} />
-          <StatBox label="Hotové položky" value={hotovoPolozek} />
+          <StatBox label="PlĂˇn celkem" value={`${celkemPlan} ks`} />
+          <StatBox label="NaloĹľeno celkem" value={`${celkemNalozeno} ks`} />
+          <StatBox label="HotovĂ© poloĹľky" value={hotovoPolozek} />
         </div>
       </Card>
 
       <Card>
         <div className="space-y-4">
           <div>
-            <div className="text-lg font-semibold text-white">Porovnání s další zakázkou</div>
+            <div className="text-lg font-semibold text-white">PorovnĂˇnĂ­ s dalĹˇĂ­ zakĂˇzkou</div>
             <div className="mt-1 text-sm text-slate-400">
-              Skladník uvidí, co má nechat na autě, co vyložit a co doložit.
+              SkladnĂ­k uvidĂ­, co mĂˇ nechat na autÄ›, co vyloĹľit a co doloĹľit.
             </div>
           </div>
 
@@ -320,7 +306,7 @@ export default function NakladkaClient({
                   : "border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
               }`}
             >
-              Porovnat s další zakázkou
+              Porovnat s dalĹˇĂ­ zakĂˇzkou
             </button>
 
             <button
@@ -332,21 +318,21 @@ export default function NakladkaClient({
                   : "border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
               }`}
             >
-              Vybrat zakázku
+              Vybrat zakĂˇzku
             </button>
           </div>
 
           {compareMode === "manual" ? (
             <div className="max-w-xl">
               <label className="mb-2 block text-sm font-medium text-slate-300">
-                Porovnávací zakázka
+                PorovnĂˇvacĂ­ zakĂˇzka
               </label>
               <select
-                value={selectedCompareZakazkaId}
+                value={selectedCompareZakazkaId || autoCompareZakazkaId || compareOptions[0]?.zakazka_id || ""}
                 onChange={(e) => setSelectedCompareZakazkaId(e.target.value)}
                 className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-500"
               >
-                <option value="">Nevybráno</option>
+                <option value="">NevybrĂˇno</option>
                 {compareOptions.map((option) => (
                   <option key={option.zakazka_id} value={option.zakazka_id}>
                     {option.label}
@@ -359,14 +345,14 @@ export default function NakladkaClient({
           {activeCompareZakazka ? (
             <>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="default">Porovnání</Badge>
+                <Badge variant="default">PorovnĂˇnĂ­</Badge>
                 <Badge variant="warning">{activeCompareZakazka.label}</Badge>
               </div>
 
               <div className="grid gap-3 md:grid-cols-3">
-                <StatBox label="Nechat na autě" value={`${summaryNechat} ks`} />
-                <StatBox label="Vyložit" value={`${summaryVylozit} ks`} />
-                <StatBox label="Doložit" value={`${summaryDolozit} ks`} />
+                <StatBox label="Nechat na autÄ›" value={`${summaryNechat} ks`} />
+                <StatBox label="VyloĹľit" value={`${summaryVylozit} ks`} />
+                <StatBox label="DoloĹľit" value={`${summaryDolozit} ks`} />
               </div>
 
               <div className="grid gap-4">
@@ -377,16 +363,16 @@ export default function NakladkaClient({
                         <div className="space-y-2">
                           <div className="text-2xl font-bold text-white">{row.nazev}</div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="default">Na autě: {row.naAute} ks</Badge>
-                            <Badge variant="warning">Další zakázka: {row.planDalsi} ks</Badge>
+                            <Badge variant="default">Na autÄ›: {row.naAute} ks</Badge>
+                            <Badge variant="warning">DalĹˇĂ­ zakĂˇzka: {row.planDalsi} ks</Badge>
                           </div>
                         </div>
                       </div>
 
                       <div className="grid gap-3 md:grid-cols-3">
-                        <StatBox label="Nechat na autě" value={`${row.nechatNaAute} ks`} />
-                        <StatBox label="Vyložit" value={`${row.vylozit} ks`} />
-                        <StatBox label="Doložit" value={`${row.dolozit} ks`} />
+                        <StatBox label="Nechat na autÄ›" value={`${row.nechatNaAute} ks`} />
+                        <StatBox label="VyloĹľit" value={`${row.vylozit} ks`} />
+                        <StatBox label="DoloĹľit" value={`${row.dolozit} ks`} />
                       </div>
                     </div>
                   </Card>
@@ -395,7 +381,7 @@ export default function NakladkaClient({
             </>
           ) : (
             <div className="rounded-xl border border-dashed border-slate-700 px-4 py-4 text-sm text-slate-400">
-              Není k dispozici žádná navazující zakázka pro porovnání.
+              NenĂ­ k dispozici ĹľĂˇdnĂˇ navazujĂ­cĂ­ zakĂˇzka pro porovnĂˇnĂ­.
             </div>
           )}
         </div>
@@ -404,7 +390,7 @@ export default function NakladkaClient({
       {data.length === 0 ? (
         <Card>
           <div className="text-sm text-slate-400">
-            Zatím není co nakládat. Nejprve doplň techniku na zakázce.
+            ZatĂ­m nenĂ­ co naklĂˇdat. Nejprve doplĹ techniku na zakĂˇzce.
           </div>
         </Card>
       ) : (
@@ -426,9 +412,9 @@ export default function NakladkaClient({
                       <div className="text-2xl font-bold text-white">{r.nazev}</div>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="default">Plán: {r.plan} ks</Badge>
+                        <Badge variant="default">PlĂˇn: {r.plan} ks</Badge>
                         <Badge variant={hotovo ? "success" : "warning"}>
-                          {hotovo ? "Hotovo" : "Rozpracováno"}
+                          {hotovo ? "Hotovo" : "RozpracovĂˇno"}
                         </Badge>
                       </div>
                     </div>
@@ -441,13 +427,13 @@ export default function NakladkaClient({
                   </div>
 
                   <div className="grid gap-3 md:grid-cols-2">
-                    <StatBox label="Plán" value={`${r.plan} ks`} />
-                    <StatBox label="Naloženo" value={`${r.nalozeno} ks`} />
+                    <StatBox label="PlĂˇn" value={`${r.plan} ks`} />
+                    <StatBox label="NaloĹľeno" value={`${r.nalozeno} ks`} />
                   </div>
 
                   <div>
                     <div className="mb-2 flex items-center justify-between gap-3 text-sm text-slate-400">
-                      <span>Průběh</span>
+                      <span>PrĹŻbÄ›h</span>
                       <span>{Math.round(progress)} %</span>
                     </div>
 
@@ -509,3 +495,5 @@ export default function NakladkaClient({
     </div>
   );
 }
+
+
