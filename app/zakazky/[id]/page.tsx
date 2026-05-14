@@ -1,4 +1,4 @@
-import { revalidatePath } from "next/cache";
+﻿import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import PeoplePool from "./PeoplePool";
@@ -71,7 +71,7 @@ export default async function ZakazkaDetailPage({ params }: PageProps) {
     const quantity = Math.max(1, Number(formData.get("quantity") ?? 1) || 1);
 
     if (!templateId) {
-      throw new Error("Nebyla vybrána sestava.");
+      throw new Error("Nebyla vybrĂˇna sestava.");
     }
 
     const { error } = await supabase.from("zakazka_templates").insert({
@@ -95,7 +95,7 @@ export default async function ZakazkaDetailPage({ params }: PageProps) {
     const rowId = String(formData.get("rowId") ?? "").trim();
 
     if (!rowId) {
-      throw new Error("Chybí ID vazby sestavy.");
+      throw new Error("ChybĂ­ ID vazby sestavy.");
     }
 
     const { error } = await supabase
@@ -120,11 +120,11 @@ export default async function ZakazkaDetailPage({ params }: PageProps) {
     const direction = String(formData.get("direction") ?? "").trim();
 
     if (!rowId) {
-      throw new Error("Chybí ID vazby sestavy.");
+      throw new Error("ChybĂ­ ID vazby sestavy.");
     }
 
     if (direction !== "plus" && direction !== "minus") {
-      throw new Error("Neplatný směr změny množství.");
+      throw new Error("NeplatnĂ˝ smÄ›r zmÄ›ny mnoĹľstvĂ­.");
     }
 
     const { data: row, error: rowError } = await supabase
@@ -178,7 +178,7 @@ export default async function ZakazkaDetailPage({ params }: PageProps) {
     );
 
     if (!akceOd || !akceDo) {
-      throw new Error("Vyplň začátek a konec akce.");
+      throw new Error("VyplĹ zaÄŤĂˇtek a konec akce.");
     }
 
     const { error } = await supabase
@@ -220,7 +220,7 @@ export default async function ZakazkaDetailPage({ params }: PageProps) {
   }
 
   if (!data) {
-    return <div>Zakázka nenalezena</div>;
+    return <div>ZakĂˇzka nenalezena</div>;
   }
 
   const { data: realizace, error: realizaceError } = await supabase
@@ -258,10 +258,10 @@ export default async function ZakazkaDetailPage({ params }: PageProps) {
     return <div>Chyba: {technikaSummaryError.message}</div>;
   }
 
-  const technikaSummary = ((technikaSummaryRaw ?? []) as any[]).map((row) => ({
+  const technikaSummary = ((technikaSummaryRaw ?? []) as TechnikaSummaryRawRow[]).map((row) => ({
     skladova_polozka_id: row.skladova_polozka_id,
     mnozstvi: row.mnozstvi,
-    nazev: row.skladove_polozky?.nazev ?? "—",
+    nazev: getSkladovaPolozkaNazev(row.skladove_polozky),
   })) as TechnikaSummaryRow[];
 
   return (
@@ -291,3 +291,5 @@ export default async function ZakazkaDetailPage({ params }: PageProps) {
     </div>
   );
 }
+
+
