@@ -1,9 +1,15 @@
-﻿import { createClient } from "@/lib/supabase/server";
+import { requireSession } from "@/lib/auth/require-session";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    const supabase = await createClient();
+    const session = await requireSession();
+
+    if (!session.ok) {
+      return session.response;
+    }
+
+    const { supabase } = session;
 
     const { data, error } = await supabase
       .from("profiles")
