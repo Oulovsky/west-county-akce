@@ -6,10 +6,18 @@ import {
 } from "@/lib/sklad/constants";
 import type {
   SkladKusRow,
+  SkladPodkategorie,
+  SkladPolozkaRow,
   SkladPoskozeniListRow,
   SkladPoskozeniRow,
   SkladZakazkaOption,
+  SpravaInventoryFilters,
 } from "@/lib/sklad/types";
+
+type SkladPolozkaPodkategorieRow = {
+  skladova_polozka_id: string;
+  podkategorie_techniky_id: string | null;
+};
 
 export type SkladKusStatus = {
   text: string;
@@ -253,4 +261,116 @@ export function computePouzitelneKusy(
   poskozeneKusy: number
 ): number {
   return Math.max(0, celkemKusu - poskozeneKusy);
+}
+
+/** Normalizace textu pro klientské vyhledávání (bez diakritiky). */
+export function normalizeSkladSearchText(value: string | null | undefined): string {
+  return slugifyCz(value).replace(/_/g, " ");
+}
+
+export function getSpravaPolozkaPouzitelneKusy(
+  item: Pick<SkladPolozkaRow, "celkem_k_dispozici" | "poskozene">
+): number {
+  return computePouzitelneKusy(
+    toNumber(item.celkem_k_dispozici),
+    toNumber(item.poskozene)
+  );
+}
+
+export function isSpravaPolozkaDamaged(
+  item: Pick<SkladPolozkaRow, "poskozene">
+): boolean {
+  return toNumber(item.poskozene) > 0;
+}
+
+/** Žádné použitelné kusy při nenulovém celku — poškození blokuje dostupnost. */
+export function isSpravaPolozkaBlockedUnavailable(
+  item: Pick<SkladPolozkaRow, "celkem_k_dispozici" | "poskozene">
+): boolean {
+  const celkem = toNumber(item.celkem_k_dispozici);
+  if (celkem <= 0) return false;
+  return getSpravaPolozkaPouzitelneKusy(item) <= 0;
+}
+
+export function hasActiveSpravaInventoryFilters(
+  filters: SpravaInventoryFilters
+): boolean {
+  return (
+    filters.query.trim().length > 0 ||
+    filters.onlyDamaged ||
+    filters.onlyBlocked ||
+    Boolean(filters.blokId) ||
+    Boolean(filters.kategorieId)
+  );
+}
+
+export function filterSpravaInventoryItems(
+  items: SkladPolozkaRow[],
+  filters: SpravaInventoryFilters
+): SkladPolozkaRow[] {
+  const queryNorm = normalizeSkladSearchText(filters.query.trim());
+
+  return items.filter((item) => {
+    if (filters.blokId && item.sklad_blok_id !== filters.blokId) {
+      return false;
+    }
+
+    if (filters.kategorieId && item.kategorie_techniky_id !== filters.kategorieId) {
+      return false;
+    }
+
+    if (filters.onlyDamaged && !isSpravaPolozkaDamaged(item)) {
+      return false;
+    }
+
+    if (filters.onlyBlocked && !isSpravaPolozkaBlockedUnavailable(item)) {
+      return false;
+    }
+
+    if (!queryNorm) {
+      return true;
+    }
+
+    const haystack = [
+      item.nazev,
+      item.kategorie_nazev,
+      item.podkategorie_nazev,
+      item.blok_nazev,
+    ]
+      .map(normalizeSkladSearchText)
+      .join(" ");
+
+    return haystack.includes(queryNorm);
+  });
+}
+
+/** Doplní podkategorii — RPC get_skladove_polozky ji neobsahuje. */
+export function enrichSpravaPolozkyWithPodkategorie(
+  items: SkladPolozkaRow[],
+  podkategorieRows: SkladPolozkaPodkategorieRow[],
+  podkategorieCatalog: SkladPodkategorie[]
+): SkladPolozkaRow[] {
+  const podkategorieByPolozkaId = new Map(
+    podkategorieRows.map((row) => [
+      row.skladova_polozka_id,
+      row.podkategorie_techniky_id,
+    ])
+  );
+
+  const podkategorieNazevById = new Map(
+    podkategorieCatalog.map((row) => [row.podkategorie_techniky_id, row.nazev])
+  );
+
+  return items.map((item) => {
+    const podkategorieTechnikyId =
+      podkategorieByPolozkaId.get(item.skladova_polozka_id) ?? null;
+
+    return {
+      ...item,
+      podkategorie_techniky_id: podkategorieTechnikyId,
+      podkategorie_nazev: podkategorieTechnikyId
+        ? (podkategorieNazevById.get(podkategorieTechnikyId) ?? null)
+        : null,
+    };
+  });
 }

@@ -1,31 +1,27 @@
-﻿type Props = {
-  tableGrid: string;
+﻿import {
+  SPRAVA_TABLE_GRID,
+  SPRAVA_TABLE_HEADER_CLASS,
+} from "./spravaTableLayout";
+
+type Props = {
+  tableGrid?: string;
 };
 
-export function SkladTableHeader({ tableGrid }: Props) {
+export function SkladTableHeader({ tableGrid = SPRAVA_TABLE_GRID }: Props) {
   return (
-    <div
-      className={[
-        "grid",
-        tableGrid,
-        "border-b border-slate-700 bg-slate-900/95 px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-300",
-      ].join(" ")}
-    >
-      <div className="sticky left-0 z-20 bg-slate-900/95 pr-3">
-        Název
-      </div>
-
-      <div className="px-2">Okruh</div>
-      <div className="px-2">Kategorie</div>
-      <div className="px-2">Typ / rozměr</div>
-      <div className="px-2 text-right">Celkem</div>
-      <div className="px-2 text-right">Skladem</div>
-      <div className="px-2 text-right">Akce</div>
-      <div className="px-2 text-right">Poškozené</div>
-      <div className="px-2">Jednotka</div>
-      <div className="px-2 text-right">Náklad</div>
-      <div className="px-2 text-right">Rent</div>
-      <div className="px-2">Detail</div>
-    </div>
+    <section className={["grid", tableGrid, SPRAVA_TABLE_HEADER_CLASS].join(" ")}>
+      <span className="sticky left-0 z-20 bg-slate-900/95 pr-1">Název</span>
+      <span className="px-1">Okruh</span>
+      <span className="px-1">Kategorie</span>
+      <span className="px-1">Typ / rozměr</span>
+      <span className="px-1 text-right">Celkem</span>
+      <span className="px-1 text-right">Skladem</span>
+      <span className="px-1 text-right">Akce</span>
+      <span className="px-1 text-right">Poškozené</span>
+      <span className="px-1">Jednotka</span>
+      <span className="px-1 text-right">Náklad</span>
+      <span className="px-1 text-right">Rent</span>
+      <span className="px-1">Detail</span>
+    </section>
   );
 }

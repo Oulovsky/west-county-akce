@@ -76,6 +76,13 @@ export function queryPoskozeniProPolozky(
     .order("datum_nahlaseni", { ascending: false });
 }
 
+/** Podkategorie přiřazené položkám — get_skladove_polozky je nevrací. */
+export function querySkladovePolozkyPodkategorie(client: SkladSupabaseClient) {
+  return client
+    .from(SKLAD_TABLE.skladovePolozky)
+    .select("skladova_polozka_id, podkategorie_techniky_id");
+}
+
 /** Katalog pro /sklad/sprava. */
 export function querySpravaKatalog(client: SkladSupabaseClient) {
   return Promise.all([
@@ -84,6 +91,7 @@ export function querySpravaKatalog(client: SkladSupabaseClient) {
     queryPodkategorieTechnikyFull(client),
     queryJednotkySkladuFull(client),
     querySkladBloky(client),
+    querySkladovePolozkyPodkategorie(client),
   ] as const);
 }
 

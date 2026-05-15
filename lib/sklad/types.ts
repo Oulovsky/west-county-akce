@@ -233,3 +233,20 @@ export type SkladOkruhDamageSummary = {
   openReports: number;
   blockedCount: number;
 };
+
+/** Klientské filtry přehledu položek ve správě skladu. */
+export type SpravaInventoryFilters = {
+  query: string;
+  onlyDamaged: boolean;
+  onlyBlocked: boolean;
+  blokId: string;
+  kategorieId: string;
+};
+
+export const SPRAVA_INVENTORY_FILTERS_EMPTY: SpravaInventoryFilters = {
+  query: "",
+  onlyDamaged: false,
+  onlyBlocked: false,
+  blokId: "",
+  kategorieId: "",
+};

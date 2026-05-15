@@ -1,21 +1,48 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SpravaInventoryFilters } from "./components/SpravaInventoryFilters";
 import { supabase } from "@/lib/supabase";
 import { SkladToolbar } from "./components/SkladToolbar";
 import { SkladStats } from "./components/SkladStats";
 import { AddItemModal } from "./components/AddItemModal";
 import { SkladTable } from "./components/SkladTable";
 import { SkladTableRow } from "./components/SkladTableRow";
-import { SKLAD_DEFAULT_JEDNOTKA, SKLAD_REALTIME_CHANNEL, SKLAD_TABLE } from "@/lib/sklad/constants";
-import { toNumber } from "@/lib/sklad/helpers";
-import { querySpravaKatalog } from "@/lib/sklad/queries";
-import type {
-  SkladBlok,
-  SkladJednotka,
-  SkladKategorie,
-  SkladPodkategorie,
-  SkladPolozkaRow,
+import { SPRAVA_TABLE_GRID } from "./components/spravaTableLayout";
+import {
+  SKLAD_DEFAULT_JEDNOTKA,
+  SKLAD_REALTIME_CHANNEL,
+  SKLAD_RPC,
+  SKLAD_TABLE,
+} from "@/lib/sklad/constants";
+import {
+  enrichSpravaPolozkyWithPodkategorie,
+  filterSpravaInventoryItems,
+  toNumber,
+} from "@/lib/sklad/helpers";
+import {
+  createInlineJednotka,
+  createInlineKategorie,
+  createInlinePodkategorie,
+  createInlineSkladBlok,
+  type InlineConfigCreateResult,
+} from "@/lib/sklad/inlineConfigCreate";
+import {
+  queryJednotkySkladuFull,
+  queryKategorieTechnikyFull,
+  queryPodkategorieTechnikyFull,
+  querySkladBloky,
+  querySkladovePolozkyPodkategorie,
+  querySpravaKatalog,
+} from "@/lib/sklad/queries";
+import {
+  SPRAVA_INVENTORY_FILTERS_EMPTY,
+  type SkladBlok,
+  type SkladJednotka,
+  type SkladKategorie,
+  type SkladPodkategorie,
+  type SkladPolozkaRow,
+  type SpravaInventoryFilters as SpravaInventoryFiltersState,
 } from "@/lib/sklad/types";
 
 type RpcErrorResult = {
@@ -41,6 +68,8 @@ export default function Page() {
 
   const [savingId, setSavingId] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [inventoryFilters, setInventoryFilters] =
+    useState<SpravaInventoryFiltersState>(SPRAVA_INVENTORY_FILTERS_EMPTY);
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -55,49 +84,117 @@ export default function Page() {
 
   const lastChange = useRef<{ before: SkladPolozkaRow; after: SkladPolozkaRow } | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-
-    const [itemsRes, kategorieRes, podkategorieRes, jednotkyRes, blokyRes] =
-      await querySpravaKatalog(supabase);
-
-    if (itemsRes.error) {
-      alert(itemsRes.error.message);
-      setLoading(false);
-      return;
-    }
+  const reloadCatalog = useCallback(async () => {
+    const [kategorieRes, podkategorieRes, jednotkyRes, blokyRes] =
+      await Promise.all([
+        queryKategorieTechnikyFull(supabase),
+        queryPodkategorieTechnikyFull(supabase),
+        queryJednotkySkladuFull(supabase),
+        querySkladBloky(supabase),
+      ]);
 
     if (kategorieRes.error) {
       alert(kategorieRes.error.message);
-      setLoading(false);
-      return;
+      return false;
     }
 
     if (podkategorieRes.error) {
       alert(podkategorieRes.error.message);
-      setLoading(false);
-      return;
+      return false;
     }
 
     if (jednotkyRes.error) {
       alert(jednotkyRes.error.message);
-      setLoading(false);
-      return;
+      return false;
     }
 
     if (blokyRes.error) {
       alert(blokyRes.error.message);
-      setLoading(false);
-      return;
+      return false;
     }
 
-    setItems((itemsRes.data ?? []) as SkladPolozkaRow[]);
     setKategorie((kategorieRes.data ?? []) as SkladKategorie[]);
     setPodkategorie((podkategorieRes.data ?? []) as SkladPodkategorie[]);
     setJednotky((jednotkyRes.data ?? []) as SkladJednotka[]);
     setBloky((blokyRes.data ?? []) as SkladBlok[]);
-    setLoading(false);
+    return true;
   }, []);
+
+  const load = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!options?.silent) {
+        setLoading(true);
+      }
+
+      const [
+        itemsRes,
+        kategorieRes,
+        podkategorieRes,
+        jednotkyRes,
+        blokyRes,
+        polozkyPodkategorieRes,
+      ] = await querySpravaKatalog(supabase);
+
+      if (itemsRes.error) {
+        alert(itemsRes.error.message);
+        if (!options?.silent) setLoading(false);
+        return;
+      }
+
+      if (kategorieRes.error) {
+        alert(kategorieRes.error.message);
+        if (!options?.silent) setLoading(false);
+        return;
+      }
+
+      if (podkategorieRes.error) {
+        alert(podkategorieRes.error.message);
+        if (!options?.silent) setLoading(false);
+        return;
+      }
+
+      if (jednotkyRes.error) {
+        alert(jednotkyRes.error.message);
+        if (!options?.silent) setLoading(false);
+        return;
+      }
+
+      if (blokyRes.error) {
+        alert(blokyRes.error.message);
+        if (!options?.silent) setLoading(false);
+        return;
+      }
+
+      if (polozkyPodkategorieRes.error) {
+        alert(polozkyPodkategorieRes.error.message);
+        if (!options?.silent) setLoading(false);
+        return;
+      }
+
+      const podkategorieCatalog = (podkategorieRes.data ??
+        []) as SkladPodkategorie[];
+      const rawItems = (itemsRes.data ?? []) as SkladPolozkaRow[];
+
+      setItems(
+        enrichSpravaPolozkyWithPodkategorie(
+          rawItems,
+          (polozkyPodkategorieRes.data ?? []) as Array<{
+            skladova_polozka_id: string;
+            podkategorie_techniky_id: string | null;
+          }>,
+          podkategorieCatalog
+        )
+      );
+      setKategorie((kategorieRes.data ?? []) as SkladKategorie[]);
+      setPodkategorie(podkategorieCatalog);
+      setJednotky((jednotkyRes.data ?? []) as SkladJednotka[]);
+      setBloky((blokyRes.data ?? []) as SkladBlok[]);
+      if (!options?.silent) {
+        setLoading(false);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -105,7 +202,7 @@ export default function Page() {
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [load]);
+  }, [load, reloadCatalog]);
 
   useEffect(() => {
     const channels = [
@@ -114,7 +211,9 @@ export default function Page() {
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: SKLAD_TABLE.kategorieTechniky },
-          load
+          () => {
+            void reloadCatalog();
+          }
         )
         .subscribe(),
       supabase
@@ -122,7 +221,9 @@ export default function Page() {
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: SKLAD_TABLE.podkategorieTechniky },
-          load
+          () => {
+            void reloadCatalog();
+          }
         )
         .subscribe(),
       supabase
@@ -130,7 +231,9 @@ export default function Page() {
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: SKLAD_TABLE.jednotkySkladu },
-          load
+          () => {
+            void reloadCatalog();
+          }
         )
         .subscribe(),
       supabase
@@ -138,7 +241,9 @@ export default function Page() {
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: SKLAD_TABLE.hlaseniPoskozeni },
-          load
+          () => {
+            void load({ silent: true });
+          }
         )
         .subscribe(),
     ];
@@ -148,7 +253,7 @@ export default function Page() {
         void supabase.removeChannel(channel);
       });
     };
-  }, [load]);
+  }, [load, reloadCatalog]);
 
   const getKategorieOptions = useCallback(
     (blokId: string | null) => {
@@ -183,6 +288,113 @@ export default function Page() {
   const newPodkategorieOptions = useMemo(
     () => getPodkategorieOptions(newKategorieId || null),
     [getPodkategorieOptions, newKategorieId]
+  );
+
+  function inlineCreateError(
+    result: InlineConfigCreateResult
+  ): { error?: string } {
+    if (result.ok) return {};
+    return { error: result.message };
+  }
+
+  const handleQuickCreateBlok = useCallback(
+    async (nazev: string) => {
+      const result = await createInlineSkladBlok(supabase, nazev);
+      if (!result.ok) return inlineCreateError(result);
+
+      const catalogOk = await reloadCatalog();
+      if (!catalogOk) return { error: "Nepodařilo se načíst katalog." };
+
+      const { data: kategorieData } = await queryKategorieTechnikyFull(supabase);
+      const firstKategorieId =
+        ((kategorieData ?? []) as SkladKategorie[]).find(
+          (k) => k.sklad_blok_id === result.value
+        )?.kategorie_techniky_id ?? "";
+
+      setNewBlokId(result.value);
+      setNewKategorieId(firstKategorieId);
+      setNewPodkategorieId("");
+
+      return {};
+    },
+    [reloadCatalog]
+  );
+
+  const handleQuickCreateKategorie = useCallback(
+    async (nazev: string) => {
+      if (!newBlokId) return { error: "Nejdřív vyber okruh." };
+
+      const result = await createInlineKategorie(supabase, nazev, newBlokId);
+      if (!result.ok) return inlineCreateError(result);
+
+      setKategorie((prev) => {
+        if (prev.some((k) => k.kategorie_techniky_id === result.value)) {
+          return prev;
+        }
+        return [
+          ...prev,
+          {
+            kategorie_techniky_id: result.value,
+            nazev: result.nazev,
+            sklad_blok_id: newBlokId,
+          },
+        ];
+      });
+
+      await reloadCatalog();
+      setNewKategorieId(result.value);
+      setNewPodkategorieId("");
+
+      return {};
+    },
+    [newBlokId, reloadCatalog]
+  );
+
+  const handleQuickCreatePodkategorie = useCallback(
+    async (nazev: string) => {
+      if (!newKategorieId) return { error: "Nejdřív vyber kategorii." };
+
+      const result = await createInlinePodkategorie(
+        supabase,
+        nazev,
+        newKategorieId
+      );
+      if (!result.ok) return inlineCreateError(result);
+
+      setPodkategorie((prev) => {
+        if (prev.some((p) => p.podkategorie_techniky_id === result.value)) {
+          return prev;
+        }
+        return [
+          ...prev,
+          {
+            podkategorie_techniky_id: result.value,
+            nazev: result.nazev,
+            kategorie_techniky_id: newKategorieId,
+            kategorie_nazev: null,
+          },
+        ];
+      });
+
+      await reloadCatalog();
+      setNewPodkategorieId(result.value);
+
+      return {};
+    },
+    [newKategorieId, reloadCatalog]
+  );
+
+  const handleQuickCreateJednotka = useCallback(
+    async (nazev: string) => {
+      const result = await createInlineJednotka(supabase, nazev);
+      if (!result.ok) return inlineCreateError(result);
+
+      await reloadCatalog();
+      setNewJednotka(result.value);
+
+      return {};
+    },
+    [reloadCatalog]
   );
 
   function resetAddForm() {
@@ -300,11 +512,9 @@ export default function Page() {
 
       if (error) {
         alert(error.message);
-        await load();
+        await load({ silent: true });
         return;
       }
-
-      await load();
     },
     [draft, items, load]
   );
@@ -340,7 +550,7 @@ export default function Page() {
 
           if (result.error) {
             alert(result.error.message);
-            void load();
+            void load({ silent: true });
             return;
           }
 
@@ -353,7 +563,7 @@ export default function Page() {
 
     window.addEventListener("keydown", handleUndo);
     return () => window.removeEventListener("keydown", handleUndo);
-  }, [load]);
+  }, [load, reloadCatalog]);
 
   useEffect(() => {
     function handleGlobalEnter(e: KeyboardEvent) {
@@ -371,24 +581,94 @@ export default function Page() {
     return () => window.removeEventListener("keydown", handleGlobalEnter);
   }, [editingId, saveEdit]);
 
+  function resolveKategorieForBlokChange(
+    targetBlokId: string | null,
+    previousKategorieId: string | null
+  ): string | null {
+    if (!targetBlokId) return previousKategorieId;
+
+    const options = getKategorieOptions(targetBlokId);
+    if (
+      previousKategorieId &&
+      options.some((k) => k.kategorie_techniky_id === previousKategorieId)
+    ) {
+      return previousKategorieId;
+    }
+
+    return options[0]?.kategorie_techniky_id ?? previousKategorieId;
+  }
+
   async function updateZaklad(
     id: string,
     kategorieId: string | null,
     podkategorieId: string | null,
-    blokId: string | null
+    blokId: string | null,
+    labelOverrides?: {
+      kategorieNazev?: string | null;
+      podkategorieNazev?: string | null;
+      blokNazev?: string | null;
+    }
   ) {
     const previous = items;
+    const oldItem = items.find((item) => item.skladova_polozka_id === id);
+    if (!oldItem) return;
+
+    const isBlokOnlyChange =
+      kategorieId === null &&
+      podkategorieId === null &&
+      blokId !== oldItem.sklad_blok_id;
+
+    const isKategorieChange =
+      kategorieId !== null && kategorieId !== oldItem.kategorie_techniky_id;
+
+    const isPodkategorieChange =
+      !isBlokOnlyChange &&
+      !isKategorieChange &&
+      podkategorieId !== oldItem.podkategorie_techniky_id;
+
+    const finalBlokId = isBlokOnlyChange ? blokId : (blokId ?? oldItem.sklad_blok_id);
+
+    let finalKategorieId = oldItem.kategorie_techniky_id;
+    if (isKategorieChange) {
+      finalKategorieId = kategorieId;
+    } else if (isBlokOnlyChange) {
+      finalKategorieId = resolveKategorieForBlokChange(
+        blokId,
+        oldItem.kategorie_techniky_id
+      );
+    }
+
+    let finalPodkategorieId = oldItem.podkategorie_techniky_id;
+    if (isPodkategorieChange) {
+      finalPodkategorieId = podkategorieId;
+    } else if (isKategorieChange || isBlokOnlyChange) {
+      finalPodkategorieId = null;
+    }
+
+    const zakladChanged =
+      finalKategorieId !== oldItem.kategorie_techniky_id ||
+      finalBlokId !== oldItem.sklad_blok_id;
+
+    const podkategorieChanged =
+      finalPodkategorieId !== oldItem.podkategorie_techniky_id;
+
+    if (!zakladChanged && !podkategorieChanged) return;
 
     const novaKategorie =
-      kategorie.find((k) => k.kategorie_techniky_id === kategorieId)?.nazev ??
+      labelOverrides?.kategorieNazev ??
+      kategorie.find((k) => k.kategorie_techniky_id === finalKategorieId)?.nazev ??
       null;
 
     const novaPodkategorie =
-      podkategorie.find((p) => p.podkategorie_techniky_id === podkategorieId)
-        ?.nazev ?? null;
+      labelOverrides?.podkategorieNazev ??
+      podkategorie.find((p) => p.podkategorie_techniky_id === finalPodkategorieId)
+        ?.nazev ??
+      null;
 
     const novyBlok =
-      bloky.find((b) => b.sklad_blok_id === blokId)?.nazev ?? null;
+      labelOverrides?.blokNazev ??
+      bloky.find((b) => b.sklad_blok_id === finalBlokId)?.nazev ??
+      null;
 
     setSavingId(id);
 
@@ -397,35 +677,87 @@ export default function Page() {
         item.skladova_polozka_id === id
           ? {
               ...item,
-              kategorie_techniky_id: kategorieId,
+              kategorie_techniky_id: finalKategorieId,
               kategorie_nazev: novaKategorie,
-              podkategorie_techniky_id: podkategorieId,
+              podkategorie_techniky_id: finalPodkategorieId,
               podkategorie_nazev: novaPodkategorie,
-              sklad_blok_id: blokId,
+              sklad_blok_id: finalBlokId,
               blok_nazev: novyBlok,
             }
           : item
       )
     );
 
-    const { error } = await supabase.rpc("update_skladova_polozka_zaklad", {
-      p_id: id,
-      p_kategorie_techniky_id: kategorieId,
-      p_podkategorie_techniky_id: podkategorieId,
-      p_sklad_blok_id: blokId,
-    });
+    if (zakladChanged) {
+      if (!finalKategorieId) {
+        setSavingId(null);
+        setItems(previous);
+        alert("Kategorie je povinná — vyber kategorii v rámci okruhu.");
+        return;
+      }
 
-    setSavingId(null);
+      const { error } = await supabase.rpc(SKLAD_RPC.updateSkladovaPolozkaZaklad, {
+        p_id: id,
+        p_kategorie_techniky_id: finalKategorieId,
+        p_sklad_blok_id: finalBlokId,
+      });
 
-    if (error) {
-      setItems(previous);
-      alert(error.message);
-      return;
+      if (error) {
+        setSavingId(null);
+        setItems(previous);
+        alert(error.message);
+        return;
+      }
     }
 
+    if (podkategorieChanged) {
+      if (!finalKategorieId) {
+        setSavingId(null);
+        setItems(previous);
+        alert("Kategorie je povinná — typ lze uložit až po přiřazení kategorie.");
+        return;
+      }
+
+      const { error } = await supabase.rpc(SKLAD_RPC.updateSkladovaPolozka, {
+        p_skladova_polozka_id: id,
+        p_nazev: oldItem.nazev,
+        p_kategorie_techniky_id: finalKategorieId,
+        p_podkategorie_techniky_id: finalPodkategorieId,
+        p_jednotka: oldItem.jednotka ?? SKLAD_DEFAULT_JEDNOTKA,
+        p_celkem_k_dispozici: oldItem.celkem_k_dispozici,
+        p_interni_naklad: oldItem.interni_naklad,
+        p_fakturacni_cena: oldItem.fakturacni_cena,
+        p_aktivni: true,
+      });
+
+      if (error) {
+        setSavingId(null);
+        setItems(previous);
+        alert(error.message);
+        await load({ silent: true });
+        return;
+      }
+
+      const { data: podkategorieRows, error: podkategorieMapError } =
+        await querySkladovePolozkyPodkategorie(supabase);
+
+      if (!podkategorieMapError && podkategorieRows) {
+        setPodkategorie((currentPodkategorie) => {
+          setItems((prev) =>
+            enrichSpravaPolozkyWithPodkategorie(
+              prev,
+              podkategorieRows,
+              currentPodkategorie
+            )
+          );
+          return currentPodkategorie;
+        });
+      }
+    }
+
+    setSavingId(null);
     setHighlightId(id);
     window.setTimeout(() => setHighlightId(null), 1000);
-    await load();
   }
 
   async function handleCreateItem() {
@@ -547,8 +879,10 @@ export default function Page() {
     0
   );
 
-  const tableGrid =
-    "grid-cols-[minmax(190px,2fr)_120px_130px_150px_70px_80px_80px_90px_90px_100px_90px_100px]";
+  const filteredItems = useMemo(
+    () => filterSpravaInventoryItems(items, inventoryFilters),
+    [items, inventoryFilters]
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -582,14 +916,21 @@ export default function Page() {
           totalPoskozene={totalPoskozene}
         />
 
+        <SpravaInventoryFilters
+          filters={inventoryFilters}
+          onChange={setInventoryFilters}
+          bloky={bloky}
+          kategorie={kategorie}
+          filteredCount={filteredItems.length}
+          totalCount={items.length}
+        />
+
         <AddItemModal
         open={isAddOpen}
         onClose={closeAddModal}
         onSave={handleCreateItem}
         isCreating={isCreating}
         bloky={bloky}
-        kategorie={kategorie}
-        podkategorie={podkategorie}
         jednotky={jednotky}
         newBlokId={newBlokId}
         setNewBlokId={(blokId) => {
@@ -616,10 +957,19 @@ export default function Page() {
         setNewRent={setNewRent}
         newKategorieOptions={newKategorieOptions}
         newPodkategorieOptions={newPodkategorieOptions}
+        onQuickCreateBlok={handleQuickCreateBlok}
+        onQuickCreateKategorie={handleQuickCreateKategorie}
+        onQuickCreatePodkategorie={handleQuickCreatePodkategorie}
+        onQuickCreateJednotka={handleQuickCreateJednotka}
         />
 
-        <SkladTable loading={loading} tableGrid={tableGrid}>
-          {items.map((i) => {
+        <SkladTable loading={loading} tableGrid={SPRAVA_TABLE_GRID}>
+          {!loading && filteredItems.length === 0 ? (
+            <div className="border-t border-slate-800 px-4 py-10 text-center text-sm text-slate-400">
+              Žádná položka nevyhovuje zadaným filtrům.
+            </div>
+          ) : null}
+          {filteredItems.map((i) => {
           const isEditing = editingId === i.skladova_polozka_id;
           const isSaving = savingId === i.skladova_polozka_id;
           const isHighlight = highlightId === i.skladova_polozka_id;
@@ -652,6 +1002,113 @@ export default function Page() {
               }
               onDraftChange={setDraft}
               onKeyDown={(e) => handleKeyDown(e, i.skladova_polozka_id)}
+              onQuickCreateBlok={async (nazev) => {
+                const polozkaId = i.skladova_polozka_id;
+                const result = await createInlineSkladBlok(supabase, nazev);
+                if (!result.ok) return inlineCreateError(result);
+
+                const { data: kategorieData } =
+                  await queryKategorieTechnikyFull(supabase);
+                const firstKategorie = ((kategorieData ?? []) as SkladKategorie[]).find(
+                  (k) => k.sklad_blok_id === result.value
+                );
+
+                await reloadCatalog();
+                await updateZaklad(
+                  polozkaId,
+                  firstKategorie?.kategorie_techniky_id ?? null,
+                  null,
+                  result.value,
+                  {
+                    blokNazev: result.nazev,
+                    kategorieNazev: firstKategorie?.nazev ?? null,
+                  }
+                );
+                return {};
+              }}
+              onQuickCreateKategorie={async (nazev) => {
+                const polozkaId = i.skladova_polozka_id;
+                const blokId = i.sklad_blok_id;
+                if (!blokId) {
+                  return { error: "Nejdřív přiřaď okruh." };
+                }
+                const result = await createInlineKategorie(
+                  supabase,
+                  nazev,
+                  blokId
+                );
+                if (!result.ok) return inlineCreateError(result);
+
+                setKategorie((prev) => {
+                  if (prev.some((k) => k.kategorie_techniky_id === result.value)) {
+                    return prev;
+                  }
+                  return [
+                    ...prev,
+                    {
+                      kategorie_techniky_id: result.value,
+                      nazev: result.nazev,
+                      sklad_blok_id: blokId,
+                    },
+                  ];
+                });
+
+                await reloadCatalog();
+                await updateZaklad(polozkaId, result.value, null, blokId, {
+                  kategorieNazev: result.nazev,
+                });
+                return {};
+              }}
+              onQuickCreatePodkategorie={async (nazev) => {
+                const polozkaId = i.skladova_polozka_id;
+                const kategorieTechnikyId = i.kategorie_techniky_id;
+                const blokId = i.sklad_blok_id;
+                if (!kategorieTechnikyId) {
+                  return { error: "Nejdřív vyber kategorii." };
+                }
+                const result = await createInlinePodkategorie(
+                  supabase,
+                  nazev,
+                  kategorieTechnikyId
+                );
+                if (!result.ok) return inlineCreateError(result);
+
+                setPodkategorie((prev) => {
+                  if (
+                    prev.some((p) => p.podkategorie_techniky_id === result.value)
+                  ) {
+                    return prev;
+                  }
+                  return [
+                    ...prev,
+                    {
+                      podkategorie_techniky_id: result.value,
+                      nazev: result.nazev,
+                      kategorie_techniky_id: kategorieTechnikyId,
+                      kategorie_nazev: null,
+                    },
+                  ];
+                });
+
+                await reloadCatalog();
+                await updateZaklad(
+                  polozkaId,
+                  kategorieTechnikyId,
+                  result.value,
+                  blokId,
+                  { podkategorieNazev: result.nazev }
+                );
+                return {};
+              }}
+              onQuickCreateJednotka={async (nazev) => {
+                const result = await createInlineJednotka(supabase, nazev);
+                if (!result.ok) return inlineCreateError(result);
+                await reloadCatalog();
+                if (editingId === i.skladova_polozka_id) {
+                  setDraft((prev) => ({ ...prev, jednotka: result.value }));
+                }
+                return {};
+              }}
               />
             );
           })}
