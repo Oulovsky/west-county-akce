@@ -21,7 +21,6 @@ import {
   toNumber,
 } from "@/lib/sklad/helpers";
 import {
-  createInlineJednotka,
   createInlineKategorie,
   createInlinePodkategorie,
   createInlineSkladBlok,
@@ -67,6 +66,7 @@ export default function Page() {
   const [draft, setDraft] = useState({
     nazev: "",
     kusy: "",
+    pozice: "",
     jednotka: "ks",
     naklad: "",
     rent: "",
@@ -92,6 +92,9 @@ export default function Page() {
   const [newRent, setNewRent] = useState("");
 
   const lastChange = useRef<{ before: SkladPolozkaRow; after: SkladPolozkaRow } | null>(null);
+
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
 
   const bumpKusyReload = useCallback((polozkaId: string) => {
     setKusyReloadById((prev) => ({
@@ -211,7 +214,31 @@ export default function Page() {
 
       const podkategorieCatalog = (podkategorieRes.data ??
         []) as SkladPodkategorie[];
-      const rawItems = (itemsRes.data ?? []) as SkladPolozkaRow[];
+
+      const { data: pozRows, error: pozErr } = await supabase
+        .from(SKLAD_TABLE.skladovePolozky)
+        .select("skladova_polozka_id, pozice");
+
+      if (pozErr && !options?.silent) {
+        alert(pozErr.message);
+      }
+
+      const pozMap = new Map<string, string | number | null>(
+        (pozRows ?? []).map(
+          (r: { skladova_polozka_id: string; pozice: string | number | null }) => [
+            r.skladova_polozka_id,
+            r.pozice ?? null,
+          ]
+        )
+      );
+
+      const rawItems = ((itemsRes.data ?? []) as SkladPolozkaRow[]).map(
+        (item) => ({
+          ...item,
+          pozice:
+            pozMap.get(item.skladova_polozka_id) ?? item.pozice ?? null,
+        })
+      );
 
       const enrichedPodkategorie = enrichSpravaPolozkyWithPodkategorie(
         rawItems,
@@ -487,19 +514,6 @@ export default function Page() {
     [newKategorieId, reloadCatalog]
   );
 
-  const handleQuickCreateJednotka = useCallback(
-    async (nazev: string) => {
-      const result = await createInlineJednotka(supabase, nazev);
-      if (!result.ok) return inlineCreateError(result);
-
-      await reloadCatalog();
-      setNewJednotka(result.value);
-
-      return {};
-    },
-    [reloadCatalog]
-  );
-
   function resetAddForm() {
     const firstBlokId = bloky[0]?.sklad_blok_id ?? "";
 
@@ -531,6 +545,10 @@ export default function Page() {
     setDraft({
       nazev: item.nazev,
       kusy: String(toNumber(item.celkem_k_dispozici)),
+      pozice:
+        item.pozice == null || item.pozice === ""
+          ? ""
+          : String(item.pozice),
       jednotka: item.jednotka ?? "ks",
       naklad: item.interni_naklad == null ? "" : String(item.interni_naklad),
       rent: item.fakturacni_cena == null ? "" : String(item.fakturacni_cena),
@@ -542,33 +560,52 @@ export default function Page() {
     setDraft({
       nazev: "",
       kusy: "",
+      pozice: "",
       jednotka: "ks",
       naklad: "",
       rent: "",
     });
   }
 
-  const saveEdit = useCallback(
-    async (id: string) => {
+  const commitRowSave = useCallback(
+    async (
+      id: string,
+      snapshot: {
+        nazev: string;
+        kusy: string;
+        pozice: string;
+        jednotka: string;
+        naklad: string;
+        rent: string;
+      },
+      options: { exitEdit: boolean }
+    ) => {
       const oldItem = items.find((i) => i.skladova_polozka_id === id);
       if (!oldItem) return;
 
-      const parsedKusy = Number(draft.kusy);
-      const parsedNaklad = draft.naklad === "" ? null : Number(draft.naklad);
-      const parsedRent = draft.rent === "" ? null : Number(draft.rent);
+      const parsedKusy = Number(snapshot.kusy);
+      const parsedNaklad = snapshot.naklad === "" ? null : Number(snapshot.naklad);
+      const parsedRent = snapshot.rent === "" ? null : Number(snapshot.rent);
+      const parsedPozice =
+        snapshot.pozice.trim() === "" ? null : Number(snapshot.pozice);
 
-      if (!draft.nazev.trim()) {
+      if (!snapshot.nazev.trim()) {
         alert("Název je povinný.");
         return;
       }
 
-      if (!draft.jednotka.trim()) {
+      if (!snapshot.jednotka.trim()) {
         alert("Jednotka je povinná.");
         return;
       }
 
       if (!Number.isFinite(parsedKusy) || parsedKusy < 0) {
         alert("Kusy musí být číslo 0 nebo vyšší.");
+        return;
+      }
+
+      if (parsedPozice !== null && !Number.isFinite(parsedPozice)) {
+        alert("Pozice musí být číslo.");
         return;
       }
 
@@ -584,11 +621,12 @@ export default function Page() {
 
       const updated: SkladPolozkaRow = {
         ...oldItem,
-        nazev: draft.nazev.trim(),
+        nazev: snapshot.nazev.trim(),
         celkem_k_dispozici: parsedKusy,
-        jednotka: draft.jednotka.trim(),
+        jednotka: snapshot.jednotka.trim(),
         interni_naklad: parsedNaklad,
         fakturacni_cena: parsedRent,
+        pozice: parsedPozice,
       };
 
       lastChange.current = { before: oldItem, after: updated };
@@ -597,7 +635,10 @@ export default function Page() {
         prev.map((i) => (i.skladova_polozka_id === id ? updated : i))
       );
 
-      setEditingId(null);
+      if (options.exitEdit) {
+        setEditingId(null);
+      }
+
       setSavingId(id);
       setHighlightId(id);
 
@@ -619,6 +660,20 @@ export default function Page() {
         return;
       }
 
+      const { error: pozUpdateErr } = await supabase
+        .from(SKLAD_TABLE.skladovePolozky)
+        .update({
+          pozice: parsedPozice,
+          upraveno_dne: new Date().toISOString(),
+        })
+        .eq("skladova_polozka_id", id);
+
+      if (pozUpdateErr) {
+        alert(pozUpdateErr.message);
+        await load({ silent: true });
+        return;
+      }
+
       await applyKusySyncAfterCelkemSave(
         id,
         updated.nazev,
@@ -627,7 +682,23 @@ export default function Page() {
 
       await load({ silent: true });
     },
-    [applyKusySyncAfterCelkemSave, draft, items, load]
+    [applyKusySyncAfterCelkemSave, items, load]
+  );
+
+  const saveEdit = useCallback(
+    async (id: string) => {
+      await commitRowSave(id, draftRef.current, { exitEdit: true });
+    },
+    [commitRowSave]
+  );
+
+  const commitJednotkaChange = useCallback(
+    (polozkaId: string, jednotkaValue: string) => {
+      if (editingId !== polozkaId) return;
+      const snapshot = { ...draftRef.current, jednotka: jednotkaValue };
+      void commitRowSave(polozkaId, snapshot, { exitEdit: true });
+    },
+    [commitRowSave, editingId]
   );
 
   useEffect(() => {
@@ -656,11 +727,35 @@ export default function Page() {
           p_naklad: before.interni_naklad,
           p_rent: before.fakturacni_cena,
         })
-        .then((result: RpcErrorResult) => {
+        .then(async (result: RpcErrorResult) => {
           setSavingId(null);
 
           if (result.error) {
             alert(result.error.message);
+            void load({ silent: true });
+            return;
+          }
+
+          const rawPoz = before.pozice;
+          const parsedUndoPoz =
+            rawPoz == null || rawPoz === ""
+              ? null
+              : Number(rawPoz);
+          const poziceUndo =
+            parsedUndoPoz !== null && Number.isFinite(parsedUndoPoz)
+              ? parsedUndoPoz
+              : null;
+
+          const { error: pozUndoErr } = await supabase
+            .from(SKLAD_TABLE.skladovePolozky)
+            .update({
+              pozice: poziceUndo,
+              upraveno_dne: new Date().toISOString(),
+            })
+            .eq("skladova_polozka_id", before.skladova_polozka_id);
+
+          if (pozUndoErr) {
+            alert(pozUndoErr.message);
             void load({ silent: true });
             return;
           }
@@ -1088,7 +1183,6 @@ export default function Page() {
         onQuickCreateBlok={handleQuickCreateBlok}
         onQuickCreateKategorie={handleQuickCreateKategorie}
         onQuickCreatePodkategorie={handleQuickCreatePodkategorie}
-        onQuickCreateJednotka={handleQuickCreateJednotka}
         />
 
         <SkladTable loading={loading} tableGrid={SPRAVA_TABLE_GRID}>
@@ -1130,6 +1224,11 @@ export default function Page() {
                 )
               }
               onDraftChange={setDraft}
+              onCommitJednotka={
+                isEditing
+                  ? (value) => commitJednotkaChange(i.skladova_polozka_id, value)
+                  : undefined
+              }
               onKeyDown={(e) => handleKeyDown(e, i.skladova_polozka_id)}
               onQuickCreateBlok={async (nazev) => {
                 const polozkaId = i.skladova_polozka_id;
@@ -1227,15 +1326,6 @@ export default function Page() {
                   blokId,
                   { podkategorieNazev: result.nazev }
                 );
-                return {};
-              }}
-              onQuickCreateJednotka={async (nazev) => {
-                const result = await createInlineJednotka(supabase, nazev);
-                if (!result.ok) return inlineCreateError(result);
-                await reloadCatalog();
-                if (editingId === i.skladova_polozka_id) {
-                  setDraft((prev) => ({ ...prev, jednotka: result.value }));
-                }
                 return {};
               }}
               />

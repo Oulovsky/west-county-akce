@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 type SkladDetailHeaderProps = {
   skladovaPolozkaId: string;
   deleteAction: (formData: FormData) => Promise<void>;
@@ -11,12 +9,14 @@ export function SkladDetailHeader({
 }: SkladDetailHeaderProps) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <Link
-        href="/sklad"
-        className="inline-flex items-center text-sm font-medium text-slate-300 transition hover:text-white"
-      >
-        ← Zpět na sklad
-      </Link>
+      <form action="/sklad/sprava">
+        <button
+          type="submit"
+          className="inline-flex items-center rounded-xl border border-slate-600 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-800 hover:text-white"
+        >
+          ← Zpět na správu skladu
+        </button>
+      </form>
 
       <form action={deleteAction}>
         <input type="hidden" name="skladova_polozka_id" value={skladovaPolozkaId} />

@@ -1,3 +1,6 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatNumber } from "@/lib/sklad/helpers";
 import type {
   SkladDetailRow,
@@ -17,8 +20,8 @@ type SkladDetailMainRowProps = {
   editFormId: string;
   rowGridClassName: string;
   kategorie: SkladKategorie[];
-  selectedKategorieId: string;
-  selectedPodkategorie: SkladPodkategorie[];
+  /** Celý katalog podkategorií — výběr se filtruje podle aktuální kategorie v UI. */
+  podkategorie: SkladPodkategorie[];
   jednotky: SkladJednotka[];
   celkemKusu: number;
   poskozeneKusy: number;
@@ -26,13 +29,25 @@ type SkladDetailMainRowProps = {
   updateAction: (formData: FormData) => Promise<void>;
 };
 
+function podkategorieJeProKategorii(
+  podkategorieId: string,
+  kategorieId: string,
+  all: SkladPodkategorie[]
+) {
+  if (!podkategorieId) return true;
+  return all.some(
+    (p) =>
+      p.podkategorie_techniky_id === podkategorieId &&
+      (!kategorieId || p.kategorie_techniky_id === kategorieId)
+  );
+}
+
 export function SkladDetailMainRow({
   row,
   editFormId,
   rowGridClassName,
   kategorie,
-  selectedKategorieId,
-  selectedPodkategorie,
+  podkategorie: allPodkategorie,
   jednotky,
   celkemKusu,
   poskozeneKusy,
@@ -40,16 +55,71 @@ export function SkladDetailMainRow({
   updateAction,
 }: SkladDetailMainRowProps) {
   const centerCellClassName = SKLAD_DETAIL_CENTER_CELL_CLASS_NAME;
+  const formRef = useRef<HTMLFormElement>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [kategorieId, setKategorieId] = useState(() =>
+    String(row.kategorie_techniky_id ?? "")
+  );
+  const [podkategorieId, setPodkategorieId] = useState(() =>
+    String(row.podkategorie_techniky_id ?? "")
+  );
+
+  useEffect(() => {
+    setKategorieId(String(row.kategorie_techniky_id ?? ""));
+    setPodkategorieId(String(row.podkategorie_techniky_id ?? ""));
+  }, [
+    row.skladova_polozka_id,
+    row.kategorie_techniky_id,
+    row.podkategorie_techniky_id,
+    row.upraveno_dne,
+  ]);
+
+  const filteredPodkategorie = useMemo(
+    () =>
+      allPodkategorie.filter(
+        (p) => !kategorieId || p.kategorie_techniky_id === kategorieId
+      ),
+    [allPodkategorie, kategorieId]
+  );
+
+  const scheduleSubmit = useCallback(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      formRef.current?.requestSubmit();
+    }, 0);
+  }, []);
+
+  const onKategorieChange = (next: string) => {
+    setKategorieId(next);
+    setPodkategorieId((prev) =>
+      podkategorieJeProKategorii(prev, next, allPodkategorie) ? prev : ""
+    );
+    scheduleSubmit();
+  };
+
+  const onPodkategorieChange = (next: string) => {
+    setPodkategorieId(next);
+    scheduleSubmit();
+  };
+
+  const onJednotkaChange = () => {
+    scheduleSubmit();
+  };
 
   return (
     <>
       <form
+        ref={formRef}
         id={editFormId}
         action={updateAction}
         key={`${row.skladova_polozka_id}-${row.kategorie_techniky_id ?? "bez"}-${row.podkategorie_techniky_id ?? "bez"}-${row.pozice ?? "bez"}-${row.upraveno_dne}`}
       >
         <input type="hidden" name="skladova_polozka_id" value={row.skladova_polozka_id} />
         <input type="hidden" name="celkem_k_dispozici" value={celkemKusu} />
+        <input type="hidden" name="kategorie_techniky_id" value={kategorieId} />
+        <input type="hidden" name="podkategorie_techniky_id" value={podkategorieId} />
       </form>
 
       <div className="bg-slate-950/30 px-3 py-3">
@@ -59,15 +129,15 @@ export function SkladDetailMainRow({
               form={editFormId}
               name="nazev"
               defaultValue={row.nazev}
+              onBlur={scheduleSubmit}
               className={fieldClassName()}
             />
           </div>
 
           <div className="flex items-center px-2">
             <select
-              form={editFormId}
-              name="kategorie_techniky_id"
-              defaultValue={selectedKategorieId}
+              value={kategorieId}
+              onChange={(e) => onKategorieChange(e.target.value)}
               className={fieldClassName()}
             >
               <option value="">Bez kategorie</option>
@@ -81,13 +151,12 @@ export function SkladDetailMainRow({
 
           <div className="flex items-center px-2">
             <select
-              form={editFormId}
-              name="podkategorie_techniky_id"
-              defaultValue={row.podkategorie_techniky_id ?? ""}
+              value={podkategorieId}
+              onChange={(e) => onPodkategorieChange(e.target.value)}
               className={fieldClassName()}
             >
               <option value="">Bez podkategorie</option>
-              {selectedPodkategorie.map((item) => (
+              {filteredPodkategorie.map((item) => (
                 <option key={item.podkategorie_techniky_id} value={item.podkategorie_techniky_id}>
                   {item.nazev}
                 </option>
@@ -101,6 +170,7 @@ export function SkladDetailMainRow({
               name="pozice"
               defaultValue={row.pozice ?? ""}
               inputMode="decimal"
+              onBlur={scheduleSubmit}
               className={fieldClassName("text-center")}
             />
           </div>
@@ -141,6 +211,7 @@ export function SkladDetailMainRow({
               form={editFormId}
               name="jednotka"
               defaultValue={row.jednotka}
+              onChange={onJednotkaChange}
               className={fieldClassName("text-center")}
             >
               {jednotky.map((item) => (
@@ -157,6 +228,7 @@ export function SkladDetailMainRow({
               name="interni_naklad"
               defaultValue={row.interni_naklad ?? ""}
               inputMode="decimal"
+              onBlur={scheduleSubmit}
               className={fieldClassName("text-center")}
             />
           </div>
@@ -167,6 +239,7 @@ export function SkladDetailMainRow({
               name="fakturacni_cena"
               defaultValue={row.fakturacni_cena ?? ""}
               inputMode="decimal"
+              onBlur={scheduleSubmit}
               className={fieldClassName("text-center")}
             />
           </div>

@@ -1,7 +1,15 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { Dispatch, KeyboardEvent, SetStateAction, useState } from "react";
+import {
+  type Dispatch,
+  type KeyboardEvent,
+  type RefObject,
+  type SetStateAction,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { formatMoney } from "./formatMoney";
 import { formatNumber } from "./formatNumber";
 import { toNumber } from "./toNumber";
@@ -33,9 +41,13 @@ import {
 
 type QuickCreateHandler = (name: string) => Promise<{ error?: string } | void>;
 
+/** Které pole zaměřit po přepnutí řádku do režimu úprav (stejné kliknutí). */
+type EditFocusTarget = "nazev" | "pozice" | "kusy" | "naklad" | "rent" | "jednotka";
+
 type Draft = {
   nazev: string;
   kusy: string;
+  pozice: string;
   jednotka: string;
   naklad: string;
   rent: string;
@@ -59,11 +71,12 @@ type Props = {
     blokId: string | null
   ) => void;
   onDraftChange: Dispatch<SetStateAction<Draft>>;
+  /** Called after jednotka select change — persists immediately (správa table). */
+  onCommitJednotka?: (value: string) => void;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   onQuickCreateBlok: QuickCreateHandler;
   onQuickCreateKategorie: QuickCreateHandler;
   onQuickCreatePodkategorie: QuickCreateHandler;
-  onQuickCreateJednotka: QuickCreateHandler;
 };
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
@@ -96,13 +109,48 @@ export function SkladTableRow({
   onStartEdit,
   onUpdateZaklad,
   onDraftChange,
+  onCommitJednotka,
   onKeyDown,
   onQuickCreateBlok,
   onQuickCreateKategorie,
   onQuickCreatePodkategorie,
-  onQuickCreateJednotka,
 }: Props) {
   const [isExpanded, setIsExpanded] = useState(false);
+
+  const pendingEditFocus = useRef<EditFocusTarget | null>(null);
+  const nazevInputRef = useRef<HTMLInputElement>(null);
+  const poziceInputRef = useRef<HTMLInputElement>(null);
+  const kusyInputRef = useRef<HTMLInputElement>(null);
+  const nakladInputRef = useRef<HTMLInputElement>(null);
+  const rentInputRef = useRef<HTMLInputElement>(null);
+  const jednotkaCellRef = useRef<HTMLDivElement>(null);
+
+  function beginEdit(target: EditFocusTarget) {
+    if (isEditing) return;
+    pendingEditFocus.current = target;
+    onStartEdit();
+  }
+
+  useLayoutEffect(() => {
+    if (!isEditing) return;
+    const target = pendingEditFocus.current;
+    if (target == null) return;
+    pendingEditFocus.current = null;
+
+    const map: Record<EditFocusTarget, RefObject<HTMLElement | null> | null> = {
+      nazev: nazevInputRef,
+      pozice: poziceInputRef,
+      kusy: kusyInputRef,
+      naklad: nakladInputRef,
+      rent: rentInputRef,
+      jednotka: null,
+    };
+    if (target === "jednotka") {
+      jednotkaCellRef.current?.querySelector<HTMLSelectElement>("select")?.focus();
+      return;
+    }
+    map[target]?.current?.focus();
+  }, [isEditing]);
 
   const rowClass = [
     "grid",
@@ -121,7 +169,7 @@ export function SkladTableRow({
     >
       <div className={rowClass}>
         <div
-          onClick={() => !isEditing && onStartEdit()}
+          onClick={() => !isEditing && beginEdit("nazev")}
           className="sticky left-0 z-10 flex min-h-8 min-w-0 items-center gap-1.5 bg-inherit pr-1"
           style={{ cursor: isEditing ? "default" : "pointer" }}
         >
@@ -142,7 +190,7 @@ export function SkladTableRow({
 
           {isEditing ? (
             <input
-              autoFocus
+              ref={nazevInputRef}
               value={draft.nazev}
               onChange={(e) =>
                 onDraftChange((prev) => ({
@@ -231,12 +279,40 @@ export function SkladTableRow({
         </div>
 
         <div
-          onClick={() => !isEditing && onStartEdit()}
+          onClick={() => !isEditing && beginEdit("pozice")}
           className="flex min-h-8 items-center justify-center px-1 text-center"
           style={{ cursor: "pointer" }}
         >
           {isEditing ? (
             <input
+              ref={poziceInputRef}
+              value={draft.pozice}
+              onChange={(e) =>
+                onDraftChange((prev) => ({
+                  ...prev,
+                  pozice: e.target.value,
+                }))
+              }
+              onKeyDown={onKeyDown}
+              style={tableInputStyleSmall}
+              inputMode="decimal"
+              className="min-w-0 max-w-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
+            />
+          ) : (
+            <span style={tableValueBoxRight}>
+              {formatNumber(item.pozice)}
+            </span>
+          )}
+        </div>
+
+        <div
+          onClick={() => !isEditing && beginEdit("kusy")}
+          className="flex min-h-8 items-center justify-center px-1 text-center"
+          style={{ cursor: "pointer" }}
+        >
+          {isEditing ? (
+            <input
+              ref={kusyInputRef}
               value={draft.kusy}
               onChange={(e) =>
                 onDraftChange((prev) => ({
@@ -286,28 +362,28 @@ export function SkladTableRow({
         </div>
 
         <div
-          onClick={() => !isEditing && onStartEdit()}
-          className="flex min-h-8 items-center justify-center px-1"
+          ref={jednotkaCellRef}
+          onClick={() => !isEditing && beginEdit("jednotka")}
+          className="flex min-h-8 w-full min-w-0 items-center justify-center px-1"
           style={{ cursor: "pointer" }}
         >
           {isEditing ? (
             <SelectWithQuickCreate
               variant="table"
+              showQuickCreate={false}
               value={draft.jednotka}
-              onChange={(value) =>
+              onChange={(value) => {
                 onDraftChange((prev) => ({
                   ...prev,
                   jednotka: value,
-                }))
-              }
+                }));
+                onCommitJednotka?.(value);
+              }}
               selectStyle={tableSelectStyle}
               options={jednotky.map((j) => ({
                 value: j.nazev,
                 label: j.nazev,
               }))}
-              quickCreateTitle="Nová jednotka"
-              quickCreatePlaceholder="Název jednotky"
-              onQuickCreate={onQuickCreateJednotka}
             />
           ) : (
             <span style={tableValueBoxLeft} className="truncate">
@@ -317,12 +393,13 @@ export function SkladTableRow({
         </div>
 
         <div
-          onClick={() => !isEditing && onStartEdit()}
+          onClick={() => !isEditing && beginEdit("naklad")}
           className="flex min-h-8 items-center justify-center px-1 text-center"
           style={{ cursor: "pointer" }}
         >
           {isEditing ? (
             <input
+              ref={nakladInputRef}
               value={draft.naklad}
               onChange={(e) =>
                 onDraftChange((prev) => ({
@@ -342,12 +419,13 @@ export function SkladTableRow({
         </div>
 
         <div
-          onClick={() => !isEditing && onStartEdit()}
+          onClick={() => !isEditing && beginEdit("rent")}
           className="flex min-h-8 items-center justify-center px-1 text-center"
           style={{ cursor: "pointer" }}
         >
           {isEditing ? (
             <input
+              ref={rentInputRef}
               value={draft.rent}
               onChange={(e) =>
                 onDraftChange((prev) => ({

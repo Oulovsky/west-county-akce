@@ -89,6 +89,8 @@ export type SkladPolozkaRow = {
   na_sklade: number | null;
   na_akcich: number | null;
   poskozene: number | null;
+  /** Sloupec pozice ve skladove_polozky — doplňuje se dotazem vedle RPC. */
+  pozice?: number | string | null;
 };
 
 /** Skladový okruh / blok (přehled, dashboard). */

@@ -23,11 +23,13 @@ type Props = {
   placeholder?: string;
   selectStyle?: CSSProperties;
   selectClassName?: string;
-  quickCreateTitle: string;
-  quickCreatePlaceholder: string;
+  /** Bez tlačítka + a modalu (např. jednotky jen z konfigurace skladu). */
+  showQuickCreate?: boolean;
+  quickCreateTitle?: string;
+  quickCreatePlaceholder?: string;
   quickCreateDisabled?: boolean;
   quickCreateDisabledTitle?: string;
-  onQuickCreate: (name: string) => Promise<{ error?: string } | void>;
+  onQuickCreate?: (name: string) => Promise<{ error?: string } | void>;
   children?: ReactNode;
   /** Kompaktní varianta pro řádky tabulky správy. */
   variant?: "default" | "table";
@@ -41,22 +43,29 @@ export function SelectWithQuickCreate({
   placeholder,
   selectStyle,
   selectClassName,
-  quickCreateTitle,
-  quickCreatePlaceholder,
+  showQuickCreate = true,
+  quickCreateTitle = "",
+  quickCreatePlaceholder = "",
   quickCreateDisabled = false,
   quickCreateDisabledTitle,
-  onQuickCreate,
+  onQuickCreate = async () => {},
   children,
   variant = "default",
 }: Props) {
   const plusButtonClass =
     variant === "table" ? plusButtonClassTable : plusButtonClassDefault;
   const wrapperGap = variant === "table" ? "gap-0.5" : "gap-1";
-  const resolvedSelectClassName =
+  const baseSelectClass =
     selectClassName ??
     (variant === "table"
       ? "min-w-0 flex-1 truncate text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
       : "min-w-0 flex-1");
+  const resolvedSelectClassName = [
+    baseSelectClass,
+    !showQuickCreate ? "w-full" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -75,7 +84,13 @@ export function SelectWithQuickCreate({
 
   return (
     <>
-      <div className={`flex min-w-0 flex-1 items-center ${wrapperGap}`}>
+      <div
+        className={
+          showQuickCreate
+            ? `flex min-w-0 flex-1 items-center ${wrapperGap}`
+            : "flex min-w-0 w-full flex-1 items-center"
+        }
+      >
         <select
           value={value}
           disabled={disabled}
@@ -98,27 +113,31 @@ export function SelectWithQuickCreate({
           ))}
         </select>
 
-        <button
-          type="button"
-          className={plusButtonClass}
-          disabled={disabled || quickCreateDisabled || saving}
-          title={quickCreateDisabled ? quickCreateDisabledTitle : quickCreateTitle}
-          onClick={() => setModalOpen(true)}
-        >
-          +
-        </button>
+        {showQuickCreate ? (
+          <button
+            type="button"
+            className={plusButtonClass}
+            disabled={disabled || quickCreateDisabled || saving}
+            title={quickCreateDisabled ? quickCreateDisabledTitle : quickCreateTitle}
+            onClick={() => setModalOpen(true)}
+          >
+            +
+          </button>
+        ) : null}
       </div>
 
       {children}
 
-      <QuickCreateConfigModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={quickCreateTitle}
-        placeholder={quickCreatePlaceholder}
-        saving={saving}
-        onSubmit={handleCreate}
-      />
+      {showQuickCreate ? (
+        <QuickCreateConfigModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          title={quickCreateTitle}
+          placeholder={quickCreatePlaceholder}
+          saving={saving}
+          onSubmit={handleCreate}
+        />
+      ) : null}
     </>
   );
 }

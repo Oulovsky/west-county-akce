@@ -17,8 +17,7 @@ import { SkladDetailTableHeader } from "./SkladDetailTableHeader";
 type SkladDetailItemsTableProps = {
   row: SkladDetailRow;
   kategorie: SkladKategorie[];
-  selectedKategorieId: string;
-  selectedPodkategorie: SkladPodkategorie[];
+  podkategorie: SkladPodkategorie[];
   jednotky: SkladJednotka[];
   celkemKusu: number;
   poskozeneKusy: number;
@@ -34,8 +33,7 @@ type SkladDetailItemsTableProps = {
 export function SkladDetailItemsTable({
   row,
   kategorie,
-  selectedKategorieId,
-  selectedPodkategorie,
+  podkategorie,
   jednotky,
   celkemKusu,
   poskozeneKusy,
@@ -58,12 +56,12 @@ export function SkladDetailItemsTable({
         <details className="group" open>
           <summary className="cursor-pointer list-none">
             <SkladDetailMainRow
+              key={row.upraveno_dne}
               row={row}
               editFormId={editFormId}
               rowGridClassName={rowGridClassName}
               kategorie={kategorie}
-              selectedKategorieId={selectedKategorieId}
-              selectedPodkategorie={selectedPodkategorie}
+              podkategorie={podkategorie}
               jednotky={jednotky}
               celkemKusu={celkemKusu}
               poskozeneKusy={poskozeneKusy}

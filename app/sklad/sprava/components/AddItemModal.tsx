@@ -42,7 +42,6 @@ type Props = {
   onQuickCreateBlok: QuickCreateHandler;
   onQuickCreateKategorie: QuickCreateHandler;
   onQuickCreatePodkategorie: QuickCreateHandler;
-  onQuickCreateJednotka: QuickCreateHandler;
 };
 
 export function AddItemModal({
@@ -73,7 +72,6 @@ export function AddItemModal({
   onQuickCreateBlok,
   onQuickCreateKategorie,
   onQuickCreatePodkategorie,
-  onQuickCreateJednotka,
 }: Props) {
   return (
     <Modal
@@ -179,14 +177,12 @@ export function AddItemModal({
               value={newJednotka}
               onChange={setNewJednotka}
               disabled={isCreating}
+              showQuickCreate={false}
               selectClassName={modalSelectClass}
               options={jednotky.map((j) => ({
                 value: j.nazev,
                 label: j.nazev,
               }))}
-              quickCreateTitle="Nová jednotka"
-              quickCreatePlaceholder="Název jednotky"
-              onQuickCreate={onQuickCreateJednotka}
             />
           </div>
         </div>

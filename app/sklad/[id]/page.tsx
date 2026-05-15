@@ -281,11 +281,6 @@ export default async function SkladDetailPage({ params }: PageProps) {
   const podkategorie = (podkategorieRaw ?? []) as SkladPodkategorie[];
   const jednotky = (jednotkyRaw ?? []) as SkladJednotka[];
 
-  const selectedKategorieId = row.kategorie_techniky_id ?? "";
-  const selectedPodkategorie = podkategorie.filter(
-    (item) => !selectedKategorieId || item.kategorie_techniky_id === selectedKategorieId
-  );
-
   const [
     { data: kusyRaw, error: kusyError },
     { data: poskozeniRaw, error: poskozeniError },
@@ -328,8 +323,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
       <SkladDetailItemsTable
         row={row}
         kategorie={kategorie}
-        selectedKategorieId={selectedKategorieId}
-        selectedPodkategorie={selectedPodkategorie}
+        podkategorie={podkategorie}
         jednotky={jednotky}
         celkemKusu={celkemKusu}
         poskozeneKusy={poskozeneKusy}

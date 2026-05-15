@@ -193,15 +193,52 @@ export function getKusLabel(kus: SkladKusRow): string {
     : `Kus #${kus.poradove_cislo}`;
 }
 
-/** Název kusu v rozbaleném přehledu správy (např. „Novastar 1000 nr1“). */
+/**
+ * Stejný tvar jako buildSkladKusEvidencniCislo (sync / detail) — při přejmenování
+ * položky lze v UI zobrazit aktuální název, aniž by se přepisovalo DB pole.
+ */
+function isAutoNumberedSkladKusEvidencni(
+  evidencni: string,
+  poradoveCislo: number
+): boolean {
+  const m = evidencni.match(/^(.+?)\s+#(\d+)$/);
+  if (!m) return false;
+  const n = Number(m[2]);
+  return Number.isFinite(n) && n === poradoveCislo;
+}
+
+/** Starší formát rozbalovacího panelu správy: „… nrN“. */
+function isLegacySpravaNrKusLabel(
+  evidencni: string,
+  poradoveCislo: number
+): boolean {
+  const m = evidencni.match(/^(.+?)\s+nr(\d+)$/i);
+  if (!m) return false;
+  const n = Number(m[2]);
+  return Number.isFinite(n) && n === poradoveCislo;
+}
+
+/** Název kusu v rozbaleném přehledu správy. */
 export function getSpravaKusDisplayLabel(
   polozkaNazev: string,
   kus: Pick<SkladKusRow, "poradove_cislo" | "evidencni_cislo">
 ): string {
-  const evidencni = kus.evidencni_cislo?.trim();
-  if (evidencni) return evidencni;
   const nazev = polozkaNazev.trim() || "Položka";
-  return `${nazev} nr${kus.poradove_cislo}`;
+  const poradi = toNumber(kus.poradove_cislo);
+
+  const evidencni = kus.evidencni_cislo?.trim();
+  if (!evidencni) {
+    return `${nazev} #${poradi}`;
+  }
+
+  if (
+    isAutoNumberedSkladKusEvidencni(evidencni, poradi) ||
+    isLegacySpravaNrKusLabel(evidencni, poradi)
+  ) {
+    return `${nazev} #${poradi}`;
+  }
+
+  return evidencni;
 }
 
 const SKLAD_KUS_STAV_LABELS: Record<string, string> = {
