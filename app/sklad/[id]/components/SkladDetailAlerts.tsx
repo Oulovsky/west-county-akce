@@ -21,10 +21,10 @@ export function SkladDetailNotFound() {
     <div className="flex flex-col gap-4">
       <div>
         <Link
-          href="/sklad"
+          href="/sklad/sprava"
           className="inline-flex items-center text-sm font-medium text-slate-300 transition hover:text-white"
         >
-          ← Zpět na sklad
+          ← Zpět na správu skladu
         </Link>
       </div>
 

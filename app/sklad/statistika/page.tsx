@@ -66,10 +66,10 @@ export default function SkladStatistikaPage() {
         </div>
 
         <Link
-          href="/sklad"
+          href="/sklad/sprava"
           className="inline-flex items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
         >
-          Zpět na sklad
+          Zpět na správu skladu
         </Link>
       </div>
 

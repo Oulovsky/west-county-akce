@@ -210,17 +210,8 @@ export default function Page() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="space-y-1">
-          <div>
-            <Link
-              href="/sklad"
-              className="inline-flex items-center text-sm font-medium text-slate-300 transition hover:text-white"
-            >
-              ← Zpět na sklad
-            </Link>
-          </div>
-
           <h1 className="text-2xl font-bold tracking-tight text-white">
             Poškození
           </h1>
@@ -228,6 +219,13 @@ export default function Page() {
             Centrální přehled hlášení poškození napříč skladem.
           </p>
         </div>
+
+        <Link
+          href="/sklad/sprava"
+          className="inline-flex items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+        >
+          Zpět na správu skladu
+        </Link>
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
