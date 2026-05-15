@@ -551,17 +551,38 @@ export default function Page() {
     "grid-cols-[minmax(190px,2fr)_120px_130px_150px_70px_80px_80px_90px_90px_100px_90px_100px]";
 
   return (
-    <div className="flex flex-col gap-5">
-      <SkladToolbar onAddClick={openAddModal} />
-
-      <SkladStats
-        itemsCount={items.length}
-        totalKusy={totalKusy}
-        totalAkce={totalAkce}
+    <div className="flex flex-col gap-6">
+      <SkladToolbar
+        onAddClick={openAddModal}
+        bloky={bloky}
         totalPoskozene={totalPoskozene}
       />
 
-      <AddItemModal
+      <section
+        aria-labelledby="sprava-polozky-heading"
+        className="flex flex-col gap-4"
+      >
+        <div className="border-b border-slate-800 pb-4">
+          <h2
+            id="sprava-polozky-heading"
+            className="text-lg font-semibold text-white"
+          >
+            Položky skladu
+          </h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Kompletní katalog. Editace přímo v tabulce, Enter uloží řádek, Ctrl+Z
+            vrátí poslední změnu.
+          </p>
+        </div>
+
+        <SkladStats
+          itemsCount={items.length}
+          totalKusy={totalKusy}
+          totalAkce={totalAkce}
+          totalPoskozene={totalPoskozene}
+        />
+
+        <AddItemModal
         open={isAddOpen}
         onClose={closeAddModal}
         onSave={handleCreateItem}
@@ -595,10 +616,10 @@ export default function Page() {
         setNewRent={setNewRent}
         newKategorieOptions={newKategorieOptions}
         newPodkategorieOptions={newPodkategorieOptions}
-      />
+        />
 
-      <SkladTable loading={loading} tableGrid={tableGrid}>
-        {items.map((i) => {
+        <SkladTable loading={loading} tableGrid={tableGrid}>
+          {items.map((i) => {
           const isEditing = editingId === i.skladova_polozka_id;
           const isSaving = savingId === i.skladova_polozka_id;
           const isHighlight = highlightId === i.skladova_polozka_id;
@@ -608,8 +629,8 @@ export default function Page() {
             i.kategorie_techniky_id
           );
 
-          return (
-            <SkladTableRow
+            return (
+              <SkladTableRow
               key={i.skladova_polozka_id}
               item={i}
               isEditing={isEditing}
@@ -631,10 +652,11 @@ export default function Page() {
               }
               onDraftChange={setDraft}
               onKeyDown={(e) => handleKeyDown(e, i.skladova_polozka_id)}
-            />
-          );
-        })}
-      </SkladTable>
+              />
+            );
+          })}
+        </SkladTable>
+      </section>
     </div>
   );
 }
