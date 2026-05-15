@@ -4,136 +4,22 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Modal } from "@/components/ui/modal";
-
-type PoskozeniRow = {
-  poskozeni_id: string;
-  skladova_polozka_id: string;
-  kus_id: string | null;
-  zakazka_id: string | null;
-  pocet_kusu: number | string;
-  popis: string | null;
-  typ_poskozeni: string | null;
-  priorita: string | null;
-  blokuje_pouziti: boolean;
-  stav_reseni: string;
-  datum_nahlaseni: string;
-  datum_uzavreni: string | null;
-};
-
-type PrioritaOption = {
-  priorita_id: string;
-  nazev: string;
-  poradi: number | null;
-};
-
-type KusInfo = {
-  kus_id: string;
-  poradove_cislo: number;
-  evidencni_cislo: string | null;
-};
-
-function slugifyCz(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-function formatNumber(value: number | string | null | undefined) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return "-";
-  return new Intl.NumberFormat("cs-CZ").format(parsed);
-}
-
-function formatDateTime(value: string | null | undefined) {
-  if (!value) return "-";
-
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-
-  return new Intl.DateTimeFormat("cs-CZ", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(d);
-}
-
-function formatTypPoskozeni(value: string | null | undefined) {
-  const normalized = slugifyCz(value ?? "");
-
-  switch (normalized) {
-    case "mechanicke":
-      return "mechanickĂ©";
-    case "elektricke":
-      return "elektrickĂ©";
-    case "vizualni":
-      return "vizuĂˇlnĂ­";
-    case "jine":
-      return "jinĂ©";
-    default:
-      return value?.trim() || "bez typu";
-  }
-}
-
-function formatPriorita(value: string | null | undefined) {
-  const normalized = slugifyCz(value ?? "");
-
-  switch (normalized) {
-    case "nizka":
-      return "nĂ­zkĂˇ";
-    case "stredni":
-      return "stĹ™ednĂ­";
-    case "vysoka":
-      return "vysokĂˇ";
-    case "kriticka":
-      return "kritickĂˇ";
-    default:
-      return value?.trim() || "bez priority";
-  }
-}
-
-function getPriorityClasses(value: string | null | undefined) {
-  const normalized = slugifyCz(value ?? "");
-
-  switch (normalized) {
-    case "kriticka":
-      return "bg-red-600 text-white";
-    case "vysoka":
-      return "bg-orange-500 text-white";
-    case "stredni":
-      return "bg-yellow-400 text-slate-950";
-    case "nizka":
-      return "bg-slate-500 text-white";
-    default:
-      return "bg-slate-600 text-white";
-  }
-}
-
-function isClosed(item: PoskozeniRow) {
-  const stavReseni = slugifyCz(item.stav_reseni ?? "");
-
-  return (
-    Boolean(item.datum_uzavreni) ||
-    ["uzavreno", "uzavrene", "vyreseno", "closed"].includes(stavReseni)
-  );
-}
-
-function getKusLabel(item: PoskozeniRow, kusyById: Record<string, KusInfo>) {
-  if (!item.kus_id) return "bez konkrĂ©tnĂ­ho kusu";
-
-  const kus = kusyById[item.kus_id];
-
-  if (!kus) return `Kus ${item.kus_id}`;
-
-  return kus.evidencni_cislo?.trim()
-    ? kus.evidencni_cislo
-    : `Kus #${kus.poradove_cislo}`;
-}
+import { SKLAD_TABLE } from "@/lib/sklad/constants";
+import {
+  formatDateTime,
+  formatNumber,
+  formatPrioritaLabel,
+  formatTypPoskozeniLabel,
+  getEvidencePoskozeniKusLabel,
+  isPoskozeniClosed,
+  prioritaEvidenceBadgeClassName,
+  slugifyCz,
+} from "@/lib/sklad/helpers";
+import type {
+  SkladKusRow,
+  SkladPoskozeniRow,
+  SkladPrioritaOption,
+} from "@/lib/sklad/types";
 
 function FilterButton({
   active,
@@ -165,8 +51,8 @@ export function EvidencePoskozeniClient({
   priority,
   jednotka,
 }: {
-  poskozeni: PoskozeniRow[];
-  priority: PrioritaOption[];
+  poskozeni: SkladPoskozeniRow[];
+  priority: SkladPrioritaOption[];
   jednotka: string;
 }) {
   const router = useRouter();
@@ -175,8 +61,10 @@ export function EvidencePoskozeniClient({
   const [blokuje, setBlokuje] = useState<"all" | "yes" | "no">("all");
   const [priorita, setPriorita] = useState("all");
 
-  const [kusyById, setKusyById] = useState<Record<string, KusInfo>>({});
-  const [actionItem, setActionItem] = useState<PoskozeniRow | null>(null);
+  const [kusyById, setKusyById] = useState<
+    Record<string, Pick<SkladKusRow, "kus_id" | "poradove_cislo" | "evidencni_cislo">>
+  >({});
+  const [actionItem, setActionItem] = useState<SkladPoskozeniRow | null>(null);
   const [savingAction, setSavingAction] = useState<"odblokovat" | "uzavrit" | null>(null);
 
   useEffect(() => {
@@ -194,7 +82,7 @@ export function EvidencePoskozeniClient({
 
     const loadKusy = async () => {
       const { data, error } = await supabase
-        .from("sklad_polozky_kusy")
+        .from(SKLAD_TABLE.skladPolozkyKusy)
         .select("kus_id, poradove_cislo, evidencni_cislo")
         .in("kus_id", kusIds);
 
@@ -203,11 +91,16 @@ export function EvidencePoskozeniClient({
         return;
       }
 
-      const map: Record<string, KusInfo> = {};
+      const map: Record<
+        string,
+        Pick<SkladKusRow, "kus_id" | "poradove_cislo" | "evidencni_cislo">
+      > = {};
 
-      ((data ?? []) as KusInfo[]).forEach((kus) => {
-        map[kus.kus_id] = kus;
-      });
+      ((data ?? []) as Pick<SkladKusRow, "kus_id" | "poradove_cislo" | "evidencni_cislo">[]).forEach(
+        (kus) => {
+          map[kus.kus_id] = kus;
+        }
+      );
 
       setKusyById(map);
     };
@@ -217,7 +110,7 @@ export function EvidencePoskozeniClient({
 
   const filteredPoskozeni = useMemo(() => {
     return poskozeni.filter((item) => {
-      const jeUzavrene = isClosed(item);
+      const jeUzavrene = isPoskozeniClosed(item);
 
       if (stav === "open" && jeUzavrene) return false;
       if (stav === "closed" && !jeUzavrene) return false;
@@ -233,7 +126,7 @@ export function EvidencePoskozeniClient({
     });
   }, [poskozeni, stav, blokuje, priorita]);
 
-  function openActionDialog(item: PoskozeniRow) {
+  function openActionDialog(item: SkladPoskozeniRow) {
     setActionItem(item);
   }
 
@@ -249,7 +142,7 @@ export function EvidencePoskozeniClient({
     setSavingAction("odblokovat");
 
     const { error } = await supabase
-      .from("hlaseni_poskozeni")
+      .from(SKLAD_TABLE.hlaseniPoskozeni)
       .update({
         blokuje_pouziti: false,
         stav_reseni: "otevrene",
@@ -274,7 +167,7 @@ export function EvidencePoskozeniClient({
     setSavingAction("uzavrit");
 
     const { error } = await supabase
-      .from("hlaseni_poskozeni")
+      .from(SKLAD_TABLE.hlaseniPoskozeni)
       .update({
         blokuje_pouziti: false,
         stav_reseni: "uzavrene",
@@ -297,27 +190,27 @@ export function EvidencePoskozeniClient({
     <>
       <div className="mb-4 flex flex-wrap gap-2">
         <FilterButton active={stav === "open"} onClick={() => setStav("open")}>
-          OtevĹ™enĂ©
+          Otevřené
         </FilterButton>
         <FilterButton active={stav === "closed"} onClick={() => setStav("closed")}>
-          UzavĹ™enĂ©
+          Uzavřené
         </FilterButton>
         <FilterButton active={stav === "all"} onClick={() => setStav("all")}>
-          VĹˇe
+          Vše
         </FilterButton>
 
         <FilterButton active={blokuje === "all"} onClick={() => setBlokuje("all")}>
-          VĹˇechna pouĹľitĂ­
+          Všechna použití
         </FilterButton>
         <FilterButton active={blokuje === "yes"} onClick={() => setBlokuje("yes")}>
-          Jen blokujĂ­cĂ­
+          Jen blokující
         </FilterButton>
         <FilterButton active={blokuje === "no"} onClick={() => setBlokuje("no")}>
-          Jen neblokujĂ­cĂ­
+          Jen neblokující
         </FilterButton>
 
         <FilterButton active={priorita === "all"} onClick={() => setPriorita("all")}>
-          VĹˇechny priority
+          Všechny priority
         </FilterButton>
 
         {priority.map((item) => {
@@ -337,14 +230,14 @@ export function EvidencePoskozeniClient({
 
       {filteredPoskozeni.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/30 px-4 py-8 text-center text-sm text-slate-400">
-          Tomuto filtru nic neodpovĂ­dĂˇ.
+          Tomuto filtru nic neodpovídá.
         </div>
       ) : (
         <div className="grid gap-3">
           {filteredPoskozeni.map((item) => {
-            const jeUzavrene = isClosed(item);
+            const jeUzavrene = isPoskozeniClosed(item);
             const isSaving = actionItem?.poskozeni_id === item.poskozeni_id && !!savingAction;
-            const kusLabel = getKusLabel(item, kusyById);
+            const kusLabel = getEvidencePoskozeniKusLabel(item, kusyById);
 
             return (
               <div
@@ -363,16 +256,16 @@ export function EvidencePoskozeniClient({
                       </span>
 
                       <span className="rounded-full bg-blue-900 px-2.5 py-1 text-xs font-semibold text-blue-100">
-                        {formatTypPoskozeni(item.typ_poskozeni)}
+                        {formatTypPoskozeniLabel(item.typ_poskozeni)}
                       </span>
 
                       <span
                         className={[
                           "rounded-full px-2.5 py-1 text-xs font-semibold",
-                          getPriorityClasses(item.priorita),
+                          prioritaEvidenceBadgeClassName(item.priorita),
                         ].join(" ")}
                       >
-                        {formatPriorita(item.priorita)}
+                        {formatPrioritaLabel(item.priorita)}
                       </span>
 
                       <span
@@ -383,30 +276,30 @@ export function EvidencePoskozeniClient({
                             : "bg-rose-900 text-rose-100",
                         ].join(" ")}
                       >
-                        {jeUzavrene ? "uzavĹ™eno" : "otevĹ™enĂ©"}
+                        {jeUzavrene ? "uzavřeno" : "otevřené"}
                       </span>
 
                       {item.blokuje_pouziti && !jeUzavrene ? (
                         <span className="rounded-full bg-red-700 px-2.5 py-1 text-xs font-semibold text-white">
-                          blokuje pouĹľitĂ­
+                          blokuje použití
                         </span>
                       ) : null}
 
                       {!item.blokuje_pouziti && !jeUzavrene ? (
                         <span className="rounded-full bg-emerald-900 px-2.5 py-1 text-xs font-semibold text-emerald-100">
-                          neblokuje pouĹľitĂ­
+                          neblokuje použití
                         </span>
                       ) : null}
                     </div>
 
                     <div className="mt-3 grid gap-2 text-sm text-slate-300 md:grid-cols-2">
                       <div>
-                        <span className="text-slate-500">NahlĂˇĹˇeno:</span>{" "}
+                        <span className="text-slate-500">Nahlášeno:</span>{" "}
                         {formatDateTime(item.datum_nahlaseni)}
                       </div>
 
                       <div>
-                        <span className="text-slate-500">UzavĹ™eno:</span>{" "}
+                        <span className="text-slate-500">Uzavřeno:</span>{" "}
                         {formatDateTime(item.datum_uzavreni)}
                       </div>
                     </div>
@@ -424,7 +317,7 @@ export function EvidencePoskozeniClient({
                         disabled={isSaving}
                         className="inline-flex items-center justify-center rounded-xl border border-emerald-600 bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:cursor-default disabled:opacity-70"
                       >
-                        {isSaving ? "UklĂˇdĂˇm..." : "VyĹ™eĹˇit"}
+                        {isSaving ? "Ukládám..." : "Vyřešit"}
                       </button>
                     </div>
                   ) : null}
@@ -435,15 +328,17 @@ export function EvidencePoskozeniClient({
         </div>
       )}
 
-      <Modal open={!!actionItem} onClose={closeActionDialog} title="VyĹ™eĹˇit hlĂˇĹˇenĂ­ poĹˇkozenĂ­">
+      <Modal open={!!actionItem} onClose={closeActionDialog} title="Vyřešit hlášení poškození">
         {actionItem ? (
           <div className="grid gap-4">
             <div className="rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm text-slate-200">
               <div className="font-semibold text-white">
-                {getKusLabel(actionItem, kusyById)}
+                {getEvidencePoskozeniKusLabel(actionItem, kusyById)}
               </div>
               <div className="mt-1 text-slate-400">
-                {formatNumber(actionItem.pocet_kusu)} {jednotka} Â· {formatTypPoskozeni(actionItem.typ_poskozeni)} Â· {formatPriorita(actionItem.priorita)}
+                {formatNumber(actionItem.pocet_kusu)} {jednotka} ·{" "}
+                {formatTypPoskozeniLabel(actionItem.typ_poskozeni)} ·{" "}
+                {formatPrioritaLabel(actionItem.priorita)}
               </div>
               <div className="mt-3 text-slate-200">
                 {actionItem.popis?.trim() ? actionItem.popis : "Bez popisu"}
@@ -458,10 +353,10 @@ export function EvidencePoskozeniClient({
                 className="rounded-xl border border-amber-700 bg-amber-900 px-4 py-4 text-left text-sm text-white transition hover:bg-amber-800 disabled:opacity-60"
               >
                 <span className="block font-semibold">
-                  StĂˇle poĹˇkozenĂ©, ale odblokovat
+                  Stále poškozené, ale odblokovat
                 </span>
                 <span className="mt-1 block text-amber-100/80">
-                  HlĂˇĹˇenĂ­ zĹŻstane otevĹ™enĂ© v evidenci poĹˇkozenĂ­, ale nebude blokovat pouĹľitĂ­ poloĹľky.
+                  Hlášení zůstane otevřené v evidenci poškození, ale nebude blokovat použití položky.
                 </span>
               </button>
 
@@ -471,11 +366,9 @@ export function EvidencePoskozeniClient({
                 disabled={!!savingAction}
                 className="rounded-xl border border-emerald-600 bg-emerald-700 px-4 py-4 text-left text-sm text-white transition hover:bg-emerald-600 disabled:opacity-60"
               >
-                <span className="block font-semibold">
-                  Opraveno, uzavĹ™Ă­t
-                </span>
+                <span className="block font-semibold">Opraveno, uzavřít</span>
                 <span className="mt-1 block text-emerald-100/80">
-                  HlĂˇĹˇenĂ­ se uzavĹ™e, nastavĂ­ se datum uzavĹ™enĂ­ a poloĹľka nebude blokovanĂˇ.
+                  Hlášení se uzavře, nastaví se datum uzavření a položka nebude blokovaná.
                 </span>
               </button>
             </div>
@@ -487,7 +380,7 @@ export function EvidencePoskozeniClient({
                 disabled={!!savingAction}
                 className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-60"
               >
-                ZruĹˇit
+                Zrušit
               </button>
             </div>
           </div>
@@ -496,4 +389,3 @@ export function EvidencePoskozeniClient({
     </>
   );
 }
-

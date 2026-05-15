@@ -77,6 +77,69 @@ export function prioritaBadgeClassName(priorita: string | null | undefined): str
   return SKLAD_PRIORITA_BADGE_CLASS.default;
 }
 
+export function formatPrioritaLabel(value: string | null | undefined): string {
+  const normalized = slugifyCz(value);
+
+  switch (normalized) {
+    case "nizka":
+      return "nízká";
+    case "stredni":
+      return "střední";
+    case "vysoka":
+      return "vysoká";
+    case "kriticka":
+      return "kritická";
+    default:
+      return value?.trim() || "bez priority";
+  }
+}
+
+/** Badge třídy pro evidenci poškození (včetně text-*). */
+export function prioritaEvidenceBadgeClassName(
+  priorita: string | null | undefined
+): string {
+  const normalized = slugifyCz(priorita);
+
+  switch (normalized) {
+    case "kriticka":
+      return "bg-red-600 text-white";
+    case "vysoka":
+      return "bg-orange-500 text-white";
+    case "stredni":
+      return "bg-yellow-400 text-slate-950";
+    case "nizka":
+      return "bg-slate-500 text-white";
+    default:
+      return "bg-slate-600 text-white";
+  }
+}
+
+export function isPoskozeniClosed(
+  item: Pick<SkladPoskozeniRow, "datum_uzavreni" | "stav_reseni">
+): boolean {
+  const stavReseni = slugifyCz(item.stav_reseni ?? "");
+
+  return (
+    Boolean(item.datum_uzavreni) ||
+    ["uzavreno", "uzavrene", "vyreseno", "closed"].includes(stavReseni)
+  );
+}
+
+export function getEvidencePoskozeniKusLabel(
+  item: Pick<SkladPoskozeniRow, "kus_id">,
+  kusyById: Record<string, Pick<SkladKusRow, "kus_id" | "poradove_cislo" | "evidencni_cislo">>
+): string {
+  if (!item.kus_id) return "bez konkrétního kusu";
+
+  const kus = kusyById[item.kus_id];
+
+  if (!kus) return `Kus ${item.kus_id}`;
+
+  return kus.evidencni_cislo?.trim()
+    ? kus.evidencni_cislo
+    : `Kus #${kus.poradove_cislo}`;
+}
+
 export function formatTypPoskozeniLabel(value: string | null | undefined): string {
   const normalized = slugifyCz(value);
 
