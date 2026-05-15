@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 
-/** Sklad dashboard — pouze přesměrování; hlavní obrazovka je /sklad/sprava */
-export default function SkladRedirectPage() {
+export default function Page() {
   redirect("/sklad/sprava");
 }
