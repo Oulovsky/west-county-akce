@@ -265,13 +265,13 @@ export function SkladTableRow({
               )
             }
             selectStyle={tableSelectStyle}
-            placeholder="Bez typu"
+            placeholder="Bez podkategorie"
             options={podkategorieOptions.map((p) => ({
               value: p.podkategorie_techniky_id,
               label: p.nazev,
             }))}
-            quickCreateTitle="Nový typ / rozměr"
-            quickCreatePlaceholder="Název typu / rozměru"
+            quickCreateTitle="Nová podkategorie"
+            quickCreatePlaceholder="Název podkategorie"
             quickCreateDisabled={!item.kategorie_techniky_id}
             quickCreateDisabledTitle="Nejdřív vyber kategorii"
             onQuickCreate={onQuickCreatePodkategorie}
@@ -459,6 +459,15 @@ export function SkladTableRow({
           skladovaPolozkaId={item.skladova_polozka_id}
           polozkaNazev={item.nazev}
           celkemKDispozici={item.celkem_k_dispozici}
+          inherited={{
+            blok_nazev: item.blok_nazev,
+            kategorie_nazev: item.kategorie_nazev,
+            podkategorie_nazev: item.podkategorie_nazev,
+            pozice: item.pozice,
+            jednotka: item.jednotka,
+            interni_naklad: item.interni_naklad,
+            fakturacni_cena: item.fakturacni_cena,
+          }}
           reloadToken={kusyReloadToken}
         />
       ) : null}

@@ -126,20 +126,20 @@ export function AddItemModal({
           </div>
 
           <div>
-            <div className="mb-2 text-sm text-slate-300">Typ / rozměr</div>
+            <div className="mb-2 text-sm text-slate-300">Podkategorie</div>
 
             <SelectWithQuickCreate
               value={newPodkategorieId}
               onChange={setNewPodkategorieId}
-              placeholder="Bez typu / rozměru"
+              placeholder="Bez podkategorie"
               disabled={isCreating || !newKategorieId}
               selectClassName={modalSelectClass}
               options={newPodkategorieOptions.map((p) => ({
                 value: p.podkategorie_techniky_id,
                 label: p.nazev,
               }))}
-              quickCreateTitle="Nový typ / rozměr"
-              quickCreatePlaceholder="Název typu / rozměru"
+              quickCreateTitle="Nová podkategorie"
+              quickCreatePlaceholder="Název podkategorie"
               quickCreateDisabled={!newKategorieId}
               quickCreateDisabledTitle="Nejdřív vyber kategorii"
               onQuickCreate={onQuickCreatePodkategorie}

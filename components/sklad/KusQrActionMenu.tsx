@@ -8,9 +8,16 @@ type Props = {
   triggerClassName?: string;
   /** Velikost QR ikony uvnitř tlačítka (výchozí kompaktní). */
   iconClassName?: string;
+  /** Vzhled rozbalovací nabídky (vyšší z-index ve vnořeném scroll kontextu). */
+  menuVariant?: "default" | "sprava";
 };
 
-export function KusQrActionMenu({ kusId, triggerClassName, iconClassName }: Props) {
+export function KusQrActionMenu({
+  kusId,
+  triggerClassName,
+  iconClassName,
+  menuVariant = "default",
+}: Props) {
   const menuId = useId();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -50,8 +57,15 @@ export function KusQrActionMenu({ kusId, triggerClassName, iconClassName }: Prop
     }
   }
 
+  const menuClassName = [
+    "absolute right-0 min-w-[11rem] rounded-lg border py-1 text-xs shadow-xl ring-1 ring-slate-700/80",
+    menuVariant === "sprava"
+      ? "z-[200] mt-1 border-slate-600 bg-slate-950 text-slate-200"
+      : "z-50 mt-1 border-slate-700 bg-slate-950 shadow-lg",
+  ].join(" ");
+
   return (
-    <div ref={wrapRef} className="relative shrink-0">
+    <div ref={wrapRef} className="relative z-10 shrink-0">
       <button
         type="button"
         aria-expanded={open}
@@ -75,12 +89,7 @@ export function KusQrActionMenu({ kusId, triggerClassName, iconClassName }: Prop
       </button>
 
       {open ? (
-        <div
-          id={menuId}
-          role="menu"
-          aria-label="Akce štítku"
-          className="absolute right-0 z-50 mt-1 min-w-[11rem] rounded-lg border border-slate-700 bg-slate-950 py-1 text-xs shadow-lg"
-        >
+        <div id={menuId} role="menu" aria-label="Akce štítku" className={menuClassName}>
           <button
             type="button"
             role="menuitem"

@@ -19,7 +19,7 @@ export function SkladTableHeader({ tableGrid = SPRAVA_TABLE_GRID }: Props) {
       </span>
       <span className="flex min-h-8 items-center px-1">Okruh</span>
       <span className="flex min-h-8 items-center px-1">Kategorie</span>
-      <span className="flex min-h-8 items-center px-1">Typ / rozměr</span>
+      <span className="flex min-h-8 items-center px-1">Podkategorie</span>
       <span className="flex min-h-8 items-center justify-center px-1 text-center">
         Pozice
       </span>

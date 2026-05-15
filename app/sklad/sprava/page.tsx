@@ -926,7 +926,7 @@ export default function Page() {
       if (!finalKategorieId) {
         setSavingId(null);
         setItems(previous);
-        alert("Kategorie je povinná — typ lze uložit až po přiřazení kategorie.");
+        alert("Kategorie je povinná — podkategorii lze uložit až po přiřazení kategorie.");
         return;
       }
 
