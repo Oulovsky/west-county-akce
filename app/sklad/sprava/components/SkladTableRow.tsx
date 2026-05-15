@@ -5,6 +5,13 @@ import { Dispatch, KeyboardEvent, SetStateAction } from "react";
 import { formatMoney } from "./formatMoney";
 import { formatNumber } from "./formatNumber";
 import { toNumber } from "./toNumber";
+import type {
+  SkladBlok,
+  SkladJednotka,
+  SkladKategorie,
+  SkladPodkategorie,
+  SkladPolozkaRow,
+} from "@/lib/sklad/types";
 import {
   dangerBoxRight,
   inputStyle,
@@ -15,41 +22,6 @@ import {
   valueBoxRight,
 } from "./styles";
 
-type Item = {
-  skladova_polozka_id: string;
-  nazev: string;
-  kategorie_techniky_id: string | null;
-  podkategorie_techniky_id: string | null;
-  celkem_k_dispozici: number;
-  jednotka: string | null;
-  interni_naklad: number | null;
-  fakturacni_cena: number | null;
-  sklad_blok_id: string | null;
-  na_sklade: number | null;
-  na_akcich: number | null;
-  poskozene: number | null;
-};
-
-type Blok = {
-  sklad_blok_id: string;
-  nazev: string;
-};
-
-type Kategorie = {
-  kategorie_techniky_id: string;
-  nazev: string;
-};
-
-type Podkategorie = {
-  podkategorie_techniky_id: string;
-  nazev: string;
-};
-
-type Jednotka = {
-  jednotka_id: string;
-  nazev: string;
-};
-
 type Draft = {
   nazev: string;
   kusy: string;
@@ -59,15 +31,15 @@ type Draft = {
 };
 
 type Props = {
-  item: Item;
+  item: SkladPolozkaRow;
   isEditing: boolean;
   isSaving: boolean;
   isHighlight: boolean;
   draft: Draft;
-  bloky: Blok[];
-  jednotky: Jednotka[];
-  kategorieOptions: Kategorie[];
-  podkategorieOptions: Podkategorie[];
+  bloky: SkladBlok[];
+  jednotky: SkladJednotka[];
+  kategorieOptions: SkladKategorie[];
+  podkategorieOptions: SkladPodkategorie[];
   onStartEdit: () => void;
   onUpdateZaklad: (
     kategorieId: string | null,

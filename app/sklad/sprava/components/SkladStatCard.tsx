@@ -1,14 +1,12 @@
 ﻿"use client";
 
+import { formatNumber } from "@/lib/sklad/helpers";
+
 type Props = {
   value: number;
   label: string;
   accent?: boolean;
 };
-
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat("cs-CZ").format(value);
-}
 
 export function SkladStatCard({
   value,

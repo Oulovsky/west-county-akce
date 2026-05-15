@@ -1,4 +1,14 @@
-import type { SkladKusRow, SkladPoskozeniRow } from "@/lib/sklad/types";
+import type { CSSProperties } from "react";
+import {
+  SKLAD_EMPTY_LABEL,
+  SKLAD_KUS_STATUS_CLASS,
+  SKLAD_PRIORITA_BADGE_CLASS,
+} from "@/lib/sklad/constants";
+import type {
+  SkladKusRow,
+  SkladPoskozeniListRow,
+  SkladPoskozeniRow,
+} from "@/lib/sklad/types";
 
 export type SkladKusStatus = {
   text: string;
@@ -14,13 +24,13 @@ export function toNumber(value: number | string | null | undefined): number {
 
 export function formatNumber(value: number | string | null | undefined): string {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return "-";
+  if (!Number.isFinite(parsed)) return SKLAD_EMPTY_LABEL;
   return new Intl.NumberFormat("cs-CZ").format(parsed);
 }
 
 export function formatMoney(value: number | string | null | undefined): string {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return "-";
+  if (!Number.isFinite(parsed)) return SKLAD_EMPTY_LABEL;
 
   return new Intl.NumberFormat("cs-CZ", {
     minimumFractionDigits: 0,
@@ -28,8 +38,11 @@ export function formatMoney(value: number | string | null | undefined): string {
   }).format(parsed);
 }
 
-export function formatDateTime(value: string | null | undefined): string {
-  if (!value) return "-";
+export function formatDateTime(
+  value: string | null | undefined,
+  emptyLabel: string = SKLAD_EMPTY_LABEL
+): string {
+  if (!value) return emptyLabel;
 
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
@@ -43,8 +56,8 @@ export function formatDateTime(value: string | null | undefined): string {
   }).format(d);
 }
 
-export function slugifyCz(value: string): string {
-  return value
+export function slugifyCz(value: string | null | undefined): string {
+  return (value ?? "")
     .trim()
     .toLowerCase()
     .normalize("NFD")
@@ -53,10 +66,65 @@ export function slugifyCz(value: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
+export function prioritaBadgeClassName(priorita: string | null | undefined): string {
+  const s = slugifyCz(priorita);
+
+  if (s.includes("krit")) return SKLAD_PRIORITA_BADGE_CLASS.kriticka;
+  if (s.includes("vys")) return SKLAD_PRIORITA_BADGE_CLASS.vysoka;
+  if (s.includes("stred")) return SKLAD_PRIORITA_BADGE_CLASS.stredni;
+  if (s.includes("niz")) return SKLAD_PRIORITA_BADGE_CLASS.nizka;
+
+  return SKLAD_PRIORITA_BADGE_CLASS.default;
+}
+
+export function formatTypPoskozeniLabel(value: string | null | undefined): string {
+  const normalized = slugifyCz(value);
+
+  switch (normalized) {
+    case "mechanicke":
+      return "mechanické";
+    case "elektricke":
+      return "elektrické";
+    case "vizualni":
+      return "vizuální";
+    case "jine":
+      return "jiné";
+    default:
+      return value?.trim() || "bez typu";
+  }
+}
+
+export function badgeStyle(background: string): CSSProperties {
+  return {
+    display: "inline-block",
+    padding: "4px 8px",
+    borderRadius: 999,
+    background,
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: 700,
+    lineHeight: 1.2,
+  };
+}
+
 export function getKusLabel(kus: SkladKusRow): string {
   return kus.evidencni_cislo?.trim()
     ? kus.evidencni_cislo
     : `Kus #${kus.poradove_cislo}`;
+}
+
+export function getPoskozeniListKusLabel(
+  row: Pick<SkladPoskozeniListRow, "kus_id" | "nazev">,
+  kusyById: Record<string, Pick<SkladKusRow, "evidencni_cislo" | "poradove_cislo">>
+): string {
+  if (!row.kus_id) return row.nazev;
+
+  const kus = kusyById[row.kus_id];
+  if (!kus) return row.nazev;
+
+  return kus.evidencni_cislo?.trim()
+    ? kus.evidencni_cislo
+    : `${row.nazev} #${kus.poradove_cislo}`;
 }
 
 export function getKusStatus(
@@ -72,7 +140,7 @@ export function getKusStatus(
   if (blokuje) {
     return {
       text: "blokováno",
-      className: "border-red-700 bg-red-950 text-red-200",
+      className: SKLAD_KUS_STATUS_CLASS.blokovano,
       blokovano: 1,
       pouzitelne: "✕",
     };
@@ -81,7 +149,7 @@ export function getKusStatus(
   if (otevrene.length > 0) {
     return {
       text: "poškozeno, použitelné",
-      className: "border-amber-700 bg-amber-950 text-amber-200",
+      className: SKLAD_KUS_STATUS_CLASS.poskozenoPouzitelne,
       blokovano: 0,
       pouzitelne: "!",
     };
@@ -89,7 +157,7 @@ export function getKusStatus(
 
   return {
     text: "OK",
-    className: "border-emerald-700 bg-emerald-950 text-emerald-200",
+    className: SKLAD_KUS_STATUS_CLASS.ok,
     blokovano: 0,
     pouzitelne: "✓",
   };

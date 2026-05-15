@@ -7,63 +7,27 @@ import { SkladStats } from "./components/SkladStats";
 import { AddItemModal } from "./components/AddItemModal";
 import { SkladTable } from "./components/SkladTable";
 import { SkladTableRow } from "./components/SkladTableRow";
-import { toNumber } from "./components/toNumber";
-
-type Item = {
-  skladova_polozka_id: string;
-  nazev: string;
-  kategorie_techniky_id: string | null;
-  kategorie_nazev: string | null;
-  podkategorie_techniky_id: string | null;
-  podkategorie_nazev: string | null;
-  celkem_k_dispozici: number;
-  jednotka: string | null;
-  interni_naklad: number | null;
-  fakturacni_cena: number | null;
-  sklad_blok_id: string | null;
-  blok_nazev: string | null;
-  na_sklade: number | null;
-  na_akcich: number | null;
-  poskozene: number | null;
-};
-
-type Kategorie = {
-  kategorie_techniky_id: string;
-  sklad_blok_id: string | null;
-  blok_nazev: string | null;
-  nazev: string;
-  poradi?: number | null;
-};
-
-type Podkategorie = {
-  podkategorie_techniky_id: string;
-  kategorie_techniky_id: string;
-  kategorie_nazev: string | null;
-  nazev: string;
-  poradi?: number | null;
-};
-
-type Jednotka = {
-  jednotka_id: string;
-  nazev: string;
-  poradi?: number | null;
-};
-
-type Blok = {
-  sklad_blok_id: string;
-  nazev: string;
-};
+import { SKLAD_DEFAULT_JEDNOTKA, SKLAD_REALTIME_CHANNEL, SKLAD_TABLE } from "@/lib/sklad/constants";
+import { toNumber } from "@/lib/sklad/helpers";
+import { querySpravaKatalog } from "@/lib/sklad/queries";
+import type {
+  SkladBlok,
+  SkladJednotka,
+  SkladKategorie,
+  SkladPodkategorie,
+  SkladPolozkaRow,
+} from "@/lib/sklad/types";
 
 type RpcErrorResult = {
   error: { message: string } | null;
 };
 
 export default function Page() {
-  const [items, setItems] = useState<Item[]>([]);
-  const [kategorie, setKategorie] = useState<Kategorie[]>([]);
-  const [podkategorie, setPodkategorie] = useState<Podkategorie[]>([]);
-  const [jednotky, setJednotky] = useState<Jednotka[]>([]);
-  const [bloky, setBloky] = useState<Blok[]>([]);
+  const [items, setItems] = useState<SkladPolozkaRow[]>([]);
+  const [kategorie, setKategorie] = useState<SkladKategorie[]>([]);
+  const [podkategorie, setPodkategorie] = useState<SkladPodkategorie[]>([]);
+  const [jednotky, setJednotky] = useState<SkladJednotka[]>([]);
+  const [bloky, setBloky] = useState<SkladBlok[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -89,19 +53,13 @@ export default function Page() {
   const [newNaklad, setNewNaklad] = useState("");
   const [newRent, setNewRent] = useState("");
 
-  const lastChange = useRef<{ before: Item; after: Item } | null>(null);
+  const lastChange = useRef<{ before: SkladPolozkaRow; after: SkladPolozkaRow } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
 
     const [itemsRes, kategorieRes, podkategorieRes, jednotkyRes, blokyRes] =
-      await Promise.all([
-        supabase.rpc("get_skladove_polozky"),
-        supabase.rpc("get_kategorie_techniky_full"),
-        supabase.rpc("get_podkategorie_techniky_full"),
-        supabase.rpc("get_jednotky_skladu_full"),
-        supabase.rpc("get_sklad_bloky"),
-      ]);
+      await querySpravaKatalog(supabase);
 
     if (itemsRes.error) {
       alert(itemsRes.error.message);
@@ -133,11 +91,11 @@ export default function Page() {
       return;
     }
 
-    setItems((itemsRes.data ?? []) as Item[]);
-    setKategorie((kategorieRes.data ?? []) as Kategorie[]);
-    setPodkategorie((podkategorieRes.data ?? []) as Podkategorie[]);
-    setJednotky((jednotkyRes.data ?? []) as Jednotka[]);
-    setBloky((blokyRes.data ?? []) as Blok[]);
+    setItems((itemsRes.data ?? []) as SkladPolozkaRow[]);
+    setKategorie((kategorieRes.data ?? []) as SkladKategorie[]);
+    setPodkategorie((podkategorieRes.data ?? []) as SkladPodkategorie[]);
+    setJednotky((jednotkyRes.data ?? []) as SkladJednotka[]);
+    setBloky((blokyRes.data ?? []) as SkladBlok[]);
     setLoading(false);
   }, []);
 
@@ -152,34 +110,34 @@ export default function Page() {
   useEffect(() => {
     const channels = [
       supabase
-        .channel("sklad-sprava-kategorie")
+        .channel(SKLAD_REALTIME_CHANNEL.spravaKategorie)
         .on(
           "postgres_changes",
-          { event: "*", schema: "public", table: "kategorie_techniky" },
+          { event: "*", schema: "public", table: SKLAD_TABLE.kategorieTechniky },
           load
         )
         .subscribe(),
       supabase
-        .channel("sklad-sprava-podkategorie")
+        .channel(SKLAD_REALTIME_CHANNEL.spravaPodkategorie)
         .on(
           "postgres_changes",
-          { event: "*", schema: "public", table: "podkategorie_techniky" },
+          { event: "*", schema: "public", table: SKLAD_TABLE.podkategorieTechniky },
           load
         )
         .subscribe(),
       supabase
-        .channel("sklad-sprava-jednotky")
+        .channel(SKLAD_REALTIME_CHANNEL.spravaJednotky)
         .on(
           "postgres_changes",
-          { event: "*", schema: "public", table: "jednotky_skladu" },
+          { event: "*", schema: "public", table: SKLAD_TABLE.jednotkySkladu },
           load
         )
         .subscribe(),
       supabase
-        .channel("sklad-sprava-poskozeni")
+        .channel(SKLAD_REALTIME_CHANNEL.spravaPoskozeni)
         .on(
           "postgres_changes",
-          { event: "*", schema: "public", table: "hlaseni_poskozeni" },
+          { event: "*", schema: "public", table: SKLAD_TABLE.hlaseniPoskozeni },
           load
         )
         .subscribe(),
@@ -253,7 +211,7 @@ export default function Page() {
     setIsAddOpen(false);
   }
 
-  function startEdit(item: Item) {
+  function startEdit(item: SkladPolozkaRow) {
     setEditingId(item.skladova_polozka_id);
     setDraft({
       nazev: item.nazev,
@@ -309,7 +267,7 @@ export default function Page() {
         return;
       }
 
-      const updated: Item = {
+      const updated: SkladPolozkaRow = {
         ...oldItem,
         nazev: draft.nazev.trim(),
         celkem_k_dispozici: parsedKusy,

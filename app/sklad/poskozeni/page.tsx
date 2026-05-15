@@ -4,75 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { Modal } from "@/components/ui/modal";
-
-type Row = {
-  poskozeni_id: string;
-  skladova_polozka_id: string;
-  kus_id: string | null;
-  nazev: string;
-  pocet_kusu: number;
-  typ_poskozeni: string | null;
-  priorita: string | null;
-  blokuje_pouziti: boolean;
-  datum_nahlaseni: string;
-  datum_uzavreni: string | null;
-};
-
-type KusInfo = {
-  kus_id: string;
-  skladova_polozka_id: string;
-  poradove_cislo: number;
-  evidencni_cislo: string | null;
-};
-
-function slug(value: string | null | undefined) {
-  return (value ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-function colorClass(value: string | null) {
-  const s = slug(value);
-
-  if (s.includes("krit")) return "bg-red-600";
-  if (s.includes("vys")) return "bg-orange-500";
-  if (s.includes("stred")) return "bg-yellow-500 text-slate-950";
-  if (s.includes("niz")) return "bg-slate-500";
-  return "bg-slate-600";
-}
-
-function formatDateTime(value: string | null | undefined) {
-  if (!value) return "—";
-
-  const d = new Date(value);
-
-  if (Number.isNaN(d.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("cs-CZ", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(d);
-}
-
-function getKusLabel(row: Row, kusyById: Record<string, KusInfo>) {
-  if (!row.kus_id) return row.nazev;
-
-  const kus = kusyById[row.kus_id];
-
-  if (!kus) return row.nazev;
-
-  return kus.evidencni_cislo?.trim()
-    ? kus.evidencni_cislo
-    : `${row.nazev} #${kus.poradove_cislo}`;
-}
+import { SKLAD_EMPTY_LABEL_EM, SKLAD_TABLE } from "@/lib/sklad/constants";
+import {
+  formatDateTime,
+  getPoskozeniListKusLabel,
+  prioritaBadgeClassName,
+  slugifyCz,
+} from "@/lib/sklad/helpers";
+import type { SkladKusInfo, SkladPoskozeniListRow } from "@/lib/sklad/types";
 
 function FilterButton({
   active,
@@ -99,18 +38,18 @@ function FilterButton({
 }
 
 export default function Page() {
-  const [data, setData] = useState<Row[]>([]);
-  const [kusyById, setKusyById] = useState<Record<string, KusInfo>>({});
+  const [data, setData] = useState<SkladPoskozeniListRow[]>([]);
+  const [kusyById, setKusyById] = useState<Record<string, SkladKusInfo>>({});
   const [loading, setLoading] = useState(true);
 
   const [stav, setStav] = useState("open");
   const [blokuje, setBlokuje] = useState("all");
   const [priorita, setPriorita] = useState("all");
 
-  const [actionRow, setActionRow] = useState<Row | null>(null);
+  const [actionRow, setActionRow] = useState<SkladPoskozeniListRow | null>(null);
   const [savingAction, setSavingAction] = useState<string | null>(null);
 
-  async function loadKusy(rows: Row[]) {
+  async function loadKusy(rows: SkladPoskozeniListRow[]) {
     const kusIds = Array.from(
       new Set(
         rows
@@ -136,9 +75,9 @@ export default function Page() {
       return;
     }
 
-    const map: Record<string, KusInfo> = {};
+    const map: Record<string, SkladKusInfo> = {};
 
-    ((data ?? []) as KusInfo[]).forEach((kus) => {
+    ((data ?? []) as SkladKusInfo[]).forEach((kus) => {
       map[kus.kus_id] = kus;
     });
 
@@ -157,7 +96,7 @@ export default function Page() {
       return;
     }
 
-    const rows = (data ?? []) as Row[];
+    const rows = (data ?? []) as SkladPoskozeniListRow[];
 
     setData(rows);
     await loadKusy(rows);
@@ -194,13 +133,13 @@ export default function Page() {
       if (blokuje === "yes" && !r.blokuje_pouziti) return false;
       if (blokuje === "no" && r.blokuje_pouziti) return false;
 
-      if (priorita !== "all" && slug(r.priorita) !== priorita) return false;
+      if (priorita !== "all" && slugifyCz(r.priorita) !== priorita) return false;
 
       return true;
     });
   }, [data, stav, blokuje, priorita]);
 
-  function openActionDialog(row: Row) {
+  function openActionDialog(row: SkladPoskozeniListRow) {
     setActionRow(row);
   }
 
@@ -419,7 +358,7 @@ export default function Page() {
           {filtered.map((r) => {
             const isClosed = !!r.datum_uzavreni;
             const isSaving = actionRow?.poskozeni_id === r.poskozeni_id && !!savingAction;
-            const kusLabel = getKusLabel(r, kusyById);
+            const kusLabel = getPoskozeniListKusLabel(r, kusyById);
 
             return (
               <div
@@ -447,7 +386,7 @@ export default function Page() {
                       <span
                         className={[
                           "rounded-full px-2.5 py-1 text-xs font-semibold text-white",
-                          colorClass(r.priorita),
+                          prioritaBadgeClassName(r.priorita),
                         ].join(" ")}
                       >
                         {r.priorita ?? "bez priority"}
@@ -489,12 +428,12 @@ export default function Page() {
 
                       <div>
                         <span className="text-slate-500">Nahlášeno:</span>{" "}
-                        {formatDateTime(r.datum_nahlaseni)}
+                        {formatDateTime(r.datum_nahlaseni, SKLAD_EMPTY_LABEL_EM)}
                       </div>
 
                       <div>
                         <span className="text-slate-500">Uzavřeno:</span>{" "}
-                        {formatDateTime(r.datum_uzavreni)}
+                        {formatDateTime(r.datum_uzavreni, SKLAD_EMPTY_LABEL_EM)}
                       </div>
                     </div>
                   </div>
@@ -522,7 +461,7 @@ export default function Page() {
           <div className="grid gap-4">
             <div className="rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm text-slate-200">
               <div className="font-semibold text-white">
-                {getKusLabel(actionRow, kusyById)}
+                {getPoskozeniListKusLabel(actionRow, kusyById)}
               </div>
               <div className="mt-1 text-slate-400">
                 {actionRow.nazev} · {actionRow.typ_poskozeni ?? "bez typu"} · {actionRow.priorita ?? "bez priority"}

@@ -2,51 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { SKLAD_TABLE } from "@/lib/sklad/constants";
+import {
+  queryPoskozeniProPolozky,
+  querySkladBlokDetail,
+  querySkladovePolozky,
+} from "@/lib/sklad/queries";
+import type {
+  SkladOkruhItem,
+  SkladOkruhPoskozeniRow,
+  SkladOkruhRow,
+} from "@/lib/sklad/types";
 
-export type SkladOkruhRow = {
-  sklad_blok_id: string;
-  blok_nazev: string;
-  skladova_polozka_id: string | null;
-  nazev: string | null;
-  jednotka: string | null;
-  celkem_k_dispozici: number | null;
-  aktivni: boolean | null;
-  poznamka: string | null;
-  na_sklade: number | null;
-  na_akcich: number | null;
-  poskozene: number | null;
-  kategorie_techniky_id: string | null;
-  kategorie_nazev: string | null;
-  kategorie_poradi: number | null;
-  podkategorie_techniky_id: string | null;
-  podkategorie_nazev: string | null;
-  podkategorie_poradi: number | null;
-};
-
-export type SkladOkruhItem = {
-  skladova_polozka_id: string;
-  nazev: string;
-  sklad_blok_id: string | null;
-  blok_nazev: string | null;
-  jednotka: string | null;
-  celkem_k_dispozici: number;
-};
-
-export type SkladOkruhPoskozeniRow = {
-  poskozeni_id: string;
-  skladova_polozka_id: string;
-  zakazka_id: string | null;
-  pocet_kusu: number | string;
-  popis: string | null;
-  typ_poskozeni: string | null;
-  priorita: string | null;
-  blokuje_pouziti: boolean;
-  stav_reseni: string;
-  datum_nahlaseni: string;
-  datum_uzavreni: string | null;
-  datum_odblokovani: string | null;
-  duvod_odblokovani: string | null;
-};
+export type { SkladOkruhItem, SkladOkruhPoskozeniRow, SkladOkruhRow };
 
 export function useSkladOkruhData(blokId: string) {
   const [rows, setRows] = useState<SkladOkruhRow[]>([]);
@@ -61,10 +29,8 @@ export function useSkladOkruhData(blokId: string) {
     setLoading(true);
 
     const [blokDetailRes, itemsRes] = await Promise.all([
-      supabase.rpc("get_sklad_blok_detail", {
-        p_sklad_blok_id: blokId,
-      }),
-      supabase.rpc("get_skladove_polozky"),
+      querySkladBlokDetail(supabase, blokId),
+      querySkladovePolozky(supabase),
     ]);
 
     const loadedRows = (blokDetailRes.data ?? []) as SkladOkruhRow[];
@@ -78,12 +44,7 @@ export function useSkladOkruhData(blokId: string) {
       .filter((v): v is string => Boolean(v));
 
     if (itemIds.length > 0) {
-      const { data } = await supabase
-        .from("hlaseni_poskozeni")
-        .select("*")
-        .in("skladova_polozka_id", itemIds)
-        .order("datum_nahlaseni", { ascending: false });
-
+      const { data } = await queryPoskozeniProPolozky(supabase, itemIds);
       setAllPoskozeni((data ?? []) as SkladOkruhPoskozeniRow[]);
     } else {
       setAllPoskozeni([]);
@@ -132,8 +93,16 @@ export function useSkladOkruhData(blokId: string) {
 
     const channel = supabase
       .channel(`sklad-okruh-${blokId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "hlaseni_poskozeni" }, reloadIfCurrent)
-      .on("postgres_changes", { event: "*", schema: "public", table: "skladove_polozky" }, reloadIfCurrent)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: SKLAD_TABLE.hlaseniPoskozeni },
+        reloadIfCurrent
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: SKLAD_TABLE.skladovePolozky },
+        reloadIfCurrent
+      )
       .subscribe();
 
     return () => {

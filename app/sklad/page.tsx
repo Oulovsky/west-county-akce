@@ -4,30 +4,10 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Modal } from "@/components/ui/modal";
-
-type Blok = {
-  sklad_blok_id: string;
-  nazev: string;
-  poradi: number;
-  pocet_polozek: number;
-  kusu_celkem: number;
-};
-
-type PoskozeniStatRow = {
-  poskozeni_id: string;
-  pocet_kusu: number | string;
-  blokuje_pouziti: boolean;
-  datum_uzavreni: string | null;
-};
-
-function toNumber(value: number | string | null | undefined): number {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function formatNumber(value: number | string | null | undefined): string {
-  return new Intl.NumberFormat("cs-CZ").format(Number(value ?? 0) || 0);
-}
+import { SKLAD_REALTIME_CHANNEL, SKLAD_RPC } from "@/lib/sklad/constants";
+import { formatNumber, toNumber } from "@/lib/sklad/helpers";
+import { queryOtevrenaPoskozeni, querySkladBloky } from "@/lib/sklad/queries";
+import type { SkladBlok, SkladPoskozeniStatRow } from "@/lib/sklad/types";
 
 function StatCard({
   label,
@@ -72,8 +52,8 @@ const tertiaryButtonClass =
   "inline-flex items-center justify-center rounded-xl border border-slate-600 bg-slate-800/80 px-4 py-2.5 text-sm font-medium text-slate-300 transition hover:border-slate-500 hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-60";
 
 export default function SkladPage() {
-  const [bloky, setBloky] = useState<Blok[]>([]);
-  const [poskozeniStats, setPoskozeniStats] = useState<PoskozeniStatRow[]>([]);
+  const [bloky, setBloky] = useState<SkladBlok[]>([]);
+  const [poskozeniStats, setPoskozeniStats] = useState<SkladPoskozeniStatRow[]>([]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -85,28 +65,25 @@ export default function SkladPage() {
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   async function loadBloky() {
-    const { data, error } = await supabase.rpc("get_sklad_bloky");
+    const { data, error } = await querySkladBloky(supabase);
 
     if (error) {
       console.error(error);
       return;
     }
 
-    setBloky((data ?? []) as Blok[]);
+    setBloky((data ?? []) as SkladBlok[]);
   }
 
   async function loadPoskozeniStats() {
-    const { data, error } = await supabase
-      .from("hlaseni_poskozeni")
-      .select("poskozeni_id, pocet_kusu, blokuje_pouziti, datum_uzavreni")
-      .is("datum_uzavreni", null);
+    const { data, error } = await queryOtevrenaPoskozeni(supabase);
 
     if (error) {
       console.error(error);
       return;
     }
 
-    setPoskozeniStats((data ?? []) as PoskozeniStatRow[]);
+    setPoskozeniStats((data ?? []) as SkladPoskozeniStatRow[]);
   }
 
   async function load() {
@@ -117,7 +94,7 @@ export default function SkladPage() {
     const ok = window.confirm("Opravdu chcete okruh skladu smazat?");
     if (!ok) return;
 
-    const { error } = await supabase.rpc("delete_sklad_blok", {
+    const { error } = await supabase.rpc(SKLAD_RPC.deleteSkladBlok, {
       p_sklad_blok_id: id,
     });
 
@@ -130,7 +107,7 @@ export default function SkladPage() {
     await loadBloky();
   }
 
-  async function handleEdit(blok: Blok) {
+  async function handleEdit(blok: SkladBlok) {
     const name = window.prompt("Nový název okruhu", blok.nazev);
 
     if (!name || !name.trim()) return;
@@ -164,7 +141,7 @@ export default function SkladPage() {
 
     setSaving(true);
 
-    const { error } = await supabase.rpc("create_sklad_blok", {
+    const { error } = await supabase.rpc(SKLAD_RPC.createSkladBlok, {
       p_nazev: newNazev.trim(),
     });
 
@@ -243,7 +220,7 @@ export default function SkladPage() {
 
     const orderedIds = newOrder.map((b) => b.sklad_blok_id);
 
-    const { error } = await supabase.rpc("set_sklad_blok_poradi", {
+    const { error } = await supabase.rpc(SKLAD_RPC.setSkladBlokPoradi, {
       p_ids: orderedIds,
     });
 
@@ -262,7 +239,7 @@ export default function SkladPage() {
 
   useEffect(() => {
     const channel = supabase
-      .channel("sklad-home-poskozeni")
+      .channel(SKLAD_REALTIME_CHANNEL.homePoskozeni)
       .on(
         "postgres_changes",
         {

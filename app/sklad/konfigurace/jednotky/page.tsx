@@ -7,15 +7,11 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { Modal } from "@/components/ui/modal";
 import { Card } from "@/components/ui/card";
-
-type Jednotka = {
-  jednotka_id: string;
-  nazev: string;
-  poradi: number | null;
-};
+import { queryJednotkySkladuFull } from "@/lib/sklad/queries";
+import type { SkladJednotka } from "@/lib/sklad/types";
 
 export default function Page() {
-  const [data, setData] = useState<Jednotka[]>([]);
+  const [data, setData] = useState<SkladJednotka[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [newName, setNewName] = useState("");
@@ -35,7 +31,7 @@ export default function Page() {
   async function load() {
     setLoading(true);
 
-    const { data, error } = await supabase.rpc("get_jednotky_skladu_full");
+    const { data, error } = await queryJednotkySkladuFull(supabase);
 
     setLoading(false);
 
@@ -44,7 +40,7 @@ export default function Page() {
       return;
     }
 
-    setData((data ?? []) as Jednotka[]);
+    setData((data ?? []) as SkladJednotka[]);
   }
 
   useEffect(() => {
@@ -105,7 +101,7 @@ export default function Page() {
     await load();
   }
 
-  function startEdit(item: Jednotka) {
+  function startEdit(item: SkladJednotka) {
     setEditingId(item.jednotka_id);
     setDraft(item.nazev);
   }

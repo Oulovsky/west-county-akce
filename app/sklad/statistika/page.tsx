@@ -3,32 +3,20 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-
-type Row = {
-  skladova_polozka_id: string;
-  nazev: string;
-  jednotka: string | null;
-  celkem_k_dispozici: number;
-  blokovane_kusy: number;
-  otevrena_hlaseni: number;
-  celkem_hlaseni: number;
-};
-
-function formatNumber(value: number | string | null | undefined): string {
-  const parsed = Number(value ?? 0);
-  return new Intl.NumberFormat("cs-CZ").format(parsed);
-}
+import { formatNumber } from "@/lib/sklad/helpers";
+import { queryStatistikaPoskozeni } from "@/lib/sklad/queries";
+import type { SkladStatistikaRow } from "@/lib/sklad/types";
 
 export default function SkladStatistikaPage() {
-  const [data, setData] = useState<Row[]>([]);
+  const [data, setData] = useState<SkladStatistikaRow[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let active = true;
 
     async function load() {
-      const result = await supabase.rpc("get_statistika_poskozeni");
-      const rows = result.data as Row[] | null;
+      const result = await queryStatistikaPoskozeni(supabase);
+      const rows = result.data as SkladStatistikaRow[] | null;
       const error = result.error;
 
       if (!active) return;

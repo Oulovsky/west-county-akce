@@ -1,43 +1,22 @@
 ﻿"use client";
 
 import { Modal } from "@/components/ui/modal";
-
-type Blok = {
-  sklad_blok_id: string;
-  nazev: string;
-};
-
-type Kategorie = {
-  kategorie_techniky_id: string;
-  sklad_blok_id: string | null;
-  blok_nazev: string | null;
-  nazev: string;
-  poradi?: number | null;
-};
-
-type Podkategorie = {
-  podkategorie_techniky_id: string;
-  kategorie_techniky_id: string;
-  kategorie_nazev: string | null;
-  nazev: string;
-  poradi?: number | null;
-};
-
-type Jednotka = {
-  jednotka_id: string;
-  nazev: string;
-  poradi?: number | null;
-};
+import type {
+  SkladBlok,
+  SkladJednotka,
+  SkladKategorie,
+  SkladPodkategorie,
+} from "@/lib/sklad/types";
 
 type Props = {
   open: boolean;
   onClose: () => void;
   onSave: () => void;
   isCreating: boolean;
-  bloky: Blok[];
-  kategorie: Kategorie[];
-  podkategorie: Podkategorie[];
-  jednotky: Jednotka[];
+  bloky: SkladBlok[];
+  kategorie: SkladKategorie[];
+  podkategorie: SkladPodkategorie[];
+  jednotky: SkladJednotka[];
   newBlokId: string;
   setNewBlokId: (value: string) => void;
   newKategorieId: string;
@@ -54,8 +33,8 @@ type Props = {
   setNewNaklad: (value: string) => void;
   newRent: string;
   setNewRent: (value: string) => void;
-  newKategorieOptions: Kategorie[];
-  newPodkategorieOptions: Podkategorie[];
+  newKategorieOptions: SkladKategorie[];
+  newPodkategorieOptions: SkladPodkategorie[];
 };
 
 export function AddItemModal({
