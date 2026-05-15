@@ -1,17 +1,9 @@
-﻿import Link from "next/link";
-import { revalidatePath } from "next/cache";
+﻿import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { EvidencePoskozeniClient } from "@/components/sklad/evidence-poskozeni-client";
 import {
   computeCelkemKusu,
   computePouzitelneKusy,
-  formatDateTime,
-  formatMoney,
-  formatNumber,
-  getKusLabel,
-  getKusStatus,
-  slugifyCz,
   sumBlokujiciPoskozeneKusy,
   toNumber,
 } from "@/lib/sklad/helpers";
@@ -25,38 +17,22 @@ import type {
   SkladPrioritaOption,
   SkladTypPoskozeniOption,
 } from "@/lib/sklad/types";
+import {
+  SkladDetailConfigError,
+  SkladDetailLoadError,
+  SkladDetailNotFound,
+} from "./components/SkladDetailAlerts";
+import { SkladDetailBasicInfo } from "./components/SkladDetailBasicInfo";
+import { SkladDetailEvidenceSection } from "./components/SkladDetailEvidenceSection";
+import { SkladDetailFinance } from "./components/SkladDetailFinance";
+import { SkladDetailHeader } from "./components/SkladDetailHeader";
+import { SkladDetailItemsTable } from "./components/SkladDetailItemsTable";
+import { SkladDetailMetaSection } from "./components/SkladDetailMetaSection";
+import { SkladDetailReportDamageSection } from "./components/SkladDetailReportDamageSection";
 
 type PageProps = {
   params: Promise<{ id: string }>;
 };
-
-function fieldClassName(extra = "") {
-  return [
-    "h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 font-semibold text-white outline-none",
-    extra,
-  ].join(" ");
-}
-
-function boxClassName(extra = "") {
-  return [
-    "flex h-12 w-full items-center rounded-xl border border-slate-700 bg-slate-950 px-3 font-semibold text-white",
-    extra,
-  ].join(" ");
-}
-
-function statusBoxClassName(extra = "") {
-  return [
-    "flex h-12 w-full items-center rounded-xl border px-3 font-semibold",
-    extra,
-  ].join(" ");
-}
-
-function headerBoxClassName(extra = "") {
-  return [
-    "flex h-10 w-full items-center rounded-xl border border-slate-700 bg-slate-900 px-3 text-xs font-semibold uppercase tracking-wide text-slate-300",
-    extra,
-  ].join(" ");
-}
 
 async function prepocitatPocetKusu(skladovaPolozkaId: string) {
   "use server";
@@ -282,43 +258,23 @@ export default async function SkladDetailPage({ params }: PageProps) {
   ]);
 
   if (error) {
-    return (
-      <div className="rounded-2xl border border-red-800 bg-red-950/40 px-4 py-6 text-red-200">
-        Chyba: {error.message}
-      </div>
-    );
+    return <SkladDetailLoadError message={error.message} />;
   }
 
   if (kategorieError || podkategorieError || jednotkyError) {
     return (
-      <div className="rounded-2xl border border-red-800 bg-red-950/40 px-4 py-6 text-red-200">
-        Chyba konfigurace:{" "}
-        {[kategorieError?.message, podkategorieError?.message, jednotkyError?.message]
-          .filter(Boolean)
-          .join(" | ")}
-      </div>
+      <SkladDetailConfigError
+        messages={[kategorieError?.message, podkategorieError?.message, jednotkyError?.message].filter(
+          Boolean
+        ) as string[]}
+      />
     );
   }
 
   const row = ((data ?? [])[0] ?? null) as SkladDetailRow | null;
 
   if (!row) {
-    return (
-      <div className="flex flex-col gap-4">
-        <div>
-          <Link
-            href="/sklad"
-            className="inline-flex items-center text-sm font-medium text-slate-300 transition hover:text-white"
-          >
-            ← Zpět na sklad
-          </Link>
-        </div>
-
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-6 text-slate-200">
-          Položka nenalezena.
-        </div>
-      </div>
-    );
+    return <SkladDetailNotFound />;
   }
 
   const kategorie = (kategorieRaw ?? []) as SkladKategorie[];
@@ -362,644 +318,62 @@ export default async function SkladDetailPage({ params }: PageProps) {
   const poskozeneKusy = sumBlokujiciPoskozeneKusy(poskozeni);
   const pouzitelneKusy = computePouzitelneKusy(celkemKusu, poskozeneKusy);
 
-  const tableMinWidth = "min-w-[1560px]";
-  const tableGrid =
-    "grid-cols-[minmax(360px,1.8fr)_150px_170px_90px_90px_110px_110px_90px_110px_110px_130px_130px]";
-
-  const rowGridClassName = [
-    "grid",
-    tableGrid,
-    "rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-200",
-  ].join(" ");
-
-  const headerGridClassName = [
-    "grid",
-    tableGrid,
-    "rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-200",
-  ].join(" ");
-
-  const centerCellClassName = "flex items-center justify-center px-2";
-
-  const editFormId = `upravit-polozku-${row.skladova_polozka_id}`;
-
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between gap-3">
-        <Link
-          href="/sklad"
-          className="inline-flex items-center text-sm font-medium text-slate-300 transition hover:text-white"
-        >
-          ← Zpět na sklad
-        </Link>
+      <SkladDetailHeader
+        skladovaPolozkaId={row.skladova_polozka_id}
+        deleteAction={smazatPolozku}
+      />
 
-        <form action={smazatPolozku}>
-          <input
-            type="hidden"
-            name="skladova_polozka_id"
-            value={row.skladova_polozka_id}
-          />
-          <button
-            type="submit"
-            className="rounded-xl border border-red-700 bg-red-950 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-900"
-          >
-            Smazat hlavní položku
-          </button>
-        </form>
-      </div>
-
-      <section className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/60">
-        <div className={tableMinWidth}>
-          <div className="bg-slate-950/30 px-3 pt-3">
-            <div className={headerGridClassName}>
-              <div className="flex items-center px-2">
-                <span className={headerBoxClassName()}>Název</span>
-              </div>
-
-              <div className="flex items-center px-2">
-                <span className={headerBoxClassName()}>Kategorie</span>
-              </div>
-
-              <div className="flex items-center px-2">
-                <span className={headerBoxClassName()}>Podkategorie</span>
-              </div>
-
-              <div className={centerCellClassName}>
-                <span className={headerBoxClassName("justify-center text-center")}>Pozice</span>
-              </div>
-
-              <div className={centerCellClassName}>
-                <span className={headerBoxClassName("justify-center text-center")}>Celkem</span>
-              </div>
-
-              <div className={centerCellClassName}>
-                <span className={headerBoxClassName("justify-center text-center")}>Blokováno</span>
-              </div>
-
-              <div className={centerCellClassName}>
-                <span className={headerBoxClassName("justify-center text-center")}>Použitelné</span>
-              </div>
-
-              <div className={centerCellClassName}>
-                <span className={headerBoxClassName("justify-center text-center")}>Jednotka</span>
-              </div>
-
-              <div className={centerCellClassName}>
-                <span className={headerBoxClassName("justify-center text-center")}>Akce</span>
-              </div>
-
-              <div className={centerCellClassName}>
-                <span className={headerBoxClassName("justify-center text-center")}>Rent</span>
-              </div>
-
-              <div className={centerCellClassName}>
-                <span className={headerBoxClassName("justify-center text-center")}>Stav</span>
-              </div>
-
-              <div className={centerCellClassName}>
-                <span className={headerBoxClassName("justify-center text-center")}>Akce</span>
-              </div>
-            </div>
-          </div>
-
-          <details className="group" open>
-            <summary className="cursor-pointer list-none">
-              <form
-                id={editFormId}
-                action={upravitPolozku}
-                key={`${row.skladova_polozka_id}-${row.kategorie_techniky_id ?? "bez"}-${row.podkategorie_techniky_id ?? "bez"}-${row.pozice ?? "bez"}-${row.upraveno_dne}`}
-              >
-                <input
-                  type="hidden"
-                  name="skladova_polozka_id"
-                  value={row.skladova_polozka_id}
-                />
-                <input
-                  type="hidden"
-                  name="celkem_k_dispozici"
-                  value={celkemKusu}
-                />
-              </form>
-
-              <div className="bg-slate-950/30 px-3 py-3">
-                <div className={rowGridClassName}>
-                  <div className="flex items-center px-2">
-                    <input
-                      form={editFormId}
-                      name="nazev"
-                      defaultValue={row.nazev}
-                      className={fieldClassName()}
-                    />
-                  </div>
-
-                  <div className="flex items-center px-2">
-                    <select
-                      form={editFormId}
-                      name="kategorie_techniky_id"
-                      defaultValue={selectedKategorieId}
-                      className={fieldClassName()}
-                    >
-                      <option value="">Bez kategorie</option>
-                      {kategorie.map((item) => (
-                        <option
-                          key={item.kategorie_techniky_id}
-                          value={item.kategorie_techniky_id}
-                        >
-                          {item.nazev}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex items-center px-2">
-                    <select
-                      form={editFormId}
-                      name="podkategorie_techniky_id"
-                      defaultValue={row.podkategorie_techniky_id ?? ""}
-                      className={fieldClassName()}
-                    >
-                      <option value="">Bez podkategorie</option>
-                      {selectedPodkategorie.map((item) => (
-                        <option
-                          key={item.podkategorie_techniky_id}
-                          value={item.podkategorie_techniky_id}
-                        >
-                          {item.nazev}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className={centerCellClassName}>
-                    <input
-                      form={editFormId}
-                      name="pozice"
-                      defaultValue={row.pozice ?? ""}
-                      inputMode="decimal"
-                      className={fieldClassName("text-center")}
-                    />
-                  </div>
-
-                  <div className={centerCellClassName}>
-                    <span className={boxClassName("justify-center text-center")}>
-                      {formatNumber(celkemKusu)}
-                    </span>
-                  </div>
-
-                  <div className={centerCellClassName}>
-                    <span
-                      className={statusBoxClassName(
-                        [
-                          "justify-center text-center",
-                          poskozeneKusy > 0
-                            ? "border-red-700 bg-red-950 text-red-200"
-                            : "border-emerald-700 bg-emerald-950 text-emerald-200",
-                        ].join(" ")
-                      )}
-                    >
-                      {formatNumber(poskozeneKusy)}
-                    </span>
-                  </div>
-
-                  <div className={centerCellClassName}>
-                    <span className={statusBoxClassName("justify-center text-center border-emerald-700 bg-emerald-950 text-emerald-200")}>
-                      {formatNumber(pouzitelneKusy)}
-                    </span>
-                  </div>
-
-                  <div className={centerCellClassName}>
-                    <select
-                      form={editFormId}
-                      name="jednotka"
-                      defaultValue={row.jednotka}
-                      className={fieldClassName("text-center")}
-                    >
-                      {jednotky.map((item) => (
-                        <option key={item.jednotka_id} value={item.nazev}>
-                          {item.nazev}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className={centerCellClassName}>
-                    <input
-                      form={editFormId}
-                      name="interni_naklad"
-                      defaultValue={row.interni_naklad ?? ""}
-                      inputMode="decimal"
-                      className={fieldClassName("text-center")}
-                    />
-                  </div>
-
-                  <div className={centerCellClassName}>
-                    <input
-                      form={editFormId}
-                      name="fakturacni_cena"
-                      defaultValue={row.fakturacni_cena ?? ""}
-                      inputMode="decimal"
-                      className={fieldClassName("text-center")}
-                    />
-                  </div>
-
-                  <div className={centerCellClassName}>
-                    <span
-                      className={[
-                        boxClassName("justify-center text-center"),
-                        row.aktivni
-                          ? "border-emerald-800 bg-emerald-950 text-emerald-100"
-                          : "border-slate-700 bg-slate-950 text-slate-100",
-                      ].join(" ")}
-                    >
-                      {row.aktivni ? "aktivní" : "neaktivní"}
-                    </span>
-                  </div>
-
-                  <div className={centerCellClassName}>
-                    <button
-                      type="submit"
-                      form={editFormId}
-                      className="h-12 w-full rounded-xl border border-emerald-700 bg-emerald-900 px-3 text-sm font-semibold text-white transition hover:bg-emerald-800"
-                    >
-                      Uložit
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </summary>
-
-            <div className="bg-slate-950/30 px-3 py-4">
-              <div className="mb-3 flex justify-end">
-                <form action={pridatKus}>
-                  <input
-                    type="hidden"
-                    name="skladova_polozka_id"
-                    value={row.skladova_polozka_id}
-                  />
-                  <input type="hidden" name="nazev" value={row.nazev} />
-                  <button
-                    type="submit"
-                    className="rounded-xl border border-blue-700 bg-blue-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800"
-                  >
-                    + Přidat kus
-                  </button>
-                </form>
-              </div>
-
-              {kusyError ? (
-                <div className="rounded-xl border border-red-800 bg-red-950/40 px-4 py-4 text-sm text-red-200">
-                  Chyba: {kusyError.message}
-                </div>
-              ) : kusy.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/30 px-4 py-8 text-center text-sm text-slate-400">
-                  Pro tuto položku zatím nejsou založené jednotlivé kusy.
-                </div>
-              ) : (
-                <div className="grid gap-2">
-                  {kusy.map((kus) => {
-                    const stav = getKusStatus(kus, poskozeni);
-
-                    return (
-                      <div key={kus.kus_id} className={rowGridClassName}>
-                        <div className="flex items-center px-2">
-                          <span className={boxClassName()}>
-                            {getKusLabel(kus)}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center px-2">
-                          <span className={boxClassName()}>{row.kategorie_nazev ?? "-"}</span>
-                        </div>
-
-                        <div className="flex items-center px-2">
-                          <span className={boxClassName()}>{row.podkategorie_nazev ?? "-"}</span>
-                        </div>
-
-                        <div className={centerCellClassName}>
-                          <span className={boxClassName("justify-center text-center")}>
-                            {formatNumber(row.pozice)}
-                          </span>
-                        </div>
-
-                        <div className={centerCellClassName}>
-                          <span className={boxClassName("justify-center text-center")}>1</span>
-                        </div>
-
-                        <div className={centerCellClassName}>
-                          <span
-                            className={statusBoxClassName(
-                              [
-                                "justify-center text-center",
-                                stav.blokovano
-                                  ? "border-red-700 bg-red-950 text-red-200"
-                                  : "border-emerald-700 bg-emerald-950 text-emerald-200",
-                              ].join(" ")
-                            )}
-                          >
-                            {stav.blokovano ? "1 ks" : "OK"}
-                          </span>
-                        </div>
-
-                        <div className={centerCellClassName}>
-                          <span
-                            className={statusBoxClassName("justify-center text-center " + stav.className)}
-                            title={stav.text}
-                          >
-                            {stav.pouzitelne}
-                          </span>
-                        </div>
-
-                        <div className={centerCellClassName}>
-                          <span className={boxClassName("justify-center text-center")}>{row.jednotka}</span>
-                        </div>
-
-                        <div className={centerCellClassName}>
-                          <span className={boxClassName("justify-center text-center")}>
-                            {formatMoney(row.interni_naklad)}
-                          </span>
-                        </div>
-
-                        <div className={centerCellClassName}>
-                          <span className={boxClassName("justify-center text-center")}>
-                            {formatMoney(row.fakturacni_cena)}
-                          </span>
-                        </div>
-
-                        <div className={centerCellClassName}>
-                          <span
-                            className={[
-                              "flex h-12 w-full items-center justify-center rounded-xl border px-3 text-xs font-semibold text-center",
-                              stav.className,
-                            ].join(" ")}
-                          >
-                            {stav.text}
-                          </span>
-                        </div>
-
-                        <div className={centerCellClassName}>
-                          <form action={smazatKus} className="w-full">
-                            <input
-                              type="hidden"
-                              name="skladova_polozka_id"
-                              value={row.skladova_polozka_id}
-                            />
-                            <input type="hidden" name="kus_id" value={kus.kus_id} />
-                            <button
-                              type="submit"
-                              className="h-12 w-full rounded-xl border border-red-800 bg-red-950 px-3 text-sm font-semibold text-red-100 transition hover:bg-red-900"
-                            >
-                              Smazat
-                            </button>
-                          </form>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </details>
-        </div>
-      </section>
+      <SkladDetailItemsTable
+        row={row}
+        kategorie={kategorie}
+        selectedKategorieId={selectedKategorieId}
+        selectedPodkategorie={selectedPodkategorie}
+        jednotky={jednotky}
+        celkemKusu={celkemKusu}
+        poskozeneKusy={poskozeneKusy}
+        pouzitelneKusy={pouzitelneKusy}
+        kusy={kusy}
+        poskozeni={poskozeni}
+        kusyError={kusyError}
+        updateAction={upravitPolozku}
+        addKusAction={pridatKus}
+        deleteKusAction={smazatKus}
+      />
 
       <div className="grid gap-5 2xl:grid-cols-[minmax(0,1.3fr)_minmax(420px,0.9fr)]">
         <div className="flex flex-col gap-5">
           <div className="grid gap-5 xl:grid-cols-2">
-            <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-              <h2 className="mb-4 text-lg font-semibold text-white">Základní info</h2>
-
-              <div className="grid gap-3 text-sm text-slate-200">
-                <div className="grid grid-cols-[140px_1fr] gap-3">
-                  <div className="text-slate-500">Kategorie</div>
-                  <div>{row.kategorie_nazev ?? "-"}</div>
-                </div>
-
-                <div className="grid grid-cols-[140px_1fr] gap-3">
-                  <div className="text-slate-500">Podkategorie</div>
-                  <div>{row.podkategorie_nazev ?? "-"}</div>
-                </div>
-
-                <div className="grid grid-cols-[140px_1fr] gap-3">
-                  <div className="text-slate-500">Pozice</div>
-                  <div>{formatNumber(row.pozice)}</div>
-                </div>
-
-                <div className="grid grid-cols-[140px_1fr] gap-3">
-                  <div className="text-slate-500">Jednotka</div>
-                  <div>{row.jednotka}</div>
-                </div>
-
-                <div className="grid grid-cols-[140px_1fr] gap-3">
-                  <div className="text-slate-500">Na skladě celkem</div>
-                  <div>
-                    {formatNumber(celkemKusu)} {row.jednotka}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-[140px_1fr] gap-3">
-                  <div className="text-slate-500">Blokováno poškozením</div>
-                  <div>
-                    {formatNumber(poskozeneKusy)} {row.jednotka}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-[140px_1fr] gap-3">
-                  <div className="text-slate-500">Použitelné</div>
-                  <div>
-                    {formatNumber(pouzitelneKusy)} {row.jednotka}
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-              <h2 className="mb-4 text-lg font-semibold text-white">Finance</h2>
-
-              <div className="grid gap-3 text-sm text-slate-200">
-                <div className="grid grid-cols-[140px_1fr] gap-3">
-                  <div className="text-slate-500">Akce</div>
-                  <div>{formatMoney(row.interni_naklad)}</div>
-                </div>
-
-                <div className="grid grid-cols-[140px_1fr] gap-3">
-                  <div className="text-slate-500">Rent</div>
-                  <div>{formatMoney(row.fakturacni_cena)}</div>
-                </div>
-
-                <div className="grid grid-cols-[140px_1fr] gap-3">
-                  <div className="text-slate-500">Vytvořeno</div>
-                  <div>{formatDateTime(row.vytvoreno_dne)}</div>
-                </div>
-
-                <div className="grid grid-cols-[140px_1fr] gap-3">
-                  <div className="text-slate-500">Upraveno</div>
-                  <div>{formatDateTime(row.upraveno_dne)}</div>
-                </div>
-              </div>
-            </section>
+            <SkladDetailBasicInfo
+              row={row}
+              celkemKusu={celkemKusu}
+              poskozeneKusy={poskozeneKusy}
+              pouzitelneKusy={pouzitelneKusy}
+            />
+            <SkladDetailFinance row={row} />
           </div>
 
-          <section
-            id="evidence-poskozeni"
-            className="scroll-mt-24 rounded-2xl border border-slate-800 bg-slate-900/60 p-5"
-          >
-            <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-white">Evidence poškození</h2>
-                <p className="text-sm text-slate-400">
-                  Filtrace přehledu poškození pro tuto položku.
-                </p>
-              </div>
-
-              <Link
-                href="/sklad/poskozeni"
-                className="inline-flex items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-slate-800"
-              >
-                Centrální přehled poškození
-              </Link>
-            </div>
-
-            {poskozeniError ? (
-              <div className="rounded-xl border border-red-800 bg-red-950/40 px-4 py-4 text-sm text-red-200">
-                Chyba: {poskozeniError.message}
-              </div>
-            ) : (
-              <EvidencePoskozeniClient
-                poskozeni={poskozeni}
-                priority={priority}
-                jednotka={row.jednotka}
-              />
-            )}
-          </section>
+          <SkladDetailEvidenceSection
+            poskozeni={poskozeni}
+            priority={priority}
+            jednotka={row.jednotka}
+            poskozeniError={poskozeniError}
+          />
         </div>
 
         <div className="flex flex-col gap-5">
-          <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-            <h2 className="mb-4 text-lg font-semibold text-white">
-              Nahlásit poškození
-            </h2>
+          <SkladDetailReportDamageSection
+            skladovaPolozkaId={row.skladova_polozka_id}
+            kusy={kusy}
+            typyPoskozeni={typyPoskozeni}
+            priority={priority}
+            typyError={typyError}
+            priorityError={priorityError}
+            reportAction={nahlasitPoskozeni}
+          />
 
-            {typyError || priorityError ? (
-              <div className="rounded-xl border border-red-800 bg-red-950/40 px-4 py-4 text-sm text-red-200">
-                Chyba konfigurace poškození:{" "}
-                {[typyError?.message, priorityError?.message].filter(Boolean).join(" | ")}
-              </div>
-            ) : (
-              <form action={nahlasitPoskozeni} className="grid gap-4">
-                <input type="hidden" name="skladova_polozka_id" value={row.skladova_polozka_id} />
-
-                <div>
-                  <div className="mb-2 text-sm text-slate-300">Konkrétní kus</div>
-                  <select
-                    name="kus_id"
-                    required
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none"
-                  >
-                    <option value="">Vyber kus</option>
-                    {kusy.map((kus) => (
-                      <option key={kus.kus_id} value={kus.kus_id}>
-                        {getKusLabel(kus)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <div className="mb-2 text-sm text-slate-300">Typ poškození</div>
-                    <select
-                      name="typ_poskozeni"
-                      defaultValue={slugifyCz(typyPoskozeni[0]?.nazev ?? "mechanické")}
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none"
-                    >
-                      {typyPoskozeni.length > 0 ? (
-                        typyPoskozeni.map((item) => (
-                          <option key={item.typ_id} value={slugifyCz(item.nazev)}>
-                            {item.nazev}
-                          </option>
-                        ))
-                      ) : (
-                        <>
-                          <option value="mechanicke">mechanické</option>
-                          <option value="elektricke">elektrické</option>
-                          <option value="vizualni">vizuální</option>
-                          <option value="jine">jiné</option>
-                        </>
-                      )}
-                    </select>
-                  </div>
-
-                  <div>
-                    <div className="mb-2 text-sm text-slate-300">Priorita</div>
-                    <select
-                      name="priorita"
-                      defaultValue={slugifyCz(priority[1]?.nazev ?? priority[0]?.nazev ?? "střední")}
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none"
-                    >
-                      {priority.length > 0 ? (
-                        priority.map((item) => (
-                          <option key={item.priorita_id} value={slugifyCz(item.nazev)}>
-                            {item.nazev}
-                          </option>
-                        ))
-                      ) : (
-                        <>
-                          <option value="nizka">nízká</option>
-                          <option value="stredni">střední</option>
-                          <option value="vysoka">vysoká</option>
-                          <option value="kriticka">kritická</option>
-                        </>
-                      )}
-                    </select>
-                  </div>
-                </div>
-
-                <label className="inline-flex w-fit items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-200">
-                  <input type="checkbox" name="blokuje_pouziti" value="true" defaultChecked className="h-4 w-4" />
-                  <span>Blokuje použití</span>
-                </label>
-
-                <div>
-                  <div className="mb-2 text-sm text-slate-300">Popis</div>
-                  <textarea
-                    name="popis"
-                    rows={5}
-                    placeholder="Co je poškozené, jak se to projevuje..."
-                    className="min-h-[120px] w-full resize-y rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none"
-                  />
-                </div>
-
-                <div className="flex justify-end">
-                  <button
-                    type="submit"
-                    className="inline-flex items-center justify-center rounded-xl border border-amber-700 bg-amber-800 px-4 py-3 text-sm font-semibold text-white transition hover:bg-amber-700"
-                  >
-                    Nahlásit poškození
-                  </button>
-                </div>
-              </form>
-            )}
-          </section>
-
-          <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-            <h2 className="mb-4 text-lg font-semibold text-white">Další</h2>
-
-            <div className="grid gap-3 text-sm text-slate-200">
-              <div className="grid grid-cols-[120px_1fr] gap-3">
-                <div className="text-slate-500">Poznámka</div>
-                <div>{row.poznamka ?? "-"}</div>
-              </div>
-
-              <div className="grid grid-cols-[120px_1fr] gap-3">
-                <div className="text-slate-500">Vytvořeno</div>
-                <div>{formatDateTime(row.vytvoreno_dne)}</div>
-              </div>
-
-              <div className="grid grid-cols-[120px_1fr] gap-3">
-                <div className="text-slate-500">Upraveno</div>
-                <div>{formatDateTime(row.upraveno_dne)}</div>
-              </div>
-            </div>
-          </section>
+          <SkladDetailMetaSection row={row} />
         </div>
       </div>
     </div>
