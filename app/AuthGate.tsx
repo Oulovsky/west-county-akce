@@ -4,6 +4,12 @@ import { useEffect, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 
+type AuthStatus = "loading" | "authorized" | "public" | "unauthorized"
+
+function isPublicPath(pathname: string) {
+  return pathname === "/login" || pathname.startsWith("/auth/")
+}
+
 export default function AuthGate({
   children,
 }: {
@@ -12,10 +18,12 @@ export default function AuthGate({
   const pathname = usePathname()
   const router = useRouter()
 
-  const [loading, setLoading] = useState(true)
+  const [status, setStatus] = useState<AuthStatus>("loading")
 
   useEffect(() => {
     let mounted = true
+
+    setStatus("loading")
 
     async function check() {
       const {
@@ -24,9 +32,16 @@ export default function AuthGate({
 
       if (!mounted) return
 
+      const publicPath = isPublicPath(pathname)
+
       if (!session) {
-        setLoading(false)
-        if (pathname !== "/login") router.replace("/login")
+        if (publicPath) {
+          setStatus("public")
+          return
+        }
+
+        setStatus("unauthorized")
+        router.replace("/login")
         return
       }
 
@@ -40,16 +55,23 @@ export default function AuthGate({
 
       if (!allowed) {
         await supabase.auth.signOut()
-        setLoading(false)
+        if (!mounted) return
+        setStatus("unauthorized")
         router.replace("/login")
         return
       }
 
-      setLoading(false)
-
       if (pathname === "/login") {
         router.replace("/zakazky")
+        return
       }
+
+      if (publicPath) {
+        setStatus("public")
+        return
+      }
+
+      setStatus("authorized")
     }
 
     void check()
@@ -66,13 +88,13 @@ export default function AuthGate({
     }
   }, [pathname, router])
 
-  if (loading) {
-    return (
-      <main style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
-        Načítání…
-      </main>
-    )
+  if (status === "authorized" || status === "public") {
+    return <>{children}</>
   }
 
-  return <>{children}</>
+  return (
+    <main style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
+      Načítání…
+    </main>
+  )
 }

@@ -1,4 +1,5 @@
 import "./globals.css";
+import AuthGate from "@/app/AuthGate";
 import SidebarNav from "./SidebarNav";
 
 export default function RootLayout({
@@ -20,7 +21,7 @@ export default function RootLayout({
         </div>
 
         <main className="mx-auto w-full max-w-[1920px] px-4 py-5 sm:px-6 xl:px-8 2xl:px-10">
-          {children}
+          <AuthGate>{children}</AuthGate>
         </main>
       </body>
     </html>
