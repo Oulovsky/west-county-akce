@@ -3,170 +3,32 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { EvidencePoskozeniClient } from "@/components/sklad/evidence-poskozeni-client";
+import {
+  computeCelkemKusu,
+  computePouzitelneKusy,
+  formatDateTime,
+  formatMoney,
+  formatNumber,
+  getKusLabel,
+  getKusStatus,
+  slugifyCz,
+  sumBlokujiciPoskozeneKusy,
+  toNumber,
+} from "@/lib/sklad/helpers";
+import type {
+  SkladDetailRow,
+  SkladJednotka,
+  SkladKategorie,
+  SkladKusRow,
+  SkladPodkategorie,
+  SkladPoskozeniRow,
+  SkladPrioritaOption,
+  SkladTypPoskozeniOption,
+} from "@/lib/sklad/types";
 
 type PageProps = {
   params: Promise<{ id: string }>;
 };
-
-type SkladDetailRow = {
-  skladova_polozka_id: string;
-  nazev: string;
-  kategorie_techniky_id: string | null;
-  kategorie_nazev: string | null;
-  podkategorie_techniky_id: string | null;
-  podkategorie_nazev: string | null;
-  pozice: number | string | null;
-  jednotka: string;
-  celkem_k_dispozici: number | string;
-  interni_naklad: number | string | null;
-  fakturacni_cena: number | string | null;
-  aktivni: boolean;
-  poznamka: string | null;
-  vytvoreno_dne: string;
-  upraveno_dne: string;
-};
-
-type Kategorie = {
-  kategorie_techniky_id: string;
-  nazev: string;
-  poradi?: number | null;
-};
-
-type Podkategorie = {
-  podkategorie_techniky_id: string;
-  kategorie_techniky_id: string;
-  kategorie_nazev: string | null;
-  nazev: string;
-  poradi?: number | null;
-};
-
-type Jednotka = {
-  jednotka_id: string;
-  nazev: string;
-  poradi?: number | null;
-};
-
-type KusRow = {
-  kus_id: string;
-  skladova_polozka_id: string;
-  poradove_cislo: number;
-  evidencni_cislo: string | null;
-  stav: string;
-  poznamka: string | null;
-  aktivni: boolean;
-};
-
-type PoskozeniRow = {
-  poskozeni_id: string;
-  skladova_polozka_id: string;
-  kus_id: string | null;
-  zakazka_id: string | null;
-  pocet_kusu: number | string;
-  popis: string | null;
-  typ_poskozeni: string | null;
-  priorita: string | null;
-  blokuje_pouziti: boolean;
-  stav_reseni: string;
-  datum_nahlaseni: string;
-  datum_uzavreni: string | null;
-};
-
-type TypPoskozeniOption = {
-  typ_id: string;
-  nazev: string;
-  poradi: number | null;
-};
-
-type PrioritaOption = {
-  priorita_id: string;
-  nazev: string;
-  poradi: number | null;
-};
-
-function toNumber(value: number | string | null | undefined): number {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function formatNumber(value: number | string | null | undefined) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return "-";
-  return new Intl.NumberFormat("cs-CZ").format(parsed);
-}
-
-function formatMoney(value: number | string | null | undefined) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return "-";
-
-  return new Intl.NumberFormat("cs-CZ", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(parsed);
-}
-
-function formatDateTime(value: string | null | undefined) {
-  if (!value) return "-";
-
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-
-  return new Intl.DateTimeFormat("cs-CZ", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(d);
-}
-
-function slugifyCz(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-function getKusLabel(kus: KusRow) {
-  return kus.evidencni_cislo?.trim()
-    ? kus.evidencni_cislo
-    : `Kus #${kus.poradove_cislo}`;
-}
-
-function getKusStatus(kus: KusRow, poskozeni: PoskozeniRow[]) {
-  const otevrene = poskozeni.filter(
-    (p) => p.kus_id === kus.kus_id && !p.datum_uzavreni
-  );
-
-  const blokuje = otevrene.some((p) => p.blokuje_pouziti);
-
-  if (blokuje) {
-    return {
-      text: "blokováno",
-      className: "border-red-700 bg-red-950 text-red-200",
-      blokovano: 1,
-      pouzitelne: "✕",
-    };
-  }
-
-  if (otevrene.length > 0) {
-    return {
-      text: "poškozeno, použitelné",
-      className: "border-amber-700 bg-amber-950 text-amber-200",
-      blokovano: 0,
-      pouzitelne: "!",
-    };
-  }
-
-  return {
-    text: "OK",
-    className: "border-emerald-700 bg-emerald-950 text-emerald-200",
-    blokovano: 0,
-    pouzitelne: "✓",
-  };
-}
 
 function fieldClassName(extra = "") {
   return [
@@ -459,9 +321,9 @@ export default async function SkladDetailPage({ params }: PageProps) {
     );
   }
 
-  const kategorie = (kategorieRaw ?? []) as Kategorie[];
-  const podkategorie = (podkategorieRaw ?? []) as Podkategorie[];
-  const jednotky = (jednotkyRaw ?? []) as Jednotka[];
+  const kategorie = (kategorieRaw ?? []) as SkladKategorie[];
+  const podkategorie = (podkategorieRaw ?? []) as SkladPodkategorie[];
+  const jednotky = (jednotkyRaw ?? []) as SkladJednotka[];
 
   const selectedKategorieId = row.kategorie_techniky_id ?? "";
   const selectedPodkategorie = podkategorie.filter(
@@ -490,27 +352,15 @@ export default async function SkladDetailPage({ params }: PageProps) {
     supabase.rpc("get_priority_poskozeni_full"),
   ]);
 
-  const kusy = (kusyRaw ?? []) as KusRow[];
-  const poskozeni = (poskozeniRaw ?? []) as PoskozeniRow[];
-  const typyPoskozeni = (typyRaw ?? []) as TypPoskozeniOption[];
-  const priority = (priorityRaw ?? []) as PrioritaOption[];
+  const kusy = (kusyRaw ?? []) as SkladKusRow[];
+  const poskozeni = (poskozeniRaw ?? []) as SkladPoskozeniRow[];
+  const typyPoskozeni = (typyRaw ?? []) as SkladTypPoskozeniOption[];
+  const priority = (priorityRaw ?? []) as SkladPrioritaOption[];
 
   const evidovanyPocetKusu = kusy.length;
-  const celkemKusu =
-    evidovanyPocetKusu > 0
-      ? evidovanyPocetKusu
-      : toNumber(row.celkem_k_dispozici);
-
-  const otevrenaBlokujiciPoskozeni = poskozeni.filter(
-    (p) => !p.datum_uzavreni && p.blokuje_pouziti
-  );
-
-  const poskozeneKusy = otevrenaBlokujiciPoskozeni.reduce(
-    (sum, item) => sum + toNumber(item.pocet_kusu),
-    0
-  );
-
-  const pouzitelneKusy = Math.max(0, celkemKusu - poskozeneKusy);
+  const celkemKusu = computeCelkemKusu(evidovanyPocetKusu, row.celkem_k_dispozici);
+  const poskozeneKusy = sumBlokujiciPoskozeneKusy(poskozeni);
+  const pouzitelneKusy = computePouzitelneKusy(celkemKusu, poskozeneKusy);
 
   const tableMinWidth = "min-w-[1560px]";
   const tableGrid =

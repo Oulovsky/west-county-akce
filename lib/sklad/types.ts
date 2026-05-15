@@ -1,0 +1,136 @@
+/** Detail položky skladu (RPC get_skladova_polozka_detail). */
+export type SkladDetailRow = {
+  skladova_polozka_id: string;
+  nazev: string;
+  kategorie_techniky_id: string | null;
+  kategorie_nazev: string | null;
+  podkategorie_techniky_id: string | null;
+  podkategorie_nazev: string | null;
+  pozice: number | string | null;
+  jednotka: string;
+  celkem_k_dispozici: number | string;
+  interni_naklad: number | string | null;
+  fakturacni_cena: number | string | null;
+  aktivni: boolean;
+  poznamka: string | null;
+  vytvoreno_dne: string;
+  upraveno_dne: string;
+};
+
+/** Kategorie techniky — správa, detail, konfigurace. */
+export type SkladKategorie = {
+  kategorie_techniky_id: string;
+  nazev: string;
+  poradi?: number | null;
+  sklad_blok_id?: string | null;
+  blok_nazev?: string | null;
+};
+
+/** Podkategorie techniky. */
+export type SkladPodkategorie = {
+  podkategorie_techniky_id: string;
+  kategorie_techniky_id: string;
+  kategorie_nazev: string | null;
+  nazev: string;
+  poradi?: number | null;
+};
+
+/** Jednotka skladu (ks, m, …). */
+export type SkladJednotka = {
+  jednotka_id: string;
+  nazev: string;
+  poradi?: number | null;
+};
+
+/** Jednotlivý kus položky. */
+export type SkladKusRow = {
+  kus_id: string;
+  skladova_polozka_id: string;
+  poradove_cislo: number;
+  evidencni_cislo: string | null;
+  stav: string;
+  poznamka: string | null;
+  aktivni: boolean;
+};
+
+/** Hlášení poškození — detail, okruh, centrální přehled. */
+export type SkladPoskozeniRow = {
+  poskozeni_id: string;
+  skladova_polozka_id: string;
+  kus_id: string | null;
+  zakazka_id: string | null;
+  pocet_kusu: number | string;
+  popis: string | null;
+  typ_poskozeni: string | null;
+  priorita: string | null;
+  blokuje_pouziti: boolean;
+  stav_reseni: string;
+  datum_nahlaseni: string;
+  datum_uzavreni: string | null;
+  datum_odblokovani?: string | null;
+  duvod_odblokovani?: string | null;
+};
+
+/** Řádek v tabulce správy skladu (RPC get_skladove_polozky). */
+export type SkladPolozkaRow = {
+  skladova_polozka_id: string;
+  nazev: string;
+  kategorie_techniky_id: string | null;
+  kategorie_nazev: string | null;
+  podkategorie_techniky_id: string | null;
+  podkategorie_nazev: string | null;
+  celkem_k_dispozici: number;
+  jednotka: string | null;
+  interni_naklad: number | null;
+  fakturacni_cena: number | null;
+  sklad_blok_id: string | null;
+  blok_nazev: string | null;
+  na_sklade: number | null;
+  na_akcich: number | null;
+  poskozene: number | null;
+};
+
+/** Skladový okruh / blok (přehled, dashboard). */
+export type SkladBlok = {
+  sklad_blok_id: string;
+  nazev: string;
+  poradi?: number;
+  pocet_polozek?: number;
+  kusu_celkem?: number;
+};
+
+/** Otevřené poškození pro statistiky na dashboardu. */
+export type SkladPoskozeniStatRow = {
+  poskozeni_id: string;
+  pocet_kusu: number | string;
+  blokuje_pouziti: boolean;
+  datum_uzavreni: string | null;
+};
+
+/** Řádek centrálního přehledu poškození. */
+export type SkladPoskozeniListRow = {
+  poskozeni_id: string;
+  skladova_polozka_id: string;
+  kus_id: string | null;
+  nazev: string;
+  pocet_kusu: number;
+  typ_poskozeni: string | null;
+  priorita: string | null;
+  blokuje_pouziti: boolean;
+  datum_nahlaseni: string;
+  datum_uzavreni: string | null;
+};
+
+/** Konfigurace: typ poškození. */
+export type SkladTypPoskozeniOption = {
+  typ_id: string;
+  nazev: string;
+  poradi: number | null;
+};
+
+/** Konfigurace: priorita poškození. */
+export type SkladPrioritaOption = {
+  priorita_id: string;
+  nazev: string;
+  poradi: number | null;
+};
