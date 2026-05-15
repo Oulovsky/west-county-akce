@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireSession } from "@/lib/auth/require-session";
 
 type RequestBody = {
   bloky?: string[];
@@ -7,6 +7,12 @@ type RequestBody = {
 
 export async function POST(req: Request) {
   try {
+    const session = await requireSession();
+
+    if (!session.ok) {
+      return session.response;
+    }
+
     const body = (await req.json()) as RequestBody;
 
     const bloky = Array.isArray(body.bloky)
@@ -15,7 +21,7 @@ export async function POST(req: Request) {
         )
       : [];
 
-    const supabase = await createClient();
+    const { supabase } = session;
 
     const { data, error } = await supabase.rpc("set_sklad_bloky_poradi", {
       p_bloky: bloky,
@@ -27,13 +33,18 @@ export async function POST(req: Request) {
           ok: false,
           where: "rpc:set_sklad_bloky_poradi",
           message: error.message ?? null,
-          code: "code" in error ? (error as { code?: string }).code ?? null : null,
+          code:
+            "code" in error
+              ? (error as { code?: string }).code ?? null
+              : null,
           details:
             "details" in error
               ? (error as { details?: string }).details ?? null
               : null,
           hint:
-            "hint" in error ? (error as { hint?: string }).hint ?? null : null,
+            "hint" in error
+              ? (error as { hint?: string }).hint ?? null
+              : null,
           received: bloky,
           returnedData: data ?? null,
         },
