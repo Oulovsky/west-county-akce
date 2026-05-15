@@ -5,24 +5,13 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { Modal } from "@/components/ui/modal";
 import { Card } from "@/components/ui/card";
-
-type Kategorie = {
-  kategorie_techniky_id: string;
-  sklad_blok_id: string | null;
-  blok_nazev: string | null;
-  nazev: string;
-  poradi: number | null;
-  aktivni?: boolean | null;
-};
-
-type Blok = {
-  sklad_blok_id: string;
-  nazev: string;
-};
+import { SKLAD_RPC } from "@/lib/sklad/constants";
+import { queryKonfiguraceKategorie } from "@/lib/sklad/queries";
+import type { SkladBlok, SkladKategorie } from "@/lib/sklad/types";
 
 export default function Page() {
-  const [data, setData] = useState<Kategorie[]>([]);
-  const [bloky, setBloky] = useState<Blok[]>([]);
+  const [data, setData] = useState<SkladKategorie[]>([]);
+  const [bloky, setBloky] = useState<SkladBlok[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [newName, setNewName] = useState("");
@@ -41,10 +30,7 @@ export default function Page() {
   const load = useCallback(async () => {
     setLoading(true);
 
-    const [kategorieRes, blokyRes] = await Promise.all([
-      supabase.rpc("get_kategorie_techniky_full"),
-      supabase.rpc("get_sklad_bloky"),
-    ]);
+    const [kategorieRes, blokyRes] = await queryKonfiguraceKategorie(supabase);
 
     setLoading(false);
 
@@ -58,8 +44,8 @@ export default function Page() {
       return;
     }
 
-    const loadedKategorie = (kategorieRes.data ?? []) as Kategorie[];
-    const loadedBloky = (blokyRes.data ?? []) as Blok[];
+    const loadedKategorie = (kategorieRes.data ?? []) as SkladKategorie[];
+    const loadedBloky = (blokyRes.data ?? []) as SkladBlok[];
 
     setData(loadedKategorie);
     setBloky(loadedBloky);
@@ -93,7 +79,7 @@ export default function Page() {
 
       setSavingId(id);
 
-      const { error } = await supabase.rpc("update_kategorie_techniky", {
+      const { error } = await supabase.rpc(SKLAD_RPC.updateKategorieTechniky, {
         p_id: id,
         p_nazev: trimmed,
         p_sklad_blok_id: draftBlokId,
@@ -187,7 +173,7 @@ export default function Page() {
 
     setCreating(true);
 
-    const { error } = await supabase.rpc("create_kategorie_techniky", {
+    const { error } = await supabase.rpc(SKLAD_RPC.createKategorieTechniky, {
       p_nazev: trimmed,
       p_sklad_blok_id: newBlokId,
     });
@@ -206,7 +192,7 @@ export default function Page() {
     await load();
   }
 
-  function startEdit(item: Kategorie) {
+  function startEdit(item: SkladKategorie) {
     setEditingId(item.kategorie_techniky_id);
     setDraftName(item.nazev);
     setDraftBlokId(item.sklad_blok_id ?? "");
@@ -218,7 +204,7 @@ export default function Page() {
 
     setRemovingId(id);
 
-    const { error } = await supabase.rpc("delete_kategorie_techniky", {
+    const { error } = await supabase.rpc(SKLAD_RPC.deleteKategorieTechniky, {
       p_id: id,
     });
 

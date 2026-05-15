@@ -7,24 +7,13 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { Modal } from "@/components/ui/modal";
 import { Card } from "@/components/ui/card";
-
-type Kategorie = {
-  kategorie_techniky_id: string;
-  nazev: string;
-  poradi?: number | null;
-};
-
-type Podkategorie = {
-  podkategorie_techniky_id: string;
-  kategorie_techniky_id: string;
-  kategorie_nazev: string | null;
-  nazev: string;
-  poradi: number | null;
-};
+import { SKLAD_RPC } from "@/lib/sklad/constants";
+import { queryKonfiguracePodkategorie } from "@/lib/sklad/queries";
+import type { SkladKategorie, SkladPodkategorie } from "@/lib/sklad/types";
 
 export default function Page() {
-  const [kategorie, setKategorie] = useState<Kategorie[]>([]);
-  const [data, setData] = useState<Podkategorie[]>([]);
+  const [kategorie, setKategorie] = useState<SkladKategorie[]>([]);
+  const [data, setData] = useState<SkladPodkategorie[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [newName, setNewName] = useState("");
@@ -46,10 +35,8 @@ export default function Page() {
   async function load() {
     setLoading(true);
 
-    const [kategorieRes, podkategorieRes] = await Promise.all([
-      supabase.rpc("get_kategorie_techniky_full"),
-      supabase.rpc("get_podkategorie_techniky_full"),
-    ]);
+    const [kategorieRes, podkategorieRes] =
+      await queryKonfiguracePodkategorie(supabase);
 
     setLoading(false);
 
@@ -63,8 +50,8 @@ export default function Page() {
       return;
     }
 
-    const loadedKategorie = (kategorieRes.data ?? []) as Kategorie[];
-    const loadedPodkategorie = (podkategorieRes.data ?? []) as Podkategorie[];
+    const loadedKategorie = (kategorieRes.data ?? []) as SkladKategorie[];
+    const loadedPodkategorie = (podkategorieRes.data ?? []) as SkladPodkategorie[];
 
     setKategorie(loadedKategorie);
     setData(loadedPodkategorie);
@@ -125,7 +112,7 @@ export default function Page() {
 
     setCreating(true);
 
-    const { error } = await supabase.rpc("create_podkategorie_techniky", {
+    const { error } = await supabase.rpc(SKLAD_RPC.createPodkategorieTechniky, {
       p_kategorie_techniky_id: newKategorieId,
       p_nazev: trimmed,
     });
@@ -142,7 +129,7 @@ export default function Page() {
     await load();
   }
 
-  function startEdit(item: Podkategorie) {
+  function startEdit(item: SkladPodkategorie) {
     setEditingId(item.podkategorie_techniky_id);
     setDraftName(item.nazev);
     setDraftKategorieId(item.kategorie_techniky_id);
@@ -163,7 +150,7 @@ export default function Page() {
 
     setSavingId(id);
 
-    const { error } = await supabase.rpc("update_podkategorie_techniky", {
+    const { error } = await supabase.rpc(SKLAD_RPC.updatePodkategorieTechniky, {
       p_id: id,
       p_kategorie_techniky_id: draftKategorieId,
       p_nazev: trimmed,
@@ -188,7 +175,7 @@ export default function Page() {
 
     setRemovingId(id);
 
-    const { error } = await supabase.rpc("delete_podkategorie_techniky", {
+    const { error } = await supabase.rpc(SKLAD_RPC.deletePodkategorieTechniky, {
       p_id: id,
     });
 
@@ -279,7 +266,7 @@ export default function Page() {
 
     const orderedIds = newOrder.map((item) => item.podkategorie_techniky_id);
 
-    const { error } = await supabase.rpc("set_podkategorie_poradi", {
+    const { error } = await supabase.rpc(SKLAD_RPC.setPodkategoriePoradi, {
       p_kategorie_techniky_id: kategorieId,
       p_ids: orderedIds,
     });

@@ -7,15 +7,16 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { Modal } from "@/components/ui/modal";
 import { Card } from "@/components/ui/card";
-
-type TypPoskozeni = {
-  typ_id: string;
-  nazev: string;
-  poradi: number | null;
-};
+import {
+  SKLAD_REALTIME_CHANNEL,
+  SKLAD_RPC,
+  SKLAD_TABLE,
+} from "@/lib/sklad/constants";
+import { queryTypyPoskozeniFull } from "@/lib/sklad/queries";
+import type { SkladTypPoskozeniOption } from "@/lib/sklad/types";
 
 export default function Page() {
-  const [data, setData] = useState<TypPoskozeni[]>([]);
+  const [data, setData] = useState<SkladTypPoskozeniOption[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [newName, setNewName] = useState("");
@@ -35,7 +36,7 @@ export default function Page() {
   async function load() {
     setLoading(true);
 
-    const { data, error } = await supabase.rpc("get_typy_poskozeni_full");
+    const { data, error } = await queryTypyPoskozeniFull(supabase);
 
     setLoading(false);
 
@@ -44,7 +45,7 @@ export default function Page() {
       return;
     }
 
-    setData((data ?? []) as TypPoskozeni[]);
+    setData((data ?? []) as SkladTypPoskozeniOption[]);
   }
 
   useEffect(() => {
@@ -53,13 +54,13 @@ export default function Page() {
 
   useEffect(() => {
     const channel = supabase
-      .channel("typy-poskozeni-realtime")
+      .channel(SKLAD_REALTIME_CHANNEL.konfigTypyPoskozeni)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
-          table: "typy_poskozeni",
+          table: SKLAD_TABLE.typyPoskozeni,
         },
         async () => {
           await load();
@@ -109,7 +110,7 @@ export default function Page() {
 
     setCreating(true);
 
-    const { error } = await supabase.rpc("create_typ_poskozeni", {
+    const { error } = await supabase.rpc(SKLAD_RPC.createTypPoskozeni, {
       p_nazev: trimmed,
     });
 
@@ -126,7 +127,7 @@ export default function Page() {
     await load();
   }
 
-  function startEdit(item: TypPoskozeni) {
+  function startEdit(item: SkladTypPoskozeniOption) {
     setEditingId(item.typ_id);
     setDraft(item.nazev);
   }
@@ -141,7 +142,7 @@ export default function Page() {
 
     setSavingId(id);
 
-    const { error } = await supabase.rpc("update_typ_poskozeni", {
+    const { error } = await supabase.rpc(SKLAD_RPC.updateTypPoskozeni, {
       p_id: id,
       p_nazev: trimmed,
     });
@@ -166,7 +167,7 @@ export default function Page() {
 
     setRemovingId(id);
 
-    const { error } = await supabase.rpc("delete_typ_poskozeni", {
+    const { error } = await supabase.rpc(SKLAD_RPC.deleteTypPoskozeni, {
       p_id: id,
     });
 
@@ -248,7 +249,7 @@ export default function Page() {
 
     const orderedIds = newOrder.map((item) => item.typ_id);
 
-    const { error } = await supabase.rpc("set_typy_poskozeni_poradi", {
+    const { error } = await supabase.rpc(SKLAD_RPC.setTypyPoskozeniPoradi, {
       p_ids: orderedIds,
     });
 

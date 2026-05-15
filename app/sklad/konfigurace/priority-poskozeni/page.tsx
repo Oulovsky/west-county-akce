@@ -7,15 +7,16 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { Modal } from "@/components/ui/modal";
 import { Card } from "@/components/ui/card";
-
-type Priorita = {
-  priorita_id: string;
-  nazev: string;
-  poradi: number | null;
-};
+import {
+  SKLAD_REALTIME_CHANNEL,
+  SKLAD_RPC,
+  SKLAD_TABLE,
+} from "@/lib/sklad/constants";
+import { queryPriorityPoskozeniFull } from "@/lib/sklad/queries";
+import type { SkladPrioritaOption } from "@/lib/sklad/types";
 
 export default function Page() {
-  const [data, setData] = useState<Priorita[]>([]);
+  const [data, setData] = useState<SkladPrioritaOption[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [newName, setNewName] = useState("");
@@ -35,7 +36,7 @@ export default function Page() {
   async function load() {
     setLoading(true);
 
-    const { data, error } = await supabase.rpc("get_priority_poskozeni_full");
+    const { data, error } = await queryPriorityPoskozeniFull(supabase);
 
     setLoading(false);
 
@@ -44,7 +45,7 @@ export default function Page() {
       return;
     }
 
-    setData((data ?? []) as Priorita[]);
+    setData((data ?? []) as SkladPrioritaOption[]);
   }
 
   useEffect(() => {
@@ -53,13 +54,13 @@ export default function Page() {
 
   useEffect(() => {
     const channel = supabase
-      .channel("priority-poskozeni-realtime")
+      .channel(SKLAD_REALTIME_CHANNEL.konfigPriorityPoskozeni)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
-          table: "priority_poskozeni",
+          table: SKLAD_TABLE.priorityPoskozeni,
         },
         async () => {
           await load();
@@ -109,7 +110,7 @@ export default function Page() {
 
     setCreating(true);
 
-    const { error } = await supabase.rpc("create_priorita_poskozeni", {
+    const { error } = await supabase.rpc(SKLAD_RPC.createPrioritaPoskozeni, {
       p_nazev: trimmed,
     });
 
@@ -126,7 +127,7 @@ export default function Page() {
     await load();
   }
 
-  function startEdit(item: Priorita) {
+  function startEdit(item: SkladPrioritaOption) {
     setEditingId(item.priorita_id);
     setDraft(item.nazev);
   }
@@ -141,7 +142,7 @@ export default function Page() {
 
     setSavingId(id);
 
-    const { error } = await supabase.rpc("update_priorita_poskozeni", {
+    const { error } = await supabase.rpc(SKLAD_RPC.updatePrioritaPoskozeni, {
       p_id: id,
       p_nazev: trimmed,
     });
@@ -166,7 +167,7 @@ export default function Page() {
 
     setRemovingId(id);
 
-    const { error } = await supabase.rpc("delete_priorita_poskozeni", {
+    const { error } = await supabase.rpc(SKLAD_RPC.deletePrioritaPoskozeni, {
       p_id: id,
     });
 
@@ -246,7 +247,7 @@ export default function Page() {
     setDraggingId(null);
     setDragOverId(null);
 
-    const { error } = await supabase.rpc("set_priority_poskozeni_poradi", {
+    const { error } = await supabase.rpc(SKLAD_RPC.setPriorityPoskozeniPoradi, {
       p_ids: newOrder.map((item) => item.priorita_id),
     });
 

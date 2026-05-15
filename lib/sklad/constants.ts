@@ -24,6 +24,21 @@ export const SKLAD_RPC = {
   createSkladBlok: "create_sklad_blok",
   deleteSkladBlok: "delete_sklad_blok",
   setSkladBlokPoradi: "set_sklad_blok_poradi",
+  createKategorieTechniky: "create_kategorie_techniky",
+  updateKategorieTechniky: "update_kategorie_techniky",
+  deleteKategorieTechniky: "delete_kategorie_techniky",
+  createPodkategorieTechniky: "create_podkategorie_techniky",
+  updatePodkategorieTechniky: "update_podkategorie_techniky",
+  deletePodkategorieTechniky: "delete_podkategorie_techniky",
+  setPodkategoriePoradi: "set_podkategorie_poradi",
+  createTypPoskozeni: "create_typ_poskozeni",
+  updateTypPoskozeni: "update_typ_poskozeni",
+  deleteTypPoskozeni: "delete_typ_poskozeni",
+  setTypyPoskozeniPoradi: "set_typy_poskozeni_poradi",
+  createPrioritaPoskozeni: "create_priorita_poskozeni",
+  updatePrioritaPoskozeni: "update_priorita_poskozeni",
+  deletePrioritaPoskozeni: "delete_priorita_poskozeni",
+  setPriorityPoskozeniPoradi: "set_priority_poskozeni_poradi",
 } as const;
 
 export const SKLAD_TABLE = {
@@ -34,6 +49,8 @@ export const SKLAD_TABLE = {
   kategorieTechniky: "kategorie_techniky",
   podkategorieTechniky: "podkategorie_techniky",
   jednotkySkladu: "jednotky_skladu",
+  typyPoskozeni: "typy_poskozeni",
+  priorityPoskozeni: "priority_poskozeni",
 } as const;
 
 export const SKLAD_REALTIME_CHANNEL = {
@@ -42,6 +59,8 @@ export const SKLAD_REALTIME_CHANNEL = {
   spravaPodkategorie: "sklad-sprava-podkategorie",
   spravaJednotky: "sklad-sprava-jednotky",
   spravaPoskozeni: "sklad-sprava-poskozeni",
+  konfigTypyPoskozeni: "typy-poskozeni-realtime",
+  konfigPriorityPoskozeni: "priority-poskozeni-realtime",
 } as const;
 
 export const SKLAD_KUS_STATUS_CLASS = {

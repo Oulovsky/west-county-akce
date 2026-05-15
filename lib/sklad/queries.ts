@@ -95,3 +95,19 @@ export function queryPolozkaKonfigurace(client: SkladSupabaseClient) {
     queryJednotkySkladuFull(client),
   ] as const);
 }
+
+/** Konfigurace kategorií — kategorie + okruhy. */
+export function queryKonfiguraceKategorie(client: SkladSupabaseClient) {
+  return Promise.all([
+    queryKategorieTechnikyFull(client),
+    querySkladBloky(client),
+  ] as const);
+}
+
+/** Konfigurace podkategorií — kategorie + podkategorie. */
+export function queryKonfiguracePodkategorie(client: SkladSupabaseClient) {
+  return Promise.all([
+    queryKategorieTechnikyFull(client),
+    queryPodkategorieTechnikyFull(client),
+  ] as const);
+}

@@ -24,6 +24,7 @@ export type SkladKategorie = {
   poradi?: number | null;
   sklad_blok_id?: string | null;
   blok_nazev?: string | null;
+  aktivni?: boolean | null;
 };
 
 /** Podkategorie techniky. */
