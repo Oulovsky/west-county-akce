@@ -194,8 +194,17 @@ export default function Page() {
 
   const getKategorieOptions = useCallback(
     (blokId: string | null) => {
-      if (!blokId) return [];
-      return kategorie.filter((k) => k.sklad_blok_id === blokId);
+      if (blokId) {
+        const assignedToBlock = kategorie.filter(
+          (k) => k.sklad_blok_id === blokId
+        );
+
+        if (assignedToBlock.length > 0) {
+          return assignedToBlock;
+        }
+      }
+
+      return kategorie.filter((k) => k.sklad_blok_id === null);
     },
     [kategorie]
   );
@@ -220,9 +229,9 @@ export default function Page() {
 
   function resetAddForm() {
     const firstBlokId = bloky[0]?.sklad_blok_id ?? "";
+
     const firstKategorieId =
-      kategorie.find((k) => k.sklad_blok_id === firstBlokId)
-        ?.kategorie_techniky_id ?? "";
+      getKategorieOptions(firstBlokId || null)[0]?.kategorie_techniky_id ?? "";
 
     setNewBlokId(firstBlokId);
     setNewKategorieId(firstKategorieId);
@@ -604,7 +613,14 @@ export default function Page() {
         podkategorie={podkategorie}
         jednotky={jednotky}
         newBlokId={newBlokId}
-        setNewBlokId={setNewBlokId}
+        setNewBlokId={(blokId) => {
+          const firstKategorieId =
+            getKategorieOptions(blokId || null)[0]?.kategorie_techniky_id ?? "";
+
+          setNewBlokId(blokId);
+          setNewKategorieId(firstKategorieId);
+          setNewPodkategorieId("");
+        }}
         newKategorieId={newKategorieId}
         setNewKategorieId={setNewKategorieId}
         newPodkategorieId={newPodkategorieId}
