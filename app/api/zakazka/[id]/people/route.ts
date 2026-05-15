@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireSession } from "@/lib/auth/require-session";
 import { createClient } from "@/lib/supabase/server";
 
 type RouteContext = {
@@ -90,8 +91,14 @@ async function loadZakazkaByEitherKey(
 
 export async function GET(_req: NextRequest, { params }: RouteContext) {
   try {
+    const session = await requireSession();
+
+    if (!session.ok) {
+      return session.response;
+    }
+
     const { id: zakazkaId } = await params;
-    const supabase = await createClient();
+    const { supabase } = session;
 
     const assignmentsResult = await supabase
       .from("zakazka_lide")
@@ -150,6 +157,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
+
     return NextResponse.json(
       {
         error: message,
@@ -164,8 +172,14 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 
 export async function POST(req: NextRequest, { params }: RouteContext) {
   try {
+    const session = await requireSession();
+
+    if (!session.ok) {
+      return session.response;
+    }
+
     const { id: zakazkaId } = await params;
-    const supabase = await createClient();
+    const { supabase } = session;
     const body = await req.json();
 
     const userId = String(body.user_id ?? "").trim();
@@ -248,6 +262,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json(insertResult.data);
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
+
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

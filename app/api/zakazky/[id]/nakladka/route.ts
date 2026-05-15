@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireSession } from "@/lib/auth/require-session";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -28,8 +28,14 @@ type SkladovaPolozkaRow = {
 };
 
 export async function GET(_: Request, { params }: RouteContext) {
+  const session = await requireSession();
+
+  if (!session.ok) {
+    return session.response;
+  }
+
   const { id } = await params;
-  const supabase = await createClient();
+  const { supabase } = session;
 
   const { data: zakazkaRaw, error: zakazkaError } = await supabase
     .from("zakazky")
@@ -54,7 +60,11 @@ export async function GET(_: Request, { params }: RouteContext) {
     return new NextResponse("Chyba při načítání techniky", { status: 500 });
   }
 
-  const ids = [...new Set(technikaRows.map((t: TechnikaNaZakazceRow) => t.skladova_polozka_id))];
+  const ids = [
+    ...new Set(
+      technikaRows.map((t: TechnikaNaZakazceRow) => t.skladova_polozka_id)
+    ),
+  ];
 
   let mapaNazvu = new Map<string, string>();
 
@@ -67,7 +77,9 @@ export async function GET(_: Request, { params }: RouteContext) {
     const nazvy = (nazvyRaw || []) as SkladovaPolozkaRow[];
 
     if (nazvyError) {
-      return new NextResponse("Chyba při načítání názvů techniky", { status: 500 });
+      return new NextResponse("Chyba při načítání názvů techniky", {
+        status: 500,
+      });
     }
 
     mapaNazvu = new Map(
@@ -79,6 +91,7 @@ export async function GET(_: Request, { params }: RouteContext) {
     (a: TechnikaNaZakazceRow, b: TechnikaNaZakazceRow) => {
       const nazevA = mapaNazvu.get(a.skladova_polozka_id) || "";
       const nazevB = mapaNazvu.get(b.skladova_polozka_id) || "";
+
       return nazevA.localeCompare(nazevB, "cs");
     }
   );
