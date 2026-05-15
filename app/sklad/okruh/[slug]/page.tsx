@@ -10,22 +10,7 @@ import { DamageModal } from "./components/DamageModal";
 import ItemsTable from "./components/ItemsTable";
 import { useSkladOkruhData } from "./hooks/useSkladOkruhData";
 import { useDamage } from "./hooks/useDamage";
-
-type ZakazkaOption = {
-  zakazka_id: string;
-  cislo_zakazky: string;
-  nazev: string;
-  datum_od?: string | null;
-  datum_do?: string | null;
-};
-
-type TableItem = {
-  skladova_polozka_id: string;
-  nazev: string | null;
-  jednotka: string | null;
-  celkem_k_dispozici: number | null;
-  poznamka: string | null;
-};
+import type { SkladOkruhTableItem, SkladZakazkaOption } from "@/lib/sklad/types";
 
 type KategorieGroup = {
   id: string;
@@ -63,7 +48,7 @@ export default function SkladOkruhDetailPage() {
   const [isAssignOpen, setIsAssignOpen] = useState(false);
   const [selectedId, setSelectedId] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const [zakazky, setZakazky] = useState<ZakazkaOption[]>([]);
+  const [zakazky, setZakazky] = useState<SkladZakazkaOption[]>([]);
 
   const loadZakazky = useCallback(async () => {
     const { data, error } = await supabase
@@ -77,7 +62,7 @@ export default function SkladOkruhDetailPage() {
       return;
     }
 
-    setZakazky((data ?? []) as ZakazkaOption[]);
+    setZakazky((data ?? []) as SkladZakazkaOption[]);
   }, []);
 
   useEffect(() => {
@@ -202,7 +187,7 @@ export default function SkladOkruhDetailPage() {
   }
 
   const handleDamageClick = useCallback(
-    (item: TableItem) => {
+    (item: SkladOkruhTableItem) => {
       damage.openDamageModal({
         skladova_polozka_id: item.skladova_polozka_id,
         nazev: item.nazev ?? "Položka",
@@ -223,7 +208,7 @@ export default function SkladOkruhDetailPage() {
     }
   }
 
-  const tableItems: TableItem[] = visibleItems.map((item) => ({
+  const tableItems: SkladOkruhTableItem[] = visibleItems.map((item) => ({
     skladova_polozka_id: item.skladova_polozka_id,
     nazev: item.nazev,
     jednotka: item.jednotka,

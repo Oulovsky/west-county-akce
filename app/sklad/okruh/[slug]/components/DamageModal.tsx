@@ -1,47 +1,28 @@
 "use client";
 
 import { Modal } from "@/components/ui/modal";
-import { badgeStyle, formatDateTime, toNumber } from "../helpers";
-
-type PoskozeniRow = {
-  poskozeni_id: string;
-  skladova_polozka_id: string;
-  zakazka_id: string | null;
-  pocet_kusu: number | string;
-  popis: string | null;
-  typ_poskozeni: string | null;
-  priorita: string | null;
-  blokuje_pouziti: boolean;
-  stav_reseni: string;
-  datum_nahlaseni: string;
-  datum_uzavreni: string | null;
-  datum_odblokovani: string | null;
-  duvod_odblokovani: string | null;
-};
-
-type Zakazka = {
-  zakazka_id: string;
-  cislo_zakazky: string;
-  nazev: string;
-  datum_od?: string | null;
-  datum_do?: string | null;
-};
-
-type Item = {
-  skladova_polozka_id: string;
-  nazev: string;
-  jednotka: string | null;
-  celkem_k_dispozici: number;
-};
+import {
+  badgeStyle,
+  buildZakazkaLabel,
+  formatPrioritaLabel,
+  formatTypPoskozeniLabel,
+  toNumber,
+} from "@/lib/sklad/helpers";
+import type {
+  SkladDamageModalItem,
+  SkladOkruhPoskozeniRow,
+  SkladZakazkaOption,
+} from "@/lib/sklad/types";
+import { formatDateTime } from "../helpers";
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  item: Item | null;
-  data: PoskozeniRow[];
+  item: SkladDamageModalItem | null;
+  data: SkladOkruhPoskozeniRow[];
   loading: boolean;
 
-  zakazky?: Zakazka[];
+  zakazky?: SkladZakazkaOption[];
 
   damageSaving?: boolean;
 
@@ -84,12 +65,6 @@ function StatBox({
       <div style={statValueStyle}>{value}</div>
     </div>
   );
-}
-
-function buildZakazkaLabel(zakazka: Zakazka) {
-  const cislo = zakazka.cislo_zakazky || "Bez čísla";
-  const nazev = zakazka.nazev || "Zakázka";
-  return `${cislo} — ${nazev}`;
 }
 
 export function DamageModal({
@@ -334,10 +309,10 @@ export function DamageModal({
                           {toNumber(row.pocet_kusu)} {item?.jednotka ?? "ks"}
                         </span>
                         <span style={badgeStyle("#1d4ed8")}>
-                          {row.typ_poskozeni ?? "bez typu"}
+                          {formatTypPoskozeniLabel(row.typ_poskozeni)}
                         </span>
                         <span style={badgeStyle("#475569")}>
-                          {row.priorita ?? "bez priority"}
+                          {formatPrioritaLabel(row.priorita)}
                         </span>
                         <span style={badgeStyle(isClosed ? "#166534" : "#991b1b")}>
                           {isClosed ? "uzavřeno" : "otevřené"}
@@ -440,7 +415,7 @@ export function DamageModal({
                         <div>
                           <div style={{ fontWeight: 700, marginBottom: 6 }}>
                             {toNumber(row.pocet_kusu)} {item?.jednotka ?? "ks"} —{" "}
-                            {row.typ_poskozeni ?? "bez typu"}
+                            {formatTypPoskozeniLabel(row.typ_poskozeni)}
                           </div>
                           <div style={{ fontSize: 13, opacity: 0.8 }}>
                             {row.popis?.trim() ? row.popis : "Bez popisu"}

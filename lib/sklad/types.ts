@@ -200,3 +200,36 @@ export type SkladKusInfo = Pick<
   SkladKusRow,
   "kus_id" | "skladova_polozka_id" | "poradove_cislo" | "evidencni_cislo"
 >;
+
+/** Položka v tabulce okruhu (ItemsTable). */
+export type SkladOkruhTableItem = {
+  skladova_polozka_id: string;
+  nazev: string | null;
+  jednotka: string | null;
+  celkem_k_dispozici: number | null;
+  poznamka: string | null;
+};
+
+/** Položka aktivní v modálu poškození okruhu. */
+export type SkladDamageModalItem = {
+  skladova_polozka_id: string;
+  nazev: string;
+  jednotka: string | null;
+  celkem_k_dispozici: number;
+};
+
+/** Zakázka pro výběr v modálu poškození. */
+export type SkladZakazkaOption = {
+  zakazka_id: string;
+  cislo_zakazky: string;
+  nazev: string;
+  datum_od?: string | null;
+  datum_do?: string | null;
+};
+
+/** Souhrn poškození položky v okruhu. */
+export type SkladOkruhDamageSummary = {
+  totalReports: number;
+  openReports: number;
+  blockedCount: number;
+};

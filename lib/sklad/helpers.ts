@@ -8,6 +8,7 @@ import type {
   SkladKusRow,
   SkladPoskozeniListRow,
   SkladPoskozeniRow,
+  SkladZakazkaOption,
 } from "@/lib/sklad/types";
 
 export type SkladKusStatus = {
@@ -138,6 +139,14 @@ export function getEvidencePoskozeniKusLabel(
   return kus.evidencni_cislo?.trim()
     ? kus.evidencni_cislo
     : `Kus #${kus.poradove_cislo}`;
+}
+
+export function buildZakazkaLabel(
+  zakazka: Pick<SkladZakazkaOption, "cislo_zakazky" | "nazev">
+): string {
+  const cislo = zakazka.cislo_zakazky || "Bez čísla";
+  const nazev = zakazka.nazev || "Zakázka";
+  return `${cislo} — ${nazev}`;
 }
 
 export function formatTypPoskozeniLabel(value: string | null | undefined): string {

@@ -1,25 +1,12 @@
 "use client";
 
-import { badgeStyle, toNumber } from "../helpers";
-
-type Item = {
-  skladova_polozka_id: string;
-  nazev: string | null;
-  jednotka: string | null;
-  celkem_k_dispozici: number | null;
-  poznamka: string | null;
-};
-
-type Summary = {
-  totalReports: number;
-  openReports: number;
-  blockedCount: number;
-};
+import { badgeStyle, toNumber } from "@/lib/sklad/helpers";
+import type { SkladOkruhDamageSummary, SkladOkruhTableItem } from "@/lib/sklad/types";
 
 type Props = {
-  items: Item[];
-  getSummary: (itemId: string) => Summary;
-  onDamageClick: (item: Item) => void;
+  items: SkladOkruhTableItem[];
+  getSummary: (itemId: string) => SkladOkruhDamageSummary;
+  onDamageClick: (item: SkladOkruhTableItem) => void;
 };
 
 export default function ItemsTable({
