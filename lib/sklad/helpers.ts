@@ -193,6 +193,53 @@ export function getKusLabel(kus: SkladKusRow): string {
     : `Kus #${kus.poradove_cislo}`;
 }
 
+/** Název kusu v rozbaleném přehledu správy (např. „Novastar 1000 nr1“). */
+export function getSpravaKusDisplayLabel(
+  polozkaNazev: string,
+  kus: Pick<SkladKusRow, "poradove_cislo" | "evidencni_cislo">
+): string {
+  const evidencni = kus.evidencni_cislo?.trim();
+  if (evidencni) return evidencni;
+  const nazev = polozkaNazev.trim() || "Položka";
+  return `${nazev} nr${kus.poradove_cislo}`;
+}
+
+const SKLAD_KUS_STAV_LABELS: Record<string, string> = {
+  skladem: "Skladem",
+  na_akci: "Na akci",
+  poskozeno: "Poškozeno",
+  odpis: "Odpis",
+};
+
+/** Text prázdného rozpisu kusů ve správě skladu. */
+export function getSpravaKusyEmptyMessage(celkemKDispozici: number): string {
+  if (celkemKDispozici > 0) {
+    return `Položka má Celkem ${celkemKDispozici} ks, ale v evidenci kusů zatím nejsou řádky. Uložte řádek znovu (Enter), aby se kusy doplnily automaticky, nebo je přidejte v detailu položky.`;
+  }
+  return "Pro tuto položku zatím nejsou evidované kusy.";
+}
+
+/** Varování při nesouladu Celkem vs. počet řádků v sklad_polozky_kusy. */
+export function getSpravaKusyCountMismatchMessage(
+  celkemKDispozici: number,
+  evidenceCount: number
+): string | null {
+  const celkem = toNumber(celkemKDispozici);
+  if (evidenceCount === celkem) return null;
+
+  if (evidenceCount > celkem) {
+    return `Evidence kusů obsahuje ${evidenceCount} kusů, ale Celkem je ${celkem}. Přebytečné kusy smažte ručně v detailu položky.`;
+  }
+
+  return `Evidence: ${evidenceCount} kusů · v přehledu celkem: ${celkem} ks`;
+}
+
+export function formatSkladKusStav(stav: string | null | undefined): string {
+  const raw = stav?.trim();
+  if (!raw) return SKLAD_EMPTY_LABEL;
+  return SKLAD_KUS_STAV_LABELS[raw] ?? raw;
+}
+
 export function getPoskozeniListKusLabel(
   row: Pick<SkladPoskozeniListRow, "kus_id" | "nazev">,
   kusyById: Record<string, Pick<SkladKusRow, "evidencni_cislo" | "poradove_cislo">>

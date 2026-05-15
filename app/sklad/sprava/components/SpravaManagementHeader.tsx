@@ -1,12 +1,7 @@
 "use client";
 
-import Link from "next/link";
-
 const primaryCtaClass =
   "inline-flex items-center justify-center rounded-xl border border-blue-500 bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-950/30 transition hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400";
-
-const subtleLinkClass =
-  "inline-flex items-center justify-center rounded-xl border border-slate-700 bg-slate-900/80 px-4 py-2.5 text-sm font-medium text-slate-400 transition hover:border-slate-600 hover:bg-slate-900 hover:text-slate-200";
 
 type Props = {
   onAddClick: () => void;
@@ -32,9 +27,6 @@ export function SpravaManagementHeader({ onAddClick }: Props) {
           <button type="button" onClick={onAddClick} className={primaryCtaClass}>
             + Přidat položku
           </button>
-          <Link href="/sklad" className={subtleLinkClass}>
-            Přehled skladu
-          </Link>
         </div>
       </div>
     </header>

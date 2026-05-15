@@ -35,6 +35,12 @@ import {
   querySkladovePolozkyPodkategorie,
   querySpravaKatalog,
 } from "@/lib/sklad/queries";
+import { querySpravaNaZakazkachCountsByPolozka } from "@/lib/sklad/spravaNaZakazkach";
+import {
+  computeSpravaNaSklade,
+  querySpravaBlokujiciPoskozeneByPolozka,
+} from "@/lib/sklad/spravaSkladem";
+import { syncPolozkaKusyToCelkem } from "@/lib/sklad/syncPolozkaKusy";
 import {
   SPRAVA_INVENTORY_FILTERS_EMPTY,
   type SkladBlok,
@@ -68,6 +74,9 @@ export default function Page() {
 
   const [savingId, setSavingId] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [kusyReloadById, setKusyReloadById] = useState<Record<string, number>>(
+    {}
+  );
   const [inventoryFilters, setInventoryFilters] =
     useState<SpravaInventoryFiltersState>(SPRAVA_INVENTORY_FILTERS_EMPTY);
 
@@ -83,6 +92,35 @@ export default function Page() {
   const [newRent, setNewRent] = useState("");
 
   const lastChange = useRef<{ before: SkladPolozkaRow; after: SkladPolozkaRow } | null>(null);
+
+  const bumpKusyReload = useCallback((polozkaId: string) => {
+    setKusyReloadById((prev) => ({
+      ...prev,
+      [polozkaId]: (prev[polozkaId] ?? 0) + 1,
+    }));
+  }, []);
+
+  const applyKusySyncAfterCelkemSave = useCallback(
+    async (polozkaId: string, nazev: string, celkem: number) => {
+      const sync = await syncPolozkaKusyToCelkem(
+        supabase,
+        polozkaId,
+        nazev,
+        celkem
+      );
+
+      if (!sync.ok) {
+        alert(
+          `Položka uložena, ale evidenci kusů se nepodařilo doplnit: ${sync.error}\n\n` +
+            "Přidejte kusy v detailu položky, nebo požádejte o úpravu oprávnění v databázi."
+        );
+        return;
+      }
+
+      bumpKusyReload(polozkaId);
+    },
+    [bumpKusyReload]
+  );
 
   const reloadCatalog = useCallback(async () => {
     const [kategorieRes, podkategorieRes, jednotkyRes, blokyRes] =
@@ -175,16 +213,60 @@ export default function Page() {
         []) as SkladPodkategorie[];
       const rawItems = (itemsRes.data ?? []) as SkladPolozkaRow[];
 
-      setItems(
-        enrichSpravaPolozkyWithPodkategorie(
-          rawItems,
-          (polozkyPodkategorieRes.data ?? []) as Array<{
-            skladova_polozka_id: string;
-            podkategorie_techniky_id: string | null;
-          }>,
-          podkategorieCatalog
-        )
+      const enrichedPodkategorie = enrichSpravaPolozkyWithPodkategorie(
+        rawItems,
+        (polozkyPodkategorieRes.data ?? []) as Array<{
+          skladova_polozka_id: string;
+          podkategorie_techniky_id: string | null;
+        }>,
+        podkategorieCatalog
       );
+
+      const [{ map: naZakazkachMap, error: naZakazkachErr }, { map: blokujiciMap, error: blokujiciErr }] =
+        await Promise.all([
+          querySpravaNaZakazkachCountsByPolozka(supabase, new Date()),
+          querySpravaBlokujiciPoskozeneByPolozka(supabase),
+        ]);
+
+      const mergedItems = enrichedPodkategorie.map((item) => {
+        const id = item.skladova_polozka_id;
+        const celkem = toNumber(item.celkem_k_dispozici);
+
+        if (naZakazkachErr || !naZakazkachMap) {
+          return item;
+        }
+
+        const naZakazkach = naZakazkachMap.get(id) ?? 0;
+
+        if (blokujiciErr || !blokujiciMap) {
+          return {
+            ...item,
+            na_akcich: naZakazkach,
+          };
+        }
+
+        const blok = blokujiciMap.get(id) ?? 0;
+
+        return {
+          ...item,
+          na_akcich: naZakazkach,
+          na_sklade: computeSpravaNaSklade(celkem, naZakazkach, blok),
+        };
+      });
+
+      if (!options?.silent && (naZakazkachErr || blokujiciErr)) {
+        const parts: string[] = [];
+        if (naZakazkachErr) {
+          parts.push(`Rezervace v zakázkách: ${naZakazkachErr.message}`);
+        }
+        if (blokujiciErr) {
+          parts.push(`Blokující poškození: ${blokujiciErr.message}`);
+        }
+        alert(
+          `${parts.join(" ")}\n\nSloupce „Na zakázkách“ a „Skladem“ zůstávají u části dat ze serveru.`
+        );
+      }
+      setItems(mergedItems);
       setKategorie((kategorieRes.data ?? []) as SkladKategorie[]);
       setPodkategorie(podkategorieCatalog);
       setJednotky((jednotkyRes.data ?? []) as SkladJednotka[]);
@@ -233,6 +315,27 @@ export default function Page() {
           { event: "*", schema: "public", table: SKLAD_TABLE.jednotkySkladu },
           () => {
             void reloadCatalog();
+          }
+        )
+        .subscribe(),
+      supabase
+        .channel("sklad-sprava-na-zakazkach")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: SKLAD_TABLE.technikaNaZakazce,
+          },
+          () => {
+            void load({ silent: true });
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: SKLAD_TABLE.zakazky },
+          () => {
+            void load({ silent: true });
           }
         )
         .subscribe(),
@@ -515,8 +618,16 @@ export default function Page() {
         await load({ silent: true });
         return;
       }
+
+      await applyKusySyncAfterCelkemSave(
+        id,
+        updated.nazev,
+        updated.celkem_k_dispozici
+      );
+
+      await load({ silent: true });
     },
-    [draft, items, load]
+    [applyKusySyncAfterCelkemSave, draft, items, load]
   );
 
   useEffect(() => {
@@ -554,6 +665,12 @@ export default function Page() {
             return;
           }
 
+          void applyKusySyncAfterCelkemSave(
+            before.skladova_polozka_id,
+            before.nazev,
+            before.celkem_k_dispozici
+          );
+
           setHighlightId(before.skladova_polozka_id);
           window.setTimeout(() => setHighlightId(null), 1000);
         });
@@ -563,7 +680,7 @@ export default function Page() {
 
     window.addEventListener("keydown", handleUndo);
     return () => window.removeEventListener("keydown", handleUndo);
-  }, [load, reloadCatalog]);
+  }, [applyKusySyncAfterCelkemSave, load, reloadCatalog]);
 
   useEffect(() => {
     function handleGlobalEnter(e: KeyboardEvent) {
@@ -847,6 +964,12 @@ export default function Page() {
       return;
     }
 
+    await applyKusySyncAfterCelkemSave(
+      createdId,
+      newNazev.trim(),
+      parsedKusy
+    );
+
     setIsCreating(false);
     setIsAddOpen(false);
     await load();
@@ -879,6 +1002,11 @@ export default function Page() {
     0
   );
 
+  const totalSkladem = items.reduce(
+    (sum, item) => sum + toNumber(item.na_sklade),
+    0
+  );
+
   const filteredItems = useMemo(
     () => filterSpravaInventoryItems(items, inventoryFilters),
     [items, inventoryFilters]
@@ -888,7 +1016,6 @@ export default function Page() {
     <div className="flex flex-col gap-6">
       <SkladToolbar
         onAddClick={openAddModal}
-        bloky={bloky}
         totalPoskozene={totalPoskozene}
       />
 
@@ -912,6 +1039,7 @@ export default function Page() {
         <SkladStats
           itemsCount={items.length}
           totalKusy={totalKusy}
+          totalSkladem={totalSkladem}
           totalAkce={totalAkce}
           totalPoskozene={totalPoskozene}
         />
@@ -986,6 +1114,7 @@ export default function Page() {
               isEditing={isEditing}
               isSaving={isSaving}
               isHighlight={isHighlight}
+              kusyReloadToken={kusyReloadById[i.skladova_polozka_id] ?? 0}
               draft={draft}
               bloky={bloky}
               jednotky={jednotky}

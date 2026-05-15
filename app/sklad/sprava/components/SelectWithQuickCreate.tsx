@@ -8,7 +8,7 @@ const plusButtonClassDefault =
   "flex h-12 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-600 bg-slate-900 text-lg font-bold leading-none text-slate-300 transition hover:border-slate-500 hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40";
 
 const plusButtonClassTable =
-  "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-600 bg-slate-900 text-sm font-bold leading-none text-slate-300 transition hover:border-slate-500 hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40";
+  "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-600 bg-slate-900 text-sm font-bold leading-none text-slate-300 transition hover:border-slate-500 hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50";
 
 type Option = {
   value: string;
@@ -55,7 +55,7 @@ export function SelectWithQuickCreate({
   const resolvedSelectClassName =
     selectClassName ??
     (variant === "table"
-      ? "min-w-0 flex-1 truncate text-[13px]"
+      ? "min-w-0 flex-1 truncate text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
       : "min-w-0 flex-1");
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);

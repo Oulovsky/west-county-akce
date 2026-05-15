@@ -6,10 +6,14 @@ import { formatMoney } from "./formatMoney";
 import { formatNumber } from "./formatNumber";
 import { toNumber } from "./toNumber";
 import { SelectWithQuickCreate } from "./SelectWithQuickCreate";
+import { SpravaKusyExpandPanel } from "./SpravaKusyExpandPanel";
 import {
   SPRAVA_TABLE_GRID,
   SPRAVA_TABLE_ROW_CLASS,
 } from "./spravaTableLayout";
+import {
+  SKLAD_SPRAVA_HINT_NA_ZAKAZKACH,
+} from "@/lib/sklad/constants";
 import type {
   SkladBlok,
   SkladJednotka,
@@ -42,6 +46,7 @@ type Props = {
   isEditing: boolean;
   isSaving: boolean;
   isHighlight: boolean;
+  kusyReloadToken?: number;
   draft: Draft;
   bloky: SkladBlok[];
   jednotky: SkladJednotka[];
@@ -82,6 +87,7 @@ export function SkladTableRow({
   isEditing,
   isSaving,
   isHighlight,
+  kusyReloadToken = 0,
   draft,
   bloky,
   jednotky,
@@ -116,7 +122,7 @@ export function SkladTableRow({
       <div className={rowClass}>
         <div
           onClick={() => !isEditing && onStartEdit()}
-          className="sticky left-0 z-10 flex min-w-0 items-center gap-1.5 bg-inherit pr-1"
+          className="sticky left-0 z-10 flex min-h-8 min-w-0 items-center gap-1.5 bg-inherit pr-1"
           style={{ cursor: isEditing ? "default" : "pointer" }}
         >
           <button
@@ -125,7 +131,7 @@ export function SkladTableRow({
               e.stopPropagation();
               setIsExpanded((prev) => !prev);
             }}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-700 bg-slate-900 text-slate-400 transition hover:border-slate-600 hover:text-white"
+            className="flex h-8 w-8 shrink-0 items-center justify-center self-center rounded-md border border-slate-700 bg-slate-900 text-slate-400 outline-none transition hover:border-slate-600 hover:text-white focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/60"
             aria-expanded={isExpanded}
             aria-label={
               isExpanded ? "Sbalit rozpis kusů" : "Rozbalit rozpis kusů"
@@ -146,11 +152,11 @@ export function SkladTableRow({
               }
               onKeyDown={onKeyDown}
               style={tableInputStyle}
-              className="min-w-0 flex-1"
+              className="min-w-0 flex-1 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
             />
           ) : (
             <div
-              className="min-w-0 flex-1 truncate text-sm font-medium text-white"
+              className="flex min-h-8 min-w-0 flex-1 items-center truncate text-sm font-medium leading-normal text-white"
               title={item.nazev}
             >
               {item.nazev}
@@ -158,7 +164,7 @@ export function SkladTableRow({
           )}
         </div>
 
-        <div className="flex min-w-0 items-center px-1">
+        <div className="flex min-h-8 min-w-0 items-center px-1">
           <SelectWithQuickCreate
             variant="table"
             value={item.sklad_blok_id ?? ""}
@@ -176,7 +182,7 @@ export function SkladTableRow({
           />
         </div>
 
-        <div className="flex min-w-0 items-center px-1">
+        <div className="flex min-h-8 min-w-0 items-center px-1">
           <SelectWithQuickCreate
             variant="table"
             value={item.kategorie_techniky_id ?? ""}
@@ -198,7 +204,7 @@ export function SkladTableRow({
           />
         </div>
 
-        <div className="flex min-w-0 items-center px-1">
+        <div className="flex min-h-8 min-w-0 items-center px-1">
           <SelectWithQuickCreate
             variant="table"
             value={item.podkategorie_techniky_id ?? ""}
@@ -226,7 +232,7 @@ export function SkladTableRow({
 
         <div
           onClick={() => !isEditing && onStartEdit()}
-          className="flex items-center justify-end px-1 text-right"
+          className="flex min-h-8 items-center justify-center px-1 text-center"
           style={{ cursor: "pointer" }}
         >
           {isEditing ? (
@@ -240,6 +246,7 @@ export function SkladTableRow({
               }
               onKeyDown={onKeyDown}
               style={tableInputStyleSmall}
+              className="min-w-0 max-w-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
             />
           ) : (
             <span style={tableValueBoxRight}>
@@ -248,19 +255,22 @@ export function SkladTableRow({
           )}
         </div>
 
-        <div className="flex items-center justify-end px-1 text-right">
+        <div className="flex min-h-8 items-center justify-center px-1 text-center">
           <span style={tableValueBoxRight}>
             {formatNumber(item.na_sklade)}
           </span>
         </div>
 
-        <div className="flex items-center justify-end px-1 text-right">
+        <div
+          className="flex min-h-8 items-center justify-center px-1 text-center"
+          title={SKLAD_SPRAVA_HINT_NA_ZAKAZKACH}
+        >
           <span style={tableValueBoxRight}>
             {formatNumber(item.na_akcich)}
           </span>
         </div>
 
-        <div className="flex items-center justify-end px-1 text-right">
+        <div className="flex min-h-8 items-center justify-center px-1 text-center">
           {toNumber(item.poskozene) > 0 ? (
             <Link
               href={`/sklad/${item.skladova_polozka_id}`}
@@ -277,7 +287,7 @@ export function SkladTableRow({
 
         <div
           onClick={() => !isEditing && onStartEdit()}
-          className="flex items-center px-1"
+          className="flex min-h-8 items-center justify-center px-1"
           style={{ cursor: "pointer" }}
         >
           {isEditing ? (
@@ -308,7 +318,7 @@ export function SkladTableRow({
 
         <div
           onClick={() => !isEditing && onStartEdit()}
-          className="flex items-center justify-end px-1 text-right"
+          className="flex min-h-8 items-center justify-center px-1 text-center"
           style={{ cursor: "pointer" }}
         >
           {isEditing ? (
@@ -322,6 +332,7 @@ export function SkladTableRow({
               }
               onKeyDown={onKeyDown}
               style={tableInputStyleSmall}
+              className="min-w-0 max-w-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
             />
           ) : (
             <span style={tableValueBoxRight} className="truncate text-xs">
@@ -332,7 +343,7 @@ export function SkladTableRow({
 
         <div
           onClick={() => !isEditing && onStartEdit()}
-          className="flex items-center justify-end px-1 text-right"
+          className="flex min-h-8 items-center justify-center px-1 text-center"
           style={{ cursor: "pointer" }}
         >
           {isEditing ? (
@@ -346,6 +357,7 @@ export function SkladTableRow({
               }
               onKeyDown={onKeyDown}
               style={tableInputStyleSmall}
+              className="min-w-0 max-w-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
             />
           ) : (
             <span style={tableValueBoxRight} className="truncate text-xs">
@@ -354,10 +366,10 @@ export function SkladTableRow({
           )}
         </div>
 
-        <div className="flex items-center px-1">
+        <div className="flex min-h-8 items-center justify-center px-1">
           <Link
             href={`/sklad/${item.skladova_polozka_id}`}
-            className="inline-flex w-full items-center justify-center rounded-md border border-amber-700 bg-amber-800 px-2 py-1 text-xs font-semibold text-white transition hover:bg-amber-700"
+            className="inline-flex h-8 max-h-8 w-full min-w-0 items-center justify-center rounded-md border border-amber-700 bg-amber-800 px-2 py-0 text-xs font-semibold leading-none text-white outline-none transition hover:bg-amber-700 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-500/70"
           >
             Detail
           </Link>
@@ -365,16 +377,12 @@ export function SkladTableRow({
       </div>
 
       {isExpanded ? (
-        <div className="border-t border-slate-800/80 bg-slate-950/50 px-2 py-2">
-          <div className="flex items-start gap-3 pl-9">
-            <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              Kusy
-            </span>
-            <p className="text-sm text-slate-400">
-              Rozpis kusů bude doplněn z evidence kusů.
-            </p>
-          </div>
-        </div>
+        <SpravaKusyExpandPanel
+          skladovaPolozkaId={item.skladova_polozka_id}
+          polozkaNazev={item.nazev}
+          celkemKDispozici={item.celkem_k_dispozici}
+          reloadToken={kusyReloadToken}
+        />
       ) : null}
     </div>
   );

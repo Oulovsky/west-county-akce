@@ -6,6 +6,16 @@ export const SKLAD_EMPTY_LABEL_EM = "—" as const;
 
 export const SKLAD_DEFAULT_JEDNOTKA = "ks" as const;
 
+/** Sloupec v přehledu správy — po načtení přepočítáno z technika_na_zakazce + zakazky (viz spravaNaZakazkach). */
+export const SKLAD_SPRAVA_LABEL_NA_ZAKAZKACH = "Na zakázkách" as const;
+
+/**
+ * Zapojené zakázky: nezrušené a s koncem plánu v minulosti nezahrnuté
+ * (stejně jako záložka „Zakázky“ v /zakazky oproti archivu).
+ */
+export const SKLAD_SPRAVA_HINT_NA_ZAKAZKACH =
+  "Součet plánované techniky na probíhajících a nadcházejících zakázkách (ne zrušených; zakázky po datu konce se nezapočítávají). Hodnota z RPC se přepočítá v prohlížeči." as const;
+
 export const SKLAD_DEFAULT_PRIORITA = "stredni" as const;
 
 export const SKLAD_DEFAULT_TYP_POSKOZENI = "mechanicke" as const;
@@ -57,6 +67,8 @@ export const SKLAD_TABLE = {
   jednotkySkladu: "jednotky_skladu",
   typyPoskozeni: "typy_poskozeni",
   priorityPoskozeni: "priority_poskozeni",
+  technikaNaZakazce: "technika_na_zakazce",
+  zakazky: "zakazky",
 } as const;
 
 export const SKLAD_REALTIME_CHANNEL = {
@@ -96,6 +108,9 @@ export const SKLAD_FALLBACK_PRIORITA_OPTIONS = [
   { value: "vysoka", label: "vysoká" },
   { value: "kriticka", label: "kritická" },
 ] as const;
+
+export const SKLAD_KUS_SELECT_FIELDS =
+  "kus_id, skladova_polozka_id, poradove_cislo, evidencni_cislo, stav, poznamka, aktivni" as const;
 
 export const SKLAD_POSKOZENI_SELECT_FIELDS =
   "poskozeni_id, pocet_kusu, blokuje_pouziti, datum_uzavreni" as const;

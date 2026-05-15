@@ -4,6 +4,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  SKLAD_KUS_SELECT_FIELDS,
   SKLAD_POSKOZENI_SELECT_FIELDS,
   SKLAD_RPC,
   SKLAD_TABLE,
@@ -74,6 +75,18 @@ export function queryPoskozeniProPolozky(
     .select("*")
     .in("skladova_polozka_id", skladovaPolozkaIds)
     .order("datum_nahlaseni", { ascending: false });
+}
+
+/** Jednotlivé kusy položky (tabulka sklad_polozky_kusy). */
+export function querySkladPolozkyKusyForPolozka(
+  client: SkladSupabaseClient,
+  skladovaPolozkaId: string
+) {
+  return client
+    .from(SKLAD_TABLE.skladPolozkyKusy)
+    .select(SKLAD_KUS_SELECT_FIELDS)
+    .eq("skladova_polozka_id", skladovaPolozkaId)
+    .order("poradove_cislo", { ascending: true });
 }
 
 /** Podkategorie přiřazené položkám — get_skladove_polozky je nevrací. */

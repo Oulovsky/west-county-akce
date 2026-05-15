@@ -56,6 +56,7 @@ export const dangerBoxRight: CSSProperties = {
 };
 
 const tableControlBase: CSSProperties = {
+  boxSizing: "border-box",
   width: "100%",
   height: 32,
   padding: "4px 8px",
@@ -65,6 +66,7 @@ const tableControlBase: CSSProperties = {
   border: "1px solid #334155",
   borderRadius: 8,
   color: "#fff",
+  outline: "none",
 };
 
 export const tableInputStyle: CSSProperties = {
@@ -73,7 +75,7 @@ export const tableInputStyle: CSSProperties = {
 
 export const tableInputStyleSmall: CSSProperties = {
   ...tableControlBase,
-  textAlign: "right",
+  textAlign: "center",
 };
 
 export const tableSelectStyle: CSSProperties = {
@@ -87,14 +89,15 @@ export const tableValueBoxRight: CSSProperties = {
   ...tableControlBase,
   display: "flex",
   alignItems: "center",
-  justifyContent: "flex-end",
+  justifyContent: "center",
   fontWeight: 600,
   color: "#e2e8f0",
+  textAlign: "center",
 };
 
+/** Zobrazené hodnoty v pravé části tabulky (vč. jednotky) — centrovaně v buňce. */
 export const tableValueBoxLeft: CSSProperties = {
   ...tableValueBoxRight,
-  justifyContent: "flex-start",
 };
 
 export const tableMutedBoxRight: CSSProperties = {

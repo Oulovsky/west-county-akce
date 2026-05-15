@@ -61,22 +61,22 @@ export default function SkladKonfiguracePage() {
 
         <div className="flex flex-wrap gap-3">
           <Link
-            href="/sklad"
-            className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 font-semibold text-white"
-          >
-            Zpět na sklad
-          </Link>
-
-          <Link
             href="/sklad/sprava"
             className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 font-semibold text-white"
           >
-            Správa skladu
+            Zpět na správu skladu
           </Link>
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
+        <SectionCard
+          title="Okruhy skladu"
+          description="Členění skladu používané pro filtrování a přiřazení položek."
+          status="Hotovo"
+          href="/sklad/konfigurace/okruhy"
+        />
+
         <SectionCard
           title="Kategorie"
           description="Hlavní kategorie techniky."
