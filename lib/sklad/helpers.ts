@@ -241,6 +241,36 @@ export function getSpravaKusDisplayLabel(
   return evidencni;
 }
 
+/**
+ * Evidence odpovídá „generovanému“ štítku pro dané pořadové číslo
+ * (stejná pravidla jako u zobrazení v přehledu).
+ */
+export function isKusEvidencniAutoForPoradi(
+  evidencni: string | null | undefined,
+  poradoveCislo: number
+): boolean {
+  const e = evidencni?.trim();
+  if (!e) return false;
+  const poradi = toNumber(poradoveCislo);
+  return (
+    isAutoNumberedSkladKusEvidencni(e, poradi) ||
+    isLegacySpravaNrKusLabel(e, poradi)
+  );
+}
+
+/** Popisek kusu v detailu / správě — stejná logika jako přehled správy. */
+export function getSkladKusDisplayLabel(
+  polozkaNazev: string,
+  kus: Pick<SkladKusRow, "poradove_cislo" | "evidencni_cislo">
+): string {
+  return getSpravaKusDisplayLabel(polozkaNazev, kus);
+}
+
+/** Chybová hláška při kolizi pořadového čísla mezi kusy jedné položky (bez DB constraintu). */
+export function formatSkladKusDuplicatePoradiMessage(poradi: number): string {
+  return `Pořadové číslo ${poradi} už u této položky používá jiný kus. Zvolte jiné číslo.`;
+}
+
 const SKLAD_KUS_STAV_LABELS: Record<string, string> = {
   skladem: "Skladem",
   na_akci: "Na akci",

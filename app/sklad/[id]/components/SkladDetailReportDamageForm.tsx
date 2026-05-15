@@ -1,4 +1,4 @@
-import { getKusLabel, slugifyCz } from "@/lib/sklad/helpers";
+import { getSkladKusDisplayLabel, slugifyCz } from "@/lib/sklad/helpers";
 import type {
   SkladKusRow,
   SkladPrioritaOption,
@@ -7,6 +7,7 @@ import type {
 
 type SkladDetailReportDamageFormProps = {
   skladovaPolozkaId: string;
+  polozkaNazev: string;
   kusy: SkladKusRow[];
   typyPoskozeni: SkladTypPoskozeniOption[];
   priority: SkladPrioritaOption[];
@@ -15,6 +16,7 @@ type SkladDetailReportDamageFormProps = {
 
 export function SkladDetailReportDamageForm({
   skladovaPolozkaId,
+  polozkaNazev,
   kusy,
   typyPoskozeni,
   priority,
@@ -34,7 +36,7 @@ export function SkladDetailReportDamageForm({
           <option value="">Vyber kus</option>
           {kusy.map((kus) => (
             <option key={kus.kus_id} value={kus.kus_id}>
-              {getKusLabel(kus)}
+              {getSkladKusDisplayLabel(polozkaNazev, kus)}
             </option>
           ))}
         </select>

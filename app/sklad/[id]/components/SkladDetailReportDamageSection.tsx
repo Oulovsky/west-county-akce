@@ -3,6 +3,7 @@ import { SkladDetailReportDamageForm } from "./SkladDetailReportDamageForm";
 
 type SkladDetailReportDamageSectionProps = {
   skladovaPolozkaId: string;
+  polozkaNazev: string;
   kusy: SkladKusRow[];
   typyPoskozeni: SkladTypPoskozeniOption[];
   priority: SkladPrioritaOption[];
@@ -13,6 +14,7 @@ type SkladDetailReportDamageSectionProps = {
 
 export function SkladDetailReportDamageSection({
   skladovaPolozkaId,
+  polozkaNazev,
   kusy,
   typyPoskozeni,
   priority,
@@ -32,6 +34,7 @@ export function SkladDetailReportDamageSection({
       ) : (
         <SkladDetailReportDamageForm
           skladovaPolozkaId={skladovaPolozkaId}
+          polozkaNazev={polozkaNazev}
           kusy={kusy}
           typyPoskozeni={typyPoskozeni}
           priority={priority}

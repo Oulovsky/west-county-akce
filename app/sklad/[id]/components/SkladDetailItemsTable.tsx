@@ -6,6 +6,7 @@ import type {
   SkladPodkategorie,
   SkladPoskozeniRow,
 } from "@/lib/sklad/types";
+import type { UpdateKusPoradiResult } from "../actions/updateKusPoradi";
 import {
   SKLAD_DETAIL_TABLE_MIN_WIDTH,
   skladDetailRowGridClassName,
@@ -28,6 +29,9 @@ type SkladDetailItemsTableProps = {
   updateAction: (formData: FormData) => Promise<void>;
   addKusAction: (formData: FormData) => Promise<void>;
   deleteKusAction: (formData: FormData) => Promise<void>;
+  updateKusPoradiAction: (
+    formData: FormData
+  ) => Promise<UpdateKusPoradiResult>;
 };
 
 export function SkladDetailItemsTable({
@@ -44,6 +48,7 @@ export function SkladDetailItemsTable({
   updateAction,
   addKusAction,
   deleteKusAction,
+  updateKusPoradiAction,
 }: SkladDetailItemsTableProps) {
   const editFormId = `upravit-polozku-${row.skladova_polozka_id}`;
   const rowGridClassName = skladDetailRowGridClassName();
@@ -77,6 +82,7 @@ export function SkladDetailItemsTable({
             kusyError={kusyError}
             addKusAction={addKusAction}
             deleteKusAction={deleteKusAction}
+            updateKusPoradiAction={updateKusPoradiAction}
           />
         </details>
       </div>

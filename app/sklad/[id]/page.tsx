@@ -29,6 +29,7 @@ import { SkladDetailHeader } from "./components/SkladDetailHeader";
 import { SkladDetailItemsTable } from "./components/SkladDetailItemsTable";
 import { SkladDetailMetaSection } from "./components/SkladDetailMetaSection";
 import { SkladDetailReportDamageSection } from "./components/SkladDetailReportDamageSection";
+import { updateKusPoradiAction } from "./actions/updateKusPoradi";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -334,6 +335,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
         updateAction={upravitPolozku}
         addKusAction={pridatKus}
         deleteKusAction={smazatKus}
+        updateKusPoradiAction={updateKusPoradiAction}
       />
 
       <div className="grid gap-5 2xl:grid-cols-[minmax(0,1.3fr)_minmax(420px,0.9fr)]">
@@ -359,6 +361,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
         <div className="flex flex-col gap-5">
           <SkladDetailReportDamageSection
             skladovaPolozkaId={row.skladova_polozka_id}
+            polozkaNazev={row.nazev}
             kusy={kusy}
             typyPoskozeni={typyPoskozeni}
             priority={priority}
