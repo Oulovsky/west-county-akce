@@ -1,6 +1,17 @@
 ﻿import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
+function isPublicPath(pathname: string) {
+  if (pathname === "/login") return true;
+  if (pathname.startsWith("/auth/")) return true;
+  if (pathname.startsWith("/api/")) return true;
+  if (pathname.startsWith("/_next/")) return true;
+  if (pathname === "/favicon.ico") return true;
+  if (/\.[a-zA-Z0-9]+$/.test(pathname)) return true;
+
+  return false;
+}
+
 export async function proxy(req: NextRequest) {
   const res = NextResponse.next();
 
@@ -22,11 +33,25 @@ export async function proxy(req: NextRequest) {
     }
   );
 
-  await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const pathname = req.nextUrl.pathname;
+  if (!user && !isPublicPath(pathname)) {
+    const redirectUrl = req.nextUrl.clone();
+    const nextPath = `${pathname}${req.nextUrl.search}`;
+
+    redirectUrl.pathname = "/login";
+    redirectUrl.search = "";
+    redirectUrl.searchParams.set("next", nextPath);
+
+    return NextResponse.redirect(redirectUrl);
+  }
 
   return res;
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };

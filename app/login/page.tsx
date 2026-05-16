@@ -7,11 +7,19 @@ export default function LoginPage() {
   const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState("")
 
+  function getSafeNextPath() {
+    const next = new URLSearchParams(window.location.search).get("next")
+    if (!next) return "/zakazky"
+    if (!next.startsWith("/") || next.startsWith("//")) return "/zakazky"
+    return next
+  }
+
   async function handleGoogleLogin() {
     setGoogleLoading(true)
     setError("")
 
-    const callbackUrl = `${window.location.origin}/auth/callback?next=/zakazky`
+    const next = getSafeNextPath()
+    const callbackUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`
 
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",

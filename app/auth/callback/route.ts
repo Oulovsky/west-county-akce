@@ -1,14 +1,21 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+function getSafeNextPath(value: string | null) {
+  if (!value) return "/zakazky";
+  if (!value.startsWith("/") || value.startsWith("//")) return "/zakazky";
+  return value;
+}
+
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
+  const nextPath = getSafeNextPath(searchParams.get("next"));
 
   if (code) {
     const supabase = await createClient();
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  return NextResponse.redirect(origin);
+  return NextResponse.redirect(`${origin}${nextPath}`);
 }
