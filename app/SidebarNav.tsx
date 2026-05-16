@@ -62,6 +62,10 @@ export default function SidebarNav() {
         Správa skladu
       </NavLink>
 
+      <NavLink href="/sklad/setupy">
+        Setupy
+      </NavLink>
+
       <NavLink href="/admin" danger>
         Admin
       </NavLink>

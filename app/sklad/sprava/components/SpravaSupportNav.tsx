@@ -16,7 +16,7 @@ type Props = {
 export function SpravaSupportNav({ totalPoskozene = 0 }: Props) {
   return (
     <nav
-      className="grid gap-3 sm:grid-cols-2"
+      className="grid gap-3 lg:grid-cols-3"
       aria-label="Doplňková navigace skladu"
     >
       <section
@@ -57,6 +57,18 @@ export function SpravaSupportNav({ totalPoskozene = 0 }: Props) {
         </p>
         <Link href="/sklad/konfigurace" className={panelLinkClass}>
           Konfigurace skladu →
+        </Link>
+      </section>
+
+      <section className="rounded-xl border border-slate-800/80 bg-slate-950/30 p-4">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Setupy
+        </h2>
+        <p className="mt-1 text-xs leading-relaxed text-slate-500">
+          Knihovna opakovatelných sestav ze skladových položek bez konkrétních kusů.
+        </p>
+        <Link href="/sklad/setupy" className={panelLinkClass}>
+          Setupy skladu →
         </Link>
       </section>
     </nav>
