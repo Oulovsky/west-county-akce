@@ -13,6 +13,8 @@ import { GpsLocationFields, type SavedPlaceSuggestion } from "../GpsLocationFiel
 import { KlientSelectWithCreate, type KlientOption } from "../KlientSelectWithCreate";
 
 type TypObsluhy = "s_obsluhou" | "bez_obsluhy";
+type TechSectionKey = "stage" | "sound" | "lights" | "led" | "kamery";
+type SetupCategoryKey = "stage" | "sound" | "lights" | "led" | "kamery";
 
 type RealizaceForm = {
   local_id: string;
@@ -164,6 +166,20 @@ const selectChevronStyle = {
 
 const AVAILABILITY_WARNING_NOTE =
   "Upozornění dostupnosti: některé položky překračují dostupné množství. Řešení: půjčit / doplnit externě.";
+
+const STAGE_PRESET_DIMENSIONS: Record<string, { width: string; depth: string }> = {
+  mala: { width: "6", depth: "4" },
+  stredni: { width: "8", depth: "6" },
+  velka: { width: "10", depth: "8" },
+};
+
+const SETUP_CATEGORY_KEYWORDS: Record<SetupCategoryKey, string[]> = {
+  stage: ["stage", "pódium", "podium", "střecha", "strecha"],
+  sound: ["sound", "zvuk", "audio", "pa", "repro"],
+  lights: ["lights", "světla", "svetla", "osvětlení", "osvetleni"],
+  led: ["led", "mantinel", "obrazovka"],
+  kamery: ["kamera", "kamery", "video", "stream"],
+};
 
 function PickerInput({
   type,
@@ -394,6 +410,9 @@ export default function NovaZakazkaPage() {
   const [realizaceList, setRealizaceList] = useState<RealizaceForm[]>([
     createRealizace(0),
   ]);
+  const [activeTechSections, setActiveTechSections] = useState<
+    Record<string, Partial<Record<TechSectionKey, boolean>>>
+  >({});
 
   const [poznamka, setPoznamka] = useState("");
   const [ukladam, setUkladam] = useState(false);
@@ -719,6 +738,102 @@ export default function NovaZakazkaPage() {
     return [...map.values()].sort((a, b) => a.nazev.localeCompare(b.nazev, "cs"));
   }, [aggregatedSetupPlanRows, manualPlanRows]);
 
+  const selectedSetupCount = useMemo(
+    () => Object.values(setupSelections).filter((selection) => selection.selected).length,
+    [setupSelections]
+  );
+
+  function renderCategorySetups(category: SetupCategoryKey) {
+    const categorySetups = getCategorySetups(category);
+
+    if (setupyLoading) {
+      return (
+        <div className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-400">
+          Načítám skladové setupy...
+        </div>
+      );
+    }
+
+    if (setupyError) {
+      return (
+        <div className="rounded-xl border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-100">
+          Chyba načtení setupů: {setupyError}
+        </div>
+      );
+    }
+
+    if (categorySetups.length === 0) return null;
+
+    return (
+      <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+        <div>
+          <div className="text-sm font-bold text-white">Skladové setupy pro tuto kategorii</div>
+          <div className="mt-1 text-xs text-slate-400">
+            Volitelné. Vybrané setupy předvyplní plán techniky po uložení zakázky.
+          </div>
+        </div>
+
+        <div className="grid gap-2">
+          {categorySetups.map((setup) => {
+            const selection = setupSelections[setup.setup_id] ?? {
+              selected: false,
+              quantity: "1",
+            };
+            const polozky = setupPolozkyBySetup.get(setup.setup_id) ?? [];
+
+            return (
+              <div
+                key={setup.setup_id}
+                className={[
+                  "grid gap-3 rounded-xl border px-3 py-3 sm:grid-cols-[minmax(0,1fr)_120px] sm:items-center",
+                  selection.selected
+                    ? "border-blue-600 bg-blue-950/30"
+                    : "border-slate-800 bg-[#0b1324]",
+                ].join(" ")}
+              >
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selection.selected}
+                    onChange={(event) =>
+                      updateSetupSelection(setup.setup_id, {
+                        selected: event.target.checked,
+                      })
+                    }
+                    className="mt-1 h-5 w-5 accent-blue-600"
+                  />
+                  <span>
+                    <span className="block font-bold text-white">{setup.nazev}</span>
+                    {setup.popis ? (
+                      <span className="mt-1 block text-xs text-slate-400">{setup.popis}</span>
+                    ) : null}
+                    <span className="mt-1 block text-xs text-slate-500">
+                      Položek v setupu: {polozky.length}
+                    </span>
+                  </span>
+                </label>
+
+                <Input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={selection.quantity}
+                  onChange={(event) =>
+                    updateSetupSelection(setup.setup_id, {
+                      quantity: event.target.value,
+                    })
+                  }
+                  disabled={!selection.selected}
+                  aria-label={`Množství setupu ${setup.nazev}`}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   function updateRealizace(
     localId: string,
     field: keyof RealizaceForm,
@@ -737,6 +852,97 @@ export default function NovaZakazkaPage() {
           : item
       )
     );
+  }
+
+  function hasTechSectionValues(realizace: RealizaceForm, section: TechSectionKey) {
+    if (section === "stage") {
+      return Boolean(realizace.stagePreset || realizace.stageWidth || realizace.stageDepth);
+    }
+
+    if (section === "sound") return Boolean(realizace.soundPreset);
+    if (section === "lights") return Boolean(realizace.lightsPreset);
+    if (section === "led") {
+      return Boolean(realizace.ledKind || realizace.ledWidth || realizace.ledHeight || realizace.ledRohy);
+    }
+
+    return realizace.kamery > 0;
+  }
+
+  function isTechSectionActive(realizace: RealizaceForm, section: TechSectionKey) {
+    return Boolean(activeTechSections[realizace.local_id]?.[section] || hasTechSectionValues(realizace, section));
+  }
+
+  function setTechSectionActive(localId: string, section: TechSectionKey, active: boolean) {
+    setActiveTechSections((prev) => ({
+      ...prev,
+      [localId]: {
+        ...(prev[localId] ?? {}),
+        [section]: active,
+      },
+    }));
+
+    if (active) return;
+
+    setRealizaceList((prev) =>
+      prev.map((item) => {
+        if (item.local_id !== localId) return item;
+
+        if (section === "stage") {
+          return { ...item, stagePreset: "", stageWidth: "", stageDepth: "" };
+        }
+
+        if (section === "sound") return { ...item, soundPreset: "" };
+        if (section === "lights") return { ...item, lightsPreset: "" };
+        if (section === "led") {
+          return { ...item, ledKind: "", ledWidth: "", ledHeight: "", ledRohy: false };
+        }
+
+        return { ...item, kamery: 0 };
+      })
+    );
+  }
+
+  function updateStagePreset(localId: string, preset: string) {
+    setActiveTechSections((prev) => ({
+      ...prev,
+      [localId]: {
+        ...(prev[localId] ?? {}),
+        stage: true,
+      },
+    }));
+
+    const dimensions = STAGE_PRESET_DIMENSIONS[preset];
+    setRealizaceList((prev) =>
+      prev.map((item) =>
+        item.local_id === localId
+          ? {
+              ...item,
+              stagePreset: preset,
+              ...(dimensions ? { stageWidth: dimensions.width, stageDepth: dimensions.depth } : {}),
+            }
+          : item
+      )
+    );
+  }
+
+  function matchesSetupCategory(setup: SkladSetup, category: SetupCategoryKey) {
+    const haystack = `${setup.nazev} ${setup.popis ?? ""}`
+      .toLocaleLowerCase("cs-CZ")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+    return SETUP_CATEGORY_KEYWORDS[category].some((keyword) =>
+      haystack.includes(
+        keyword
+          .toLocaleLowerCase("cs-CZ")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+      )
+    );
+  }
+
+  function getCategorySetups(category: SetupCategoryKey) {
+    return setupy.filter((setup) => matchesSetupCategory(setup, category));
   }
 
   function addRealizace() {
@@ -1541,9 +1747,9 @@ export default function NovaZakazkaPage() {
           <Card className="space-y-6 border-slate-700 bg-[#0b1324]">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="text-lg font-semibold text-white">Basic look</div>
+                <div className="text-lg font-semibold text-white">Technika</div>
                 <div className="mt-1 text-sm text-slate-400">
-                  Základní produkční zadání po jednotlivých stage / realizacích.
+                  Vyber jen kategorie, které zakázka opravdu potřebuje. Ostatní části zůstanou skryté.
                 </div>
               </div>
 
@@ -1568,6 +1774,11 @@ export default function NovaZakazkaPage() {
                 const isLedOverLimit = Boolean(
                   ledRequestedArea && ledMaxArea && ledRequestedArea > ledMaxArea
                 );
+                const stageActive = isTechSectionActive(realizace, "stage");
+                const soundActive = isTechSectionActive(realizace, "sound");
+                const lightsActive = isTechSectionActive(realizace, "lights");
+                const ledActive = isTechSectionActive(realizace, "led");
+                const kameryActive = isTechSectionActive(realizace, "kamery");
 
                 return (
                   <Card
@@ -1597,7 +1808,68 @@ export default function NovaZakazkaPage() {
                       ) : null}
                     </div>
 
-                    <div className="grid gap-6 md:grid-cols-2">
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      {[
+                        ["stage", "Stage"],
+                        ["sound", "Sound"],
+                        ["lights", "Lights"],
+                        ["led", "LED / mantinel"],
+                        ["kamery", "Kamery"],
+                      ].map(([section, label]) => {
+                        const key = section as TechSectionKey;
+                        const active = isTechSectionActive(realizace, key);
+
+                        return (
+                          <label
+                            key={section}
+                            className={[
+                              "flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm font-black transition",
+                              active
+                                ? "border-blue-500 bg-blue-600/20 text-white"
+                                : "border-slate-700 bg-[#0b1324] text-slate-300 hover:bg-slate-900",
+                            ].join(" ")}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={active}
+                              onChange={(event) =>
+                                setTechSectionActive(realizace.local_id, key, event.target.checked)
+                              }
+                              className="h-5 w-5 accent-blue-600"
+                            />
+                            {label}
+                          </label>
+                        );
+                      })}
+
+                      <label
+                        className={[
+                          "flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm font-black transition",
+                          realizace.dron
+                            ? "border-blue-500 bg-blue-600/20 text-white"
+                            : "border-slate-700 bg-[#0b1324] text-slate-300 hover:bg-slate-900",
+                        ].join(" ")}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={realizace.dron}
+                          onChange={(event) =>
+                            updateRealizace(realizace.local_id, "dron", event.target.checked)
+                          }
+                          className="h-5 w-5 accent-blue-600"
+                        />
+                        Dron
+                      </label>
+                    </div>
+
+                    {!stageActive && !soundActive && !lightsActive && !ledActive && !kameryActive && !realizace.dron ? (
+                      <div className="rounded-xl border border-dashed border-slate-700 bg-[#0b1324] px-4 py-4 text-sm text-slate-400">
+                        Technika je zatím prázdná. Zaškrtni kategorii, kterou chceš pro tuto realizaci zadat.
+                      </div>
+                    ) : null}
+
+                    <div className="grid gap-4">
+                      {stageActive ? (
                       <Card className="border-slate-700 bg-[#0b1324]">
                         <div className="space-y-4">
                           <div className="text-base font-semibold text-white">Stage</div>
@@ -1606,15 +1878,16 @@ export default function NovaZakazkaPage() {
                             <select
                               value={realizace.stagePreset}
                               onChange={(e) =>
-                                updateRealizace(realizace.local_id, "stagePreset", e.target.value)
+                                updateStagePreset(realizace.local_id, e.target.value)
                               }
                               className={selectClassName}
                               style={selectChevronStyle}
                             >
                               <option value="">—</option>
                               <option value="mala">Malý setup</option>
+                              <option value="stredni">Střední setup</option>
                               <option value="velka">Velký setup</option>
-                              <option value="nejvetsi">Největší setup</option>
+                              <option value="vlastni">Vlastní</option>
                             </select>
                           </Field>
 
@@ -1647,13 +1920,22 @@ export default function NovaZakazkaPage() {
                               />
                             </Field>
                           </div>
+                          {renderCategorySetups("stage")}
                         </div>
                       </Card>
+                      ) : null}
 
+                      {soundActive || lightsActive ? (
                       <Card className="border-slate-700 bg-[#0b1324]">
                         <div className="space-y-4">
-                          <div className="text-base font-semibold text-white">Sound & lights</div>
+                          <div className="text-base font-semibold text-white">
+                            {[soundActive ? "Sound" : "", lightsActive ? "Lights" : ""]
+                              .filter(Boolean)
+                              .join(" / ")}
+                          </div>
 
+                          {soundActive ? (
+                          <>
                           <Field label="Sound">
                             <select
                               value={realizace.soundPreset}
@@ -1667,9 +1949,15 @@ export default function NovaZakazkaPage() {
                               <option value="mala">Malý setup</option>
                               <option value="stredni">Střední setup</option>
                               <option value="velka">Velký setup</option>
+                              <option value="vlastni">Vlastní</option>
                             </select>
                           </Field>
+                          {renderCategorySetups("sound")}
+                          </>
+                          ) : null}
 
+                          {lightsActive ? (
+                          <>
                           <Field label="Lights">
                             <select
                               value={realizace.lightsPreset}
@@ -1683,16 +1971,28 @@ export default function NovaZakazkaPage() {
                               <option value="mala">Malý setup</option>
                               <option value="stredni">Střední setup</option>
                               <option value="velka">Velký setup</option>
+                              <option value="vlastni">Vlastní</option>
                             </select>
                           </Field>
+                          {renderCategorySetups("lights")}
+                          </>
+                          ) : null}
                         </div>
                       </Card>
+                      ) : null}
                     </div>
 
+                    {ledActive || kameryActive ? (
                     <Card className="border-slate-700 bg-[#0b1324]">
                       <div className="space-y-4">
-                        <div className="text-base font-semibold text-white">LED / mantinel</div>
+                        <div className="text-base font-semibold text-white">
+                          {[ledActive ? "LED / mantinel" : "", kameryActive ? "Kamery" : ""]
+                            .filter(Boolean)
+                            .join(" / ")}
+                        </div>
 
+                        {ledActive ? (
+                        <>
                         <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
                           <Field label="Typ LED / mantinelu">
                             <select
@@ -1790,7 +2090,11 @@ export default function NovaZakazkaPage() {
                           {ledRequestedArea ? `${ledRequestedArea} m²` : "—"}
                           {ledMaxArea ? ` / maximum ${ledMaxArea} m²` : ""}
                         </div>
+                        {renderCategorySetups("led")}
+                        </>
+                        ) : null}
 
+                        {kameryActive ? (
                         <div className="grid gap-4 md:grid-cols-2">
                           <Field label="Kamery">
                             <select
@@ -1807,29 +2111,35 @@ export default function NovaZakazkaPage() {
                               <option value="3">3</option>
                             </select>
                           </Field>
-
-                          <div className="flex items-end pb-[14px]">
-                            <label className="flex items-center gap-2 text-white">
-                              <input
-                                type="checkbox"
-                                checked={realizace.dron}
-                                onChange={(e) =>
-                                  updateRealizace(realizace.local_id, "dron", e.target.checked)
-                                }
-                              />
-                              Dron
-                            </label>
-                          </div>
+                          {renderCategorySetups("kamery")}
                         </div>
+                        ) : null}
                       </div>
                     </Card>
+                    ) : null}
                   </Card>
                 );
               })}
             </div>
           </Card>
 
-          <Card className="space-y-6 border-slate-700 bg-[#0b1324]">
+          <Card className="border-blue-900/50 bg-blue-950/20">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-base font-semibold text-blue-100">Plán techniky</div>
+                <div className="mt-1 text-sm text-slate-300">
+                  Plán techniky se vytvoří podle vybraných sekcí a setupů.
+                </div>
+              </div>
+              <div className="rounded-xl border border-blue-800/60 bg-slate-950 px-4 py-2 text-sm font-bold text-blue-100">
+                {selectedSetupCount > 0
+                  ? `${selectedSetupCount} vybraných setupů`
+                  : "Bez vybraného skladového setupu"}
+              </div>
+            </div>
+          </Card>
+
+          <Card className="hidden space-y-6 border-slate-700 bg-[#0b1324]">
             <div>
               <div className="text-lg font-semibold text-white">Setupy skladu</div>
               <div className="mt-1 text-sm text-slate-400">
@@ -1994,7 +2304,7 @@ export default function NovaZakazkaPage() {
             ) : null}
           </Card>
 
-          <Card className="space-y-6 border-slate-700 bg-[#0b1324]">
+          <Card className="hidden space-y-6 border-slate-700 bg-[#0b1324]">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="text-lg font-semibold text-white">Další položky mimo setup</div>
@@ -2113,7 +2423,7 @@ export default function NovaZakazkaPage() {
             )}
           </Card>
 
-          <Card className="space-y-4 border-emerald-800 bg-emerald-950/20">
+          <Card className="hidden space-y-4 border-emerald-800 bg-emerald-950/20">
             <div>
               <div className="text-lg font-semibold text-emerald-100">
                 Výsledný plán techniky

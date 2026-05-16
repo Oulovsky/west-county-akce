@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
 const LeafletPointMap = dynamic(
@@ -12,7 +10,7 @@ const LeafletPointMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-80 items-center justify-center rounded-xl border border-slate-700 bg-slate-950 text-sm text-slate-400">
+      <div className="flex h-64 items-center justify-center rounded-xl border border-slate-700 bg-slate-950 text-sm text-slate-400">
         Načítám mapu...
       </div>
     ),
@@ -114,6 +112,7 @@ export function GpsLocationFields({
   const [selectedPlaceId, setSelectedPlaceId] = useState(defaultPlaceId ?? "");
   const [selectedPlaceClientId, setSelectedPlaceClientId] = useState(defaultPlaceClientId ?? "");
   const [selectedPlaceName, setSelectedPlaceName] = useState("");
+  const [mapLayer, setMapLayer] = useState<"map" | "satellite">("map");
   const activePlaceText = placeText ?? domPlaceText;
 
   function update(patch: Partial<GpsLocationValue>) {
@@ -145,18 +144,6 @@ export function GpsLocationFields({
     input.addEventListener("input", handleInput);
     return () => input.removeEventListener("input", handleInput);
   }, [placeInputName, placeText, selectedPlaceId, selectedPlaceClientId]);
-
-  function getPlaceQuery() {
-    if (placeText?.trim()) return placeText.trim();
-    if (domPlaceText.trim()) return domPlaceText.trim();
-
-    if (typeof document === "undefined") return "";
-
-    const input = document.querySelector<HTMLInputElement>(
-      `input[name="${placeInputName}"]`
-    );
-    return input?.value.trim() ?? "";
-  }
 
   function updatePlaceInput(nextValue: string) {
     if (placeText !== undefined) return;
@@ -256,19 +243,6 @@ export function GpsLocationFields({
       controller.abort();
     };
   }, [activePlaceText]);
-
-  async function searchByPlace() {
-    setError(null);
-    setResults([]);
-
-    const query = getPlaceQuery();
-    if (!query) {
-      setError("Nejdřív vyplň textové pole Místo.");
-      return;
-    }
-
-    await fetchPlaceResults(query, { showErrors: true });
-  }
 
   function selectResult(result: NominatimResult) {
     setResults([]);
@@ -385,21 +359,11 @@ export function GpsLocationFields({
 
       <Card className="space-y-4 border-slate-700 bg-[#0b1324]">
         <div>
-          <div className="text-lg font-semibold text-white">GPS lokace místa</div>
+          <div className="text-lg font-semibold text-white">GPS místa</div>
           <div className="mt-1 text-sm text-slate-400">
-            Vyber přesný bod konání akce kliknutím do mapy. Vyhledání podle místa slouží jako rychlý posun mapy.
+            Hledání běží automaticky podle pole Místo. Bod můžeš volitelně zpřesnit v mapě.
           </div>
         </div>
-
-        <Field label="Radius GPS zóny (m)">
-          <Input
-            name="misto_gps_radius_m"
-            inputMode="decimal"
-            value={value.radiusM}
-            onChange={(event) => update({ radiusM: event.target.value })}
-            placeholder="300"
-          />
-        </Field>
 
         {selectionMessage ? (
           <div className="rounded-xl border border-green-500/30 bg-green-950/20 px-4 py-3 text-sm text-green-200">
@@ -409,66 +373,87 @@ export function GpsLocationFields({
 
         {error ? <div className="text-sm text-red-300">{error}</div> : null}
 
-        <div className="flex flex-wrap gap-3">
-          <Button type="button" variant="secondary" onClick={searchByPlace} disabled={isSearching}>
-            {isSearching ? "Vyhledávám..." : "Vyhledat podle místa"}
-          </Button>
-        </div>
-
-        <div className="space-y-2">
-          <div className="text-sm font-semibold text-white">Mapa pro přesný bod</div>
-          <div className="text-xs text-slate-400">
-            Klikni do mapy na přesné místo konání. Kolečkem myši mapu přiblížíš nebo oddálíš.
-          </div>
-          <div className="overflow-hidden rounded-xl border border-slate-700 bg-slate-950">
-            <LeafletPointMap
-              lat={parseCoordinate(value.lat, -90, 90)}
-              lng={parseCoordinate(value.lng, -180, 180)}
-              onSelect={selectMapPoint}
-            />
-          </div>
-        </div>
-
         <details className="rounded-xl border border-slate-700 bg-slate-950 p-4">
           <summary className="cursor-pointer text-sm font-semibold text-slate-200">
-            Technické souřadnice
+            Upřesnit bod na mapě
           </summary>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <Field label="Latitude">
-              <Input
-                name="misto_lat"
-                inputMode="decimal"
-                value={value.lat}
-                onChange={(event) => handleManualCoordinateChange({ lat: event.target.value })}
-                placeholder="50.123456"
-              />
-            </Field>
+          <div className="mt-4 space-y-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-xs text-slate-400">
+                Klikni do mapy na přesné místo konání. Kolečkem myši mapu přiblížíš nebo oddálíš.
+              </div>
 
-            <Field label="Longitude">
-              <Input
-                name="misto_lng"
-                inputMode="decimal"
-                value={value.lng}
-                onChange={(event) => handleManualCoordinateChange({ lng: event.target.value })}
-                placeholder="12.345678"
-              />
-            </Field>
+              <div className="inline-flex rounded-xl border border-slate-700 bg-slate-950 p-1">
+                <button
+                  type="button"
+                  onClick={() => setMapLayer("map")}
+                  className={[
+                    "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
+                    mapLayer === "map"
+                      ? "bg-blue-600 text-white"
+                      : "text-slate-300 hover:bg-slate-800 hover:text-white",
+                  ].join(" ")}
+                >
+                  Mapa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMapLayer("satellite")}
+                  className={[
+                    "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
+                    mapLayer === "satellite"
+                      ? "bg-blue-600 text-white"
+                      : "text-slate-300 hover:bg-slate-800 hover:text-white",
+                  ].join(" ")}
+                >
+                  Letecká
+                </button>
+              </div>
+            </div>
+            <div className="overflow-hidden rounded-xl border border-slate-700 bg-slate-950">
+              <div className="[&_.leaflet-container]:h-[380px] md:[&_.leaflet-container]:h-[560px]">
+                <LeafletPointMap
+                  lat={parseCoordinate(value.lat, -90, 90)}
+                  lng={parseCoordinate(value.lng, -180, 180)}
+                  onSelect={selectMapPoint}
+                  layer={mapLayer}
+                />
+              </div>
+            </div>
           </div>
 
-          <input type="hidden" name="misto_gps_presnost_m" value={value.accuracyM} />
-          <input type="hidden" name="misto_gps_zdroj" value={value.source} />
-          <input type="hidden" name="misto_gps_updated_at" value={value.updatedAt} />
-          <input type="hidden" name="misto_id" value={selectedPlaceId} />
-          <input type="hidden" name="misto_klient_id" value={selectedPlaceClientId} />
-
-          {value.accuracyM || value.source ? (
-            <div className="mt-4 rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-300">
-              {value.accuracyM ? `Přesnost: ${value.accuracyM} m` : "Přesnost nezadaná"}
-              {value.source ? ` · Zdroj: ${value.source}` : ""}
-            </div>
-          ) : null}
         </details>
+
+        <div className="hidden">
+          <Input
+            name="misto_gps_radius_m"
+            inputMode="decimal"
+            value={value.radiusM}
+            onChange={(event) => update({ radiusM: event.target.value })}
+            placeholder="300"
+          />
+          <Input
+            name="misto_lat"
+            inputMode="decimal"
+            value={value.lat}
+            onChange={(event) => handleManualCoordinateChange({ lat: event.target.value })}
+            placeholder="50.123456"
+          />
+          <Input
+            name="misto_lng"
+            inputMode="decimal"
+            value={value.lng}
+            onChange={(event) => handleManualCoordinateChange({ lng: event.target.value })}
+            placeholder="12.345678"
+          />
+        </div>
+
+        <input type="hidden" name="misto_gps_presnost_m" value={value.accuracyM} />
+        <input type="hidden" name="misto_gps_zdroj" value={value.source} />
+        <input type="hidden" name="misto_gps_updated_at" value={value.updatedAt} />
+        <input type="hidden" name="misto_id" value={selectedPlaceId} />
+        <input type="hidden" name="misto_klient_id" value={selectedPlaceClientId} />
       </Card>
     </>
   );

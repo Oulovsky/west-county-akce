@@ -1,11 +1,26 @@
 ﻿import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  formatQuestionnaireRiskCount,
+  getQuestionnaireRiskLabel,
+  isPrimaryQuestionnaireRisk,
+  normalizeQuestionnaireRiskCodes,
+} from "@/lib/questionnaire-risks";
 import PeoplePool from "./PeoplePool";
 import { combineDateAndTime } from "./helpers";
 import { ZakazkaBasicLookCard } from "./components/ZakazkaBasicLookCard";
 import { ZakazkaScheduleCard } from "./components/ZakazkaScheduleCard";
 import { ZakazkaHeaderCard } from "./components/ZakazkaHeaderCard";
+import {
+  ZakazkaPlaceConnectionCard,
+  type ExistingPlaceOption,
+} from "./components/ZakazkaPlaceConnectionCard";
+import {
+  QuestionnairePhotoGallery,
+  type QuestionnairePhotoGalleryItem,
+} from "./QuestionnairePhotoGallery";
 import {
   markQuestionnaireInternallyVerifiedAction,
   markQuestionnaireNotNeededAction,
@@ -14,6 +29,13 @@ import {
 
 import { ZakazkaSubnav } from "@/components/zakazky/zakazka-subnav";
 import { Card } from "@/components/ui/card";
+import {
+  PlaceTechnicalNotesCard,
+  type MistoKonaniRow,
+  type PlaceTechnicalNoteAuthorRow,
+  type PlaceTechnicalNoteRow,
+  type PlaceTechnicalNoteZakazkaRow,
+} from "@/components/mista/PlaceTechnicalNotesCard";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -156,6 +178,16 @@ type ClientVerificationDotaznikRow = {
   updated_at: string | null;
 };
 
+type ClientVerificationPhotoRow = {
+  id: string;
+  storage_bucket: string;
+  storage_path: string;
+  typ: string | null;
+  popis: string | null;
+  original_filename: string | null;
+  created_at: string | null;
+};
+
 function getSkladovaPolozkaInfo(
   value: TechnikaSummaryRawRow["skladove_polozky"]
 ) {
@@ -217,6 +249,15 @@ function formatChoice(value: string | null) {
   return value || "—";
 }
 
+function formatPhotoType(value: string | null) {
+  if (value === "rozvadec") return "Rozvaděč";
+  if (value === "prijezd") return "Příjezd";
+  if (value === "parkovani") return "Parkování";
+  if (value === "prostor") return "Prostor";
+  if (value === "jina") return "Jiná";
+  return "Jiná";
+}
+
 function getClientVerificationStatus({
   link,
   dotaznik,
@@ -224,7 +265,7 @@ function getClientVerificationStatus({
   link: ClientVerificationLinkRow | null;
   dotaznik: ClientVerificationDotaznikRow | null;
 }) {
-  const risks = Array.isArray(dotaznik?.rizika) ? dotaznik.rizika : [];
+  const risks = normalizeQuestionnaireRiskCodes(dotaznik?.rizika);
 
   if (dotaznik?.stav === "pozadovan_vyjezd_technika" || dotaznik?.pozadovan_vyjezd_technika) {
     return "Požadován výjezd technika";
@@ -650,20 +691,26 @@ function PlanTechnikyCard({ items }: { items: TechnikaSummaryRow[] }) {
 
 function ClientTechnicalVerificationCard({
   zakazkaId,
+  mistoId,
   statusLabel,
   link,
   dotaznik,
+  photos,
+  galleryPhotos,
   message,
   hasSavedPlace,
 }: {
   zakazkaId: string;
+  mistoId: string | null;
   statusLabel: string;
   link: ClientVerificationLinkRow | null;
   dotaznik: ClientVerificationDotaznikRow | null;
+  photos: ClientVerificationPhotoRow[];
+  galleryPhotos: QuestionnairePhotoGalleryItem[];
   message: "sent" | "missing_email" | "missing_resend_key" | null;
   hasSavedPlace: boolean;
 }) {
-  const risks = Array.isArray(dotaznik?.rizika) ? dotaznik.rizika : [];
+  const risks = normalizeQuestionnaireRiskCodes(dotaznik?.rizika);
   const decision = getExtraAnswer(dotaznik?.odpovedi_extra, "decision");
   const lzeZajetAutem = getExtraAnswer(dotaznik?.odpovedi_extra, "lze_zajet_autem");
   const mistoZpevnene = getExtraAnswer(dotaznik?.odpovedi_extra, "misto_zpevnene");
@@ -736,8 +783,8 @@ function ClientTechnicalVerificationCard({
         </div>
 
         <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Rizika</div>
-          <div className="mt-1 font-semibold text-white">{risks.length}</div>
+          <div className="text-xs uppercase tracking-wide text-slate-500">Technická upozornění</div>
+          <div className="mt-1 font-semibold text-white">{formatQuestionnaireRiskCount(risks.length)}</div>
           {dotaznik?.submitted_at ? (
             <div className="mt-1 text-xs text-slate-500">
               Odesláno: {new Date(dotaznik.submitted_at).toLocaleString("cs-CZ")}
@@ -761,8 +808,68 @@ function ClientTechnicalVerificationCard({
             <div>Kabel přes silnici/průchod: {formatChoice(kabelPresSilnici)}</div>
             <div>Příjezd: {dotaznik.prijezd_poznamka || "—"}</div>
             <div>Parkování: {dotaznik.parkovani_poznamka || "—"}</div>
-            <div>Rizika: {risks.length > 0 ? risks.join(", ") : "Bez automaticky detekovaných rizik"}</div>
+            <div>
+              Fotky:{" "}
+              {photos.length > 0
+                ? `${photos.length} (${photos.map((photo) => formatPhotoType(photo.typ)).join(", ")})`
+                : "—"}
+            </div>
           </div>
+        </div>
+      ) : null}
+
+      {dotaznik?.submitted_at ? (
+        <div className="space-y-3 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+          <div>
+            <div className="font-semibold text-white">Technická upozornění</div>
+            <p className="mt-1 text-sm text-slate-400">
+              Automaticky vyhodnocené body z odpovědí klienta. Nejde o score, ale o konkrétní upozornění k zakázce.
+            </p>
+          </div>
+
+          {risks.length === 0 ? (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm font-semibold text-emerald-100">
+              Klient neuvedl žádná technická upozornění.
+            </div>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {risks.map((risk) => {
+                const isPrimary = isPrimaryQuestionnaireRisk(risk);
+
+                return (
+                  <div
+                    key={risk}
+                    className={[
+                      "rounded-xl border px-4 py-3 text-sm",
+                      isPrimary
+                        ? "border-red-500/50 bg-red-950/30 text-red-100"
+                        : "border-amber-500/30 bg-amber-950/20 text-amber-100",
+                    ].join(" ")}
+                  >
+                    <div className="font-black">{getQuestionnaireRiskLabel(risk)}</div>
+                    <div className={isPrimary ? "mt-1 text-xs text-red-200" : "mt-1 text-xs text-amber-200"}>
+                      {risk}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {dotaznik?.submitted_at ? (
+        <div className="space-y-3 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+          <div>
+            <div className="font-semibold text-white">Fotky od klienta</div>
+            <p className="mt-1 text-sm text-slate-400">
+              Fotky jsou podklad jen pro tuto zakázku. Neukládají se jako dlouhodobé ověření místa.
+            </p>
+          </div>
+          <QuestionnairePhotoGallery
+            photos={galleryPhotos}
+            promoteConfig={mistoId ? { zakazkaId, mistoId } : null}
+          />
         </div>
       ) : null}
 
@@ -877,6 +984,100 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
     return <div>ZakĂˇzka nenalezena</div>;
   }
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let mistoKonani: MistoKonaniRow | null = null;
+  let mistoTechnickePoznamky: PlaceTechnicalNoteRow[] = [];
+  let noteAuthorsById = new Map<string, PlaceTechnicalNoteAuthorRow>();
+  let noteZakazkyById = new Map<string, PlaceTechnicalNoteZakazkaRow>();
+  let existingPlacesForLink: ExistingPlaceOption[] = [];
+
+  if (data.misto_id) {
+    const { data: mistoRaw, error: mistoError } = await supabase
+      .from("mista_konani")
+      .select("misto_id, nazev, adresa_text")
+      .eq("misto_id", data.misto_id)
+      .maybeSingle();
+
+    if (mistoError) {
+      return <div>Chyba místa konání: {mistoError.message}</div>;
+    }
+
+    mistoKonani = (mistoRaw ?? null) as MistoKonaniRow | null;
+
+    const { data: notesRaw, error: notesError } = await supabase
+      .from("misto_technicke_poznamky")
+      .select("id, misto_id, zakazka_id, autor_id, typ, text, dulezite, created_at, updated_at")
+      .eq("misto_id", data.misto_id)
+      .order("dulezite", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (notesError) {
+      return <div>Chyba technických poznámek místa: {notesError.message}</div>;
+    }
+
+    mistoTechnickePoznamky = (notesRaw ?? []) as PlaceTechnicalNoteRow[];
+
+    const authorIds = [
+      ...new Set(mistoTechnickePoznamky.map((note) => note.autor_id).filter(Boolean)),
+    ] as string[];
+
+    if (authorIds.length > 0) {
+      const { data: authorsRaw, error: authorsError } = await supabase
+        .from("profiles")
+        .select("user_id, email, jmeno, prijmeni")
+        .in("user_id", authorIds);
+
+      if (authorsError) {
+        return <div>Chyba autorů poznámek: {authorsError.message}</div>;
+      }
+
+      noteAuthorsById = new Map(
+        ((authorsRaw ?? []) as PlaceTechnicalNoteAuthorRow[]).map((author) => [author.user_id, author])
+      );
+    }
+
+    const noteZakazkaIds = [
+      ...new Set(
+        mistoTechnickePoznamky
+          .map((note) => note.zakazka_id)
+          .filter((zakazkaId): zakazkaId is string => Boolean(zakazkaId && zakazkaId !== id))
+      ),
+    ];
+
+    if (noteZakazkaIds.length > 0) {
+      const { data: noteZakazkyRaw, error: noteZakazkyError } = await supabase
+        .from("zakazky")
+        .select("zakazka_id, cislo_zakazky, nazev")
+        .in("zakazka_id", noteZakazkaIds);
+
+      if (noteZakazkyError) {
+        return <div>Chyba vazeb poznámek na zakázky: {noteZakazkyError.message}</div>;
+      }
+
+      noteZakazkyById = new Map(
+        ((noteZakazkyRaw ?? []) as PlaceTechnicalNoteZakazkaRow[]).map((zakazka) => [
+          zakazka.zakazka_id,
+          zakazka,
+        ])
+      );
+    }
+  } else {
+    const { data: placesRaw, error: placesError } = await supabase
+      .from("mista_konani")
+      .select("misto_id, nazev, adresa_text, klient_id")
+      .eq("aktivni", true)
+      .order("nazev", { ascending: true });
+
+    if (placesError) {
+      return <div>Chyba seznamu míst: {placesError.message}</div>;
+    }
+
+    existingPlacesForLink = (placesRaw ?? []) as ExistingPlaceOption[];
+  }
+
   const { data: dotaznikRaw, error: dotaznikError } = await supabase
     .from("zakazka_dotazniky")
     .select(
@@ -892,6 +1093,41 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
   }
 
   const dotaznik = (dotaznikRaw ?? null) as ClientVerificationDotaznikRow | null;
+
+  let dotaznikPhotos: ClientVerificationPhotoRow[] = [];
+  let dotaznikGalleryPhotos: QuestionnairePhotoGalleryItem[] = [];
+  if (dotaznik?.dotaznik_id) {
+    const { data: photosRaw, error: photosError } = await supabase
+      .from("dotaznik_fotky")
+      .select("id, storage_bucket, storage_path, typ, popis, original_filename, created_at")
+      .eq("dotaznik_odpoved_id", dotaznik.dotaznik_id)
+      .order("poradi", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (photosError) {
+      return <div>Chyba fotek dotazníku: {photosError.message}</div>;
+    }
+
+    dotaznikPhotos = (photosRaw ?? []) as ClientVerificationPhotoRow[];
+    const adminSupabase = createAdminClient();
+
+    dotaznikGalleryPhotos = await Promise.all(
+      dotaznikPhotos.map(async (photo) => {
+        const { data: signedUrlData } = await adminSupabase.storage
+          .from(photo.storage_bucket)
+          .createSignedUrl(photo.storage_path, 60 * 60);
+
+        return {
+          id: photo.id,
+          signedUrl: signedUrlData?.signedUrl ?? null,
+          typ: photo.typ,
+          popis: photo.popis,
+          originalFilename: photo.original_filename,
+          createdAt: photo.created_at,
+        };
+      })
+    );
+  }
 
   const { data: linkRaw, error: linkError } = await supabase
     .from("zakazka_client_links")
@@ -1150,11 +1386,38 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
 
       <ZakazkaBasicLookCard realizace={(realizace ?? []) as RealizaceRow[]} data={data} />
 
+      {!data.misto_id ? (
+        <ZakazkaPlaceConnectionCard
+          zakazka={{
+            zakazkaId: id,
+            nazev: data.nazev ?? null,
+            klientId: data.klient_id ?? null,
+            misto: data.misto ?? null,
+            mistoLat: data.misto_lat ?? null,
+            mistoLng: data.misto_lng ?? null,
+            mistoRadius: data.misto_gps_radius_m ?? null,
+          }}
+          places={existingPlacesForLink}
+        />
+      ) : null}
+
+      <PlaceTechnicalNotesCard
+        currentZakazkaId={id}
+        misto={mistoKonani}
+        notes={mistoTechnickePoznamky}
+        authorsById={noteAuthorsById}
+        zakazkyById={noteZakazkyById}
+        showPlaceDetailLink
+      />
+
       <ClientTechnicalVerificationCard
         zakazkaId={id}
+        mistoId={user ? data.misto_id ?? null : null}
         statusLabel={clientVerificationStatus}
         link={clientVerificationLink}
         dotaznik={dotaznik}
+        photos={dotaznikPhotos}
+        galleryPhotos={dotaznikGalleryPhotos}
         message={technicalVerificationMessage}
         hasSavedPlace={Boolean(data.misto_id)}
       />

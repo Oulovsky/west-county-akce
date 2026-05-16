@@ -8,6 +8,7 @@ type LeafletPointMapProps = {
   lat: number | null;
   lng: number | null;
   onSelect: (lat: number, lng: number) => void;
+  layer?: "map" | "satellite";
 };
 
 const DEFAULT_CENTER: LatLngExpression = [50.1, 12.9];
@@ -50,9 +51,23 @@ function MapCenterSync({
   return null;
 }
 
-export function LeafletPointMap({ lat, lng, onSelect }: LeafletPointMapProps) {
+export function LeafletPointMap({ lat, lng, onSelect, layer = "map" }: LeafletPointMapProps) {
   const hasPoint = isValidLat(lat) && isValidLng(lng);
   const center: LatLngExpression = hasPoint ? [lat, lng] : DEFAULT_CENTER;
+  const tileLayer =
+    layer === "satellite"
+      ? {
+          key: "satellite",
+          attribution:
+            "Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+          url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        }
+      : {
+          key: "map",
+          attribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        };
 
   return (
     <MapContainer
@@ -62,8 +77,9 @@ export function LeafletPointMap({ lat, lng, onSelect }: LeafletPointMapProps) {
       className="h-80 w-full rounded-xl"
     >
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        key={tileLayer.key}
+        attribution={tileLayer.attribution}
+        url={tileLayer.url}
       />
       <MapClickHandler onSelect={onSelect} />
       <MapCenterSync lat={lat} lng={lng} />

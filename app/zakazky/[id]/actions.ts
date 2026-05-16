@@ -19,6 +19,13 @@ function getZakazkaId(formData: FormData) {
   return zakazkaId;
 }
 
+function toOptionalNumber(value: unknown) {
+  const text = String(value ?? "").trim().replace(",", ".");
+  if (!text) return null;
+  const number = Number(text);
+  return Number.isFinite(number) ? number : null;
+}
+
 function getClientQuestionnaireBaseUrl(headersList: Headers) {
   const configured = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, "");
   if (configured) return configured;
@@ -131,6 +138,120 @@ export async function markQuestionnaireNotNeededAction(formData: FormData) {
 export async function markQuestionnaireInternallyVerifiedAction(formData: FormData) {
   const zakazkaId = getZakazkaId(formData);
   await setClientVerificationStatus(zakazkaId, "overeno_interne");
+}
+
+export async function createPlaceFromZakazkaAction(formData: FormData) {
+  const zakazkaId = getZakazkaId(formData);
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, errorMessage: "Pro vytvoření místa musíte být přihlášeni.", mistoId: null };
+  }
+
+  const { data: zakazka, error: zakazkaError } = await supabase
+    .from("zakazky")
+    .select("zakazka_id, nazev, klient_id, misto_id, misto, misto_lat, misto_lng, misto_gps_radius_m")
+    .eq("zakazka_id", zakazkaId)
+    .single();
+
+  if (zakazkaError) {
+    return { ok: false, errorMessage: zakazkaError.message, mistoId: null };
+  }
+
+  if (zakazka.misto_id) {
+    return { ok: true, errorMessage: null, mistoId: zakazka.misto_id as string };
+  }
+
+  const placeName = String(zakazka.misto ?? "").trim() || String(zakazka.nazev ?? "").trim() || "Místo konání";
+  const lat = toOptionalNumber(zakazka.misto_lat);
+  const lng = toOptionalNumber(zakazka.misto_lng);
+  const radius = toOptionalNumber(zakazka.misto_gps_radius_m);
+
+  const { data: misto, error: mistoError } = await supabase
+    .from("mista_konani")
+    .insert({
+      klient_id: zakazka.klient_id ?? null,
+      nazev: placeName,
+      adresa_text: String(zakazka.misto ?? "").trim() || null,
+      lat,
+      lng,
+      radius_m: radius ?? 300,
+      aktivni: true,
+    })
+    .select("misto_id")
+    .single();
+
+  if (mistoError) {
+    return { ok: false, errorMessage: mistoError.message, mistoId: null };
+  }
+
+  const { error: updateError } = await supabase
+    .from("zakazky")
+    .update({ misto_id: misto.misto_id })
+    .eq("zakazka_id", zakazkaId);
+
+  if (updateError) {
+    return { ok: false, errorMessage: updateError.message, mistoId: null };
+  }
+
+  revalidatePath(`/zakazky/${zakazkaId}`);
+  revalidatePath(`/mista/${misto.misto_id}`);
+  revalidatePath("/mista");
+
+  return { ok: true, errorMessage: null, mistoId: misto.misto_id as string };
+}
+
+export async function linkZakazkaToExistingPlaceAction(formData: FormData) {
+  const zakazkaId = getZakazkaId(formData);
+  const mistoId = String(formData.get("misto_id") ?? "").trim();
+
+  if (!mistoId) {
+    return { ok: false, errorMessage: "Vyberte prosím existující místo.", mistoId: null };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, errorMessage: "Pro propojení místa musíte být přihlášeni.", mistoId: null };
+  }
+
+  const { data: misto, error: mistoError } = await supabase
+    .from("mista_konani")
+    .select("misto_id")
+    .eq("misto_id", mistoId)
+    .maybeSingle();
+
+  if (mistoError) {
+    return { ok: false, errorMessage: mistoError.message, mistoId: null };
+  }
+
+  if (!misto) {
+    return { ok: false, errorMessage: "Vybrané místo nebylo nalezeno.", mistoId: null };
+  }
+
+  const { error } = await supabase
+    .from("zakazky")
+    .update({ misto_id: mistoId })
+    .eq("zakazka_id", zakazkaId);
+
+  if (error) {
+    return { ok: false, errorMessage: error.message, mistoId: null };
+  }
+
+  revalidatePath(`/zakazky/${zakazkaId}`);
+  revalidatePath(`/mista/${mistoId}`);
+  revalidatePath("/mista");
+
+  return { ok: true, errorMessage: null, mistoId };
 }
 
 export async function sendClientQuestionnaireAction(formData: FormData) {

@@ -11,6 +11,7 @@ type ZakazkaHeaderCardProps = {
     nazev?: string | null;
     klient_nazev?: string | null;
     misto?: string | null;
+    misto_id?: string | null;
     misto_lat?: number | string | null;
     misto_lng?: number | string | null;
     misto_gps_radius_m?: number | string | null;
@@ -41,7 +42,18 @@ export function ZakazkaHeaderCard({
             <div className="text-4xl font-bold text-white">
               {data.cislo_zakazky} – {data.nazev}
             </div>
-            <div className="text-lg text-slate-400">{data.misto || "—"}</div>
+            <div className="text-lg text-slate-400">
+              {data.misto_id ? (
+                <Link
+                  href={`/mista/${data.misto_id}`}
+                  className="font-semibold text-blue-200 underline-offset-4 hover:text-blue-100 hover:underline"
+                >
+                  {data.misto || "Detail místa"}
+                </Link>
+              ) : (
+                data.misto || "—"
+              )}
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant={hasGps ? "success" : "warning"}>
                 {hasGps ? "GPS zadána" : "GPS chybí"}

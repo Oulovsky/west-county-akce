@@ -13,6 +13,7 @@ export type Zakazka = {
   cislo_zakazky: string;
   nazev: string;
   misto: string | null;
+  misto_id: string | null;
   datum_od: string;
   datum_do: string;
   cas_od: string | null;
@@ -127,16 +128,28 @@ function ZakazkaCard({
   return (
     <Card className="transition hover:border-slate-700 hover:bg-[#0b1324]">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <Link href={`/zakazky/${zakazka.zakazka_id}`} className="block flex-1">
+        <div className="block flex-1">
           <div className="space-y-3">
-            <div className="text-2xl font-bold text-white">
+            <Link
+              href={`/zakazky/${zakazka.zakazka_id}`}
+              className="block text-2xl font-bold text-white transition hover:text-blue-100"
+            >
               {zakazka.cislo_zakazky} – {zakazka.nazev}
-            </div>
+            </Link>
 
             <div className="space-y-1 text-sm text-slate-300">
               <div>
                 <span className="font-semibold text-slate-200">Místo:</span>{" "}
-                {zakazka.misto || "—"}
+                {zakazka.misto_id ? (
+                  <Link
+                    href={`/mista/${zakazka.misto_id}`}
+                    className="font-semibold text-blue-200 underline-offset-4 hover:text-blue-100 hover:underline"
+                  >
+                    {zakazka.misto || "Detail místa"}
+                  </Link>
+                ) : (
+                  zakazka.misto || "—"
+                )}
               </div>
               <div>
                 <span className="font-semibold text-slate-200">Termín:</span>{" "}
@@ -157,7 +170,7 @@ function ZakazkaCard({
               ) : null}
             </div>
           </div>
-        </Link>
+        </div>
 
         {canDeletePermanently ? (
           <form action={smazatTrvaleAction} className="shrink-0">
