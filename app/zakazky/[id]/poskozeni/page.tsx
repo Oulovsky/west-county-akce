@@ -105,7 +105,7 @@ export default async function ZakazkaPoskozeniPage({ params }: PageProps) {
   }, 0);
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4">
+    <div className="w-full">
       <Card className="mt-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">

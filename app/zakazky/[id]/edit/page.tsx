@@ -189,7 +189,7 @@ export default async function EditZakazkyPage({ params }: PageProps) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4">
+    <div className="w-full">
       <PageHeader
         title="Editace zakázky"
         description="Uprav základní informace, logistiku a časové bloky zakázky."

@@ -2,10 +2,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import PeoplePool from "./PeoplePool";
-import { combineDateAndTime, recomputeZakazkaTechnikaFromTemplates } from "./helpers";
+import { combineDateAndTime } from "./helpers";
 import { ZakazkaBasicLookCard } from "./components/ZakazkaBasicLookCard";
 import { ZakazkaScheduleCard } from "./components/ZakazkaScheduleCard";
-import { ZakazkaTemplatesCard } from "./components/ZakazkaTemplatesCard";
 import { ZakazkaHeaderCard } from "./components/ZakazkaHeaderCard";
 
 import { ZakazkaSubnav } from "@/components/zakazky/zakazka-subnav";
@@ -15,31 +14,15 @@ type PageProps = {
   params: Promise<{ id: string }>;
 };
 
-type TemplateRow = {
-  id: string;
-  name: string;
-};
-
-type ZakazkaTemplateRow = {
-  id: string;
-  template_id: string;
-  quantity: number | string;
-  templates:
-    | {
-        id: string;
-        name: string;
-      }
-    | {
-        id: string;
-        name: string;
-      }[]
-    | null;
-};
-
 type TechnikaSummaryRow = {
   skladova_polozka_id: string;
   nazev: string;
   mnozstvi: number | string;
+  pozice: number | string | null;
+  okruhNazev: string;
+  okruhPoradi: number;
+  kategorieNazev: string;
+  podkategorieNazev: string;
 };
 
 type TechnikaSummaryRawRow = {
@@ -48,11 +31,35 @@ type TechnikaSummaryRawRow = {
   skladove_polozky:
     | {
         nazev: string | null;
+        pozice: number | string | null;
+        sklad_blok_id: string | null;
+        kategorie_techniky_id: string | null;
+        podkategorie_techniky_id: string | null;
       }
     | {
         nazev: string | null;
+        pozice: number | string | null;
+        sklad_blok_id: string | null;
+        kategorie_techniky_id: string | null;
+        podkategorie_techniky_id: string | null;
       }[]
     | null;
+};
+
+type SkladBlokPlanRow = {
+  sklad_blok_id: string;
+  nazev: string | null;
+  poradi: number | null;
+};
+
+type KategoriePlanRow = {
+  kategorie_techniky_id: string;
+  nazev: string | null;
+};
+
+type PodkategoriePlanRow = {
+  podkategorie_techniky_id: string;
+  nazev: string | null;
 };
 
 type LoadingPlanRow = {
@@ -106,14 +113,14 @@ type LoadingStatusGroup = {
   totals: Omit<LoadingStatusItem, "skladova_polozka_id" | "nazev" | "pozice">;
 };
 
-function getSkladovaPolozkaNazev(
+function getSkladovaPolozkaInfo(
   value: TechnikaSummaryRawRow["skladove_polozky"]
 ) {
   if (Array.isArray(value)) {
-    return value[0]?.nazev ?? "-";
+    return value[0] ?? null;
   }
 
-  return value?.nazev ?? "-";
+  return value ?? null;
 }
 
 function toCount(value: number | string | null | undefined) {
@@ -386,6 +393,99 @@ function LoadingStatusCard({ groups }: { groups: LoadingStatusGroup[] }) {
   );
 }
 
+function PlanTechnikyCard({ items }: { items: TechnikaSummaryRow[] }) {
+  const groups = new Map<
+    string,
+    { okruhNazev: string; okruhPoradi: number; items: TechnikaSummaryRow[] }
+  >();
+
+  for (const item of items) {
+    const key = item.okruhNazev || "Bez okruhu";
+    const group = groups.get(key) ?? {
+      okruhNazev: key,
+      okruhPoradi: item.okruhPoradi,
+      items: [],
+    };
+    group.items.push(item);
+    groups.set(key, group);
+  }
+
+  const sortedGroups = [...groups.values()]
+    .map((group) => ({
+      ...group,
+      items: [...group.items].sort((a, b) => {
+        const aPosition = Number(a.pozice);
+        const bPosition = Number(b.pozice);
+        if (Number.isFinite(aPosition) && Number.isFinite(bPosition) && aPosition !== bPosition) {
+          return aPosition - bPosition;
+        }
+        return a.nazev.localeCompare(b.nazev, "cs");
+      }),
+    }))
+    .sort((a, b) => {
+      if (a.okruhPoradi !== b.okruhPoradi) return a.okruhPoradi - b.okruhPoradi;
+      return a.okruhNazev.localeCompare(b.okruhNazev, "cs");
+    });
+
+  return (
+    <Card className="mt-6">
+      <h2 className="text-2xl font-black text-white">Plán techniky</h2>
+      <p className="mt-1 text-sm text-slate-400">
+        Čtecí přehled plánu z technika_na_zakazce. Konkrétní kusy vznikají až při loading scanu.
+      </p>
+
+      {items.length === 0 ? (
+        <div className="mt-5 rounded-2xl border border-dashed border-slate-700 px-4 py-5 text-sm text-slate-400">
+          Zakázka zatím nemá plánovanou techniku.
+        </div>
+      ) : (
+        <div className="mt-5 grid gap-4">
+          {sortedGroups.map((group) => (
+            <section
+              key={group.okruhNazev}
+              className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4"
+            >
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Okruh
+              </div>
+              <h3 className="mt-1 text-xl font-black text-white">{group.okruhNazev}</h3>
+
+              <div className="mt-4 grid gap-3">
+                {group.items.map((item) => (
+                  <div
+                    key={item.skladova_polozka_id}
+                    className="rounded-2xl border border-slate-800 bg-[#081225] p-4"
+                  >
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <div className="text-lg font-black text-white">{item.nazev}</div>
+                        <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-slate-300">
+                          <span className="rounded-md bg-slate-800 px-2 py-1">
+                            Kategorie: {item.kategorieNazev}
+                          </span>
+                          <span className="rounded-md bg-slate-800 px-2 py-1">
+                            Podkategorie: {item.podkategorieNazev}
+                          </span>
+                          <span className="rounded-md bg-emerald-950 px-2 py-1 text-emerald-100">
+                            Pozice: {formatPosition(item.pozice)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-blue-800 bg-blue-950 px-4 py-3 text-2xl font-black text-blue-100">
+                        {formatCount(toCount(item.mnozstvi))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 type RealizaceRow = {
   realizace_id: string;
   zakazka_id: string;
@@ -407,106 +507,6 @@ type RealizaceRow = {
 export default async function ZakazkaDetailPage({ params }: PageProps) {
   const { id } = await params;
   const supabase = await createClient();
-
-  async function addTemplate(formData: FormData) {
-    "use server";
-    const supabase = await createClient();
-
-    const templateId = String(formData.get("templateId") ?? "").trim();
-    const quantity = Math.max(1, Number(formData.get("quantity") ?? 1) || 1);
-
-    if (!templateId) {
-      throw new Error("Nebyla vybrĂˇna sestava.");
-    }
-
-    const { error } = await supabase.from("zakazka_templates").insert({
-      zakazka_id: id,
-      template_id: templateId,
-      quantity,
-    });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    await recomputeZakazkaTechnikaFromTemplates(supabase, id);
-    revalidatePath(`/zakazky/${id}`);
-  }
-
-  async function removeTemplate(formData: FormData) {
-    "use server";
-    const supabase = await createClient();
-
-    const rowId = String(formData.get("rowId") ?? "").trim();
-
-    if (!rowId) {
-      throw new Error("ChybĂ­ ID vazby sestavy.");
-    }
-
-    const { error } = await supabase
-      .from("zakazka_templates")
-      .delete()
-      .eq("id", rowId)
-      .eq("zakazka_id", id);
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    await recomputeZakazkaTechnikaFromTemplates(supabase, id);
-    revalidatePath(`/zakazky/${id}`);
-  }
-
-  async function changeTemplateQuantity(formData: FormData) {
-    "use server";
-    const supabase = await createClient();
-
-    const rowId = String(formData.get("rowId") ?? "").trim();
-    const direction = String(formData.get("direction") ?? "").trim();
-
-    if (!rowId) {
-      throw new Error("ChybĂ­ ID vazby sestavy.");
-    }
-
-    if (direction !== "plus" && direction !== "minus") {
-      throw new Error("NeplatnĂ˝ smÄ›r zmÄ›ny mnoĹľstvĂ­.");
-    }
-
-    const { data: row, error: rowError } = await supabase
-      .from("zakazka_templates")
-      .select("quantity")
-      .eq("id", rowId)
-      .single();
-
-    if (rowError) {
-      throw new Error(rowError.message);
-    }
-
-    const qty = Number(row?.quantity ?? 1);
-
-    if (direction === "minus" && qty <= 1) {
-      const { error: deleteError } = await supabase
-        .from("zakazka_templates")
-        .delete()
-        .eq("id", rowId);
-
-      if (deleteError) {
-        throw new Error(deleteError.message);
-      }
-    } else {
-      const { error: updateError } = await supabase
-        .from("zakazka_templates")
-        .update({ quantity: direction === "plus" ? qty + 1 : qty - 1 })
-        .eq("id", rowId);
-
-      if (updateError) {
-        throw new Error(updateError.message);
-      }
-    }
-
-    await recomputeZakazkaTechnikaFromTemplates(supabase, id);
-    revalidatePath(`/zakazky/${id}`);
-  }
 
   async function updateZakazkaSchedule(formData: FormData) {
     "use server";
@@ -577,37 +577,100 @@ export default async function ZakazkaDetailPage({ params }: PageProps) {
     return <div>Chyba: {realizaceError.message}</div>;
   }
 
-  const { data: templates, error: templatesError } = await supabase
-    .from("templates")
-    .select("id, name");
-
-  if (templatesError) {
-    return <div>Chyba: {templatesError.message}</div>;
-  }
-
-  const { data: zakazkaTemplates, error: zakazkaTemplatesError } = await supabase
-    .from("zakazka_templates")
-    .select("id, template_id, quantity, templates(id, name)")
-    .eq("zakazka_id", id);
-
-  if (zakazkaTemplatesError) {
-    return <div>Chyba: {zakazkaTemplatesError.message}</div>;
-  }
-
   const { data: technikaSummaryRaw, error: technikaSummaryError } = await supabase
     .from("technika_na_zakazce")
-    .select("skladova_polozka_id, mnozstvi, skladove_polozky(nazev)")
+    .select(
+      "skladova_polozka_id, mnozstvi, skladove_polozky(nazev, pozice, sklad_blok_id, kategorie_techniky_id, podkategorie_techniky_id)"
+    )
     .eq("zakazka_id", id);
 
   if (technikaSummaryError) {
     return <div>Chyba: {technikaSummaryError.message}</div>;
   }
 
-  const technikaSummary = ((technikaSummaryRaw ?? []) as TechnikaSummaryRawRow[]).map((row) => ({
-    skladova_polozka_id: row.skladova_polozka_id,
-    mnozstvi: row.mnozstvi,
-    nazev: getSkladovaPolozkaNazev(row.skladove_polozky),
-  })) as TechnikaSummaryRow[];
+  const technikaRows = (technikaSummaryRaw ?? []) as TechnikaSummaryRawRow[];
+  const planItemInfos = technikaRows
+    .map((row) => getSkladovaPolozkaInfo(row.skladove_polozky))
+    .filter(Boolean);
+  const planBlokIds = [
+    ...new Set(planItemInfos.map((item) => item?.sklad_blok_id).filter(Boolean)),
+  ] as string[];
+  const planKategorieIds = [
+    ...new Set(planItemInfos.map((item) => item?.kategorie_techniky_id).filter(Boolean)),
+  ] as string[];
+  const planPodkategorieIds = [
+    ...new Set(planItemInfos.map((item) => item?.podkategorie_techniky_id).filter(Boolean)),
+  ] as string[];
+
+  let planBloky: SkladBlokPlanRow[] = [];
+  if (planBlokIds.length > 0) {
+    const { data: blokyRaw, error: blokyError } = await supabase
+      .from("sklad_bloky")
+      .select("sklad_blok_id, nazev, poradi")
+      .in("sklad_blok_id", planBlokIds);
+
+    if (blokyError) {
+      return <div>Chyba okruhů plánu: {blokyError.message}</div>;
+    }
+
+    planBloky = (blokyRaw ?? []) as SkladBlokPlanRow[];
+  }
+
+  let planKategorie: KategoriePlanRow[] = [];
+  if (planKategorieIds.length > 0) {
+    const { data: kategorieRaw, error: kategorieError } = await supabase
+      .from("kategorie_techniky")
+      .select("kategorie_techniky_id, nazev")
+      .in("kategorie_techniky_id", planKategorieIds);
+
+    if (kategorieError) {
+      return <div>Chyba kategorií plánu: {kategorieError.message}</div>;
+    }
+
+    planKategorie = (kategorieRaw ?? []) as KategoriePlanRow[];
+  }
+
+  let planPodkategorie: PodkategoriePlanRow[] = [];
+  if (planPodkategorieIds.length > 0) {
+    const { data: podkategorieRaw, error: podkategorieError } = await supabase
+      .from("podkategorie_techniky")
+      .select("podkategorie_techniky_id, nazev")
+      .in("podkategorie_techniky_id", planPodkategorieIds);
+
+    if (podkategorieError) {
+      return <div>Chyba podkategorií plánu: {podkategorieError.message}</div>;
+    }
+
+    planPodkategorie = (podkategorieRaw ?? []) as PodkategoriePlanRow[];
+  }
+
+  const planBlokMap = new Map(planBloky.map((row) => [row.sklad_blok_id, row]));
+  const planKategorieMap = new Map(planKategorie.map((row) => [row.kategorie_techniky_id, row]));
+  const planPodkategorieMap = new Map(
+    planPodkategorie.map((row) => [row.podkategorie_techniky_id, row])
+  );
+
+  const technikaSummary = technikaRows.map((row) => {
+    const info = getSkladovaPolozkaInfo(row.skladove_polozky);
+    const blok = info?.sklad_blok_id ? planBlokMap.get(info.sklad_blok_id) : null;
+    const kategorie = info?.kategorie_techniky_id
+      ? planKategorieMap.get(info.kategorie_techniky_id)
+      : null;
+    const podkategorie = info?.podkategorie_techniky_id
+      ? planPodkategorieMap.get(info.podkategorie_techniky_id)
+      : null;
+
+    return {
+      skladova_polozka_id: row.skladova_polozka_id,
+      mnozstvi: row.mnozstvi,
+      nazev: info?.nazev?.trim() || row.skladova_polozka_id,
+      pozice: info?.pozice ?? null,
+      okruhNazev: blok?.nazev?.trim() || "Bez okruhu",
+      okruhPoradi: blok?.poradi ?? 999999,
+      kategorieNazev: kategorie?.nazev?.trim() || "—",
+      podkategorieNazev: podkategorie?.nazev?.trim() || "—",
+    };
+  }) as TechnikaSummaryRow[];
 
   const planRows = (technikaSummaryRaw ?? []) as LoadingPlanRow[];
 
@@ -687,21 +750,14 @@ export default async function ZakazkaDetailPage({ params }: PageProps) {
   );
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4">
+    <div className="w-full">
       <ZakazkaHeaderCard zakazkaId={id} data={data} cancelAction={cancelZakazka} />
 
       <ZakazkaScheduleCard data={data} action={updateZakazkaSchedule} />
 
       <ZakazkaBasicLookCard realizace={(realizace ?? []) as RealizaceRow[]} data={data} />
 
-      <ZakazkaTemplatesCard
-        templates={(templates ?? []) as TemplateRow[]}
-        zakazkaTemplates={(zakazkaTemplates ?? []) as ZakazkaTemplateRow[]}
-        technikaSummary={technikaSummary}
-        addTemplateAction={addTemplate}
-        changeTemplateQuantityAction={changeTemplateQuantity}
-        removeTemplateAction={removeTemplate}
-      />
+      <PlanTechnikyCard items={technikaSummary} />
 
       <LoadingStatusCard groups={loadingStatusGroups} />
 

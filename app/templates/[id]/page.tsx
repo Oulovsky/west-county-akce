@@ -265,8 +265,17 @@ export default async function TemplateDetailPage({ params }: PageProps) {
     <div className="mx-auto w-full max-w-6xl px-4">
       <PageHeader
         title={`Sestava – ${template.name}`}
-        description="Skládání sestavy ze skladových položek."
+        description="Legacy detail staré sestavy. Nový zakázkový workflow používá Setupy skladu."
       />
+
+      <Card className="mb-6 border-amber-900/60 bg-amber-950/30">
+        <div className="flex flex-wrap items-center gap-3">
+          <Badge variant="warning">Legacy</Badge>
+          <div className="text-sm text-amber-100">
+            Úpravy zde už neřídí plán nové zakázky. Aktivní knihovna sestav je ve skladu jako `/sklad/setupy`.
+          </div>
+        </div>
+      </Card>
 
       <Card className="mb-6">
         <div className="flex flex-col gap-4">

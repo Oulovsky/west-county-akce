@@ -152,7 +152,7 @@ export default async function NakladkaPage({ params }: PageProps) {
 
   if (!perms.nakladkaCteni) {
     return (
-      <div className="mx-auto w-full max-w-5xl px-4">
+      <div className="w-full">
         <Card className="border-red-900/50 bg-red-950/30">
           <div className="flex items-center gap-3">
             <Badge variant="danger">Bez oprávnění</Badge>
@@ -390,7 +390,7 @@ export default async function NakladkaPage({ params }: PageProps) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4">
+    <div className="w-full">
       <PageHeader
         title="Nakládka"
         description={

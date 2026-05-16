@@ -176,11 +176,11 @@ export default function TechnikaClient({
     <div className="space-y-6">
       <Card>
         <div className="grid gap-3 md:grid-cols-5">
-          <StatBox label="PlĂˇnovĂˇno na zakĂˇzce" value={`${celkemPlan} ks`} />
-          <StatBox label="SkuteÄŤnÄ› na zakĂˇzce" value={`${celkemReal} ks`} />
-          <StatBox label="PoĹˇkozenĂ© kusy" value={`${celkemPoskozeno} ks`} />
-          <StatBox label="PoÄŤet poloĹľek" value={pocetPolozek} />
-          <StatBox label="AktivnĂ­ poloĹľky" value={aktivnichPolozek} />
+          <StatBox label="Plánováno na zakázce" value={`${celkemPlan} ks`} />
+          <StatBox label="Skutečně na zakázce" value={`${celkemReal} ks`} />
+          <StatBox label="Poškozené kusy" value={`${celkemPoskozeno} ks`} />
+          <StatBox label="Počet položek" value={pocetPolozek} />
+          <StatBox label="Aktivní položky" value={aktivnichPolozek} />
         </div>
       </Card>
 
@@ -197,27 +197,27 @@ export default function TechnikaClient({
                   <div className="text-2xl font-bold text-white">{radek.nazev}</div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="default">PlĂˇn: {radek.na_zakazce} ks</Badge>
-                    <Badge variant="success">SkuteÄŤnÄ›: {radek.skutecne_na_zakazce} ks</Badge>
+                    <Badge variant="default">Plán: {radek.na_zakazce} ks</Badge>
+                    <Badge variant="success">Skutečně: {radek.skutecne_na_zakazce} ks</Badge>
 
                     {rozdil === 0 ? (
-                      <Badge variant="success">SedĂ­ s realitou</Badge>
+                      <Badge variant="success">Sedí s realitou</Badge>
                     ) : rozdil > 0 ? (
-                      <Badge variant="warning">NavĂ­c na akci: +{rozdil} ks</Badge>
+                      <Badge variant="warning">Navíc na akci: +{rozdil} ks</Badge>
                     ) : (
-                      <Badge variant="danger">ChybĂ­ proti plĂˇnu: {Math.abs(rozdil)} ks</Badge>
+                      <Badge variant="danger">Chybí proti plánu: {Math.abs(rozdil)} ks</Badge>
                     )}
 
                     {radek.rezervovano_jinde > 0 ? (
                       <Badge variant="warning">
-                        RezervovĂˇno jinde: {radek.rezervovano_jinde} ks
+                        Rezervováno jinde: {radek.rezervovano_jinde} ks
                       </Badge>
                     ) : (
                       <Badge variant="success">Bez kolize skladu</Badge>
                     )}
 
                     {radek.poskozene > 0 ? (
-                      <Badge variant="danger">PoĹˇkozenĂ©: {radek.poskozene} ks</Badge>
+                      <Badge variant="danger">Poškozené: {radek.poskozene} ks</Badge>
                     ) : null}
                   </div>
                 </div>
@@ -225,10 +225,10 @@ export default function TechnikaClient({
                 {!canEdit ? (
                   <div className="grid min-w-[180px] gap-2">
                     <div className="rounded-xl border border-slate-700 bg-slate-900/50 px-4 py-3 text-center text-lg font-bold text-white">
-                      PlĂˇn: {radek.na_zakazce} ks
+                      Plán: {radek.na_zakazce} ks
                     </div>
                     <div className="rounded-xl border border-emerald-700/50 bg-emerald-950/30 px-4 py-3 text-center text-lg font-bold text-emerald-100">
-                      ReĂˇl: {radek.skutecne_na_zakazce} ks
+                      Reál: {radek.skutecne_na_zakazce} ks
                     </div>
                   </div>
                 ) : null}
@@ -236,11 +236,11 @@ export default function TechnikaClient({
 
               <div className="grid gap-3 md:grid-cols-6">
                 <StatBox label="Sklad celkem" value={`${radek.sklad_celkem} ks`} />
-                <StatBox label="PoĹˇkozenĂ©" value={`${radek.poskozene} ks`} />
-                <StatBox label="RezervovĂˇno jinde" value={`${radek.rezervovano_jinde} ks`} />
+                <StatBox label="Poškozené" value={`${radek.poskozene} ks`} />
+                <StatBox label="Rezervováno jinde" value={`${radek.rezervovano_jinde} ks`} />
                 <StatBox label="K dispozici" value={`${radek.k_dispozici} ks`} />
-                <StatBox label="Maximum pro zakĂˇzku" value={`${radek.max_na_teto_zakazce} ks`} />
-                <StatBox label="ReĂˇlnĂ˝ stav" value={`${radek.skutecne_na_zakazce} ks`} />
+                <StatBox label="Maximum pro zakázku" value={`${radek.max_na_teto_zakazce} ks`} />
+                <StatBox label="Reálný stav" value={`${radek.skutecne_na_zakazce} ks`} />
               </div>
 
               {canEdit ? (
@@ -263,10 +263,10 @@ export default function TechnikaClient({
 
                   <div className="grid min-w-[150px] gap-2">
                     <div className="rounded-xl border border-slate-700 bg-slate-900/50 px-4 py-3 text-center text-2xl font-bold text-white">
-                      PlĂˇn: {radek.na_zakazce} ks
+                      Plán: {radek.na_zakazce} ks
                     </div>
                     <div className="rounded-xl border border-emerald-700/50 bg-emerald-950/30 px-4 py-3 text-center text-lg font-bold text-emerald-100">
-                      ReĂˇl: {radek.skutecne_na_zakazce} ks
+                      Reál: {radek.skutecne_na_zakazce} ks
                     </div>
                   </div>
 

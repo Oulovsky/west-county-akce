@@ -170,6 +170,19 @@ export default async function SetupDetailPage({ params }: PageProps) {
 
       <h1 style={{ fontSize: 24, marginBottom: 8 }}>{first.setup_nazev}</h1>
 
+      <div
+        style={{
+          marginBottom: 20,
+          padding: 12,
+          border: "1px solid #8a6d1d",
+          borderRadius: 8,
+          background: "#2a2208",
+          color: "#fff",
+        }}
+      >
+        Legacy/starý systém. Aktivní skladové setupy pro nové zakázky jsou na /sklad/setupy.
+      </div>
+
       <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 20 }}>
         stav: {first.setup_aktivni ? "aktivní" : "neaktivní"}
       </div>

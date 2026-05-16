@@ -28,6 +28,19 @@ export default async function SetupyPage() {
     <div style={{ padding: 20 }}>
       <h1 style={{ fontSize: 24, marginBottom: 20 }}>Setupy</h1>
 
+      <div
+        style={{
+          marginBottom: 20,
+          padding: 12,
+          border: "1px solid #8a6d1d",
+          borderRadius: 8,
+          background: "#2a2208",
+          color: "#fff",
+        }}
+      >
+        Legacy/starý systém. Aktivní skladové setupy pro nové zakázky jsou na /sklad/setupy.
+      </div>
+
       {setupy.length === 0 ? (
         <div>Žádné setupy</div>
       ) : (

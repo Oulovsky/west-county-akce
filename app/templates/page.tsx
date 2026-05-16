@@ -60,8 +60,17 @@ export default async function TemplatesPage() {
     <div className="mx-auto w-full max-w-6xl px-4">
       <PageHeader
         title="Sestavy"
-        description="Správa sestav složených ze skladových položek."
+        description="Legacy správa starých sestav. Nový zakázkový workflow používá Setupy skladu."
       />
+
+      <Card className="mb-6 border-amber-900/60 bg-amber-950/30">
+        <div className="flex flex-wrap items-center gap-3">
+          <Badge variant="warning">Legacy</Badge>
+          <div className="text-sm text-amber-100">
+            Tento starý systém templates už není aktivní zdroj plánu zakázky. Pro nové plánování používej `/sklad/setupy`.
+          </div>
+        </div>
+      </Card>
 
       <Card className="mb-6">
         <form action={createTemplate} className="flex flex-col gap-4 md:flex-row">
