@@ -178,9 +178,11 @@ export default async function EditZakazkyPage({ params }: PageProps) {
         misto_gps_radius_m: mistoGpsRadius,
         misto_gps_presnost_m: mistoGpsPresnost,
         misto_gps_zdroj:
-          mistoGpsZdrojRaw || (mistoLat != null && mistoLng != null ? "manual" : null),
+          mistoLat != null && mistoLng != null ? mistoGpsZdrojRaw || "manual" : null,
         misto_gps_updated_at:
-          mistoGpsUpdatedAtRaw || (mistoLat != null && mistoLng != null ? new Date().toISOString() : null),
+          mistoLat != null && mistoLng != null
+            ? mistoGpsUpdatedAtRaw || new Date().toISOString()
+            : null,
         typ_obsluhy: typObsluhy,
         odjezd_ze_skladu: odjezdZeSkladu,
         sraz_na_miste: srazNaMiste,

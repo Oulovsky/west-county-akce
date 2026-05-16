@@ -1002,9 +1002,12 @@ export default function NovaZakazkaPage() {
           misto_lng: mistoLng,
           misto_gps_radius_m: mistoGpsRadius,
           misto_gps_presnost_m: mistoGpsPresnost,
-          misto_gps_zdroj: mistoGps.source || (mistoLat != null && mistoLng != null ? "manual" : null),
+          misto_gps_zdroj:
+            mistoLat != null && mistoLng != null ? mistoGps.source || "manual" : null,
           misto_gps_updated_at:
-            mistoGps.updatedAt || (mistoLat != null && mistoLng != null ? new Date().toISOString() : null),
+            mistoLat != null && mistoLng != null
+              ? mistoGps.updatedAt || new Date().toISOString()
+              : null,
           typ_obsluhy: typObsluhy,
 
           odjezd_ze_skladu: odjezdZeSkladu,
@@ -1227,7 +1230,7 @@ export default function NovaZakazkaPage() {
             />
           </Field>
 
-          <GpsLocationFields onChange={setMistoGps} />
+          <GpsLocationFields placeText={misto} onChange={setMistoGps} />
 
           <Field label="Typ obsluhy">
             <select

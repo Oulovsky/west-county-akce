@@ -1,4 +1,5 @@
 import "./globals.css";
+import "leaflet/dist/leaflet.css";
 import AuthGate from "@/app/AuthGate";
 import SidebarNav from "./SidebarNav";
 
