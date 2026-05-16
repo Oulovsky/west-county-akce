@@ -958,10 +958,10 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
 
       <div className="mt-5">
         <Link
-          href={`/zakazky/${id}/nakladka`}
+          href={`/zakazky/${id}/scan`}
           className="inline-flex rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
         >
-          Zpět na nakládku
+          Zpět na scan
         </Link>
       </div>
     </div>

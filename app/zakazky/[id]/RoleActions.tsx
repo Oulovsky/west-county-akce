@@ -46,7 +46,7 @@ export default async function RoleActions({ zakazkaId }: Props) {
       )}
 
       {perms.nakladkaCteni && (
-        <Link href={`/zakazky/${zakazkaId}/nakladka`}>
+        <Link href={`/zakazky/${zakazkaId}/scan`}>
           <button style={{
             backgroundColor: "#16a34a",
             color: "white",

@@ -79,6 +79,13 @@ type LoadingKusRow = {
   skladova_polozka_id: string;
 };
 
+type LoadingKusHistoryRow = {
+  kus_id: string;
+  typ_akce: string | null;
+  poznamka: string | null;
+  created_at: string | null;
+};
+
 type LoadingPolozkaRow = {
   skladova_polozka_id: string;
   nazev: string | null;
@@ -137,12 +144,64 @@ function formatPosition(value: number | string | null | undefined) {
   return text || "—";
 }
 
+// TODO: Dočasné řešení bez DB změny. Náhrady se teď párují podle názvu
+// plánované položky ze sklad_kus_historie.poznamka. Dlouhodobě má
+// zakazka_kusy nést explicitní planned_skladova_polozka_id /
+// splnuje_skladova_polozka_id, aby se náhrady počítaly spolehlivě bez
+// parsování textu.
+function extractReplacementPlannedItemName(note: string | null | undefined) {
+  const text = note ?? "";
+  const marker = "Náhrada za plánovanou položku:";
+  const index = text.indexOf(marker);
+  if (index < 0) return null;
+
+  const afterMarker = text.slice(index + marker.length).trim();
+  const damageMarker = " Naložen poškozený/blokovaný kus:";
+  return afterMarker.split(damageMarker)[0]?.trim() || null;
+}
+
+function buildReplacementPolozkaByKus(
+  historyRows: LoadingKusHistoryRow[],
+  planRows: LoadingPlanRow[],
+  polozky: LoadingPolozkaRow[]
+) {
+  const plannedIds = new Set(planRows.map((row) => row.skladova_polozka_id).filter(Boolean));
+  const plannedNameToId = new Map<string, string | null>();
+
+  for (const polozka of polozky) {
+    if (!plannedIds.has(polozka.skladova_polozka_id)) continue;
+
+    const name = polozka.nazev?.trim();
+    if (!name) continue;
+
+    if (plannedNameToId.has(name)) {
+      plannedNameToId.set(name, null);
+    } else {
+      plannedNameToId.set(name, polozka.skladova_polozka_id);
+    }
+  }
+
+  const replacementByKus = new Map<string, string>();
+  for (const row of historyRows) {
+    if (replacementByKus.has(row.kus_id)) continue;
+
+    const plannedName = extractReplacementPlannedItemName(row.poznamka);
+    if (!plannedName) continue;
+
+    const plannedId = plannedNameToId.get(plannedName);
+    if (plannedId) replacementByKus.set(row.kus_id, plannedId);
+  }
+
+  return replacementByKus;
+}
+
 function buildLoadingStatusGroups(
   planRows: LoadingPlanRow[],
   assignments: LoadingKusAssignmentRow[],
   kusRows: LoadingKusRow[],
   polozky: LoadingPolozkaRow[],
-  bloky: LoadingBlokRow[]
+  bloky: LoadingBlokRow[],
+  replacementPolozkaByKus: Map<string, string>
 ): LoadingStatusGroup[] {
   const planByPolozka = new Map<string, number>();
   for (const row of planRows) {
@@ -160,7 +219,7 @@ function buildLoadingStatusGroups(
   >();
 
   for (const assignment of assignments) {
-    const polozkaId = kusToPolozka.get(assignment.kus_id);
+    const polozkaId = replacementPolozkaByKus.get(assignment.kus_id) ?? kusToPolozka.get(assignment.kus_id);
     if (!polozkaId) continue;
 
     const counts = countsByPolozka.get(polozkaId) ?? {
@@ -702,6 +761,23 @@ export default async function ZakazkaDetailPage({ params }: PageProps) {
     loadingKusy = (kusyRaw ?? []) as LoadingKusRow[];
   }
 
+  let loadingKusHistory: LoadingKusHistoryRow[] = [];
+  if (assignmentKusIds.length > 0) {
+    const { data: historyRaw, error: historyError } = await supabase
+      .from("sklad_kus_historie")
+      .select("kus_id, typ_akce, poznamka, created_at")
+      .eq("zakazka_id", id)
+      .eq("typ_akce", "nalozeno")
+      .in("kus_id", assignmentKusIds)
+      .order("created_at", { ascending: false });
+
+    if (historyError) {
+      return <div>Chyba historie náhrad: {historyError.message}</div>;
+    }
+
+    loadingKusHistory = (historyRaw ?? []) as LoadingKusHistoryRow[];
+  }
+
   const loadingPolozkaIds = [
     ...new Set([
       ...planRows.map((row) => row.skladova_polozka_id).filter(Boolean),
@@ -741,12 +817,19 @@ export default async function ZakazkaDetailPage({ params }: PageProps) {
     loadingBloky = (blokyRaw ?? []) as LoadingBlokRow[];
   }
 
+  const replacementPolozkaByKus = buildReplacementPolozkaByKus(
+    loadingKusHistory,
+    planRows,
+    loadingPolozky
+  );
+
   const loadingStatusGroups = buildLoadingStatusGroups(
     planRows,
     loadingAssignments,
     loadingKusy,
     loadingPolozky,
-    loadingBloky
+    loadingBloky,
+    replacementPolozkaByKus
   );
 
   return (
