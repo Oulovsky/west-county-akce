@@ -7,14 +7,14 @@ export const SKLAD_EMPTY_LABEL_EM = "—" as const;
 export const SKLAD_DEFAULT_JEDNOTKA = "ks" as const;
 
 /** Sloupec v přehledu správy — po načtení přepočítáno z technika_na_zakazce + zakazky (viz spravaNaZakazkach). */
-export const SKLAD_SPRAVA_LABEL_NA_ZAKAZKACH = "Na zakázkách" as const;
+export const SKLAD_SPRAVA_LABEL_NA_ZAKAZKACH = "Plánováno na zakázkách" as const;
 
 /**
  * Zapojené zakázky: nezrušené a s koncem plánu v minulosti nezahrnuté
  * (stejně jako záložka „Zakázky“ v /zakazky oproti archivu).
  */
 export const SKLAD_SPRAVA_HINT_NA_ZAKAZKACH =
-  "Součet plánované techniky na probíhajících a nadcházejících zakázkách (ne zrušených; zakázky po datu konce se nezapočítávají). Hodnota z RPC se přepočítá v prohlížeči." as const;
+  "Součet plánovaného množství na aktivních zakázkách. Fyzicky naložené kusy se řeší přes scan." as const;
 
 export const SKLAD_DEFAULT_PRIORITA = "stredni" as const;
 

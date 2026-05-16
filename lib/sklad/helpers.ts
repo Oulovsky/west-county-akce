@@ -273,7 +273,7 @@ export function formatSkladKusDuplicatePoradiMessage(poradi: number): string {
 
 const SKLAD_KUS_STAV_LABELS: Record<string, string> = {
   skladem: "Skladem",
-  na_akci: "Na akci",
+  na_akci: "Na akci / legacy stav",
   poskozeno: "Poškozeno",
   odpis: "Odpis",
 };

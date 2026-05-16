@@ -158,7 +158,7 @@ export default async function SkladKusDetailPage({ params }: PageProps) {
             tone="blue"
           />
           <DetailCard label="Pozice skladu" value={pozice} tone="emerald" />
-          <DetailCard label="Aktuální stav" value={stav} tone="amber" />
+          <DetailCard label="Stav kusu" value={stav} tone="amber" />
           <DetailCard label="Kategorie" value={row.kategorie_nazev ?? "—"} />
         </div>
       </section>
@@ -188,6 +188,9 @@ export default async function SkladKusDetailPage({ params }: PageProps) {
         <h2 className="text-xl font-black tracking-tight text-white">
           Aktuální zakázka
         </h2>
+        <p className="mt-1 text-sm text-slate-400">
+          Fyzické přiřazení kusu k zakázce určuje scan workflow přes zakazka_kusy.
+        </p>
         {assignment ? (
           <div className="mt-4 grid gap-3 text-sm text-slate-200">
             <div className="rounded-2xl border border-blue-800 bg-blue-950/50 p-4 text-sm font-semibold text-blue-100">

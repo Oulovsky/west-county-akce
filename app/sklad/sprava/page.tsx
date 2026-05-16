@@ -290,7 +290,7 @@ export default function Page() {
           parts.push(`Blokující poškození: ${blokujiciErr.message}`);
         }
         alert(
-          `${parts.join(" ")}\n\nSloupce „Na zakázkách“ a „Skladem“ zůstávají u části dat ze serveru.`
+          `${parts.join(" ")}\n\nSloupce „Plánováno na zakázkách“ a „Skladem“ zůstávají u části dat ze serveru.`
         );
       }
       setItems(mergedItems);
