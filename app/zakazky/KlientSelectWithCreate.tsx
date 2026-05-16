@@ -25,6 +25,23 @@ type KlientFormState = {
   poznamka: string;
 };
 
+type AresSidlo = {
+  nazevUlice?: unknown;
+  cisloDomovni?: unknown;
+  cisloOrientacni?: unknown;
+  nazevObce?: unknown;
+  nazevCastiObce?: unknown;
+  textovaAdresa?: unknown;
+  psc?: unknown;
+};
+
+type AresSubject = {
+  ico?: unknown;
+  obchodniJmeno?: unknown;
+  dic?: unknown;
+  sidlo?: AresSidlo;
+};
+
 type Props = {
   clients: KlientOption[];
   selectedId?: string;
@@ -51,6 +68,40 @@ function toNullable(value: string) {
   return trimmed || null;
 }
 
+function getString(value: unknown) {
+  return typeof value === "string" || typeof value === "number" ? String(value).trim() : "";
+}
+
+function formatAddressNumber(address?: AresSidlo) {
+  const houseNumber = getString(address?.cisloDomovni);
+  const orientationNumber = getString(address?.cisloOrientacni);
+  return [houseNumber, orientationNumber].filter(Boolean).join("/");
+}
+
+function getStreetFromTextAddress(address?: AresSidlo) {
+  const textAddress = getString(address?.textovaAdresa);
+  if (!textAddress) return "";
+
+  const firstPart = textAddress.split(",")[0]?.trim() ?? "";
+  return /\d/.test(firstPart) ? firstPart : "";
+}
+
+function formatStreet(address?: AresSidlo) {
+  const streetName =
+    getString(address?.nazevUlice) || getString(address?.nazevCastiObce);
+  const numberPart = formatAddressNumber(address);
+
+  if (!streetName) {
+    return getStreetFromTextAddress(address);
+  }
+
+  return [streetName, numberPart].filter(Boolean).join(" ");
+}
+
+function normalizePsc(value: unknown) {
+  return getString(value).replace(/\s+/g, "");
+}
+
 export function KlientSelectWithCreate({
   clients,
   selectedId,
@@ -62,6 +113,7 @@ export function KlientSelectWithCreate({
   const [localSelectedId, setLocalSelectedId] = useState(defaultSelectedId ?? "");
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [aresLoading, setAresLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<KlientFormState>(emptyForm);
   const [createdClients, setCreatedClients] = useState<KlientOption[]>([]);
@@ -82,6 +134,53 @@ export function KlientSelectWithCreate({
 
   function updateForm(field: keyof KlientFormState, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function loadFromAres() {
+    const ico = form.ico.replace(/\D/g, "");
+    if (!/^\d{8}$/.test(ico)) {
+      setError("IČO musí mít přesně 8 číslic.");
+      return;
+    }
+
+    setAresLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `https://ares.gov.cz/ekonomicke-subjekty-v-be/rest/ekonomicke-subjekty/${ico}`,
+        { headers: { Accept: "application/json" } }
+      );
+
+      if (response.status === 404) {
+        setError("ARES nenašel subjekt pro zadané IČO.");
+        return;
+      }
+
+      if (!response.ok) {
+        setError("ARES je momentálně nedostupný. Klienta můžeš vyplnit ručně.");
+        return;
+      }
+
+      const subject = (await response.json()) as AresSubject;
+      const street = formatStreet(subject.sidlo);
+      const city = getString(subject.sidlo?.nazevObce) || getString(subject.sidlo?.nazevCastiObce);
+      const psc = normalizePsc(subject.sidlo?.psc);
+
+      setForm((current) => ({
+        ...current,
+        nazev: getString(subject.obchodniJmeno) || current.nazev,
+        ico: getString(subject.ico) || ico,
+        dic: getString(subject.dic) || current.dic,
+        ulice: street || current.ulice,
+        mesto: city || current.mesto,
+        psc: psc || current.psc,
+      }));
+    } catch {
+      setError("ARES je momentálně nedostupný. Klienta můžeš vyplnit ručně.");
+    } finally {
+      setAresLoading(false);
+    }
   }
 
   async function createClient() {
@@ -190,7 +289,22 @@ export function KlientSelectWithCreate({
                 </Field>
 
                 <Field label="IČO">
-                  <Input value={form.ico} onChange={(event) => updateForm("ico", event.target.value)} />
+                  <div className="flex gap-2">
+                    <Input
+                      value={form.ico}
+                      onChange={(event) => updateForm("ico", event.target.value)}
+                      placeholder="8 číslic"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => void loadFromAres()}
+                      disabled={aresLoading}
+                      className="mt-2 whitespace-nowrap"
+                    >
+                      {aresLoading ? "Načítám..." : "Načíst z ARES"}
+                    </Button>
+                  </div>
                 </Field>
 
                 <Field label="DIČ">
