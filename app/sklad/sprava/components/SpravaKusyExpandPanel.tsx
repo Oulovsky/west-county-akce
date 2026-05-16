@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { KusQrActionMenu } from "@/components/sklad/KusQrActionMenu";
 import {
   SKLAD_EMPTY_LABEL,
@@ -19,7 +20,16 @@ import {
 } from "@/lib/sklad/helpers";
 import { querySkladPolozkyKusyForPolozka } from "@/lib/sklad/queries";
 import { buildSkladKusEvidencniCislo } from "@/lib/sklad/syncPolozkaKusy";
-import type { SkladKusRow, SkladPolozkaRow } from "@/lib/sklad/types";
+import type {
+  SkladKusRow,
+  SkladKusZakazkaAssignmentRow,
+  SkladPolozkaRow,
+} from "@/lib/sklad/types";
+import {
+  formatZakazkaKusStav,
+  formatZakazkaKusZakazkaLabel,
+  queryAktivniZakazkyKusu,
+} from "@/lib/sklad/zakazkaKusy";
 import { supabase } from "@/lib/supabase";
 import { formatMoney } from "./formatMoney";
 import { formatNumber } from "./formatNumber";
@@ -91,12 +101,14 @@ function SpravaExpandKusRow({
   polozkaNazev,
   siblingKusy,
   inherited,
+  assignment,
   onUpdated,
 }: {
   kus: SkladKusRow;
   polozkaNazev: string;
   siblingKusy: SkladKusRow[];
   inherited: SpravaKusyInheritedColumns;
+  assignment: SkladKusZakazkaAssignmentRow | null;
   onUpdated: () => Promise<void>;
 }) {
   const [poradiDraft, setPoradiDraft] = useState(() => String(kus.poradove_cislo));
@@ -161,8 +173,12 @@ function SpravaExpandKusRow({
   const labelTitle = `${label} · ${stavHint}`;
 
   const skladem = kusSklademCell(kus);
-  const naZakazkach = kusNaZakazkachCell(kus);
+  const naZakazkach = assignment ? 1 : kusNaZakazkachCell(kus);
   const poskozene = kusPoskozeneCell(kus);
+  const assignmentLabel = formatZakazkaKusZakazkaLabel(assignment);
+  const assignmentTitle = assignment
+    ? `${assignmentLabel} · ${formatZakazkaKusStav(assignment.stav)}`
+    : "Kus není přiřazen k aktivní zakázce.";
 
   return (
     <li className={kus.aktivni ? "" : "opacity-60"}>
@@ -196,6 +212,13 @@ function SpravaExpandKusRow({
             </span>
             <KusQrActionMenu
               kusId={kus.kus_id}
+              label={{
+                kusId: kus.kus_id,
+                itemName: polozkaNazev,
+                poradoveCislo: kus.poradove_cislo,
+                position: inherited.pozice,
+                sector: inherited.blok_nazev,
+              }}
               triggerClassName={SPRAVA_QR_TRIGGER}
               iconClassName="h-[18px] w-[18px]"
               menuVariant="sprava"
@@ -260,7 +283,12 @@ function SpravaExpandKusRow({
           className="flex min-h-8 items-center justify-center px-1 pt-0.5 text-center"
           title={SKLAD_SPRAVA_HINT_NA_ZAKAZKACH}
         >
-          <span style={tableMutedBoxRight}>{formatNumber(naZakazkach)}</span>
+          <span
+            style={assignment ? tableValueBoxRight : tableMutedBoxRight}
+            title={assignmentTitle}
+          >
+            {formatNumber(naZakazkach)}
+          </span>
         </div>
 
         <div className="flex min-h-8 items-center justify-center px-1 pt-0.5 text-center">
@@ -290,9 +318,19 @@ function SpravaExpandKusRow({
         </div>
 
         <div className="flex min-h-8 items-center justify-center px-1 pt-0.5">
-          <span style={tableMutedBoxRight} className="text-[11px]">
-            {SKLAD_EMPTY_LABEL_EM}
-          </span>
+          {assignment ? (
+            <Link
+              href={`/zakazky/${assignment.zakazka_id}`}
+              className="flex h-8 w-full min-w-0 items-center justify-center truncate rounded-md border border-blue-700 bg-blue-950 px-1.5 text-[10px] font-semibold text-blue-100"
+              title={assignmentTitle}
+            >
+              {assignmentLabel}
+            </Link>
+          ) : (
+            <span style={tableMutedBoxRight} className="text-[11px]">
+              {SKLAD_EMPTY_LABEL_EM}
+            </span>
+          )}
         </div>
       </div>
     </li>
@@ -308,6 +346,9 @@ export function SpravaKusyExpandPanel({
 }: Props) {
   const celkem = toNumber(celkemKDispozici);
   const [kusy, setKusy] = useState<SkladKusRow[] | null>(null);
+  const [assignmentsByKusId, setAssignmentsByKusId] = useState<
+    Record<string, SkladKusZakazkaAssignmentRow>
+  >({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -334,6 +375,42 @@ export function SpravaKusyExpandPanel({
   useEffect(() => {
     void fetchKusy();
   }, [fetchKusy, reloadToken]);
+
+  useEffect(() => {
+    if (!kusy || kusy.length === 0) {
+      setAssignmentsByKusId({});
+      return;
+    }
+
+    let alive = true;
+    const currentKusy = kusy;
+
+    async function loadAssignments() {
+      const { data, error: assignmentError } = await queryAktivniZakazkyKusu(
+        supabase,
+        currentKusy.map((kus) => kus.kus_id)
+      );
+
+      if (!alive) return;
+
+      if (assignmentError) {
+        setAssignmentsByKusId({});
+        return;
+      }
+
+      const next: Record<string, SkladKusZakazkaAssignmentRow> = {};
+      for (const row of (data ?? []) as SkladKusZakazkaAssignmentRow[]) {
+        if (!next[row.kus_id]) next[row.kus_id] = row;
+      }
+      setAssignmentsByKusId(next);
+    }
+
+    void loadAssignments();
+
+    return () => {
+      alive = false;
+    };
+  }, [kusy]);
 
   const refreshAfterPoradi = useCallback(async () => {
     const { data, error: fetchError } = await querySkladPolozkyKusyForPolozka(
@@ -383,6 +460,7 @@ export function SpravaKusyExpandPanel({
                   polozkaNazev={polozkaNazev}
                   siblingKusy={kusy}
                   inherited={inherited}
+                  assignment={assignmentsByKusId[kus.kus_id] ?? null}
                   onUpdated={refreshAfterPoradi}
                 />
               ))}

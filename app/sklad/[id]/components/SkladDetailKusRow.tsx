@@ -56,6 +56,12 @@ export function SkladDetailKusRow({
 
         <KusQrActionMenu
           kusId={kus.kus_id}
+          label={{
+            kusId: kus.kus_id,
+            itemName: row.nazev,
+            poradoveCislo: kus.poradove_cislo,
+            position: row.pozice,
+          }}
           triggerClassName={QR_DETAIL_TRIGGER}
           iconClassName="h-[26px] w-[26px]"
         />

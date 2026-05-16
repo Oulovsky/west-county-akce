@@ -54,6 +54,54 @@ export type SkladKusRow = {
   aktivni: boolean;
 };
 
+export type ZakazkaKusStav =
+  | "rezervovano"
+  | "nalozeno"
+  | "vratit"
+  | "vraceno"
+  | "poskozeno";
+
+export type ZakazkaKusRow = {
+  id: string;
+  zakazka_id: string;
+  kus_id: string;
+  stav: ZakazkaKusStav;
+  is_rezerva?: boolean | null;
+  created_at: string;
+};
+
+export type SkladKusZakazkaAssignmentRow = ZakazkaKusRow & {
+  zakazka: {
+    zakazka_id: string;
+    cislo_zakazky: string | null;
+    nazev: string | null;
+    datum_od: string | null;
+    datum_do: string | null;
+  } | null;
+};
+
+export type SkladKusHistorieTypAkce =
+  | "rezervovano"
+  | "nalozeno"
+  | "vraceno"
+  | "poskozeno"
+  | "blokovano"
+  | "odblokovano";
+
+export type SkladKusHistorieRow = {
+  historie_id: string;
+  kus_id: string;
+  zakazka_id: string | null;
+  typ_akce: SkladKusHistorieTypAkce;
+  poznamka: string | null;
+  created_at: string;
+  zakazka: {
+    zakazka_id: string;
+    cislo_zakazky: string | null;
+    nazev: string | null;
+  } | null;
+};
+
 /** Hlášení poškození — detail, okruh, centrální přehled. */
 export type SkladPoskozeniRow = {
   poskozeni_id: string;
@@ -227,6 +275,17 @@ export type SkladZakazkaOption = {
   nazev: string;
   datum_od?: string | null;
   datum_do?: string | null;
+};
+
+export type SkladZakazkaAssignmentOption = {
+  zakazka_id: string;
+  cislo_zakazky: string | null;
+  nazev: string | null;
+  datum_od: string | null;
+  datum_do: string | null;
+  cas_od?: string | null;
+  cas_do?: string | null;
+  zrusena?: boolean | null;
 };
 
 /** Souhrn poškození položky v okruhu. */

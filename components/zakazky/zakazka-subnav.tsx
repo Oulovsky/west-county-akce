@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
-type ZakazkaSubnavTab = "detail" | "technika" | "nakladka" | "historie" | "people";
+type ZakazkaSubnavTab =
+  | "detail"
+  | "technika"
+  | "nakladka"
+  | "historie"
+  | "people";
 
 export function ZakazkaSubnav({
   zakazkaId,
@@ -30,7 +35,7 @@ export function ZakazkaSubnav({
     {
       key: "nakladka",
       label: "Nakládka",
-      href: `/zakazky/${zakazkaId}/nakladka`,
+      href: `/zakazky/${zakazkaId}/scan`,
     },
     {
       key: "historie",

@@ -59,6 +59,7 @@ export const SKLAD_RPC = {
 
 export const SKLAD_TABLE = {
   hlaseniPoskozeni: "hlaseni_poskozeni",
+  skladKusHistorie: "sklad_kus_historie",
   skladPolozkyKusy: "sklad_polozky_kusy",
   skladovePolozky: "skladove_polozky",
   skladBloky: "sklad_bloky",
@@ -68,6 +69,7 @@ export const SKLAD_TABLE = {
   typyPoskozeni: "typy_poskozeni",
   priorityPoskozeni: "priority_poskozeni",
   technikaNaZakazce: "technika_na_zakazce",
+  zakazkaKusy: "zakazka_kusy",
   zakazky: "zakazky",
 } as const;
 
