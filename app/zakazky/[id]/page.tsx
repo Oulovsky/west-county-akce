@@ -1,5 +1,7 @@
 ﻿import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { createHash, randomBytes } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import PeoplePool from "./PeoplePool";
 import { combineDateAndTime } from "./helpers";
@@ -12,6 +14,7 @@ import { Card } from "@/components/ui/card";
 
 type PageProps = {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ dotaznik_token?: string }>;
 };
 
 type TechnikaSummaryRow = {
@@ -120,6 +123,26 @@ type LoadingStatusGroup = {
   totals: Omit<LoadingStatusItem, "skladova_polozka_id" | "nazev" | "pozice">;
 };
 
+type ClientVerificationLinkRow = {
+  link_id: string;
+  stav: string | null;
+  email_sent_at: string | null;
+  opened_at: string | null;
+  last_opened_at: string | null;
+  open_count: number | null;
+  created_at: string | null;
+};
+
+type ClientVerificationDotaznikRow = {
+  dotaznik_id: string;
+  stav: string | null;
+  link_id: string | null;
+  pozadovan_vyjezd_technika: boolean | null;
+  rizika: unknown;
+  submitted_at: string | null;
+  updated_at: string | null;
+};
+
 function getSkladovaPolozkaInfo(
   value: TechnikaSummaryRawRow["skladove_polozky"]
 ) {
@@ -162,6 +185,47 @@ function getLoadingStatusLabel({
 function formatPosition(value: number | string | null | undefined) {
   const text = String(value ?? "").trim();
   return text || "—";
+}
+
+function hashClientQuestionnaireToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function createClientQuestionnaireToken() {
+  return randomBytes(32).toString("base64url");
+}
+
+function getClientQuestionnaireBaseUrl(headersList: Headers) {
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, "");
+  if (configured) return configured;
+
+  const host = headersList.get("x-forwarded-host") ?? headersList.get("host");
+  if (!host) return "";
+
+  const proto = headersList.get("x-forwarded-proto") ?? "http";
+  return `${proto}://${host}`;
+}
+
+function getClientVerificationStatus({
+  link,
+  dotaznik,
+}: {
+  link: ClientVerificationLinkRow | null;
+  dotaznik: ClientVerificationDotaznikRow | null;
+}) {
+  const risks = Array.isArray(dotaznik?.rizika) ? dotaznik.rizika : [];
+
+  if (risks.length > 0) return "Rizikové odpovědi";
+  if (dotaznik?.stav === "pozadovan_vyjezd_technika" || dotaznik?.pozadovan_vyjezd_technika) {
+    return "Požadován výjezd technika";
+  }
+  if (dotaznik?.stav === "vyplneno") return "Vyplněno klientem";
+  if (dotaznik?.stav === "neni_potreba") return "Není potřeba";
+  if (dotaznik?.stav === "overeno_interne") return "Ověřeno interně";
+  if (link?.opened_at || link?.last_opened_at || (link?.open_count ?? 0) > 0) return "Klient otevřel";
+  if (link?.email_sent_at) return "Email odeslán";
+  if (link) return "Link vytvořen";
+  return "Dotazník nevytvořen";
 }
 
 // TODO: Dočasné řešení bez DB změny. Náhrady se teď párují podle názvu
@@ -574,6 +638,119 @@ function PlanTechnikyCard({ items }: { items: TechnikaSummaryRow[] }) {
   );
 }
 
+function ClientTechnicalVerificationCard({
+  statusLabel,
+  link,
+  dotaznik,
+  publicLink,
+  hasSavedPlace,
+  createQuestionnaireAction,
+  markNotNeededAction,
+  markInternallyVerifiedAction,
+}: {
+  statusLabel: string;
+  link: ClientVerificationLinkRow | null;
+  dotaznik: ClientVerificationDotaznikRow | null;
+  publicLink: string | null;
+  hasSavedPlace: boolean;
+  createQuestionnaireAction: () => Promise<void>;
+  markNotNeededAction: () => Promise<void>;
+  markInternallyVerifiedAction: () => Promise<void>;
+}) {
+  const risks = Array.isArray(dotaznik?.rizika) ? dotaznik.rizika : [];
+
+  return (
+    <Card className="mt-6 space-y-5 border-slate-700 bg-[#0b1324]">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="text-xl font-bold text-white">Technické ověření klientem</div>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-400">
+            Dotazník je volitelný podklad od klienta pro jednu zakázku. Ověřená realita z akcí patří
+            dlouhodobě do interních technických poznámek místa.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-blue-500/40 bg-blue-950/30 px-4 py-3 text-sm">
+          <div className="text-xs uppercase tracking-wide text-blue-200">Stav</div>
+          <div className="mt-1 text-lg font-black text-white">{statusLabel}</div>
+        </div>
+      </div>
+
+      {hasSavedPlace ? (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">
+          U ověřených míst může být dotazník zbytečný. Rozhodnutí ale zůstává na šéfovi.
+        </div>
+      ) : null}
+
+      {publicLink ? (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-3">
+          <div className="text-sm font-semibold text-emerald-100">Nový link vytvořen</div>
+          <p className="mt-1 text-sm text-emerald-200">
+            Raw token se neukládá do databáze, proto si link zkopíruj teď. Public formulář bude přidán v dalším kroku.
+          </p>
+          <input
+            readOnly
+            value={publicLink}
+            className="mt-3 w-full rounded-xl border border-emerald-700 bg-slate-950 px-4 py-3 text-sm text-white"
+          />
+        </div>
+      ) : null}
+
+      <div className="grid gap-3 text-sm text-slate-300 md:grid-cols-3">
+        <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Link</div>
+          <div className="mt-1 font-semibold text-white">{link ? "Vytvořen" : "Nevytvořen"}</div>
+          {link?.created_at ? (
+            <div className="mt-1 text-xs text-slate-500">
+              Vytvořeno: {new Date(link.created_at).toLocaleString("cs-CZ")}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Otevření</div>
+          <div className="mt-1 font-semibold text-white">{link?.open_count ?? 0}×</div>
+          {link?.last_opened_at ? (
+            <div className="mt-1 text-xs text-slate-500">
+              Naposledy: {new Date(link.last_opened_at).toLocaleString("cs-CZ")}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Rizika</div>
+          <div className="mt-1 font-semibold text-white">{risks.length}</div>
+          {dotaznik?.submitted_at ? (
+            <div className="mt-1 text-xs text-slate-500">
+              Odesláno: {new Date(dotaznik.submitted_at).toLocaleString("cs-CZ")}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <form action={createQuestionnaireAction}>
+          <button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500">
+            Vytvořit dotazník
+          </button>
+        </form>
+
+        <form action={markNotNeededAction}>
+          <button className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-slate-700">
+            Označit jako není potřeba
+          </button>
+        </form>
+
+        <form action={markInternallyVerifiedAction}>
+          <button className="rounded-xl border border-emerald-700 bg-emerald-950/50 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-900/60">
+            Označit jako ověřeno interně
+          </button>
+        </form>
+      </div>
+    </Card>
+  );
+}
+
 type RealizaceRow = {
   realizace_id: string;
   zakazka_id: string;
@@ -592,8 +769,9 @@ type RealizaceRow = {
   dron: boolean | null;
 };
 
-export default async function ZakazkaDetailPage({ params }: PageProps) {
+export default async function ZakazkaDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const resolvedSearchParams = await searchParams;
   const supabase = await createClient();
 
   async function updateZakazkaSchedule(formData: FormData) {
@@ -644,6 +822,135 @@ export default async function ZakazkaDetailPage({ params }: PageProps) {
     redirect("/zakazky");
   }
 
+  async function setClientVerificationStatus(stav: "neni_potreba" | "overeno_interne") {
+    const supabase = await createClient();
+
+    const { data: currentDotaznik, error: currentError } = await supabase
+      .from("zakazka_dotazniky")
+      .select("dotaznik_id")
+      .eq("zakazka_id", id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (currentError) {
+      throw new Error(currentError.message);
+    }
+
+    const payload = {
+      zakazka_id: id,
+      stav,
+      pozadovan_vyjezd_technika: false,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = currentDotaznik?.dotaznik_id
+      ? await supabase
+          .from("zakazka_dotazniky")
+          .update(payload)
+          .eq("dotaznik_id", currentDotaznik.dotaznik_id)
+      : await supabase.from("zakazka_dotazniky").insert(payload);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    revalidatePath(`/zakazky/${id}`);
+  }
+
+  async function markQuestionnaireNotNeeded() {
+    "use server";
+    await setClientVerificationStatus("neni_potreba");
+  }
+
+  async function markQuestionnaireInternallyVerified() {
+    "use server";
+    await setClientVerificationStatus("overeno_interne");
+  }
+
+  async function createClientQuestionnaire() {
+    "use server";
+    const supabase = await createClient();
+
+    const { data: zakazka, error: zakazkaError } = await supabase
+      .from("zakazky")
+      .select("zakazka_id, klient_id")
+      .eq("zakazka_id", id)
+      .single();
+
+    if (zakazkaError) {
+      throw new Error(zakazkaError.message);
+    }
+
+    let emailTo: string | null = null;
+    if (zakazka.klient_id) {
+      const { data: klient, error: klientError } = await supabase
+        .from("klienti")
+        .select("email")
+        .eq("klient_id", zakazka.klient_id)
+        .maybeSingle();
+
+      if (klientError) {
+        throw new Error(klientError.message);
+      }
+
+      emailTo = klient?.email ?? null;
+    }
+
+    const rawToken = createClientQuestionnaireToken();
+    const tokenHash = hashClientQuestionnaireToken(rawToken);
+
+    const { data: link, error: linkError } = await supabase
+      .from("zakazka_client_links")
+      .insert({
+        zakazka_id: id,
+        klient_id: zakazka.klient_id,
+        token_hash: tokenHash,
+        email_to: emailTo,
+        stav: "vytvoren",
+      })
+      .select("link_id")
+      .single();
+
+    if (linkError) {
+      throw new Error(linkError.message);
+    }
+
+    const { data: currentDotaznik, error: currentError } = await supabase
+      .from("zakazka_dotazniky")
+      .select("dotaznik_id")
+      .eq("zakazka_id", id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (currentError) {
+      throw new Error(currentError.message);
+    }
+
+    const dotaznikPayload = {
+      zakazka_id: id,
+      link_id: link.link_id,
+      stav: "rozpracovano",
+      pozadovan_vyjezd_technika: false,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error: dotaznikError } = currentDotaznik?.dotaznik_id
+      ? await supabase
+          .from("zakazka_dotazniky")
+          .update(dotaznikPayload)
+          .eq("dotaznik_id", currentDotaznik.dotaznik_id)
+      : await supabase.from("zakazka_dotazniky").insert(dotaznikPayload);
+
+    if (dotaznikError) {
+      throw new Error(dotaznikError.message);
+    }
+
+    revalidatePath(`/zakazky/${id}`);
+    redirect(`/zakazky/${id}?dotaznik_token=${encodeURIComponent(rawToken)}`);
+  }
+
   const { data, error } = await supabase
     .from("zakazky")
     .select("*")
@@ -657,6 +964,46 @@ export default async function ZakazkaDetailPage({ params }: PageProps) {
   if (!data) {
     return <div>ZakĂˇzka nenalezena</div>;
   }
+
+  const { data: dotaznikRaw, error: dotaznikError } = await supabase
+    .from("zakazka_dotazniky")
+    .select(
+      "dotaznik_id, stav, link_id, pozadovan_vyjezd_technika, rizika, submitted_at, updated_at"
+    )
+    .eq("zakazka_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (dotaznikError) {
+    return <div>Chyba dotazníku: {dotaznikError.message}</div>;
+  }
+
+  const dotaznik = (dotaznikRaw ?? null) as ClientVerificationDotaznikRow | null;
+
+  const { data: linkRaw, error: linkError } = await supabase
+    .from("zakazka_client_links")
+    .select("link_id, stav, email_sent_at, opened_at, last_opened_at, open_count, created_at")
+    .eq("zakazka_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (linkError) {
+    return <div>Chyba linku dotazníku: {linkError.message}</div>;
+  }
+
+  const clientVerificationLink = (linkRaw ?? null) as ClientVerificationLinkRow | null;
+  const clientVerificationStatus = getClientVerificationStatus({
+    link: clientVerificationLink,
+    dotaznik,
+  });
+  const rawDotaznikToken = resolvedSearchParams?.dotaznik_token?.trim() || "";
+  const headersList = await headers();
+  const clientQuestionnaireBaseUrl = getClientQuestionnaireBaseUrl(headersList);
+  const newClientQuestionnaireLink = rawDotaznikToken
+    ? `${clientQuestionnaireBaseUrl}/dotaznik/${encodeURIComponent(rawDotaznikToken)}`
+    : null;
 
   let klientNazev: string | null = null;
   if (data.klient_id) {
@@ -890,6 +1237,17 @@ export default async function ZakazkaDetailPage({ params }: PageProps) {
       <ZakazkaScheduleCard data={data} action={updateZakazkaSchedule} />
 
       <ZakazkaBasicLookCard realizace={(realizace ?? []) as RealizaceRow[]} data={data} />
+
+      <ClientTechnicalVerificationCard
+        statusLabel={clientVerificationStatus}
+        link={clientVerificationLink}
+        dotaznik={dotaznik}
+        publicLink={newClientQuestionnaireLink}
+        hasSavedPlace={Boolean(data.misto_id)}
+        createQuestionnaireAction={createClientQuestionnaire}
+        markNotNeededAction={markQuestionnaireNotNeeded}
+        markInternallyVerifiedAction={markQuestionnaireInternallyVerified}
+      />
 
       <PlanTechnikyCard items={technikaSummary} />
 

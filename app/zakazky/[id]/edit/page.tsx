@@ -124,7 +124,6 @@ export default async function EditZakazkyPage({ params }: PageProps) {
     const klientIdRaw = String(formData.get("klient_id") ?? "").trim();
     const mistoIdRaw = String(formData.get("misto_id") ?? "").trim();
     const mistoKlientIdRaw = String(formData.get("misto_klient_id") ?? "").trim();
-    const ulozitJakoMisto = formData.get("ulozit_jako_misto") === "on";
     const mistoLat = toOptionalNumber(String(formData.get("misto_lat") ?? ""));
     const mistoLng = toOptionalNumber(String(formData.get("misto_lng") ?? ""));
     const mistoGpsRadius = toOptionalNumber(String(formData.get("misto_gps_radius_m") ?? "")) ?? 300;
@@ -203,7 +202,7 @@ export default async function EditZakazkyPage({ params }: PageProps) {
     let klientId = mistoKlientIdRaw || klientIdRaw || null;
     let mistoId = mistoIdRaw || null;
 
-    if (ulozitJakoMisto && !mistoId && mistoLat != null && mistoLng != null) {
+    if (!mistoId && misto.trim() && mistoLat != null && mistoLng != null) {
       const { data: mistoData, error: mistoError } = await supabase
         .from("mista_konani")
         .insert({
@@ -341,19 +340,9 @@ export default async function EditZakazkyPage({ params }: PageProps) {
               defaultUpdatedAt={data.misto_gps_updated_at}
             />
 
-            <label className="flex items-start gap-3 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-200">
-              <input
-                type="checkbox"
-                name="ulozit_jako_misto"
-                className="mt-1"
-              />
-              <span>
-                <span className="font-semibold text-white">Uložit jako nové místo konání</span>
-                <span className="mt-1 block text-slate-400">
-                  Vytvoří archivované místo z aktuálního názvu, GPS bodu a radiusu, pokud není vybrané uložené místo.
-                </span>
-              </span>
-            </label>
+            <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-300">
+              Nové místo s vybraným bodem se uloží automaticky.
+            </div>
 
             <Field label="Typ obsluhy">
               <select

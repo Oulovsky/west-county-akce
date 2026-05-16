@@ -360,7 +360,6 @@ export default function NovaZakazkaPage() {
   const [misto, setMisto] = useState("");
   const [selectedKlientId, setSelectedKlientId] = useState("");
   const [selectedMistoId, setSelectedMistoId] = useState("");
-  const [ulozitJakoMisto, setUlozitJakoMisto] = useState(false);
   const [mistoGps, setMistoGps] = useState({
     lat: "",
     lng: "",
@@ -596,7 +595,6 @@ export default function NovaZakazkaPage() {
   function handleSavedPlaceSelect(place: SavedPlaceSuggestion) {
     setSelectedMistoId(place.misto_id);
     setMisto(place.nazev);
-    setUlozitJakoMisto(false);
 
     if (place.klient_id) {
       setSelectedKlientId(place.klient_id);
@@ -1048,7 +1046,7 @@ export default function NovaZakazkaPage() {
       let klientId = selectedKlientId || null;
       let mistoId = selectedMistoId || null;
 
-      if (ulozitJakoMisto && !mistoId && mistoLat != null && mistoLng != null) {
+      if (!mistoId && misto.trim() && mistoLat != null && mistoLng != null) {
         const { data: mistoData, error: mistoError } = await supabase
           .from("mista_konani")
           .insert({
@@ -1344,24 +1342,13 @@ export default function NovaZakazkaPage() {
             placeText={misto}
             savedPlaces={mistaKonani}
             onSavedPlaceSelect={handleSavedPlaceSelect}
+            onSavedPlaceClear={() => setSelectedMistoId("")}
             onChange={setMistoGps}
           />
 
-          <label className="flex items-start gap-3 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-200">
-            <input
-              type="checkbox"
-              checked={ulozitJakoMisto}
-              disabled={Boolean(selectedMistoId)}
-              onChange={(event) => setUlozitJakoMisto(event.target.checked)}
-              className="mt-1"
-            />
-            <span>
-              <span className="font-semibold text-white">Uložit jako nové místo konání</span>
-              <span className="mt-1 block text-slate-400">
-                Vytvoří archivované místo z aktuálního názvu, GPS bodu a radiusu.
-              </span>
-            </span>
-          </label>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-300">
+            Nové místo s vybraným bodem se uloží automaticky.
+          </div>
 
           <Field label="Typ obsluhy">
             <select

@@ -43,6 +43,7 @@ type Props = {
   placeInputName?: string;
   savedPlaces?: SavedPlaceSuggestion[];
   onSavedPlaceSelect?: (place: SavedPlaceSuggestion) => void;
+  onSavedPlaceClear?: () => void;
   defaultPlaceId?: string | null;
   defaultPlaceClientId?: string | null;
   defaultLat?: number | string | null;
@@ -86,6 +87,7 @@ export function GpsLocationFields({
   placeInputName = "misto",
   savedPlaces = [],
   onSavedPlaceSelect,
+  onSavedPlaceClear,
   defaultPlaceId = null,
   defaultPlaceClientId = null,
   defaultLat = null,
@@ -111,6 +113,7 @@ export function GpsLocationFields({
   const [selectionMessage, setSelectionMessage] = useState<string | null>(null);
   const [selectedPlaceId, setSelectedPlaceId] = useState(defaultPlaceId ?? "");
   const [selectedPlaceClientId, setSelectedPlaceClientId] = useState(defaultPlaceClientId ?? "");
+  const [selectedPlaceName, setSelectedPlaceName] = useState("");
   const activePlaceText = placeText ?? domPlaceText;
 
   function update(patch: Partial<GpsLocationValue>) {
@@ -136,11 +139,12 @@ export function GpsLocationFields({
 
     function handleInput() {
       setDomPlaceText(input?.value ?? "");
+      clearSavedPlaceSelection();
     }
 
     input.addEventListener("input", handleInput);
     return () => input.removeEventListener("input", handleInput);
-  }, [placeInputName, placeText]);
+  }, [placeInputName, placeText, selectedPlaceId, selectedPlaceClientId]);
 
   function getPlaceQuery() {
     if (placeText?.trim()) return placeText.trim();
@@ -167,6 +171,20 @@ export function GpsLocationFields({
     input.dispatchEvent(new Event("input", { bubbles: true }));
     setDomPlaceText(nextValue);
   }
+
+  function clearSavedPlaceSelection() {
+    if (!selectedPlaceId && !selectedPlaceClientId) return;
+    setSelectedPlaceId("");
+    setSelectedPlaceClientId("");
+    setSelectedPlaceName("");
+    onSavedPlaceClear?.();
+  }
+
+  useEffect(() => {
+    if (!selectedPlaceId || !selectedPlaceName) return;
+    if (activePlaceText.trim() === selectedPlaceName.trim()) return;
+    clearSavedPlaceSelection();
+  }, [activePlaceText, selectedPlaceId, selectedPlaceName]);
 
   async function fetchPlaceResults(
     query: string,
@@ -254,8 +272,7 @@ export function GpsLocationFields({
 
   function selectResult(result: NominatimResult) {
     setResults([]);
-    setSelectedPlaceId("");
-    setSelectedPlaceClientId("");
+    clearSavedPlaceSelection();
     setSelectionMessage("Místo nalezeno. Bod můžeš zpřesnit kliknutím do mapy.");
     update({
       lat: result.lat,
@@ -274,6 +291,7 @@ export function GpsLocationFields({
     setResults([]);
     setSelectedPlaceId(place.misto_id);
     setSelectedPlaceClientId(place.klient_id ?? "");
+    setSelectedPlaceName(place.nazev);
     setSelectionMessage("Uložené místo vybráno. Bod můžeš zpřesnit kliknutím do mapy.");
     updatePlaceInput(place.nazev);
     onSavedPlaceSelect?.(place);
@@ -288,6 +306,7 @@ export function GpsLocationFields({
   }
 
   function handleManualCoordinateChange(patch: Partial<Pick<GpsLocationValue, "lat" | "lng">>) {
+    clearSavedPlaceSelection();
     setSelectionMessage("Bod vybrán.");
     update({
       ...patch,
@@ -298,6 +317,7 @@ export function GpsLocationFields({
   }
 
   function selectMapPoint(lat: number, lng: number) {
+    clearSavedPlaceSelection();
     setSelectionMessage("Bod vybrán.");
     update({
       lat: String(Number(lat.toFixed(6))),
