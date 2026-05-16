@@ -1,14 +1,11 @@
-import { createClient } from "@/lib/supabase/server"
+import { requireSession } from "@/lib/auth/require-session"
 import { NextResponse } from "next/server"
 
 export async function GET() {
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const session = await requireSession()
+  if (!session.ok) return session.response
 
   return NextResponse.json({
-    email: user?.email ?? null,
+    email: session.email,
   })
 }

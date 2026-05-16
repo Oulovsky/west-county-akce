@@ -7,6 +7,16 @@ export default function LoginPage() {
   const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState("")
 
+  const queryError =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("error")
+      : null
+  const visibleError =
+    error ||
+    (queryError === "not_allowed"
+      ? "Tento Google účet není povolený pro beta přístup."
+      : "")
+
   function getSafeNextPath() {
     const next = new URLSearchParams(window.location.search).get("next")
     if (!next) return "/zakazky"
@@ -63,9 +73,9 @@ export default function LoginPage() {
           Přihlášení do systému probíhá přes Google účet.
         </div>
 
-        {error && (
+        {visibleError && (
           <div style={{ color: "#f87171" }}>
-            {error}
+            {visibleError}
           </div>
         )}
 

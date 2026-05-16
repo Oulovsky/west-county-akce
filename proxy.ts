@@ -12,6 +12,19 @@ function isPublicPath(pathname: string) {
   return false;
 }
 
+function redirectToLogin(req: NextRequest, params: Record<string, string>) {
+  const redirectUrl = req.nextUrl.clone();
+
+  redirectUrl.pathname = "/login";
+  redirectUrl.search = "";
+
+  for (const [key, value] of Object.entries(params)) {
+    redirectUrl.searchParams.set(key, value);
+  }
+
+  return NextResponse.redirect(redirectUrl);
+}
+
 export async function proxy(req: NextRequest) {
   const res = NextResponse.next();
 
@@ -39,14 +52,26 @@ export async function proxy(req: NextRequest) {
 
   const pathname = req.nextUrl.pathname;
   if (!user && !isPublicPath(pathname)) {
-    const redirectUrl = req.nextUrl.clone();
     const nextPath = `${pathname}${req.nextUrl.search}`;
+    return redirectToLogin(req, { next: nextPath });
+  }
 
-    redirectUrl.pathname = "/login";
-    redirectUrl.search = "";
-    redirectUrl.searchParams.set("next", nextPath);
+  if (user && !isPublicPath(pathname)) {
+    const email = user.email?.trim().toLowerCase();
 
-    return NextResponse.redirect(redirectUrl);
+    if (!email) {
+      return redirectToLogin(req, { error: "not_allowed" });
+    }
+
+    const { data: allowed, error: allowedError } = await supabase
+      .from("povolene_emaily")
+      .select("email")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (allowedError || !allowed) {
+      return redirectToLogin(req, { error: "not_allowed" });
+    }
   }
 
   return res;

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
+import { requireSession } from "@/lib/auth/require-session";
 
 export async function POST() {
+  const session = await requireSession();
+  if (!session.ok) return session.response;
+
   return NextResponse.json(
     {
       error:
