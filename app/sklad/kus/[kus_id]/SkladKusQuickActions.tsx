@@ -49,9 +49,9 @@ export function SkladKusQuickActions({
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
       <div>
-        <h2 className="text-xl font-black tracking-tight text-white">Rychlé akce</h2>
+        <h2 className="text-xl font-black tracking-tight text-white">Informační akce</h2>
         <p className="mt-1 text-sm text-slate-400">
-          Tento detail je informační. Loading vzniká až scanem v kontextu zakázky.
+          Akce se provádějí ve scan režimu zakázky. Tento detail je pouze informační.
           {assignmentId ? " Vazba na zakázku je načtená." : " Aktivní zakázka zatím není přiřazená."}
         </p>
       </div>

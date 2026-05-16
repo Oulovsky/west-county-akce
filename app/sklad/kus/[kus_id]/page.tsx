@@ -1,10 +1,12 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { SKLAD_KUS_SELECT_FIELDS, SKLAD_TABLE } from "@/lib/sklad/constants";
 import {
   formatDateTime,
   formatNumber,
   formatSkladKusStav,
+  getKusStatus,
   getSkladKusDisplayLabel,
 } from "@/lib/sklad/helpers";
 import type {
@@ -12,6 +14,7 @@ import type {
   SkladKusHistorieRow,
   SkladKusRow,
   SkladKusZakazkaAssignmentRow,
+  SkladPoskozeniRow,
 } from "@/lib/sklad/types";
 import {
   formatSkladKusHistorieTypAkce,
@@ -63,6 +66,52 @@ function DetailCard({
       </div>
     </div>
   );
+}
+
+function SummaryRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </div>
+      <div className="mt-1 text-sm font-semibold leading-relaxed text-white">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function getPouzitelnostLabel(openDamage: SkladPoskozeniRow[]): string {
+  if (openDamage.some((item) => item.blokuje_pouziti)) return "Blokovaný";
+  if (openDamage.length > 0) return "Poškozený";
+  return "Použitelný";
+}
+
+function getPouzitelnostClassName(openDamage: SkladPoskozeniRow[]): string {
+  if (openDamage.some((item) => item.blokuje_pouziti)) {
+    return "border-red-700 bg-red-950 text-red-100";
+  }
+  if (openDamage.length > 0) {
+    return "border-amber-700 bg-amber-950 text-amber-100";
+  }
+  return "border-emerald-700 bg-emerald-950 text-emerald-100";
+}
+
+function formatDamageSummary(item: SkladPoskozeniRow): string {
+  const parts = [
+    item.blokuje_pouziti ? "Blokuje použití" : "Poškození",
+    item.typ_poskozeni?.trim() || null,
+    item.priorita?.trim() ? `priorita ${item.priorita}` : null,
+    formatDateTime(item.datum_nahlaseni),
+  ].filter(Boolean);
+
+  return parts.join(" · ");
 }
 
 export default async function SkladKusDetailPage({ params }: PageProps) {
@@ -133,14 +182,26 @@ export default async function SkladKusDetailPage({ params }: PageProps) {
   const label = getSkladKusDisplayLabel(row.nazev, kus);
   const stav = formatSkladKusStav(kus.stav);
   const pozice = positionText(row.pozice);
-  const { data: assignmentRaw, error: assignmentError } =
-    await queryAktivniZakazkaKusu(supabase, kus.kus_id);
+  const [
+    { data: assignmentRaw, error: assignmentError },
+    { data: historieRaw, error: historieError },
+    { data: poskozeniRaw, error: poskozeniError },
+  ] = await Promise.all([
+    queryAktivniZakazkaKusu(supabase, kus.kus_id),
+    querySkladKusHistorie(supabase, kus.kus_id),
+    supabase
+      .from(SKLAD_TABLE.hlaseniPoskozeni)
+      .select("poskozeni_id, skladova_polozka_id, kus_id, zakazka_id, pocet_kusu, popis, typ_poskozeni, priorita, blokuje_pouziti, stav_reseni, datum_nahlaseni, datum_uzavreni")
+      .eq("kus_id", kus.kus_id)
+      .is("datum_uzavreni", null)
+      .order("datum_nahlaseni", { ascending: false }),
+  ]);
   const assignment = (assignmentRaw ?? null) as SkladKusZakazkaAssignmentRow | null;
-  const { data: historieRaw, error: historieError } = await querySkladKusHistorie(
-    supabase,
-    kus.kus_id
-  );
   const historie = (historieRaw ?? []) as unknown as SkladKusHistorieRow[];
+  const openPoskozeni = (poskozeniRaw ?? []) as SkladPoskozeniRow[];
+  const kusStatus = getKusStatus(kus, openPoskozeni);
+  const lastAudit = historie[0] ?? null;
+  const lastOpenDamage = openPoskozeni[0] ?? null;
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-4 px-1 sm:px-0">
@@ -181,6 +242,67 @@ export default async function SkladKusDetailPage({ params }: PageProps) {
           <span className="text-right font-semibold text-white">
             {kus.poznamka?.trim() || "—"}
           </span>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-xl font-black tracking-tight text-white">
+              Aktuální stav kusu
+            </h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Read-only souhrn z evidence kusu, zakázky, poškození a auditu.
+            </p>
+          </div>
+          <div
+            className={[
+              "rounded-2xl border px-4 py-3 text-center text-lg font-black",
+              getPouzitelnostClassName(openPoskozeni),
+            ].join(" ")}
+            title={kusStatus.text}
+          >
+            {getPouzitelnostLabel(openPoskozeni)}
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <SummaryRow label="Stav kusu">
+            {stav}
+          </SummaryRow>
+          <SummaryRow label="Stav na zakázce">
+            {assignment ? formatZakazkaKusStav(assignment.stav) : "Není na aktivní zakázce"}
+          </SummaryRow>
+          <SummaryRow label="Poslední audit událost">
+            {lastAudit ? (
+              <>
+                {formatSkladKusHistorieTypAkce(lastAudit.typ_akce)}
+                <span className="block text-xs font-medium text-slate-400">
+                  {formatDateTime(lastAudit.created_at)}
+                </span>
+              </>
+            ) : (
+              "—"
+            )}
+          </SummaryRow>
+          <SummaryRow label="Poslední otevřené poškození / blokace">
+            {poskozeniError ? (
+              <span className="text-amber-200">
+                Nepodařilo se načíst: {poskozeniError.message}
+              </span>
+            ) : lastOpenDamage ? (
+              <>
+                {formatDamageSummary(lastOpenDamage)}
+                {lastOpenDamage.popis?.trim() ? (
+                  <span className="block text-xs font-medium text-slate-400">
+                    {lastOpenDamage.popis}
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              "Žádné otevřené poškození"
+            )}
+          </SummaryRow>
         </div>
       </section>
 
