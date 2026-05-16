@@ -18,6 +18,7 @@ export type Zakazka = {
   cas_od: string | null;
   cas_do: string | null;
   zrusena?: boolean | null;
+  loading_status?: string | null;
 };
 
 type FilterMode = "all" | "active" | "future" | "past";
@@ -144,6 +145,14 @@ function ZakazkaCard({
               {jeZrusena(zakazka) ? (
                 <div className="text-red-300">
                   <span className="font-semibold text-red-200">Stav:</span> Zrušená
+                </div>
+              ) : null}
+              {zakazka.loading_status ? (
+                <div>
+                  <span className="font-semibold text-slate-200">Nakládka:</span>{" "}
+                  <span className="rounded-md border border-slate-700 bg-slate-900 px-2 py-0.5 text-xs font-bold text-slate-100">
+                    {zakazka.loading_status}
+                  </span>
                 </div>
               ) : null}
             </div>

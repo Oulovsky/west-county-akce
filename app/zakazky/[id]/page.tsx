@@ -139,6 +139,26 @@ function formatCount(value: number) {
   return new Intl.NumberFormat("cs-CZ", { maximumFractionDigits: 2 }).format(value);
 }
 
+function getLoadingStatusLabel({
+  plan,
+  aktivni,
+  vraceno,
+  poskozeno,
+}: {
+  plan: number;
+  aktivni: number;
+  vraceno: number;
+  poskozeno: number;
+}) {
+  if (aktivni === 0 && vraceno > 0 && poskozeno > 0) return "Vráceno s poškozením";
+  if (aktivni === 0 && vraceno > 0) return "Vráceno";
+  if (aktivni === 0) return "Nenaloženo";
+  if (vraceno > 0 && aktivni > 0) return "Částečně vráceno";
+  if (aktivni > 0 && aktivni < plan) return "Částečně naloženo";
+  if (aktivni >= plan && vraceno === 0) return "Naloženo";
+  return "Částečně naloženo";
+}
+
 function formatPosition(value: number | string | null | undefined) {
   const text = String(value ?? "").trim();
   return text || "—";
@@ -350,6 +370,12 @@ function LoadingStatusCard({ groups }: { groups: LoadingStatusGroup[] }) {
       zbyvaVratit: 0,
     }
   );
+  const loadingStatus = getLoadingStatusLabel({
+    plan: totals.plan,
+    aktivni: totals.nalozeno,
+    vraceno: totals.vraceno,
+    poskozeno: totals.poskozeno,
+  });
 
   return (
     <Card className="mt-6">
@@ -359,6 +385,9 @@ function LoadingStatusCard({ groups }: { groups: LoadingStatusGroup[] }) {
           <p className="mt-1 text-sm text-slate-400">
             Plán z techniky zakázky a fyzická realita ze scanů kusů.
           </p>
+        </div>
+        <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm font-black text-white">
+          {loadingStatus}
         </div>
       </div>
 
