@@ -1,6 +1,7 @@
 import type { SkladDetailRow, SkladKusRow, SkladPoskozeniRow } from "@/lib/sklad/types";
 import type { UpdateKusPoradiResult } from "../actions/updateKusPoradi";
 import { skladDetailRowGridClassName } from "../helpers/tableLayout";
+import { SkladBulkLabelsButton } from "./SkladBulkLabelsButton";
 import { SkladDetailKusRow } from "./SkladDetailKusRow";
 
 type SkladDetailKusySectionProps = {
@@ -28,7 +29,10 @@ export function SkladDetailKusySection({
 
   return (
     <div className="bg-slate-950/30 px-3 py-4">
-      <div className="mb-3 flex justify-end">
+      <div className="mb-3 flex flex-wrap justify-end gap-2">
+        {!kusyError && kusy.length > 0 ? (
+          <SkladBulkLabelsButton row={row} kusy={kusy} />
+        ) : null}
         <form action={addKusAction}>
           <input type="hidden" name="skladova_polozka_id" value={row.skladova_polozka_id} />
           <input type="hidden" name="nazev" value={row.nazev} />
