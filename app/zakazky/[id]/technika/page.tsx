@@ -38,12 +38,6 @@ type TechnikaNaZakazce = {
   mnozstvi: number;
 };
 
-type StavTechnikyNaZakazce = {
-  skladova_polozka_id: string;
-  nazev: string;
-  mnozstvi: number;
-};
-
 type Radek = {
   skladova_polozka_id: string;
   nazev: string;
@@ -51,9 +45,23 @@ type Radek = {
   poskozene: number;
   na_zakazce: number;
   skutecne_na_zakazce: number;
+  vraceno_ze_zakazky: number;
+  poskozeno_na_zakazce: number;
+  rezerva_na_zakazce: number;
   rezervovano_jinde: number;
   k_dispozici: number;
   max_na_teto_zakazce: number;
+};
+
+type ZakazkaKusRow = {
+  kus_id: string;
+  stav: string | null;
+  is_rezerva: boolean | null;
+};
+
+type SkladKusRow = {
+  kus_id: string;
+  skladova_polozka_id: string;
 };
 
 function normalizeTime(value: string | null | undefined, fallback: string) {
@@ -142,16 +150,61 @@ async function nactiData(zakazkaId: string) {
 
   const technikaNaTetoZakazce = (technikaNaTetoZakazceRaw || []) as TechnikaNaZakazce[];
 
-  const { data: skutecnyStavRaw, error: skutecnyStavError } = await supabase.rpc(
-    "get_stav_techniky_na_zakazce",
-    { p_zakazka_id: zakazkaId }
-  );
+  const { data: zakazkaKusyRaw, error: zakazkaKusyError } = await supabase
+    .from("zakazka_kusy")
+    .select("kus_id, stav, is_rezerva")
+    .eq("zakazka_id", zakazkaId);
 
-  if (skutecnyStavError) {
-    throw new Error(skutecnyStavError.message);
+  if (zakazkaKusyError) {
+    throw new Error(zakazkaKusyError.message);
   }
 
-  const skutecnyStav = (skutecnyStavRaw || []) as StavTechnikyNaZakazce[];
+  const zakazkaKusy = (zakazkaKusyRaw || []) as ZakazkaKusRow[];
+  const kusIds = zakazkaKusy.map((row) => row.kus_id).filter(Boolean);
+  let skladKusy: SkladKusRow[] = [];
+
+  if (kusIds.length > 0) {
+    const { data: skladKusyRaw, error: skladKusyError } = await supabase
+      .from("sklad_polozky_kusy")
+      .select("kus_id, skladova_polozka_id")
+      .in("kus_id", kusIds);
+
+    if (skladKusyError) {
+      throw new Error(skladKusyError.message);
+    }
+
+    skladKusy = (skladKusyRaw || []) as SkladKusRow[];
+  }
+
+  const kusToPolozka = new Map(
+    skladKusy.map((row) => [row.kus_id, row.skladova_polozka_id])
+  );
+  const realCounts = new Map<
+    string,
+    { aktivni: number; vraceno: number; poskozeno: number; rezerva: number }
+  >();
+
+  for (const assignment of zakazkaKusy) {
+    const polozkaId = kusToPolozka.get(assignment.kus_id);
+    if (!polozkaId) continue;
+
+    const counts = realCounts.get(polozkaId) ?? {
+      aktivni: 0,
+      vraceno: 0,
+      poskozeno: 0,
+      rezerva: 0,
+    };
+
+    if (assignment.stav === "vraceno") {
+      counts.vraceno += 1;
+    } else {
+      counts.aktivni += 1;
+      if (assignment.is_rezerva) counts.rezerva += 1;
+      if (assignment.stav === "poskozeno") counts.poskozeno += 1;
+    }
+
+    realCounts.set(polozkaId, counts);
+  }
 
   let technikaJinde: TechnikaNaZakazce[] = [];
 
@@ -174,10 +227,12 @@ async function nactiData(zakazkaId: string) {
         (t: TechnikaNaZakazce) => t.skladova_polozka_id === polozka.skladova_polozka_id
       )?.mnozstvi ?? 0;
 
-    const skutecneNaZakazce =
-      skutecnyStav.find(
-        (t: StavTechnikyNaZakazce) => t.skladova_polozka_id === polozka.skladova_polozka_id
-      )?.mnozstvi ?? 0;
+    const real = realCounts.get(polozka.skladova_polozka_id) ?? {
+      aktivni: 0,
+      vraceno: 0,
+      poskozeno: 0,
+      rezerva: 0,
+    };
 
     const rezervovanoJinde = technikaJinde
       .filter((t: TechnikaNaZakazce) => t.skladova_polozka_id === polozka.skladova_polozka_id)
@@ -196,7 +251,10 @@ async function nactiData(zakazkaId: string) {
       sklad_celkem: Number(polozka.celkem_k_dispozici ?? 0),
       poskozene,
       na_zakazce: Number(naZakazce ?? 0),
-      skutecne_na_zakazce: Number(skutecneNaZakazce ?? 0),
+      skutecne_na_zakazce: real.aktivni,
+      vraceno_ze_zakazky: real.vraceno,
+      poskozeno_na_zakazce: real.poskozeno,
+      rezerva_na_zakazce: real.rezerva,
       rezervovano_jinde: Number(rezervovanoJinde ?? 0),
       k_dispozici: Number(kDispozici ?? 0),
       max_na_teto_zakazce: Number(maxNaTetoZakazce ?? 0),

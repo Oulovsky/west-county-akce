@@ -14,6 +14,9 @@ type Radek = {
   poskozene: number;
   na_zakazce: number;
   skutecne_na_zakazce: number;
+  vraceno_ze_zakazky: number;
+  poskozeno_na_zakazce: number;
+  rezerva_na_zakazce: number;
   rezervovano_jinde: number;
   k_dispozici: number;
   max_na_teto_zakazce: number;
@@ -24,10 +27,15 @@ type TechnikaNaZakazceRow = {
   mnozstvi: number;
 };
 
-type StavTechnikyNaZakazceRow = {
+type ZakazkaKusRow = {
+  kus_id: string;
+  stav: string | null;
+  is_rezerva: boolean | null;
+};
+
+type SkladKusRow = {
+  kus_id: string;
   skladova_polozka_id: string;
-  nazev: string;
-  mnozstvi: number;
 };
 
 function StatBox({
@@ -90,24 +98,72 @@ export default function TechnikaClient({
     }
 
     async function refreshReal() {
-      const { data: freshRealRaw, error } = await supabase.rpc("get_stav_techniky_na_zakazce", {
-        p_zakazka_id: zakazkaId,
-      });
+      const { data: assignmentsRaw, error: assignmentsError } = await supabase
+        .from("zakazka_kusy")
+        .select("kus_id, stav, is_rezerva")
+        .eq("zakazka_id", zakazkaId);
 
-      if (error) return;
+      if (assignmentsError) return;
 
-      const freshReal = (freshRealRaw || []) as StavTechnikyNaZakazceRow[];
+      const assignments = (assignmentsRaw || []) as ZakazkaKusRow[];
+      const kusIds = assignments.map((row) => row.kus_id).filter(Boolean);
+      let kusRows: SkladKusRow[] = [];
+
+      if (kusIds.length > 0) {
+        const { data: kusRowsRaw, error: kusRowsError } = await supabase
+          .from("sklad_polozky_kusy")
+          .select("kus_id, skladova_polozka_id")
+          .in("kus_id", kusIds);
+
+        if (kusRowsError) return;
+        kusRows = (kusRowsRaw || []) as SkladKusRow[];
+      }
+
+      const kusToPolozka = new Map(
+        kusRows.map((row) => [row.kus_id, row.skladova_polozka_id])
+      );
+      const countsByPolozka = new Map<
+        string,
+        { aktivni: number; vraceno: number; poskozeno: number; rezerva: number }
+      >();
+
+      for (const assignment of assignments) {
+        const polozkaId = kusToPolozka.get(assignment.kus_id);
+        if (!polozkaId) continue;
+
+        const counts = countsByPolozka.get(polozkaId) ?? {
+          aktivni: 0,
+          vraceno: 0,
+          poskozeno: 0,
+          rezerva: 0,
+        };
+
+        if (assignment.stav === "vraceno") {
+          counts.vraceno += 1;
+        } else {
+          counts.aktivni += 1;
+          if (assignment.is_rezerva) counts.rezerva += 1;
+          if (assignment.stav === "poskozeno") counts.poskozeno += 1;
+        }
+
+        countsByPolozka.set(polozkaId, counts);
+      }
 
       setData((prev) =>
         prev.map((r) => {
-          const skutecne =
-            freshReal.find(
-              (f: StavTechnikyNaZakazceRow) => f.skladova_polozka_id === r.skladova_polozka_id
-            )?.mnozstvi || 0;
+          const counts = countsByPolozka.get(r.skladova_polozka_id) ?? {
+            aktivni: 0,
+            vraceno: 0,
+            poskozeno: 0,
+            rezerva: 0,
+          };
 
           return {
             ...r,
-            skutecne_na_zakazce: skutecne,
+            skutecne_na_zakazce: counts.aktivni,
+            vraceno_ze_zakazky: counts.vraceno,
+            poskozeno_na_zakazce: counts.poskozeno,
+            rezerva_na_zakazce: counts.rezerva,
           };
         })
       );
@@ -129,14 +185,15 @@ export default function TechnikaClient({
       )
       .subscribe();
 
-    const pohybChannel = supabase
+    const realChannel = supabase
       .channel(`technika-real-${zakazkaId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
-          table: "pohyb_polozky",
+          table: "zakazka_kusy",
+          filter: `zakazka_id=eq.${zakazkaId}`,
         },
         async () => {
           await refreshReal();
@@ -146,7 +203,7 @@ export default function TechnikaClient({
 
     return () => {
       void supabase.removeChannel(technikaChannel);
-      void supabase.removeChannel(pohybChannel);
+      void supabase.removeChannel(realChannel);
     };
   }, [zakazkaId]);
 
@@ -161,7 +218,17 @@ export default function TechnikaClient({
   );
 
   const celkemPoskozeno = useMemo(
-    () => data.reduce((sum, r) => sum + r.poskozene, 0),
+    () => data.reduce((sum, r) => sum + r.poskozeno_na_zakazce, 0),
+    [data]
+  );
+
+  const celkemRezerva = useMemo(
+    () => data.reduce((sum, r) => sum + r.rezerva_na_zakazce, 0),
+    [data]
+  );
+
+  const celkemVraceno = useMemo(
+    () => data.reduce((sum, r) => sum + r.vraceno_ze_zakazky, 0),
     [data]
   );
 
@@ -178,7 +245,9 @@ export default function TechnikaClient({
         <div className="grid gap-3 md:grid-cols-5">
           <StatBox label="Plánováno na zakázce" value={`${celkemPlan} ks`} />
           <StatBox label="Skutečně na zakázce" value={`${celkemReal} ks`} />
-          <StatBox label="Poškozené kusy" value={`${celkemPoskozeno} ks`} />
+          <StatBox label="Poškozené na zakázce" value={`${celkemPoskozeno} ks`} />
+          <StatBox label="Rezerva" value={`${celkemRezerva} ks`} />
+          <StatBox label="Vráceno" value={`${celkemVraceno} ks`} />
           <StatBox label="Počet položek" value={pocetPolozek} />
           <StatBox label="Aktivní položky" value={aktivnichPolozek} />
         </div>
@@ -219,6 +288,17 @@ export default function TechnikaClient({
                     {radek.poskozene > 0 ? (
                       <Badge variant="danger">Poškozené: {radek.poskozene} ks</Badge>
                     ) : null}
+                    {radek.rezerva_na_zakazce > 0 ? (
+                      <Badge variant="warning">Rezerva: {radek.rezerva_na_zakazce} ks</Badge>
+                    ) : null}
+                    {radek.vraceno_ze_zakazky > 0 ? (
+                      <Badge variant="default">Vráceno: {radek.vraceno_ze_zakazky} ks</Badge>
+                    ) : null}
+                    {radek.poskozeno_na_zakazce > 0 ? (
+                      <Badge variant="danger">
+                        Poškozeno na zakázce: {radek.poskozeno_na_zakazce} ks
+                      </Badge>
+                    ) : null}
                   </div>
                 </div>
 
@@ -241,6 +321,8 @@ export default function TechnikaClient({
                 <StatBox label="K dispozici" value={`${radek.k_dispozici} ks`} />
                 <StatBox label="Maximum pro zakázku" value={`${radek.max_na_teto_zakazce} ks`} />
                 <StatBox label="Reálný stav" value={`${radek.skutecne_na_zakazce} ks`} />
+                <StatBox label="Rezerva" value={`${radek.rezerva_na_zakazce} ks`} />
+                <StatBox label="Vráceno" value={`${radek.vraceno_ze_zakazky} ks`} />
               </div>
 
               {canEdit ? (
