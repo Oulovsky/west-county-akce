@@ -54,10 +54,6 @@ export default function SidebarNav() {
         Zakázky
       </NavLink>
 
-      <NavLink href="/zakazky/nova" exact>
-        Nová zakázka
-      </NavLink>
-
       <NavLink href="/sklad/sprava" exact>
         Správa skladu
       </NavLink>

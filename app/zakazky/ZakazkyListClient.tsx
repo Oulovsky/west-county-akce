@@ -278,10 +278,18 @@ export default function ZakazkyListClient({
 
   return (
     <main className="w-full text-white">
-      <PageHeader
-        title="Zakázky"
-        description="Přehled aktuálních zakázek a archivu."
-      />
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <PageHeader
+          title="Zakázky"
+          description="Přehled aktuálních zakázek a archivu."
+        />
+        <Link
+          href="/zakazky/nova"
+          className="inline-flex min-h-12 items-center justify-center rounded-xl border border-blue-500 bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500"
+        >
+          Nová zakázka
+        </Link>
+      </div>
 
       <Card className="mb-8">
         <div className="mb-5 flex flex-wrap items-center gap-3">

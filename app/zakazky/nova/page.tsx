@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,122 @@ type RealizaceForm = {
   dron: boolean;
 };
 
+type SkladSetup = {
+  setup_id: string;
+  nazev: string;
+  popis: string | null;
+  poradi: number | null;
+};
+
+type SetupPolozka = {
+  setup_polozka_id: string;
+  setup_id: string;
+  skladova_polozka_id: string;
+  mnozstvi: number | string;
+  poradi: number | null;
+  skladove_polozky:
+    | {
+        nazev: string | null;
+        pozice: number | string | null;
+      }
+    | {
+        nazev: string | null;
+        pozice: number | string | null;
+      }[]
+    | null;
+};
+
+type SetupSelection = {
+  selected: boolean;
+  quantity: string;
+};
+
+type SetupPlanPreviewRow = {
+  skladova_polozka_id: string;
+  nazev: string;
+  pozice: number | string | null;
+  mnozstviVSetupu: number;
+  pocetSetupu: number;
+  vysledneMnozstvi: number;
+};
+
+type SkladPolozka = {
+  skladova_polozka_id: string;
+  nazev: string;
+  pozice: number | string | null;
+  celkem_k_dispozici: number | string | null;
+  aktivni: boolean | null;
+  sklad_blok_id: string | null;
+  kategorie_techniky_id: string | null;
+  podkategorie_techniky_id: string | null;
+};
+
+type SkladBlok = {
+  sklad_blok_id: string;
+  nazev: string;
+  poradi: number | null;
+};
+
+type KategorieTechniky = {
+  kategorie_techniky_id: string;
+  nazev: string;
+  poradi: number | null;
+};
+
+type PodkategorieTechniky = {
+  podkategorie_techniky_id: string;
+  nazev: string;
+  poradi: number | null;
+};
+
+type ManualPlanItem = {
+  local_id: string;
+  skladova_polozka_id: string;
+  mnozstvi: string;
+};
+
+type AggregatedPlanRow = {
+  skladova_polozka_id: string;
+  nazev: string;
+  pozice: number | string | null;
+  setupMnozstvi: number;
+  manualMnozstvi: number;
+  vysledneMnozstvi: number;
+};
+
+type ZakazkaAvailabilityRow = {
+  zakazka_id: string;
+  datum_od: string | null;
+  datum_do: string | null;
+  cas_od: string | null;
+  cas_do: string | null;
+  akce_od: string | null;
+  akce_do: string | null;
+  zrusena: boolean | null;
+};
+
+type TechnikaAvailabilityRow = {
+  zakazka_id: string;
+  skladova_polozka_id: string;
+  mnozstvi: number | string | null;
+};
+
+type SkladKusAvailabilityRow = {
+  skladova_polozka_id: string;
+  stav: string | null;
+};
+
+type AvailabilityConflict = {
+  skladova_polozka_id: string;
+  nazev: string;
+  pozadovano: number;
+  celkemSkladem: number;
+  planovanoKolize: number;
+  nedostupneKusy: number;
+  dostupne: number;
+  chybi: number;
+};
+
 const selectClassName =
   "mt-2 w-full appearance-none rounded-xl border border-slate-700 bg-[#0f172a] bg-no-repeat px-4 py-3 pr-12 text-base text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30";
 
@@ -37,6 +153,9 @@ const selectChevronStyle = {
   backgroundPosition: "right 1rem center",
   backgroundSize: "1rem",
 } as const;
+
+const AVAILABILITY_WARNING_NOTE =
+  "Upozornění dostupnosti: některé položky překračují dostupné množství. Řešení: půjčit / doplnit externě.";
 
 function PickerInput({
   type,
@@ -76,6 +195,35 @@ function PickerInput({
 function combineDateAndTime(dateValue: string, timeValue: string) {
   if (!dateValue || !timeValue) return null;
   return `${dateValue}T${timeValue}:00`;
+}
+
+function normalizeTime(value: string | null | undefined, fallback: string) {
+  if (!value || value.trim() === "") return fallback;
+  return value.length === 5 ? `${value}:00` : value;
+}
+
+function parseDate(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getZakazkaStart(row: ZakazkaAvailabilityRow) {
+  const direct = parseDate(row.akce_od);
+  if (direct) return direct;
+  if (!row.datum_od) return null;
+  return parseDate(`${row.datum_od}T${normalizeTime(row.cas_od, "00:00:00")}`);
+}
+
+function getZakazkaEnd(row: ZakazkaAvailabilityRow) {
+  const direct = parseDate(row.akce_do);
+  if (direct) return direct;
+  if (!row.datum_do) return null;
+  return parseDate(`${row.datum_do}T${normalizeTime(row.cas_do, "23:59:59")}`);
+}
+
+function rangesOverlap(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) {
+  return aStart.getTime() <= bEnd.getTime() && aEnd.getTime() >= bStart.getTime();
 }
 
 function deriveLegacyDate(value: string | null) {
@@ -118,6 +266,39 @@ function getLedKindLabel(kind: string) {
     default:
       return "—";
   }
+}
+
+function toNumber(value: number | string | null | undefined) {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("cs-CZ", { maximumFractionDigits: 2 }).format(value);
+}
+
+function getSkladPolozkaInfo(row: SetupPolozka) {
+  if (Array.isArray(row.skladove_polozky)) {
+    return row.skladove_polozky[0] ?? null;
+  }
+
+  return row.skladove_polozky;
+}
+
+function formatPosition(value: number | string | null | undefined) {
+  const text = String(value ?? "").trim();
+  return text || "—";
+}
+
+function createManualPlanItem(): ManualPlanItem {
+  return {
+    local_id:
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `manual-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    skladova_polozka_id: "",
+    mnozstvi: "1",
+  };
 }
 
 function createRealizace(index: number): RealizaceForm {
@@ -191,6 +372,283 @@ export default function NovaZakazkaPage() {
 
   const [poznamka, setPoznamka] = useState("");
   const [ukladam, setUkladam] = useState(false);
+  const [setupy, setSetupy] = useState<SkladSetup[]>([]);
+  const [setupPolozky, setSetupPolozky] = useState<SetupPolozka[]>([]);
+  const [setupSelections, setSetupSelections] = useState<Record<string, SetupSelection>>({});
+  const [setupyLoading, setSetupyLoading] = useState(true);
+  const [setupyError, setSetupyError] = useState<string | null>(null);
+  const [skladPolozky, setSkladPolozky] = useState<SkladPolozka[]>([]);
+  const [skladBloky, setSkladBloky] = useState<SkladBlok[]>([]);
+  const [kategorieTechniky, setKategorieTechniky] = useState<KategorieTechniky[]>([]);
+  const [podkategorieTechniky, setPodkategorieTechniky] = useState<PodkategorieTechniky[]>([]);
+  const [skladLoading, setSkladLoading] = useState(true);
+  const [skladError, setSkladError] = useState<string | null>(null);
+  const [manualPlanItems, setManualPlanItems] = useState<ManualPlanItem[]>([]);
+  const [availabilityConflicts, setAvailabilityConflicts] = useState<AvailabilityConflict[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSetupy() {
+      setSetupyLoading(true);
+      setSetupyError(null);
+
+      const { data: setupData, error: setupError } = await supabase
+        .from("setupy")
+        .select("setup_id, nazev, popis, poradi")
+        .eq("aktivni", true)
+        .order("poradi", { ascending: true })
+        .order("nazev", { ascending: true });
+
+      if (cancelled) return;
+
+      if (setupError) {
+        setSetupyError(setupError.message);
+        setSetupyLoading(false);
+        return;
+      }
+
+      const loadedSetupy = (setupData ?? []) as SkladSetup[];
+      setSetupy(loadedSetupy);
+
+      if (loadedSetupy.length === 0) {
+        setSetupPolozky([]);
+        setSetupyLoading(false);
+        return;
+      }
+
+      const setupIds = loadedSetupy.map((setup) => setup.setup_id);
+      const { data: polozkyData, error: polozkyError } = await supabase
+        .from("setup_polozky")
+        .select(
+          "setup_polozka_id, setup_id, skladova_polozka_id, mnozstvi, poradi, skladove_polozky(nazev, pozice)"
+        )
+        .in("setup_id", setupIds)
+        .order("poradi", { ascending: true })
+        .order("created_at", { ascending: true });
+
+      if (cancelled) return;
+
+      if (polozkyError) {
+        setSetupyError(polozkyError.message);
+        setSetupyLoading(false);
+        return;
+      }
+
+      setSetupPolozky((polozkyData ?? []) as SetupPolozka[]);
+      setSetupyLoading(false);
+    }
+
+    async function loadSkladCatalog() {
+      setSkladLoading(true);
+      setSkladError(null);
+
+      const [
+        { data: polozkyData, error: polozkyError },
+        { data: blokyData, error: blokyError },
+        { data: kategorieData, error: kategorieError },
+        { data: podkategorieData, error: podkategorieError },
+      ] = await Promise.all([
+        supabase
+          .from("skladove_polozky")
+          .select(
+            "skladova_polozka_id, nazev, pozice, celkem_k_dispozici, aktivni, sklad_blok_id, kategorie_techniky_id, podkategorie_techniky_id"
+          )
+          .eq("aktivni", true)
+          .order("nazev", { ascending: true }),
+        supabase
+          .from("sklad_bloky")
+          .select("sklad_blok_id, nazev, poradi")
+          .order("poradi", { ascending: true }),
+        supabase
+          .from("kategorie_techniky")
+          .select("kategorie_techniky_id, nazev, poradi")
+          .order("poradi", { ascending: true }),
+        supabase
+          .from("podkategorie_techniky")
+          .select("podkategorie_techniky_id, nazev, poradi")
+          .order("poradi", { ascending: true }),
+      ]);
+
+      if (cancelled) return;
+
+      const error =
+        polozkyError?.message ??
+        blokyError?.message ??
+        kategorieError?.message ??
+        podkategorieError?.message;
+
+      if (error) {
+        setSkladError(error);
+        setSkladLoading(false);
+        return;
+      }
+
+      setSkladPolozky((polozkyData ?? []) as SkladPolozka[]);
+      setSkladBloky((blokyData ?? []) as SkladBlok[]);
+      setKategorieTechniky((kategorieData ?? []) as KategorieTechniky[]);
+      setPodkategorieTechniky((podkategorieData ?? []) as PodkategorieTechniky[]);
+      setSkladLoading(false);
+    }
+
+    void loadSetupy();
+    void loadSkladCatalog();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const setupPolozkyBySetup = useMemo(() => {
+    const map = new Map<string, SetupPolozka[]>();
+    for (const row of setupPolozky) {
+      const current = map.get(row.setup_id) ?? [];
+      current.push(row);
+      map.set(row.setup_id, current);
+    }
+    return map;
+  }, [setupPolozky]);
+
+  const skladPolozkaMap = useMemo(
+    () => new Map(skladPolozky.map((item) => [item.skladova_polozka_id, item])),
+    [skladPolozky]
+  );
+
+  const skladBlokMap = useMemo(
+    () => new Map(skladBloky.map((item) => [item.sklad_blok_id, item])),
+    [skladBloky]
+  );
+
+  const kategorieMap = useMemo(
+    () => new Map(kategorieTechniky.map((item) => [item.kategorie_techniky_id, item])),
+    [kategorieTechniky]
+  );
+
+  const podkategorieMap = useMemo(
+    () =>
+      new Map(
+        podkategorieTechniky.map((item) => [item.podkategorie_techniky_id, item])
+      ),
+    [podkategorieTechniky]
+  );
+
+  const sortedSkladPolozky = useMemo(() => {
+    return [...skladPolozky].sort((a, b) => {
+      const aBlok = a.sklad_blok_id
+        ? (skladBlokMap.get(a.sklad_blok_id)?.poradi ?? 999999)
+        : 999999;
+      const bBlok = b.sklad_blok_id
+        ? (skladBlokMap.get(b.sklad_blok_id)?.poradi ?? 999999)
+        : 999999;
+
+      if (aBlok !== bBlok) return aBlok - bBlok;
+      return a.nazev.localeCompare(b.nazev, "cs");
+    });
+  }, [skladBlokMap, skladPolozky]);
+
+  const selectedSetupPlanRows = useMemo(() => {
+    const rows: SetupPlanPreviewRow[] = [];
+
+    for (const setup of setupy) {
+      const selection = setupSelections[setup.setup_id];
+      if (!selection?.selected) continue;
+
+      const setupQuantity = toNumber(selection.quantity || 1);
+      if (setupQuantity <= 0) continue;
+
+      const items = setupPolozkyBySetup.get(setup.setup_id) ?? [];
+      for (const item of items) {
+        const itemQuantity = toNumber(item.mnozstvi);
+        if (itemQuantity <= 0) continue;
+
+        const info = getSkladPolozkaInfo(item);
+        rows.push({
+          skladova_polozka_id: item.skladova_polozka_id,
+          nazev: info?.nazev?.trim() || item.skladova_polozka_id,
+          pozice: info?.pozice ?? null,
+          mnozstviVSetupu: itemQuantity,
+          pocetSetupu: setupQuantity,
+          vysledneMnozstvi: itemQuantity * setupQuantity,
+        });
+      }
+    }
+
+    return rows;
+  }, [setupPolozkyBySetup, setupSelections, setupy]);
+
+  const aggregatedSetupPlanRows = useMemo(() => {
+    const map = new Map<
+      string,
+      Pick<SetupPlanPreviewRow, "skladova_polozka_id" | "nazev" | "pozice" | "vysledneMnozstvi">
+    >();
+
+    for (const row of selectedSetupPlanRows) {
+      const current = map.get(row.skladova_polozka_id);
+      if (current) {
+        current.vysledneMnozstvi += row.vysledneMnozstvi;
+      } else {
+        map.set(row.skladova_polozka_id, {
+          skladova_polozka_id: row.skladova_polozka_id,
+          nazev: row.nazev,
+          pozice: row.pozice,
+          vysledneMnozstvi: row.vysledneMnozstvi,
+        });
+      }
+    }
+
+    return [...map.values()].sort((a, b) => a.nazev.localeCompare(b.nazev, "cs"));
+  }, [selectedSetupPlanRows]);
+
+  const manualPlanRows = useMemo(() => {
+    return manualPlanItems
+      .map((item) => {
+        const polozka = skladPolozkaMap.get(item.skladova_polozka_id);
+        const quantity = toNumber(item.mnozstvi);
+        if (!polozka || quantity <= 0) return null;
+
+        return {
+          skladova_polozka_id: polozka.skladova_polozka_id,
+          nazev: polozka.nazev,
+          pozice: polozka.pozice,
+          vysledneMnozstvi: quantity,
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => Boolean(row));
+  }, [manualPlanItems, skladPolozkaMap]);
+
+  const aggregatedPlanRows = useMemo(() => {
+    const map = new Map<string, AggregatedPlanRow>();
+
+    for (const row of aggregatedSetupPlanRows) {
+      map.set(row.skladova_polozka_id, {
+        skladova_polozka_id: row.skladova_polozka_id,
+        nazev: row.nazev,
+        pozice: row.pozice,
+        setupMnozstvi: row.vysledneMnozstvi,
+        manualMnozstvi: 0,
+        vysledneMnozstvi: row.vysledneMnozstvi,
+      });
+    }
+
+    for (const row of manualPlanRows) {
+      const current = map.get(row.skladova_polozka_id);
+      if (current) {
+        current.manualMnozstvi += row.vysledneMnozstvi;
+        current.vysledneMnozstvi += row.vysledneMnozstvi;
+      } else {
+        map.set(row.skladova_polozka_id, {
+          skladova_polozka_id: row.skladova_polozka_id,
+          nazev: row.nazev,
+          pozice: row.pozice,
+          setupMnozstvi: 0,
+          manualMnozstvi: row.vysledneMnozstvi,
+          vysledneMnozstvi: row.vysledneMnozstvi,
+        });
+      }
+    }
+
+    return [...map.values()].sort((a, b) => a.nazev.localeCompare(b.nazev, "cs"));
+  }, [aggregatedSetupPlanRows, manualPlanRows]);
 
   function updateRealizace(
     localId: string,
@@ -231,6 +689,150 @@ export default function NovaZakazkaPage() {
     });
   }
 
+  function updateSetupSelection(setupId: string, patch: Partial<SetupSelection>) {
+    setSetupSelections((prev) => {
+      const current = prev[setupId] ?? { selected: false, quantity: "1" };
+      return {
+        ...prev,
+        [setupId]: {
+          ...current,
+          ...patch,
+          quantity: patch.quantity ?? current.quantity,
+        },
+      };
+    });
+  }
+
+  function getSkladPolozkaMeta(polozka: SkladPolozka | null | undefined) {
+    return {
+      okruh: polozka?.sklad_blok_id
+        ? (skladBlokMap.get(polozka.sklad_blok_id)?.nazev ?? "—")
+        : "—",
+      kategorie: polozka?.kategorie_techniky_id
+        ? (kategorieMap.get(polozka.kategorie_techniky_id)?.nazev ?? "—")
+        : "—",
+      podkategorie: polozka?.podkategorie_techniky_id
+        ? (podkategorieMap.get(polozka.podkategorie_techniky_id)?.nazev ?? "—")
+        : "—",
+      pozice: formatPosition(polozka?.pozice),
+    };
+  }
+
+  function addManualPlanItem() {
+    setManualPlanItems((prev) => [...prev, createManualPlanItem()]);
+  }
+
+  function updateManualPlanItem(
+    localId: string,
+    field: keyof Pick<ManualPlanItem, "skladova_polozka_id" | "mnozstvi">,
+    value: string
+  ) {
+    setManualPlanItems((prev) =>
+      prev.map((item) =>
+        item.local_id === localId
+          ? {
+              ...item,
+              [field]: value,
+            }
+          : item
+      )
+    );
+  }
+
+  function removeManualPlanItem(localId: string) {
+    setManualPlanItems((prev) => prev.filter((item) => item.local_id !== localId));
+  }
+
+  async function checkAvailability(akceOd: string, akceDo: string) {
+    if (aggregatedPlanRows.length === 0) return [];
+
+    const newStart = parseDate(akceOd);
+    const newEnd = parseDate(akceDo);
+    if (!newStart || !newEnd) return [];
+
+    const plannedIds = aggregatedPlanRows.map((row) => row.skladova_polozka_id);
+
+    const { data: zakazkyRaw, error: zakazkyError } = await supabase
+      .from("zakazky")
+      .select("zakazka_id, datum_od, datum_do, cas_od, cas_do, akce_od, akce_do, zrusena");
+
+    if (zakazkyError) {
+      throw new Error(zakazkyError.message);
+    }
+
+    const kolidujiciZakazky = ((zakazkyRaw ?? []) as ZakazkaAvailabilityRow[]).filter(
+      (zakazka) => {
+        if (zakazka.zrusena) return false;
+
+        const start = getZakazkaStart(zakazka);
+        const end = getZakazkaEnd(zakazka);
+        if (!start || !end) return false;
+
+        return rangesOverlap(newStart, newEnd, start, end);
+      }
+    );
+
+    const kolidujiciIds = kolidujiciZakazky.map((zakazka) => zakazka.zakazka_id);
+    const planovanoKolize = new Map<string, number>();
+
+    if (kolidujiciIds.length > 0) {
+      const { data: technikaRaw, error: technikaError } = await supabase
+        .from("technika_na_zakazce")
+        .select("zakazka_id, skladova_polozka_id, mnozstvi")
+        .in("zakazka_id", kolidujiciIds)
+        .in("skladova_polozka_id", plannedIds);
+
+      if (technikaError) {
+        throw new Error(technikaError.message);
+      }
+
+      for (const row of (technikaRaw ?? []) as TechnikaAvailabilityRow[]) {
+        planovanoKolize.set(
+          row.skladova_polozka_id,
+          (planovanoKolize.get(row.skladova_polozka_id) ?? 0) + toNumber(row.mnozstvi)
+        );
+      }
+    }
+
+    const nedostupneKusy = new Map<string, number>();
+    const { data: kusyRaw } = await supabase
+      .from("sklad_polozky_kusy")
+      .select("skladova_polozka_id, stav")
+      .in("skladova_polozka_id", plannedIds)
+      .in("stav", ["poskozeno", "blokovano", "odpis"]);
+
+    for (const row of (kusyRaw ?? []) as SkladKusAvailabilityRow[]) {
+      nedostupneKusy.set(
+        row.skladova_polozka_id,
+        (nedostupneKusy.get(row.skladova_polozka_id) ?? 0) + 1
+      );
+    }
+
+    return aggregatedPlanRows
+      .map((row) => {
+        const polozka = skladPolozkaMap.get(row.skladova_polozka_id);
+        const celkemSkladem = toNumber(polozka?.celkem_k_dispozici);
+        const kolize = planovanoKolize.get(row.skladova_polozka_id) ?? 0;
+        const nedostupne = nedostupneKusy.get(row.skladova_polozka_id) ?? 0;
+        const dostupne = Math.max(celkemSkladem - kolize - nedostupne, 0);
+        const chybi = Math.max(row.vysledneMnozstvi - dostupne, 0);
+
+        if (chybi <= 0) return null;
+
+        return {
+          skladova_polozka_id: row.skladova_polozka_id,
+          nazev: row.nazev,
+          pozadovano: row.vysledneMnozstvi,
+          celkemSkladem,
+          planovanoKolize: kolize,
+          nedostupneKusy: nedostupne,
+          dostupne,
+          chybi,
+        };
+      })
+      .filter((row): row is AvailabilityConflict => Boolean(row));
+  }
+
   async function vygenerovatCisloZakazky() {
     const rok = new Date().getFullYear();
 
@@ -258,7 +860,7 @@ export default function NovaZakazkaPage() {
     return `${rok}/${String(dalsiPoradi).padStart(3, "0")}`;
   }
 
-  async function ulozit() {
+  async function ulozit(forceAvailabilityWarning = false) {
     if (!nazev || !misto || !akceOdDatum || !akceDoDatum) {
       alert("Vyplň název, místo, akce od a akce do.");
       return;
@@ -338,9 +940,25 @@ export default function NovaZakazkaPage() {
 
     try {
       setUkladam(true);
+      const shouldAppendAvailabilityWarning =
+        forceAvailabilityWarning && availabilityConflicts.length > 0;
+      setAvailabilityConflicts([]);
+
+      if (!forceAvailabilityWarning) {
+        const conflicts = await checkAvailability(akceOd, akceDo);
+        if (conflicts.length > 0) {
+          setAvailabilityConflicts(conflicts);
+          setUkladam(false);
+          return;
+        }
+      }
 
       const cisloZakazky = await vygenerovatCisloZakazky();
       const prvniRealizace = realizaceList[0];
+      const finalPoznamka =
+        shouldAppendAvailabilityWarning
+          ? [poznamka.trim(), AVAILABILITY_WARNING_NOTE].filter(Boolean).join("\n")
+          : poznamka.trim();
 
       const prvniLedWidthNumber = prvniRealizace.ledWidth
         ? Number(prvniRealizace.ledWidth.replace(",", "."))
@@ -403,7 +1021,7 @@ export default function NovaZakazkaPage() {
           kamery_count: prvniRealizace.kamery,
           dron: prvniRealizace.dron,
 
-          poznamka: poznamka || null,
+          poznamka: finalPoznamka || null,
         })
         .select("zakazka_id")
         .single();
@@ -459,6 +1077,24 @@ export default function NovaZakazkaPage() {
         }
       }
 
+      if (aggregatedPlanRows.length > 0) {
+        const technikaPayload = aggregatedPlanRows.map((row) => ({
+          zakazka_id: zakazkaId,
+          skladova_polozka_id: row.skladova_polozka_id,
+          mnozstvi: row.vysledneMnozstvi,
+        }));
+
+        const { error: technikaError } = await supabase
+          .from("technika_na_zakazce")
+          .insert(technikaPayload);
+
+        if (technikaError) {
+          alert(technikaError.message);
+          setUkladam(false);
+          return;
+        }
+      }
+
       router.push(`/zakazky/${zakazkaId}`);
       router.refresh();
     } catch (e) {
@@ -470,6 +1106,77 @@ export default function NovaZakazkaPage() {
 
   return (
     <div className="w-full">
+      {availabilityConflicts.length > 0 ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4">
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl border-2 border-amber-500 bg-slate-950 p-5 shadow-2xl shadow-amber-950/40">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="text-xs font-black uppercase tracking-wide text-amber-300">
+                  Upozornění dostupnosti
+                </div>
+                <h2 className="mt-1 text-2xl font-black text-white">
+                  Některé položky překračují dostupné množství
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-slate-300">
+                  Zakázku můžeš přesto uložit. Do poznámky se doplní informace, že
+                  chybějící položky je potřeba půjčit nebo doplnit externě.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3">
+              {availabilityConflicts.map((conflict) => (
+                <section
+                  key={conflict.skladova_polozka_id}
+                  className="rounded-2xl border border-amber-900/70 bg-amber-950/30 p-4"
+                >
+                  <div className="text-lg font-black text-white">{conflict.nazev}</div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm md:grid-cols-6">
+                    <div className="rounded-xl bg-slate-950 p-3">
+                      <div className="text-xs text-slate-500">Požadováno</div>
+                      <div className="font-black text-white">{formatNumber(conflict.pozadovano)}</div>
+                    </div>
+                    <div className="rounded-xl bg-slate-950 p-3">
+                      <div className="text-xs text-slate-500">Celkem sklad</div>
+                      <div className="font-black text-white">{formatNumber(conflict.celkemSkladem)}</div>
+                    </div>
+                    <div className="rounded-xl bg-slate-950 p-3">
+                      <div className="text-xs text-slate-500">Plán kolize</div>
+                      <div className="font-black text-white">{formatNumber(conflict.planovanoKolize)}</div>
+                    </div>
+                    <div className="rounded-xl bg-slate-950 p-3">
+                      <div className="text-xs text-slate-500">Poškoz./blok.</div>
+                      <div className="font-black text-white">{formatNumber(conflict.nedostupneKusy)}</div>
+                    </div>
+                    <div className="rounded-xl bg-slate-950 p-3">
+                      <div className="text-xs text-slate-500">Dostupné</div>
+                      <div className="font-black text-white">{formatNumber(conflict.dostupne)}</div>
+                    </div>
+                    <div className="rounded-xl border border-red-800 bg-red-950 p-3">
+                      <div className="text-xs text-red-300">Chybí</div>
+                      <div className="font-black text-red-100">{formatNumber(conflict.chybi)}</div>
+                    </div>
+                  </div>
+                </section>
+              ))}
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <Button
+                variant="secondary"
+                onClick={() => setAvailabilityConflicts([])}
+                disabled={ukladam}
+              >
+                Zpět upravit
+              </Button>
+              <Button onClick={() => void ulozit(true)} disabled={ukladam}>
+                {ukladam ? "Ukládám..." : "Přesto uložit"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <PageHeader
         title="Nová zakázka"
         description="Vyplň základní informace, logistiku, časové bloky a basic look."
@@ -972,6 +1679,334 @@ export default function NovaZakazkaPage() {
             </div>
           </Card>
 
+          <Card className="space-y-6 border-slate-700 bg-[#0b1324]">
+            <div>
+              <div className="text-lg font-semibold text-white">Setupy skladu</div>
+              <div className="mt-1 text-sm text-slate-400">
+                Vyber skladové setupy, ze kterých se po uložení vytvoří plán množství v technice
+                zakázky. Konkrétní kusy se vybírají až při fyzické nakládce scanem.
+              </div>
+            </div>
+
+            {setupyLoading ? (
+              <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-4 text-sm text-slate-400">
+                Načítám setupy skladu…
+              </div>
+            ) : setupyError ? (
+              <div className="rounded-xl border border-red-800 bg-red-950/40 px-4 py-4 text-sm text-red-100">
+                Chyba načtení setupů: {setupyError}
+              </div>
+            ) : setupy.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-700 px-4 py-4 text-sm text-slate-400">
+                Zatím nejsou vytvořené žádné aktivní skladové setupy.
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {setupy.map((setup) => {
+                  const selection = setupSelections[setup.setup_id] ?? {
+                    selected: false,
+                    quantity: "1",
+                  };
+                  const setupQuantity = Math.max(toNumber(selection.quantity || 1), 0);
+                  const polozky = setupPolozkyBySetup.get(setup.setup_id) ?? [];
+
+                  return (
+                    <section
+                      key={setup.setup_id}
+                      className={[
+                        "rounded-2xl border p-4",
+                        selection.selected
+                          ? "border-blue-700 bg-blue-950/30"
+                          : "border-slate-800 bg-slate-950/50",
+                      ].join(" ")}
+                    >
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={selection.selected}
+                            onChange={(e) =>
+                              updateSetupSelection(setup.setup_id, {
+                                selected: e.target.checked,
+                              })
+                            }
+                            className="mt-1 h-5 w-5 accent-blue-600"
+                          />
+                          <span className="min-w-0">
+                            <span className="block text-xl font-black text-white">
+                              {setup.nazev}
+                            </span>
+                            {setup.popis ? (
+                              <span className="mt-1 block text-sm text-slate-400">
+                                {setup.popis}
+                              </span>
+                            ) : null}
+                            <span className="mt-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              Položek v setupu: {polozky.length}
+                            </span>
+                          </span>
+                        </label>
+
+                        <Field label="Množství setupu">
+                          <Input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={selection.quantity}
+                            onChange={(e) =>
+                              updateSetupSelection(setup.setup_id, {
+                                quantity: e.target.value,
+                              })
+                            }
+                            disabled={!selection.selected}
+                          />
+                        </Field>
+                      </div>
+
+                      {selection.selected ? (
+                        <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                          <div className="mb-3 text-sm font-bold text-slate-200">
+                            Preview položek setupu
+                          </div>
+
+                          {polozky.length === 0 ? (
+                            <div className="text-sm text-slate-500">
+                              Tento setup zatím nemá žádné položky.
+                            </div>
+                          ) : (
+                            <div className="grid gap-2">
+                              {polozky.map((item) => {
+                                const info = getSkladPolozkaInfo(item);
+                                const itemQuantity = toNumber(item.mnozstvi);
+                                const total = itemQuantity * setupQuantity;
+
+                                return (
+                                  <div
+                                    key={item.setup_polozka_id}
+                                    className="grid gap-2 rounded-xl border border-slate-800 bg-[#0b1324] px-4 py-3 text-sm md:grid-cols-[1fr_120px_140px_120px]"
+                                  >
+                                    <div>
+                                      <div className="font-bold text-white">
+                                        {info?.nazev?.trim() || item.skladova_polozka_id}
+                                      </div>
+                                      <div className="mt-1 text-xs text-slate-500">
+                                        Pozice: {formatPosition(info?.pozice)}
+                                      </div>
+                                    </div>
+                                    <div className="text-slate-300">
+                                      <span className="text-slate-500">V setupu: </span>
+                                      {formatNumber(itemQuantity)}
+                                    </div>
+                                    <div className="text-slate-300">
+                                      <span className="text-slate-500">Počet setupů: </span>
+                                      {formatNumber(setupQuantity)}
+                                    </div>
+                                    <div className="font-black text-blue-100">
+                                      {formatNumber(total)}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+                    </section>
+                  );
+                })}
+              </div>
+            )}
+
+            {aggregatedSetupPlanRows.length > 0 ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <div className="text-sm font-bold text-slate-200">
+                  Součet ze setupů
+                </div>
+                <div className="mt-3 grid gap-2">
+                  {aggregatedSetupPlanRows.map((row) => (
+                    <div
+                      key={row.skladova_polozka_id}
+                      className="flex flex-col gap-1 rounded-xl border border-slate-800 bg-[#0b1324] px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <div className="font-bold text-white">{row.nazev}</div>
+                        <div className="text-xs text-slate-500">
+                          Pozice: {formatPosition(row.pozice)}
+                        </div>
+                      </div>
+                      <div className="text-lg font-black text-blue-100">
+                        {formatNumber(row.vysledneMnozstvi)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </Card>
+
+          <Card className="space-y-6 border-slate-700 bg-[#0b1324]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-lg font-semibold text-white">Další položky mimo setup</div>
+                <div className="mt-1 text-sm text-slate-400">
+                  Přidej další skladové položky do plánu množství. Stále se nevybírají konkrétní kusy.
+                </div>
+              </div>
+
+              <Button variant="secondary" onClick={addManualPlanItem} disabled={skladLoading}>
+                + Přidat položku
+              </Button>
+            </div>
+
+            {skladLoading ? (
+              <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-4 text-sm text-slate-400">
+                Načítám skladové položky…
+              </div>
+            ) : skladError ? (
+              <div className="rounded-xl border border-red-800 bg-red-950/40 px-4 py-4 text-sm text-red-100">
+                Chyba načtení skladu: {skladError}
+              </div>
+            ) : manualPlanItems.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-700 px-4 py-4 text-sm text-slate-400">
+                Zatím nejsou přidané žádné ruční položky mimo setup.
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {manualPlanItems.map((manualItem) => {
+                  const selectedPolozka = skladPolozkaMap.get(manualItem.skladova_polozka_id);
+                  const meta = getSkladPolozkaMeta(selectedPolozka);
+
+                  return (
+                    <section
+                      key={manualItem.local_id}
+                      className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                    >
+                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_140px_auto] lg:items-start">
+                        <Field label="Skladová položka">
+                          <select
+                            value={manualItem.skladova_polozka_id}
+                            onChange={(e) =>
+                              updateManualPlanItem(
+                                manualItem.local_id,
+                                "skladova_polozka_id",
+                                e.target.value
+                              )
+                            }
+                            className={selectClassName}
+                            style={selectChevronStyle}
+                          >
+                            <option value="">Vyber položku</option>
+                            {sortedSkladPolozky.map((polozka) => {
+                              const optionMeta = getSkladPolozkaMeta(polozka);
+
+                              return (
+                                <option
+                                  key={polozka.skladova_polozka_id}
+                                  value={polozka.skladova_polozka_id}
+                                >
+                                  {optionMeta.okruh} / {polozka.nazev}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </Field>
+
+                        <Field label="Množství">
+                          <Input
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={manualItem.mnozstvi}
+                            onChange={(e) =>
+                              updateManualPlanItem(
+                                manualItem.local_id,
+                                "mnozstvi",
+                                e.target.value
+                              )
+                            }
+                          />
+                        </Field>
+
+                        <div className="pt-7">
+                          <Button
+                            variant="secondary"
+                            onClick={() => removeManualPlanItem(manualItem.local_id)}
+                          >
+                            Odebrat
+                          </Button>
+                        </div>
+                      </div>
+
+                      {selectedPolozka ? (
+                        <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-slate-300">
+                          <span className="rounded-md bg-slate-800 px-2 py-1">
+                            Název: {selectedPolozka.nazev}
+                          </span>
+                          <span className="rounded-md bg-slate-800 px-2 py-1">
+                            Okruh: {meta.okruh}
+                          </span>
+                          <span className="rounded-md bg-slate-800 px-2 py-1">
+                            Kategorie: {meta.kategorie}
+                          </span>
+                          <span className="rounded-md bg-slate-800 px-2 py-1">
+                            Podkategorie: {meta.podkategorie}
+                          </span>
+                          <span className="rounded-md bg-emerald-950 px-2 py-1 text-emerald-100">
+                            Pozice: {meta.pozice}
+                          </span>
+                        </div>
+                      ) : null}
+                    </section>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+
+          <Card className="space-y-4 border-emerald-800 bg-emerald-950/20">
+            <div>
+              <div className="text-lg font-semibold text-emerald-100">
+                Výsledný plán techniky
+              </div>
+              <div className="mt-1 text-sm text-slate-400">
+                Součet setupů a ručních položek, který se po uložení vloží do technika_na_zakazce.
+              </div>
+            </div>
+
+            {aggregatedPlanRows.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-emerald-900 px-4 py-4 text-sm text-slate-400">
+                Zatím není vybraná žádná plánovaná technika.
+              </div>
+            ) : (
+              <div className="grid gap-2">
+                {aggregatedPlanRows.map((row) => (
+                  <div
+                    key={row.skladova_polozka_id}
+                    className="grid gap-2 rounded-xl border border-emerald-900/60 bg-slate-950 px-4 py-3 text-sm md:grid-cols-[1fr_120px_120px_120px]"
+                  >
+                    <div>
+                      <div className="font-bold text-white">{row.nazev}</div>
+                      <div className="text-xs text-slate-500">
+                        Pozice: {formatPosition(row.pozice)}
+                      </div>
+                    </div>
+                    <div className="text-slate-300">
+                      <span className="text-slate-500">Setupy: </span>
+                      {formatNumber(row.setupMnozstvi)}
+                    </div>
+                    <div className="text-slate-300">
+                      <span className="text-slate-500">Ručně: </span>
+                      {formatNumber(row.manualMnozstvi)}
+                    </div>
+                    <div className="text-lg font-black text-emerald-100">
+                      {formatNumber(row.vysledneMnozstvi)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
           <Field label="Poznámka">
             <Textarea
               value={poznamka}
@@ -983,7 +2018,7 @@ export default function NovaZakazkaPage() {
           </Field>
 
           <div className="flex items-center gap-3 pt-2">
-            <Button onClick={ulozit} disabled={ukladam}>
+            <Button onClick={() => void ulozit()} disabled={ukladam}>
               {ukladam ? "Ukládám..." : "Uložit"}
             </Button>
 
