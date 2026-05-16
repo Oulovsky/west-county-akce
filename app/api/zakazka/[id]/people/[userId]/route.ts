@@ -13,6 +13,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       return session.response;
     }
 
+    // TODO(people-api): Parametr userId je z historických důvodů ve skutečnosti assignment id.
     const { userId: assignmentId } = await params;
     const { supabase } = session;
     const body = await req.json();
@@ -44,6 +45,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
       return session.response;
     }
 
+    // TODO(people-api): Parametr userId je z historických důvodů ve skutečnosti assignment id.
     const { userId: assignmentId } = await params;
     const { supabase } = session;
 

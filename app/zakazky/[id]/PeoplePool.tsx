@@ -98,6 +98,8 @@ type PersonChipProps = {
   badge?: string;
   warningMark?: boolean;
   secondaryBadge?: string;
+  details?: string[];
+  conflictDetail?: string | null;
 };
 
 type BlockConfig = {
@@ -137,6 +139,8 @@ function PersonChip({
   badge,
   warningMark = false,
   secondaryBadge,
+  details = [],
+  conflictDetail = null,
 }: PersonChipProps) {
   const toneClassName =
     tone === "conflict"
@@ -161,6 +165,20 @@ function PersonChip({
           ) : null}
 
           {secondaryBadge ? <Badge variant="default">{secondaryBadge}</Badge> : null}
+        </div>
+      ) : null}
+
+      {details.length > 0 ? (
+        <div className="mt-3 space-y-1 text-xs font-medium text-slate-300">
+          {details.map((detail) => (
+            <div key={detail}>{detail}</div>
+          ))}
+        </div>
+      ) : null}
+
+      {conflictDetail ? (
+        <div className="mt-3 rounded-xl border border-orange-400/30 bg-orange-500/10 px-3 py-2 text-xs font-semibold text-orange-100">
+          {conflictDetail}
         </div>
       ) : null}
 
@@ -338,6 +356,45 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
 
   function getConflictForAssignment(a: Assignment) {
     return getConflictForRange(a.user_id, a.datum_od, a.datum_do);
+  }
+
+  function formatDateTimeShort(value?: string | null) {
+    if (!value) return "";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "";
+
+    return d.toLocaleString("cs-CZ", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  function formatAssignmentRange(from?: string | null, to?: string | null) {
+    const fromText = formatDateTimeShort(from);
+    const toText = formatDateTimeShort(to);
+
+    if (fromText && toText) return `${fromText} – ${toText}`;
+    if (fromText) return `Od ${fromText}`;
+    if (toText) return `Do ${toText}`;
+    return "Čas není zadaný";
+  }
+
+  function formatConflictDetail(conflict: ReturnType<typeof getConflictForRange>) {
+    if (!conflict) return null;
+
+    const name = conflict.otherName?.trim();
+    const range = formatAssignmentRange(conflict.from, conflict.to);
+    const hasRange = range !== "Čas není zadaný";
+
+    if (name && name !== "Jiná zakázka") {
+      return hasRange ? `Kolize: ${name} · ${range}` : `Kolize: ${name}`;
+    }
+
+    return hasRange
+      ? `Kolize s jinou zakázkou · ${range}`
+      : "Kolize s jinou zakázkou";
   }
 
   function getConflictForPoolUser(userId: string, typBloku: TypBloku) {
@@ -584,7 +641,9 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
                       if (!u) return null;
 
                       const n = name(u.user_name);
-                      const hasConflict = Boolean(a.has_conflict);
+                      const conflict = getConflictForAssignment(a);
+                      const hasConflict = Boolean(a.has_conflict || conflict);
+                      const blockLabel = getTypBlokuLabel(a.typ_bloku);
 
                       return (
                         <PersonChip
@@ -594,7 +653,12 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
                           tone={hasConflict ? "conflict" : "assigned"}
                           onClick={() => openEdit(a)}
                           badge={hasConflict ? "Kolize" : "Přiřazeno"}
-                          secondaryBadge={getTypBlokuLabel(a.typ_bloku)}
+                          secondaryBadge={blockLabel}
+                          details={[
+                            `Blok: ${blockLabel}`,
+                            `Čas: ${formatAssignmentRange(a.datum_od, a.datum_do)}`,
+                          ]}
+                          conflictDetail={formatConflictDetail(conflict)}
                           warningMark={hasConflict}
                         />
                       );
