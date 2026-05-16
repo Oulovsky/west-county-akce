@@ -179,7 +179,9 @@ export function ZakazkaLoadingScanClient({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const frameRef = useRef<number | null>(null);
+  const resumeTimerRef = useRef<number | null>(null);
   const processingRef = useRef(false);
+  const successCanAutoResumeRef = useRef(false);
 
   const currentOkruhy: ChecklistOkruh[] =
     workflowMode === "loading" ? loadingOkruhy : unloadingOkruhy;
@@ -208,6 +210,11 @@ export function ZakazkaLoadingScanClient({
   );
 
   const stopCamera = useCallback(() => {
+    if (resumeTimerRef.current !== null) {
+      window.clearTimeout(resumeTimerRef.current);
+      resumeTimerRef.current = null;
+    }
+
     if (frameRef.current !== null) {
       window.cancelAnimationFrame(frameRef.current);
       frameRef.current = null;
@@ -333,12 +340,14 @@ export function ZakazkaLoadingScanClient({
   const processPayload = useCallback(
     (payload: string, decision?: ScanDecision) => {
       if (!selectedItem) {
+        successCanAutoResumeRef.current = false;
         setResult({ ok: false, error: "Nejdřív vyber položku checklistu." });
         return;
       }
 
       if (processingRef.current) return;
       processingRef.current = true;
+      successCanAutoResumeRef.current = false;
       setResult(null);
       setScanMessage(
         workflowMode === "loading"
@@ -351,14 +360,19 @@ export function ZakazkaLoadingScanClient({
           workflowMode === "loading"
             ? processLoadingScanAction
             : processUnloadingScanAction;
+        const effectiveDecision =
+          decision ?? (workflowMode === "loading" && reserveMode ? "load_reserve" : undefined);
         const next = await action(
           payload,
           selectedItem.skladovaPolozkaId,
-          decision ?? (workflowMode === "loading" && reserveMode ? "load_reserve" : undefined)
+          effectiveDecision
         );
         setResult(next);
 
         if (next.ok) {
+          successCanAutoResumeRef.current =
+            !effectiveDecision && next.counts.remaining > 0;
+
           if (workflowMode === "loading") {
             updateLoadingCounts(
               selectedItem.skladovaPolozkaId,
@@ -381,9 +395,11 @@ export function ZakazkaLoadingScanClient({
           processingRef.current = false;
           setValue("");
         } else if (next.requiresDecision) {
+          successCanAutoResumeRef.current = false;
           setScanMessage("Vyžaduje rozhodnutí.");
           processingRef.current = false;
         } else {
+          successCanAutoResumeRef.current = false;
           setScanMessage("Scan odmítnut.");
           processingRef.current = false;
         }
@@ -393,6 +409,8 @@ export function ZakazkaLoadingScanClient({
   );
 
   const scanFrame = useCallback(() => {
+    frameRef.current = null;
+
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas || processingRef.current) return;
@@ -424,6 +442,29 @@ export function ZakazkaLoadingScanClient({
     setScanMessage("Hledám QR kód…");
     frameRef.current = window.requestAnimationFrame(scanFrame);
   }, [processPayload]);
+
+  useEffect(() => {
+    if (!result?.ok) return;
+    if (!successCanAutoResumeRef.current) return;
+    if (cameraStatus !== "scanning") return;
+    if (reserveMode) return;
+    if (result.counts.remaining <= 0) return;
+
+    setScanMessage(`${result.message}. Připraveno na další scan…`);
+
+    resumeTimerRef.current = window.setTimeout(() => {
+      resumeTimerRef.current = null;
+      if (processingRef.current || frameRef.current !== null) return;
+      frameRef.current = window.requestAnimationFrame(scanFrame);
+    }, 500);
+
+    return () => {
+      if (resumeTimerRef.current !== null) {
+        window.clearTimeout(resumeTimerRef.current);
+        resumeTimerRef.current = null;
+      }
+    };
+  }, [cameraStatus, reserveMode, result, scanFrame]);
 
   const startCamera = useCallback(async () => {
     setResult(null);
