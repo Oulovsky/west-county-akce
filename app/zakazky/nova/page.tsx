@@ -9,6 +9,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { Textarea } from "@/components/ui/textarea";
+import { GpsLocationFields } from "../GpsLocationFields";
 
 type TypObsluhy = "s_obsluhou" | "bez_obsluhy";
 
@@ -273,6 +274,13 @@ function toNumber(value: number | string | null | undefined) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function toOptionalNumber(value: string) {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized) return null;
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : null;
+}
+
 function formatNumber(value: number) {
   return new Intl.NumberFormat("cs-CZ", { maximumFractionDigits: 2 }).format(value);
 }
@@ -343,6 +351,14 @@ export default function NovaZakazkaPage() {
 
   const [nazev, setNazev] = useState("");
   const [misto, setMisto] = useState("");
+  const [mistoGps, setMistoGps] = useState({
+    lat: "",
+    lng: "",
+    radiusM: "300",
+    accuracyM: "",
+    source: "",
+    updatedAt: "",
+  });
   const [typObsluhy, setTypObsluhy] = useState<TypObsluhy>("s_obsluhou");
 
   const [odjezdZeSkladuDatum, setOdjezdZeSkladuDatum] = useState("");
@@ -970,6 +986,10 @@ export default function NovaZakazkaPage() {
         prvniLedWidthNumber > 0 && prvniLedHeightNumber > 0
           ? Number((prvniLedWidthNumber * prvniLedHeightNumber).toFixed(2))
           : null;
+      const mistoLat = toOptionalNumber(mistoGps.lat);
+      const mistoLng = toOptionalNumber(mistoGps.lng);
+      const mistoGpsRadius = toOptionalNumber(mistoGps.radiusM) ?? 300;
+      const mistoGpsPresnost = toOptionalNumber(mistoGps.accuracyM);
 
       const { data, error } = await supabase
         .from("zakazky")
@@ -978,6 +998,13 @@ export default function NovaZakazkaPage() {
           stav_zakazky_id: "7a0e168f-216f-40bd-b33e-3f1f517620da",
           nazev,
           misto,
+          misto_lat: mistoLat,
+          misto_lng: mistoLng,
+          misto_gps_radius_m: mistoGpsRadius,
+          misto_gps_presnost_m: mistoGpsPresnost,
+          misto_gps_zdroj: mistoGps.source || (mistoLat != null && mistoLng != null ? "manual" : null),
+          misto_gps_updated_at:
+            mistoGps.updatedAt || (mistoLat != null && mistoLng != null ? new Date().toISOString() : null),
           typ_obsluhy: typObsluhy,
 
           odjezd_ze_skladu: odjezdZeSkladu,
@@ -1199,6 +1226,8 @@ export default function NovaZakazkaPage() {
               placeholder="Např. Bečov"
             />
           </Field>
+
+          <GpsLocationFields onChange={setMistoGps} />
 
           <Field label="Typ obsluhy">
             <select

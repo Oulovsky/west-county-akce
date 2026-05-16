@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { GpsLocationFields } from "../../GpsLocationFields";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -38,6 +39,13 @@ function toDateTimeParts(value?: string | null) {
     date: iso.slice(0, 10),
     time: iso.slice(11, 16) || "12:00",
   };
+}
+
+function toOptionalNumber(value: string) {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized) return null;
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : null;
 }
 
 export default async function EditZakazkyPage({ params }: PageProps) {
@@ -85,6 +93,12 @@ export default async function EditZakazkyPage({ params }: PageProps) {
 
     const nazev = String(formData.get("nazev") ?? "");
     const misto = String(formData.get("misto") ?? "");
+    const mistoLat = toOptionalNumber(String(formData.get("misto_lat") ?? ""));
+    const mistoLng = toOptionalNumber(String(formData.get("misto_lng") ?? ""));
+    const mistoGpsRadius = toOptionalNumber(String(formData.get("misto_gps_radius_m") ?? "")) ?? 300;
+    const mistoGpsPresnost = toOptionalNumber(String(formData.get("misto_gps_presnost_m") ?? ""));
+    const mistoGpsZdrojRaw = String(formData.get("misto_gps_zdroj") ?? "").trim();
+    const mistoGpsUpdatedAtRaw = String(formData.get("misto_gps_updated_at") ?? "").trim();
     const typObsluhy = String(formData.get("typ_obsluhy") ?? "s_obsluhou");
     const poznamka = String(formData.get("poznamka") ?? "");
 
@@ -159,6 +173,14 @@ export default async function EditZakazkyPage({ params }: PageProps) {
       .update({
         nazev,
         misto,
+        misto_lat: mistoLat,
+        misto_lng: mistoLng,
+        misto_gps_radius_m: mistoGpsRadius,
+        misto_gps_presnost_m: mistoGpsPresnost,
+        misto_gps_zdroj:
+          mistoGpsZdrojRaw || (mistoLat != null && mistoLng != null ? "manual" : null),
+        misto_gps_updated_at:
+          mistoGpsUpdatedAtRaw || (mistoLat != null && mistoLng != null ? new Date().toISOString() : null),
         typ_obsluhy: typObsluhy,
         odjezd_ze_skladu: odjezdZeSkladu,
         sraz_na_miste: srazNaMiste,
@@ -232,6 +254,15 @@ export default async function EditZakazkyPage({ params }: PageProps) {
                 placeholder="Např. Bečov"
               />
             </Field>
+
+            <GpsLocationFields
+              defaultLat={data.misto_lat}
+              defaultLng={data.misto_lng}
+              defaultRadiusM={data.misto_gps_radius_m ?? 300}
+              defaultAccuracyM={data.misto_gps_presnost_m}
+              defaultSource={data.misto_gps_zdroj}
+              defaultUpdatedAt={data.misto_gps_updated_at}
+            />
 
             <Field label="Typ obsluhy">
               <select

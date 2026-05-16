@@ -10,6 +10,9 @@ type ZakazkaHeaderCardProps = {
     cislo_zakazky?: string | null;
     nazev?: string | null;
     misto?: string | null;
+    misto_lat?: number | string | null;
+    misto_lng?: number | string | null;
+    misto_gps_radius_m?: number | string | null;
     typ_obsluhy?: string | null;
     poznamka?: string | null;
   };
@@ -21,6 +24,14 @@ export function ZakazkaHeaderCard({
   data,
   cancelAction,
 }: ZakazkaHeaderCardProps) {
+  const lat = String(data.misto_lat ?? "").trim();
+  const lng = String(data.misto_lng ?? "").trim();
+  const hasGps = Boolean(lat && lng);
+  const navigationQuery = hasGps ? `${lat},${lng}` : (data.misto ?? "").trim();
+  const navigationHref = navigationQuery
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(navigationQuery)}`
+    : null;
+
   return (
     <Card className="mt-6">
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -30,6 +41,24 @@ export function ZakazkaHeaderCard({
               {data.cislo_zakazky} – {data.nazev}
             </div>
             <div className="text-lg text-slate-400">{data.misto || "—"}</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={hasGps ? "success" : "warning"}>
+                {hasGps ? "GPS zadána" : "GPS chybí"}
+              </Badge>
+              <Badge variant="default">
+                Radius: {data.misto_gps_radius_m ?? 300} m
+              </Badge>
+              {navigationHref ? (
+                <a
+                  href={navigationHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-xl border border-blue-500/40 px-3 py-1.5 text-sm font-semibold text-blue-200 transition hover:bg-blue-500/10"
+                >
+                  Navigovat
+                </a>
+              ) : null}
+            </div>
           </div>
 
           <div className="grid gap-6 md:grid-cols-2">
