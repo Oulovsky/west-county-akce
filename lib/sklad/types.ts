@@ -136,6 +136,7 @@ export type SkladPolozkaRow = {
   blok_nazev: string | null;
   na_sklade: number | null;
   na_akcich: number | null;
+  na_zakazkach_fyzicky?: number | null;
   poskozene: number | null;
   /** Sloupec pozice ve skladove_polozky — doplňuje se dotazem vedle RPC. */
   pozice?: number | string | null;

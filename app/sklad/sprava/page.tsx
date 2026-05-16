@@ -34,7 +34,10 @@ import {
   querySkladovePolozkyPodkategorie,
   querySpravaKatalog,
 } from "@/lib/sklad/queries";
-import { querySpravaNaZakazkachCountsByPolozka } from "@/lib/sklad/spravaNaZakazkach";
+import {
+  querySpravaFyzickyNaZakazkachCountsByPolozka,
+  querySpravaNaZakazkachCountsByPolozka,
+} from "@/lib/sklad/spravaNaZakazkach";
 import {
   computeSpravaNaSklade,
   querySpravaBlokujiciPoskozeneByPolozka,
@@ -249,9 +252,14 @@ export default function Page() {
         podkategorieCatalog
       );
 
-      const [{ map: naZakazkachMap, error: naZakazkachErr }, { map: blokujiciMap, error: blokujiciErr }] =
+      const [
+        { map: naZakazkachMap, error: naZakazkachErr },
+        { map: fyzickyNaZakazkachMap, error: fyzickyNaZakazkachErr },
+        { map: blokujiciMap, error: blokujiciErr },
+      ] =
         await Promise.all([
           querySpravaNaZakazkachCountsByPolozka(supabase, new Date()),
+          querySpravaFyzickyNaZakazkachCountsByPolozka(supabase),
           querySpravaBlokujiciPoskozeneByPolozka(supabase),
         ]);
 
@@ -259,16 +267,20 @@ export default function Page() {
         const id = item.skladova_polozka_id;
         const celkem = toNumber(item.celkem_k_dispozici);
 
-        if (naZakazkachErr || !naZakazkachMap) {
-          return item;
-        }
+        const naZakazkach =
+          naZakazkachErr || !naZakazkachMap
+            ? toNumber(item.na_akcich)
+            : naZakazkachMap.get(id) ?? 0;
+        const fyzickyNaZakazkach =
+          fyzickyNaZakazkachErr || !fyzickyNaZakazkachMap
+            ? toNumber(item.na_zakazkach_fyzicky)
+            : fyzickyNaZakazkachMap.get(id) ?? 0;
 
-        const naZakazkach = naZakazkachMap.get(id) ?? 0;
-
-        if (blokujiciErr || !blokujiciMap) {
+        if (naZakazkachErr || blokujiciErr || !blokujiciMap) {
           return {
             ...item,
             na_akcich: naZakazkach,
+            na_zakazkach_fyzicky: fyzickyNaZakazkach,
           };
         }
 
@@ -277,20 +289,27 @@ export default function Page() {
         return {
           ...item,
           na_akcich: naZakazkach,
+          na_zakazkach_fyzicky: fyzickyNaZakazkach,
           na_sklade: computeSpravaNaSklade(celkem, naZakazkach, blok),
         };
       });
 
-      if (!options?.silent && (naZakazkachErr || blokujiciErr)) {
+      if (
+        !options?.silent &&
+        (naZakazkachErr || fyzickyNaZakazkachErr || blokujiciErr)
+      ) {
         const parts: string[] = [];
         if (naZakazkachErr) {
-          parts.push(`Rezervace v zakázkách: ${naZakazkachErr.message}`);
+          parts.push(`Plán zakázek: ${naZakazkachErr.message}`);
+        }
+        if (fyzickyNaZakazkachErr) {
+          parts.push(`Fyzické kusy na zakázkách: ${fyzickyNaZakazkachErr.message}`);
         }
         if (blokujiciErr) {
           parts.push(`Blokující poškození: ${blokujiciErr.message}`);
         }
         alert(
-          `${parts.join(" ")}\n\nSloupce „Plánováno na zakázkách“ a „Skladem“ zůstávají u části dat ze serveru.`
+          `${parts.join(" ")}\n\nSloupce „Plánováno na zakázkách“, „Fyzicky na zakázkách“ a „Skladem“ zůstávají u části dat ze serveru.`
         );
       }
       setItems(mergedItems);
@@ -1092,6 +1111,11 @@ export default function Page() {
     0
   );
 
+  const totalFyzickyNaZakazkach = items.reduce(
+    (sum, item) => sum + toNumber(item.na_zakazkach_fyzicky),
+    0
+  );
+
   const totalPoskozene = items.reduce(
     (sum, item) => sum + toNumber(item.poskozene),
     0
@@ -1136,6 +1160,7 @@ export default function Page() {
           totalKusy={totalKusy}
           totalSkladem={totalSkladem}
           totalAkce={totalAkce}
+          totalFyzickyNaZakazkach={totalFyzickyNaZakazkach}
           totalPoskozene={totalPoskozene}
         />
 

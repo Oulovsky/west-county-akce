@@ -1,5 +1,7 @@
 ﻿import {
+  SKLAD_SPRAVA_HINT_FYZICKY_NA_ZAKAZKACH,
   SKLAD_SPRAVA_HINT_NA_ZAKAZKACH,
+  SKLAD_SPRAVA_LABEL_FYZICKY_NA_ZAKAZKACH,
   SKLAD_SPRAVA_LABEL_NA_ZAKAZKACH,
 } from "@/lib/sklad/constants";
 import {
@@ -34,6 +36,12 @@ export function SkladTableHeader({ tableGrid = SPRAVA_TABLE_GRID }: Props) {
         title={SKLAD_SPRAVA_HINT_NA_ZAKAZKACH}
       >
         {SKLAD_SPRAVA_LABEL_NA_ZAKAZKACH}
+      </span>
+      <span
+        className="flex min-h-8 items-center justify-center px-1 text-center"
+        title={SKLAD_SPRAVA_HINT_FYZICKY_NA_ZAKAZKACH}
+      >
+        {SKLAD_SPRAVA_LABEL_FYZICKY_NA_ZAKAZKACH}
       </span>
       <span className="flex min-h-8 items-center justify-center px-1 text-center">
         Poškozené

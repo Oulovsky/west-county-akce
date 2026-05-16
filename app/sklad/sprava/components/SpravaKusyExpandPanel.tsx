@@ -6,6 +6,7 @@ import { KusQrActionMenu } from "@/components/sklad/KusQrActionMenu";
 import {
   SKLAD_EMPTY_LABEL,
   SKLAD_EMPTY_LABEL_EM,
+  SKLAD_SPRAVA_HINT_FYZICKY_NA_ZAKAZKACH,
   SKLAD_SPRAVA_HINT_NA_ZAKAZKACH,
   SKLAD_TABLE,
 } from "@/lib/sklad/constants";
@@ -174,6 +175,7 @@ function SpravaExpandKusRow({
 
   const skladem = kusSklademCell(kus);
   const naZakazkach = assignment ? 1 : kusNaZakazkachCell(kus);
+  const fyzickyNaZakazkach = assignment ? 1 : 0;
   const poskozene = kusPoskozeneCell(kus);
   const assignmentLabel = formatZakazkaKusZakazkaLabel(assignment);
   const assignmentTitle = assignment
@@ -288,6 +290,18 @@ function SpravaExpandKusRow({
             title={assignmentTitle}
           >
             {formatNumber(naZakazkach)}
+          </span>
+        </div>
+
+        <div
+          className="flex min-h-8 items-center justify-center px-1 pt-0.5 text-center"
+          title={SKLAD_SPRAVA_HINT_FYZICKY_NA_ZAKAZKACH}
+        >
+          <span
+            style={fyzickyNaZakazkach ? tableValueBoxRight : tableMutedBoxRight}
+            title={assignmentTitle}
+          >
+            {formatNumber(fyzickyNaZakazkach)}
           </span>
         </div>
 

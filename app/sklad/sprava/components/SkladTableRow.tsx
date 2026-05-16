@@ -20,6 +20,7 @@ import {
   SPRAVA_TABLE_ROW_CLASS,
 } from "./spravaTableLayout";
 import {
+  SKLAD_SPRAVA_HINT_FYZICKY_NA_ZAKAZKACH,
   SKLAD_SPRAVA_HINT_NA_ZAKAZKACH,
 } from "@/lib/sklad/constants";
 import type {
@@ -343,6 +344,15 @@ export function SkladTableRow({
         >
           <span style={tableValueBoxRight}>
             {formatNumber(item.na_akcich)}
+          </span>
+        </div>
+
+        <div
+          className="flex min-h-8 items-center justify-center px-1 text-center"
+          title={SKLAD_SPRAVA_HINT_FYZICKY_NA_ZAKAZKACH}
+        >
+          <span style={tableValueBoxRight}>
+            {formatNumber(item.na_zakazkach_fyzicky)}
           </span>
         </div>
 

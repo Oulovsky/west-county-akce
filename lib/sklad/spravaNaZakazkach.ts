@@ -20,6 +20,16 @@ type TechnikaRow = {
   mnozstvi: number | string | null;
 };
 
+type ZakazkaKusRow = {
+  kus_id: string;
+  stav: string | null;
+};
+
+type SkladKusRow = {
+  kus_id: string;
+  skladova_polozka_id: string;
+};
+
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) {
@@ -86,6 +96,59 @@ export async function querySpravaNaZakazkachCountsByPolozka(
     const id = row.skladova_polozka_id;
     const m = toNumber(row.mnozstvi);
     totals.set(id, (totals.get(id) ?? 0) + m);
+  }
+
+  return { map: totals, error: null };
+}
+
+export async function querySpravaFyzickyNaZakazkachCountsByPolozka(
+  client: SkladSupabaseClient
+): Promise<{
+  map: Map<string, number> | null;
+  error: { message: string } | null;
+}> {
+  const { data: assignmentsRaw, error: assignmentsError } = await client
+    .from(SKLAD_TABLE.zakazkaKusy)
+    .select("kus_id, stav");
+
+  if (assignmentsError) {
+    return { map: null, error: assignmentsError };
+  }
+
+  const assignments = ((assignmentsRaw ?? []) as ZakazkaKusRow[]).filter(
+    (row) => row.stav?.trim() !== "vraceno"
+  );
+  const kusIds = [
+    ...new Set(assignments.map((row) => row.kus_id).filter(Boolean)),
+  ];
+  if (kusIds.length === 0) {
+    return { map: new Map(), error: null };
+  }
+
+  const kusRows: SkladKusRow[] = [];
+  for (const part of chunk(kusIds, 200)) {
+    const { data: kusRaw, error: kusError } = await client
+      .from(SKLAD_TABLE.skladPolozkyKusy)
+      .select("kus_id, skladova_polozka_id")
+      .in("kus_id", part);
+
+    if (kusError) {
+      return { map: null, error: kusError };
+    }
+
+    kusRows.push(...((kusRaw ?? []) as SkladKusRow[]));
+  }
+
+  const kusToPolozka = new Map(
+    kusRows.map((row) => [row.kus_id, row.skladova_polozka_id] as const)
+  );
+  const totals = new Map<string, number>();
+
+  for (const assignment of assignments) {
+    const polozkaId = kusToPolozka.get(assignment.kus_id);
+    if (!polozkaId) continue;
+
+    totals.set(polozkaId, (totals.get(polozkaId) ?? 0) + 1);
   }
 
   return { map: totals, error: null };
