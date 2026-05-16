@@ -1,8 +1,17 @@
 import PeopleTimelineClient from "./PeopleTimelineClient";
 
 export default function Page() {
-  const from = "2026-04-01T00:00:00.000Z";
-  const to = "2026-04-30T23:59:59.999Z";
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const to = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    0,
+    23,
+    59,
+    59,
+    999
+  ).toISOString();
 
   return (
     <div className="w-full">

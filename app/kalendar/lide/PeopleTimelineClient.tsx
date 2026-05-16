@@ -164,7 +164,7 @@ function formatBlockLabel(value?: string | null) {
 
   if (raw === "sklad" || raw === "logistika") return "Sklad / logistika";
   if (raw === "stavba") return "Stavba";
-  if (raw === "bourani") return "BourĂˇnĂ­";
+  if (raw === "bourani") return "Bourání";
   return "Akce";
 }
 
@@ -196,7 +196,7 @@ export default function PeopleTimelineClient({
         const json = await res.json();
 
         if (!res.ok) {
-          throw new Error(json?.error || "NepodaĹ™ilo se naÄŤĂ­st data");
+          throw new Error(json?.error || "Nepodařilo se načíst data");
         }
 
         if (!cancelled) {
@@ -204,7 +204,7 @@ export default function PeopleTimelineClient({
         }
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : "NeznĂˇmĂˇ chyba");
+          setError(e instanceof Error ? e.message : "Neznámá chyba");
           setData([]);
         }
       } finally {
@@ -259,7 +259,7 @@ export default function PeopleTimelineClient({
   const today = startOfDay(new Date()).getTime();
 
   if (loading) {
-    return <div className="text-sm text-zinc-300">NaÄŤĂ­tĂˇm timeline lidĂ­â€¦</div>;
+    return <div className="text-sm text-zinc-300">Načítám timeline lidí…</div>;
   }
 
   if (error) {
@@ -269,7 +269,7 @@ export default function PeopleTimelineClient({
   if (grouped.length === 0) {
     return (
       <div className="text-sm text-zinc-400">
-        V zadanĂ©m obdobĂ­ nejsou ĹľĂˇdnĂˇ pĹ™iĹ™azenĂ­ lidĂ­.
+        V zadaném období nejsou žádná přiřazení lidí.
       </div>
     );
   }
@@ -277,14 +277,14 @@ export default function PeopleTimelineClient({
   return (
     <div className="relative w-full" onMouseLeave={() => setHovered(null)}>
       <div className="mb-4 text-sm text-zinc-400">
-        ObdobĂ­: {rangeStart.toLocaleDateString("cs-CZ")} â€“{" "}
+        Období: {rangeStart.toLocaleDateString("cs-CZ")} –{" "}
         {rangeEnd.toLocaleDateString("cs-CZ")}
       </div>
 
       <div className="overflow-hidden rounded-xl border border-zinc-800 bg-[#0b1220]">
         <div className="grid" style={{ gridTemplateColumns: "170px 1fr" }}>
           <div className="border-b border-r border-zinc-800 bg-[#0f172a] p-3 text-sm font-semibold text-white">
-            LidĂ©
+            Lidé
           </div>
 
           <div
@@ -326,7 +326,7 @@ export default function PeopleTimelineClient({
               <div key={user.user_id} className="contents">
                 <div className="border-b border-r border-zinc-800 bg-[#0f172a] px-4 py-5">
                   <div className="text-base text-slate-200">
-                    {nameParts.firstName || "â€”"}
+                    {nameParts.firstName || "—"}
                   </div>
                   <div className="text-2xl font-bold leading-tight text-white">
                     {nameParts.lastName || ""}
@@ -385,8 +385,8 @@ export default function PeopleTimelineClient({
                         people: [item.user_name],
                         statusLabel: item.conflict ? "Kolize" : "Bez kolize",
                         statusTone: item.conflict ? "orange" : "blue",
-                        warningLabel: item.conflict ? "Kolize s jinou zakĂˇzkou" : null,
-                        metaLabel: `PĹ™iĹ™azenĂ­: ${formatBlockLabel(item.typ_bloku)}`,
+                        warningLabel: item.conflict ? "Kolize s jinou zakázkou" : null,
+                        metaLabel: `Přiřazení: ${formatBlockLabel(item.typ_bloku)}`,
                       };
 
                       return (

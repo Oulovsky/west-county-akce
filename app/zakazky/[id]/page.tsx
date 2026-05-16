@@ -627,6 +627,8 @@ export default async function ZakazkaDetailPage({ params }: PageProps) {
     }
 
     revalidatePath(`/zakazky/${id}`);
+    revalidatePath("/kalendar");
+    revalidatePath("/kalendar/lide");
   }
 
   async function cancelZakazka() {
