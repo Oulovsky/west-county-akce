@@ -10,11 +10,16 @@ import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { GpsLocationFields } from "../../GpsLocationFields";
+import { GpsLocationFields, type SavedPlaceSuggestion } from "../../GpsLocationFields";
+import { KlientSelectWithCreate, type KlientOption } from "../../KlientSelectWithCreate";
 
 type PageProps = {
   params: Promise<{ id: string }>;
 };
+
+type Klient = KlientOption;
+
+type MistoKonani = SavedPlaceSuggestion;
 
 function toDateInputValue(value?: string | null) {
   if (!value) return "";
@@ -88,11 +93,38 @@ export default async function EditZakazkyPage({ params }: PageProps) {
   const bouraniOd = toDateTimeParts(data.bourani_od);
   const bouraniDo = toDateTimeParts(data.bourani_do);
 
+  const [
+    { data: klientiRaw, error: klientiError },
+    { data: mistaRaw, error: mistaError },
+  ] = await Promise.all([
+    supabase
+      .from("klienti")
+      .select("klient_id, nazev")
+      .eq("aktivni", true)
+      .order("nazev", { ascending: true }),
+    supabase
+      .from("mista_konani")
+      .select("misto_id, klient_id, nazev, adresa_text, lat, lng, radius_m")
+      .eq("aktivni", true)
+      .order("nazev", { ascending: true }),
+  ]);
+
+  if (klientiError || mistaError) {
+    return <div>Chyba: {klientiError?.message ?? mistaError?.message}</div>;
+  }
+
+  const klienti = (klientiRaw ?? []) as Klient[];
+  const mistaKonani = (mistaRaw ?? []) as MistoKonani[];
+
   async function updateZakazka(formData: FormData) {
     "use server";
 
     const nazev = String(formData.get("nazev") ?? "");
     const misto = String(formData.get("misto") ?? "");
+    const klientIdRaw = String(formData.get("klient_id") ?? "").trim();
+    const mistoIdRaw = String(formData.get("misto_id") ?? "").trim();
+    const mistoKlientIdRaw = String(formData.get("misto_klient_id") ?? "").trim();
+    const ulozitJakoMisto = formData.get("ulozit_jako_misto") === "on";
     const mistoLat = toOptionalNumber(String(formData.get("misto_lat") ?? ""));
     const mistoLng = toOptionalNumber(String(formData.get("misto_lng") ?? ""));
     const mistoGpsRadius = toOptionalNumber(String(formData.get("misto_gps_radius_m") ?? "")) ?? 300;
@@ -168,10 +200,36 @@ export default async function EditZakazkyPage({ params }: PageProps) {
       throw new Error("Konec bourání musí být později než začátek bourání.");
     }
 
+    let klientId = mistoKlientIdRaw || klientIdRaw || null;
+    let mistoId = mistoIdRaw || null;
+
+    if (ulozitJakoMisto && !mistoId && mistoLat != null && mistoLng != null) {
+      const { data: mistoData, error: mistoError } = await supabase
+        .from("mista_konani")
+        .insert({
+          klient_id: klientId,
+          nazev: misto,
+          adresa_text: misto,
+          lat: mistoLat,
+          lng: mistoLng,
+          radius_m: mistoGpsRadius,
+        })
+        .select("misto_id")
+        .single();
+
+      if (mistoError) {
+        throw new Error(`Vytvoření místa selhalo: ${mistoError.message}`);
+      }
+
+      mistoId = mistoData.misto_id;
+    }
+
     const { error } = await supabase
       .from("zakazky")
       .update({
         nazev,
+        klient_id: klientId,
+        misto_id: mistoId,
         misto,
         misto_lat: mistoLat,
         misto_lng: mistoLng,
@@ -249,6 +307,20 @@ export default async function EditZakazkyPage({ params }: PageProps) {
               />
             </Field>
 
+            <Card className="space-y-4 border-slate-700 bg-[#0b1324]">
+              <div>
+                <div className="text-lg font-semibold text-white">Klient</div>
+                <div className="mt-1 text-sm text-slate-400">
+                  Základní vazba pro budoucí archiv zakázek. Fakturace se zatím neřeší.
+                </div>
+              </div>
+
+              <KlientSelectWithCreate
+                clients={klienti}
+                defaultSelectedId={data.klient_id}
+              />
+            </Card>
+
             <Field label="Místo">
               <Input
                 name="misto"
@@ -258,6 +330,9 @@ export default async function EditZakazkyPage({ params }: PageProps) {
             </Field>
 
             <GpsLocationFields
+              savedPlaces={mistaKonani}
+              defaultPlaceId={data.misto_id}
+              defaultPlaceClientId={data.klient_id}
               defaultLat={data.misto_lat}
               defaultLng={data.misto_lng}
               defaultRadiusM={data.misto_gps_radius_m ?? 300}
@@ -265,6 +340,20 @@ export default async function EditZakazkyPage({ params }: PageProps) {
               defaultSource={data.misto_gps_zdroj}
               defaultUpdatedAt={data.misto_gps_updated_at}
             />
+
+            <label className="flex items-start gap-3 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-200">
+              <input
+                type="checkbox"
+                name="ulozit_jako_misto"
+                className="mt-1"
+              />
+              <span>
+                <span className="font-semibold text-white">Uložit jako nové místo konání</span>
+                <span className="mt-1 block text-slate-400">
+                  Vytvoří archivované místo z aktuálního názvu, GPS bodu a radiusu, pokud není vybrané uložené místo.
+                </span>
+              </span>
+            </label>
 
             <Field label="Typ obsluhy">
               <select

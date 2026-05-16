@@ -9,7 +9,8 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { Textarea } from "@/components/ui/textarea";
-import { GpsLocationFields } from "../GpsLocationFields";
+import { GpsLocationFields, type SavedPlaceSuggestion } from "../GpsLocationFields";
+import { KlientSelectWithCreate, type KlientOption } from "../KlientSelectWithCreate";
 
 type TypObsluhy = "s_obsluhou" | "bez_obsluhy";
 
@@ -34,6 +35,12 @@ type SkladSetup = {
   nazev: string;
   popis: string | null;
   poradi: number | null;
+};
+
+type Klient = KlientOption;
+
+type MistoKonani = SavedPlaceSuggestion & {
+  aktivni?: boolean | null;
 };
 
 type SetupPolozka = {
@@ -351,6 +358,9 @@ export default function NovaZakazkaPage() {
 
   const [nazev, setNazev] = useState("");
   const [misto, setMisto] = useState("");
+  const [selectedKlientId, setSelectedKlientId] = useState("");
+  const [selectedMistoId, setSelectedMistoId] = useState("");
+  const [ulozitJakoMisto, setUlozitJakoMisto] = useState(false);
   const [mistoGps, setMistoGps] = useState({
     lat: "",
     lng: "",
@@ -393,6 +403,9 @@ export default function NovaZakazkaPage() {
   const [setupSelections, setSetupSelections] = useState<Record<string, SetupSelection>>({});
   const [setupyLoading, setSetupyLoading] = useState(true);
   const [setupyError, setSetupyError] = useState<string | null>(null);
+  const [klienti, setKlienti] = useState<Klient[]>([]);
+  const [mistaKonani, setMistaKonani] = useState<MistoKonani[]>([]);
+  const [klientiMistaError, setKlientiMistaError] = useState<string | null>(null);
   const [skladPolozky, setSkladPolozky] = useState<SkladPolozka[]>([]);
   const [skladBloky, setSkladBloky] = useState<SkladBlok[]>([]);
   const [kategorieTechniky, setKategorieTechniky] = useState<KategorieTechniky[]>([]);
@@ -507,8 +520,40 @@ export default function NovaZakazkaPage() {
       setSkladLoading(false);
     }
 
+    async function loadKlientiMista() {
+      setKlientiMistaError(null);
+
+      const [
+        { data: klientiData, error: klientiError },
+        { data: mistaData, error: mistaError },
+      ] = await Promise.all([
+        supabase
+          .from("klienti")
+          .select("klient_id, nazev")
+          .eq("aktivni", true)
+          .order("nazev", { ascending: true }),
+        supabase
+          .from("mista_konani")
+          .select("misto_id, klient_id, nazev, adresa_text, lat, lng, radius_m, aktivni")
+          .eq("aktivni", true)
+          .order("nazev", { ascending: true }),
+      ]);
+
+      if (cancelled) return;
+
+      const error = klientiError?.message ?? mistaError?.message;
+      if (error) {
+        setKlientiMistaError(error);
+        return;
+      }
+
+      setKlienti((klientiData ?? []) as Klient[]);
+      setMistaKonani((mistaData ?? []) as MistoKonani[]);
+    }
+
     void loadSetupy();
     void loadSkladCatalog();
+    void loadKlientiMista();
 
     return () => {
       cancelled = true;
@@ -547,6 +592,16 @@ export default function NovaZakazkaPage() {
       ),
     [podkategorieTechniky]
   );
+
+  function handleSavedPlaceSelect(place: SavedPlaceSuggestion) {
+    setSelectedMistoId(place.misto_id);
+    setMisto(place.nazev);
+    setUlozitJakoMisto(false);
+
+    if (place.klient_id) {
+      setSelectedKlientId(place.klient_id);
+    }
+  }
 
   const sortedSkladPolozky = useMemo(() => {
     return [...skladPolozky].sort((a, b) => {
@@ -990,6 +1045,31 @@ export default function NovaZakazkaPage() {
       const mistoLng = toOptionalNumber(mistoGps.lng);
       const mistoGpsRadius = toOptionalNumber(mistoGps.radiusM) ?? 300;
       const mistoGpsPresnost = toOptionalNumber(mistoGps.accuracyM);
+      let klientId = selectedKlientId || null;
+      let mistoId = selectedMistoId || null;
+
+      if (ulozitJakoMisto && !mistoId && mistoLat != null && mistoLng != null) {
+        const { data: mistoData, error: mistoError } = await supabase
+          .from("mista_konani")
+          .insert({
+            klient_id: klientId,
+            nazev: misto,
+            adresa_text: misto,
+            lat: mistoLat,
+            lng: mistoLng,
+            radius_m: mistoGpsRadius,
+          })
+          .select("misto_id")
+          .single();
+
+        if (mistoError) {
+          alert(mistoError.message);
+          setUkladam(false);
+          return;
+        }
+
+        mistoId = mistoData.misto_id;
+      }
 
       const { data, error } = await supabase
         .from("zakazky")
@@ -997,6 +1077,8 @@ export default function NovaZakazkaPage() {
           cislo_zakazky: cisloZakazky,
           stav_zakazky_id: "7a0e168f-216f-40bd-b33e-3f1f517620da",
           nazev,
+          klient_id: klientId,
+          misto_id: mistoId,
           misto,
           misto_lat: mistoLat,
           misto_lng: mistoLng,
@@ -1222,15 +1304,64 @@ export default function NovaZakazkaPage() {
             />
           </Field>
 
+          <Card className="space-y-4 border-slate-700 bg-[#0b1324]">
+            <div>
+              <div className="text-lg font-semibold text-white">Klient</div>
+              <div className="mt-1 text-sm text-slate-400">
+                Základní vazba pro budoucí archiv zakázek. Fakturace se zatím neřeší.
+              </div>
+            </div>
+
+            {klientiMistaError ? (
+              <div className="rounded-xl border border-red-500/40 bg-red-950/20 px-4 py-3 text-sm text-red-200">
+                Klienty a místa se nepodařilo načíst: {klientiMistaError}
+              </div>
+            ) : null}
+
+            <KlientSelectWithCreate
+              clients={klienti}
+              selectedId={selectedKlientId}
+              onSelectedIdChange={setSelectedKlientId}
+              onClientCreated={(klient) => {
+                setKlienti((current) => [...current, klient]);
+                setSelectedKlientId(klient.klient_id);
+              }}
+            />
+          </Card>
+
           <Field label="Místo">
             <Input
               value={misto}
-              onChange={(e) => setMisto(e.target.value)}
+              onChange={(e) => {
+                setMisto(e.target.value);
+                setSelectedMistoId("");
+              }}
               placeholder="Např. Bečov"
             />
           </Field>
 
-          <GpsLocationFields placeText={misto} onChange={setMistoGps} />
+          <GpsLocationFields
+            placeText={misto}
+            savedPlaces={mistaKonani}
+            onSavedPlaceSelect={handleSavedPlaceSelect}
+            onChange={setMistoGps}
+          />
+
+          <label className="flex items-start gap-3 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-200">
+            <input
+              type="checkbox"
+              checked={ulozitJakoMisto}
+              disabled={Boolean(selectedMistoId)}
+              onChange={(event) => setUlozitJakoMisto(event.target.checked)}
+              className="mt-1"
+            />
+            <span>
+              <span className="font-semibold text-white">Uložit jako nové místo konání</span>
+              <span className="mt-1 block text-slate-400">
+                Vytvoří archivované místo z aktuálního názvu, GPS bodu a radiusu.
+              </span>
+            </span>
+          </label>
 
           <Field label="Typ obsluhy">
             <select

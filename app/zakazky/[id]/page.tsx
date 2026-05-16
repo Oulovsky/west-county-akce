@@ -658,6 +658,26 @@ export default async function ZakazkaDetailPage({ params }: PageProps) {
     return <div>ZakĂˇzka nenalezena</div>;
   }
 
+  let klientNazev: string | null = null;
+  if (data.klient_id) {
+    const { data: klientRaw, error: klientError } = await supabase
+      .from("klienti")
+      .select("nazev")
+      .eq("klient_id", data.klient_id)
+      .maybeSingle();
+
+    if (klientError) {
+      return <div>Chyba: {klientError.message}</div>;
+    }
+
+    klientNazev = klientRaw?.nazev ?? null;
+  }
+
+  const headerData = {
+    ...data,
+    klient_nazev: klientNazev,
+  };
+
   const { data: realizace, error: realizaceError } = await supabase
     .from("zakazka_realizace")
     .select("*")
@@ -865,7 +885,7 @@ export default async function ZakazkaDetailPage({ params }: PageProps) {
 
   return (
     <div className="w-full">
-      <ZakazkaHeaderCard zakazkaId={id} data={data} cancelAction={cancelZakazka} />
+      <ZakazkaHeaderCard zakazkaId={id} data={headerData} cancelAction={cancelZakazka} />
 
       <ZakazkaScheduleCard data={data} action={updateZakazkaSchedule} />
 

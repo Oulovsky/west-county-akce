@@ -9,6 +9,7 @@ type ZakazkaHeaderCardProps = {
   data: {
     cislo_zakazky?: string | null;
     nazev?: string | null;
+    klient_nazev?: string | null;
     misto?: string | null;
     misto_lat?: number | string | null;
     misto_lng?: number | string | null;
@@ -62,6 +63,10 @@ export function ZakazkaHeaderCard({
           </div>
 
           <div className="grid gap-6 md:grid-cols-2">
+            <Field label="Klient">
+              <div className="mt-2 text-slate-400">{data.klient_nazev || "—"}</div>
+            </Field>
+
             <Field label="Typ obsluhy">
               <div className="mt-2">
                 <Badge variant="default">

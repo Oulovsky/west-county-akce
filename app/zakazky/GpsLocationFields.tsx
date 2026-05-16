@@ -28,9 +28,23 @@ type GpsLocationValue = {
   updatedAt: string;
 };
 
+export type SavedPlaceSuggestion = {
+  misto_id: string;
+  klient_id: string | null;
+  nazev: string;
+  adresa_text: string | null;
+  lat: number | string | null;
+  lng: number | string | null;
+  radius_m: number | string | null;
+};
+
 type Props = {
   placeText?: string;
   placeInputName?: string;
+  savedPlaces?: SavedPlaceSuggestion[];
+  onSavedPlaceSelect?: (place: SavedPlaceSuggestion) => void;
+  defaultPlaceId?: string | null;
+  defaultPlaceClientId?: string | null;
   defaultLat?: number | string | null;
   defaultLng?: number | string | null;
   defaultRadiusM?: number | string | null;
@@ -48,6 +62,13 @@ type NominatimResult = {
   type?: string;
 };
 
+function normalizeSearchText(value: string) {
+  return value
+    .toLocaleLowerCase("cs-CZ")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
 function toInputValue(value: number | string | null | undefined) {
   return value == null ? "" : String(value);
 }
@@ -63,6 +84,10 @@ function parseCoordinate(value: string, min: number, max: number) {
 export function GpsLocationFields({
   placeText,
   placeInputName = "misto",
+  savedPlaces = [],
+  onSavedPlaceSelect,
+  defaultPlaceId = null,
+  defaultPlaceClientId = null,
   defaultLat = null,
   defaultLng = null,
   defaultRadiusM = 300,
@@ -84,6 +109,8 @@ export function GpsLocationFields({
   const [results, setResults] = useState<NominatimResult[]>([]);
   const [domPlaceText, setDomPlaceText] = useState("");
   const [selectionMessage, setSelectionMessage] = useState<string | null>(null);
+  const [selectedPlaceId, setSelectedPlaceId] = useState(defaultPlaceId ?? "");
+  const [selectedPlaceClientId, setSelectedPlaceClientId] = useState(defaultPlaceClientId ?? "");
   const activePlaceText = placeText ?? domPlaceText;
 
   function update(patch: Partial<GpsLocationValue>) {
@@ -125,6 +152,20 @@ export function GpsLocationFields({
       `input[name="${placeInputName}"]`
     );
     return input?.value.trim() ?? "";
+  }
+
+  function updatePlaceInput(nextValue: string) {
+    if (placeText !== undefined) return;
+    if (typeof document === "undefined") return;
+
+    const input = document.querySelector<HTMLInputElement>(
+      `input[name="${placeInputName}"]`
+    );
+    if (!input) return;
+
+    input.value = nextValue;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    setDomPlaceText(nextValue);
   }
 
   async function fetchPlaceResults(
@@ -213,12 +254,35 @@ export function GpsLocationFields({
 
   function selectResult(result: NominatimResult) {
     setResults([]);
+    setSelectedPlaceId("");
+    setSelectedPlaceClientId("");
     setSelectionMessage("Místo nalezeno. Bod můžeš zpřesnit kliknutím do mapy.");
     update({
       lat: result.lat,
       lng: result.lon,
       accuracyM: "",
       source: "geocoding_selected",
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  function selectSavedPlace(place: SavedPlaceSuggestion) {
+    const lat = toInputValue(place.lat);
+    const lng = toInputValue(place.lng);
+    const radiusM = toInputValue(place.radius_m) || "300";
+
+    setResults([]);
+    setSelectedPlaceId(place.misto_id);
+    setSelectedPlaceClientId(place.klient_id ?? "");
+    setSelectionMessage("Uložené místo vybráno. Bod můžeš zpřesnit kliknutím do mapy.");
+    updatePlaceInput(place.nazev);
+    onSavedPlaceSelect?.(place);
+    update({
+      lat,
+      lng,
+      radiusM,
+      accuracyM: "",
+      source: "mista_konani",
       updatedAt: new Date().toISOString(),
     });
   }
@@ -244,12 +308,39 @@ export function GpsLocationFields({
     });
   }
 
-  const suggestions = results.length > 0 ? (
+  const normalizedQuery = normalizeSearchText(activePlaceText.trim());
+  const savedPlaceResults =
+    normalizedQuery.length >= 3
+      ? savedPlaces
+          .filter((place) => {
+            const haystack = normalizeSearchText(
+              [place.nazev, place.adresa_text ?? ""].filter(Boolean).join(" ")
+            );
+            return haystack.includes(normalizedQuery);
+          })
+          .slice(0, 5)
+      : [];
+
+  const suggestions = savedPlaceResults.length > 0 || results.length > 0 ? (
     <div className="-mt-4 space-y-2 rounded-xl border border-blue-500/30 bg-slate-950 p-3">
       <div className="flex items-center justify-between gap-3">
         <div className="text-sm font-semibold text-white">Nalezená místa</div>
         {isSearching ? <div className="text-xs text-slate-400">Aktualizuji...</div> : null}
       </div>
+      {savedPlaceResults.map((place) => (
+        <button
+          key={`saved-${place.misto_id}`}
+          type="button"
+          onClick={() => selectSavedPlace(place)}
+          className="block w-full rounded-lg border border-emerald-500/40 px-3 py-2 text-left text-sm text-slate-200 transition hover:border-emerald-400 hover:bg-emerald-500/10"
+        >
+          <span className="block font-medium text-white">{place.nazev}</span>
+          <span className="text-xs text-emerald-300">Uložené místo</span>
+          {place.adresa_text ? (
+            <span className="block text-xs text-slate-400">{place.adresa_text}</span>
+          ) : null}
+        </button>
+      ))}
       {results.map((result) => (
         <button
           key={result.place_id}
@@ -258,6 +349,7 @@ export function GpsLocationFields({
           className="block w-full rounded-lg border border-slate-700 px-3 py-2 text-left text-sm text-slate-200 transition hover:border-blue-500 hover:bg-blue-500/10"
         >
           <span className="block font-medium text-white">{result.display_name}</span>
+          <span className="text-xs text-blue-300">Vyhledané místo</span>
           <span className="text-xs text-slate-400">
             {result.lat}, {result.lon}
             {result.type ? ` · ${result.type}` : ""}
@@ -347,6 +439,8 @@ export function GpsLocationFields({
           <input type="hidden" name="misto_gps_presnost_m" value={value.accuracyM} />
           <input type="hidden" name="misto_gps_zdroj" value={value.source} />
           <input type="hidden" name="misto_gps_updated_at" value={value.updatedAt} />
+          <input type="hidden" name="misto_id" value={selectedPlaceId} />
+          <input type="hidden" name="misto_klient_id" value={selectedPlaceClientId} />
 
           {value.accuracyM || value.source ? (
             <div className="mt-4 rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-300">
