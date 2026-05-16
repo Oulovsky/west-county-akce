@@ -1,0 +1,271 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { Resend } from "resend";
+import { createClient } from "@/lib/supabase/server";
+import {
+  buildQuestionnaireUrl,
+  createClientQuestionnaireToken,
+  hashClientQuestionnaireToken,
+} from "@/lib/client-questionnaire";
+
+function getZakazkaId(formData: FormData) {
+  const zakazkaId = String(formData.get("zakazka_id") ?? "").trim();
+  if (!zakazkaId) {
+    throw new Error("Chybí ID zakázky.");
+  }
+  return zakazkaId;
+}
+
+function getClientQuestionnaireBaseUrl(headersList: Headers) {
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, "");
+  if (configured) return configured;
+
+  const host = headersList.get("x-forwarded-host") ?? headersList.get("host");
+  if (!host) return "";
+
+  const proto = headersList.get("x-forwarded-proto") ?? "http";
+  return `${proto}://${host}`;
+}
+
+function formatDateRangeForEmail(data: {
+  akce_od?: string | null;
+  akce_do?: string | null;
+  datum_od?: string | null;
+  datum_do?: string | null;
+}) {
+  const start = data.akce_od ?? data.datum_od;
+  const end = data.akce_do ?? data.datum_do;
+
+  if (!start && !end) return "Termín není vyplněný";
+
+  const formatter = new Intl.DateTimeFormat("cs-CZ", {
+    dateStyle: "medium",
+    timeStyle: start?.includes("T") || end?.includes("T") ? "short" : undefined,
+  });
+
+  const formattedStart = start ? formatter.format(new Date(start)) : "";
+  const formattedEnd = end ? formatter.format(new Date(end)) : "";
+
+  return [formattedStart, formattedEnd].filter(Boolean).join(" – ");
+}
+
+function createQuestionnaireEmailHtml({
+  zakazkaNazev,
+  misto,
+  termin,
+  link,
+}: {
+  zakazkaNazev: string;
+  misto: string;
+  termin: string;
+  link: string;
+}) {
+  return `
+    <div style="font-family:Arial,sans-serif;line-height:1.5;color:#0f172a;max-width:640px;margin:0 auto;padding:24px">
+      <h1 style="font-size:24px;margin:0 0 16px">Technický dotazník k akci</h1>
+      <p>Dobrý den,</p>
+      <p>potřebujeme ověřit technické informace k akci, abychom správně připravili techniku, kabeláž, elektro a logistiku.</p>
+      <div style="background:#f1f5f9;border-radius:12px;padding:16px;margin:20px 0">
+        <div><strong>Akce:</strong> ${zakazkaNazev}</div>
+        <div><strong>Místo:</strong> ${misto}</div>
+        <div><strong>Termín:</strong> ${termin}</div>
+      </div>
+      <p style="margin:24px 0">
+        <a href="${link}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:14px 20px;border-radius:12px;font-weight:700">
+          Otevřít technický dotazník
+        </a>
+      </p>
+      <p style="font-size:14px;color:#475569">Pokud nechcete vyplňovat technické údaje sami, můžete v dotazníku požádat o výjezd technika před akcí.</p>
+      <p style="font-size:12px;color:#64748b;word-break:break-all">Pokud tlačítko nefunguje, otevřete tento odkaz:<br>${link}</p>
+    </div>
+  `;
+}
+
+async function setClientVerificationStatus(
+  zakazkaId: string,
+  stav: "neni_potreba" | "overeno_interne"
+) {
+  const supabase = await createClient();
+
+  const { data: currentDotaznik, error: currentError } = await supabase
+    .from("zakazka_dotazniky")
+    .select("dotaznik_id")
+    .eq("zakazka_id", zakazkaId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (currentError) {
+    throw new Error(currentError.message);
+  }
+
+  const payload = {
+    zakazka_id: zakazkaId,
+    stav,
+    pozadovan_vyjezd_technika: false,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = currentDotaznik?.dotaznik_id
+    ? await supabase
+        .from("zakazka_dotazniky")
+        .update(payload)
+        .eq("dotaznik_id", currentDotaznik.dotaznik_id)
+    : await supabase.from("zakazka_dotazniky").insert(payload);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidatePath(`/zakazky/${zakazkaId}`);
+}
+
+export async function markQuestionnaireNotNeededAction(formData: FormData) {
+  const zakazkaId = getZakazkaId(formData);
+  await setClientVerificationStatus(zakazkaId, "neni_potreba");
+}
+
+export async function markQuestionnaireInternallyVerifiedAction(formData: FormData) {
+  const zakazkaId = getZakazkaId(formData);
+  await setClientVerificationStatus(zakazkaId, "overeno_interne");
+}
+
+export async function sendClientQuestionnaireAction(formData: FormData) {
+  const zakazkaId = getZakazkaId(formData);
+  const supabase = await createClient();
+
+  const resendApiKey = process.env.RESEND_API_KEY?.trim();
+  if (!resendApiKey) {
+    redirect(`/zakazky/${zakazkaId}?technicke_overeni=missing_resend_key`);
+  }
+
+  const { data: zakazka, error: zakazkaError } = await supabase
+    .from("zakazky")
+    .select("zakazka_id, klient_id, nazev, misto, akce_od, akce_do, datum_od, datum_do")
+    .eq("zakazka_id", zakazkaId)
+    .single();
+
+  if (zakazkaError) {
+    throw new Error(zakazkaError.message);
+  }
+
+  let emailTo: string | null = null;
+  if (zakazka.klient_id) {
+    const { data: klient, error: klientError } = await supabase
+      .from("klienti")
+      .select("email")
+      .eq("klient_id", zakazka.klient_id)
+      .maybeSingle();
+
+    if (klientError) {
+      throw new Error(klientError.message);
+    }
+
+    emailTo = klient?.email ?? null;
+  }
+
+  if (!emailTo?.trim()) {
+    redirect(`/zakazky/${zakazkaId}?technicke_overeni=missing_email`);
+  }
+
+  const recipientEmail = emailTo.trim();
+  const headersList = await headers();
+  const questionnaireBaseUrl = getClientQuestionnaireBaseUrl(headersList);
+  const rawToken = createClientQuestionnaireToken();
+  const tokenHash = hashClientQuestionnaireToken(rawToken);
+  const publicLink = buildQuestionnaireUrl(questionnaireBaseUrl, rawToken);
+  const now = new Date().toISOString();
+
+  const { error: revokeError } = await supabase
+    .from("zakazka_client_links")
+    .update({ revoked_at: now })
+    .eq("zakazka_id", zakazkaId)
+    .is("revoked_at", null);
+
+  if (revokeError) {
+    throw new Error(revokeError.message);
+  }
+
+  const { data: link, error: linkError } = await supabase
+    .from("zakazka_client_links")
+    .insert({
+      zakazka_id: zakazkaId,
+      klient_id: zakazka.klient_id,
+      token_hash: tokenHash,
+      email_to: recipientEmail,
+      stav: "vytvoren",
+    })
+    .select("link_id")
+    .single();
+
+  if (linkError) {
+    throw new Error(linkError.message);
+  }
+
+  const resend = new Resend(resendApiKey);
+  const { error: resendError } = await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL?.trim() || "WEST COUNTY <onboarding@resend.dev>",
+    to: recipientEmail,
+    subject: `Technický dotazník k akci ${zakazka.nazev ?? ""}`.trim(),
+    html: createQuestionnaireEmailHtml({
+      zakazkaNazev: zakazka.nazev ?? "Zakázka",
+      misto: zakazka.misto ?? "Místo není vyplněné",
+      termin: formatDateRangeForEmail(zakazka),
+      link: publicLink,
+    }),
+  });
+
+  if (resendError) {
+    await supabase
+      .from("zakazka_client_links")
+      .update({ revoked_at: new Date().toISOString(), stav: "email_error" })
+      .eq("link_id", link.link_id);
+    throw new Error(resendError.message);
+  }
+
+  const { error: linkUpdateError } = await supabase
+    .from("zakazka_client_links")
+    .update({ email_sent_at: new Date().toISOString(), stav: "email_odeslan" })
+    .eq("link_id", link.link_id);
+
+  if (linkUpdateError) {
+    throw new Error(linkUpdateError.message);
+  }
+
+  const { data: currentDotaznik, error: currentError } = await supabase
+    .from("zakazka_dotazniky")
+    .select("dotaznik_id")
+    .eq("zakazka_id", zakazkaId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (currentError) {
+    throw new Error(currentError.message);
+  }
+
+  const dotaznikPayload = {
+    zakazka_id: zakazkaId,
+    link_id: link.link_id,
+    stav: "rozpracovano",
+    pozadovan_vyjezd_technika: false,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error: dotaznikError } = currentDotaznik?.dotaznik_id
+    ? await supabase
+        .from("zakazka_dotazniky")
+        .update(dotaznikPayload)
+        .eq("dotaznik_id", currentDotaznik.dotaznik_id)
+    : await supabase.from("zakazka_dotazniky").insert(dotaznikPayload);
+
+  if (dotaznikError) {
+    throw new Error(dotaznikError.message);
+  }
+
+  revalidatePath(`/zakazky/${zakazkaId}`);
+  redirect(`/zakazky/${zakazkaId}?technicke_overeni=sent`);
+}

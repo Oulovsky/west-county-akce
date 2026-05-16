@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase"
 type AuthStatus = "loading" | "authorized" | "public" | "unauthorized"
 
 function isPublicPath(pathname: string) {
-  return pathname === "/login" || pathname.startsWith("/auth/")
+  return pathname === "/login" || pathname.startsWith("/auth/") || pathname.startsWith("/dotaznik/")
 }
 
 export default function AuthGate({
@@ -33,6 +33,11 @@ export default function AuthGate({
       if (!mounted) return
 
       const publicPath = isPublicPath(pathname)
+
+      if (pathname.startsWith("/dotaznik/")) {
+        setStatus("public")
+        return
+      }
 
       if (!session) {
         if (publicPath) {

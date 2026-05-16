@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -16,10 +17,17 @@ function NavLink({
   exact?: boolean;
 }) {
   const pathname = usePathname();
+  const [mounted, setMounted] = useState(false);
 
-  const active = exact
-    ? pathname === href
-    : pathname === href || pathname.startsWith(href + "/");
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const active =
+    mounted &&
+    (exact
+      ? pathname === href
+      : pathname === href || pathname.startsWith(href + "/"));
 
   const base = "rounded-md border px-3 py-2 text-sm transition";
   const activeClass = danger
@@ -38,6 +46,11 @@ function NavLink({
 
 export default function SidebarNav() {
   const router = useRouter();
+  const pathname = usePathname();
+
+  if (pathname.startsWith("/dotaznik/")) {
+    return null;
+  }
 
   async function handleLogout() {
     await supabase.auth.signOut();

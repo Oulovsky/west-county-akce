@@ -1,20 +1,23 @@
 ﻿import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { createHash, randomBytes } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import PeoplePool from "./PeoplePool";
 import { combineDateAndTime } from "./helpers";
 import { ZakazkaBasicLookCard } from "./components/ZakazkaBasicLookCard";
 import { ZakazkaScheduleCard } from "./components/ZakazkaScheduleCard";
 import { ZakazkaHeaderCard } from "./components/ZakazkaHeaderCard";
+import {
+  markQuestionnaireInternallyVerifiedAction,
+  markQuestionnaireNotNeededAction,
+  sendClientQuestionnaireAction,
+} from "./actions";
 
 import { ZakazkaSubnav } from "@/components/zakazky/zakazka-subnav";
 import { Card } from "@/components/ui/card";
 
 type PageProps = {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ dotaznik_token?: string }>;
+  searchParams?: Promise<{ technicke_overeni?: string }>;
 };
 
 type TechnikaSummaryRow = {
@@ -126,6 +129,7 @@ type LoadingStatusGroup = {
 type ClientVerificationLinkRow = {
   link_id: string;
   stav: string | null;
+  email_to: string | null;
   email_sent_at: string | null;
   opened_at: string | null;
   last_opened_at: string | null;
@@ -139,6 +143,15 @@ type ClientVerificationDotaznikRow = {
   link_id: string | null;
   pozadovan_vyjezd_technika: boolean | null;
   rizika: unknown;
+  kontakt_jmeno: string | null;
+  kontakt_telefon: string | null;
+  prijezd_poznamka: string | null;
+  parkovani_poznamka: string | null;
+  elektro_pripojka: string | null;
+  elektro_jisteni: string | null;
+  elektro_zasuvka: string | null;
+  elektro_vzdalenost_m: number | string | null;
+  odpovedi_extra: unknown;
   submitted_at: string | null;
   updated_at: string | null;
 };
@@ -187,23 +200,21 @@ function formatPosition(value: number | string | null | undefined) {
   return text || "—";
 }
 
-function hashClientQuestionnaireToken(token: string) {
-  return createHash("sha256").update(token).digest("hex");
+function getExtraAnswer(value: unknown, key: string) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const item = (value as Record<string, unknown>)[key];
+  return typeof item === "string" || typeof item === "number" || typeof item === "boolean"
+    ? String(item)
+    : null;
 }
 
-function createClientQuestionnaireToken() {
-  return randomBytes(32).toString("base64url");
-}
-
-function getClientQuestionnaireBaseUrl(headersList: Headers) {
-  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, "");
-  if (configured) return configured;
-
-  const host = headersList.get("x-forwarded-host") ?? headersList.get("host");
-  if (!host) return "";
-
-  const proto = headersList.get("x-forwarded-proto") ?? "http";
-  return `${proto}://${host}`;
+function formatChoice(value: string | null) {
+  if (value === "ano") return "Ano";
+  if (value === "ne") return "Ne";
+  if (value === "nevim") return "Nevím";
+  if (value === "technician_visit") return "Chce výjezd technika";
+  if (value === "self") return "Vyplnil údaje sám";
+  return value || "—";
 }
 
 function getClientVerificationStatus({
@@ -215,16 +226,15 @@ function getClientVerificationStatus({
 }) {
   const risks = Array.isArray(dotaznik?.rizika) ? dotaznik.rizika : [];
 
-  if (risks.length > 0) return "Rizikové odpovědi";
   if (dotaznik?.stav === "pozadovan_vyjezd_technika" || dotaznik?.pozadovan_vyjezd_technika) {
     return "Požadován výjezd technika";
   }
+  if (risks.length > 0) return "Rizikové odpovědi";
   if (dotaznik?.stav === "vyplneno") return "Vyplněno klientem";
   if (dotaznik?.stav === "neni_potreba") return "Není potřeba";
   if (dotaznik?.stav === "overeno_interne") return "Ověřeno interně";
   if (link?.opened_at || link?.last_opened_at || (link?.open_count ?? 0) > 0) return "Klient otevřel";
   if (link?.email_sent_at) return "Email odeslán";
-  if (link) return "Link vytvořen";
   return "Dotazník nevytvořen";
 }
 
@@ -639,25 +649,26 @@ function PlanTechnikyCard({ items }: { items: TechnikaSummaryRow[] }) {
 }
 
 function ClientTechnicalVerificationCard({
+  zakazkaId,
   statusLabel,
   link,
   dotaznik,
-  publicLink,
+  message,
   hasSavedPlace,
-  createQuestionnaireAction,
-  markNotNeededAction,
-  markInternallyVerifiedAction,
 }: {
+  zakazkaId: string;
   statusLabel: string;
   link: ClientVerificationLinkRow | null;
   dotaznik: ClientVerificationDotaznikRow | null;
-  publicLink: string | null;
+  message: "sent" | "missing_email" | "missing_resend_key" | null;
   hasSavedPlace: boolean;
-  createQuestionnaireAction: () => Promise<void>;
-  markNotNeededAction: () => Promise<void>;
-  markInternallyVerifiedAction: () => Promise<void>;
 }) {
   const risks = Array.isArray(dotaznik?.rizika) ? dotaznik.rizika : [];
+  const decision = getExtraAnswer(dotaznik?.odpovedi_extra, "decision");
+  const lzeZajetAutem = getExtraAnswer(dotaznik?.odpovedi_extra, "lze_zajet_autem");
+  const mistoZpevnene = getExtraAnswer(dotaznik?.odpovedi_extra, "misto_zpevnene");
+  const elektroPripravena = getExtraAnswer(dotaznik?.odpovedi_extra, "elektro_pripravena");
+  const kabelPresSilnici = getExtraAnswer(dotaznik?.odpovedi_extra, "kabel_pres_silnici");
 
   return (
     <Card className="mt-6 space-y-5 border-slate-700 bg-[#0b1324]">
@@ -682,27 +693,34 @@ function ClientTechnicalVerificationCard({
         </div>
       ) : null}
 
-      {publicLink ? (
+      {message === "sent" ? (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-3">
-          <div className="text-sm font-semibold text-emerald-100">Nový link vytvořen</div>
-          <p className="mt-1 text-sm text-emerald-200">
-            Raw token se neukládá do databáze, proto si link zkopíruj teď. Public formulář bude přidán v dalším kroku.
-          </p>
-          <input
-            readOnly
-            value={publicLink}
-            className="mt-3 w-full rounded-xl border border-emerald-700 bg-slate-950 px-4 py-3 text-sm text-white"
-          />
+          <div className="text-sm font-semibold text-emerald-100">Dotazník byl odeslán klientovi.</div>
+        </div>
+      ) : null}
+
+      {message === "missing_email" ? (
+        <div className="rounded-xl border border-red-500/40 bg-red-950/20 px-4 py-3 text-sm text-red-200">
+          Klient nemá vyplněný email.
+        </div>
+      ) : null}
+
+      {message === "missing_resend_key" ? (
+        <div className="rounded-xl border border-red-500/40 bg-red-950/20 px-4 py-3 text-sm text-red-200">
+          Chybí env proměnná RESEND_API_KEY.
         </div>
       ) : null}
 
       <div className="grid gap-3 text-sm text-slate-300 md:grid-cols-3">
         <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Link</div>
-          <div className="mt-1 font-semibold text-white">{link ? "Vytvořen" : "Nevytvořen"}</div>
-          {link?.created_at ? (
+          <div className="text-xs uppercase tracking-wide text-slate-500">Email</div>
+          <div className="mt-1 font-semibold text-white">{link?.email_sent_at ? "Odeslán" : "Neodeslán"}</div>
+          {link?.email_to ? (
+            <div className="mt-1 text-xs text-slate-500">{link.email_to}</div>
+          ) : null}
+          {link?.email_sent_at ? (
             <div className="mt-1 text-xs text-slate-500">
-              Vytvořeno: {new Date(link.created_at).toLocaleString("cs-CZ")}
+              Odesláno: {new Date(link.email_sent_at).toLocaleString("cs-CZ")}
             </div>
           ) : null}
         </div>
@@ -728,20 +746,43 @@ function ClientTechnicalVerificationCard({
         </div>
       </div>
 
+      {dotaznik?.submitted_at ? (
+        <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-300">
+          <div className="mb-2 font-semibold text-white">Souhrn odpovědí</div>
+          <div className="grid gap-2 md:grid-cols-2">
+            <div>Rozhodnutí: {formatChoice(decision)}</div>
+            <div>Výjezd technika: {dotaznik.pozadovan_vyjezd_technika ? "Ano" : "Ne"}</div>
+            <div>Kontakt: {[dotaznik.kontakt_jmeno, dotaznik.kontakt_telefon].filter(Boolean).join(", ") || "—"}</div>
+            <div>Příjezd autem: {formatChoice(lzeZajetAutem)}</div>
+            <div>Místo zpevněné: {formatChoice(mistoZpevnene)}</div>
+            <div>Elektro připraveno: {formatChoice(elektroPripravena)}</div>
+            <div>Elektro: {[dotaznik.elektro_pripojka, dotaznik.elektro_jisteni, dotaznik.elektro_zasuvka].filter(Boolean).join(", ") || "—"}</div>
+            <div>Vzdálenost přípojky: {dotaznik.elektro_vzdalenost_m ?? "—"} m</div>
+            <div>Kabel přes silnici/průchod: {formatChoice(kabelPresSilnici)}</div>
+            <div>Příjezd: {dotaznik.prijezd_poznamka || "—"}</div>
+            <div>Parkování: {dotaznik.parkovani_poznamka || "—"}</div>
+            <div>Rizika: {risks.length > 0 ? risks.join(", ") : "Bez automaticky detekovaných rizik"}</div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap gap-3">
-        <form action={createQuestionnaireAction}>
+        <form action={sendClientQuestionnaireAction}>
+          <input type="hidden" name="zakazka_id" value={zakazkaId} />
           <button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500">
-            Vytvořit dotazník
+            Odeslat dotazník klientovi
           </button>
         </form>
 
-        <form action={markNotNeededAction}>
+        <form action={markQuestionnaireNotNeededAction}>
+          <input type="hidden" name="zakazka_id" value={zakazkaId} />
           <button className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-slate-700">
             Označit jako není potřeba
           </button>
         </form>
 
-        <form action={markInternallyVerifiedAction}>
+        <form action={markQuestionnaireInternallyVerifiedAction}>
+          <input type="hidden" name="zakazka_id" value={zakazkaId} />
           <button className="rounded-xl border border-emerald-700 bg-emerald-950/50 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-900/60">
             Označit jako ověřeno interně
           </button>
@@ -822,135 +863,6 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
     redirect("/zakazky");
   }
 
-  async function setClientVerificationStatus(stav: "neni_potreba" | "overeno_interne") {
-    const supabase = await createClient();
-
-    const { data: currentDotaznik, error: currentError } = await supabase
-      .from("zakazka_dotazniky")
-      .select("dotaznik_id")
-      .eq("zakazka_id", id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (currentError) {
-      throw new Error(currentError.message);
-    }
-
-    const payload = {
-      zakazka_id: id,
-      stav,
-      pozadovan_vyjezd_technika: false,
-      updated_at: new Date().toISOString(),
-    };
-
-    const { error } = currentDotaznik?.dotaznik_id
-      ? await supabase
-          .from("zakazka_dotazniky")
-          .update(payload)
-          .eq("dotaznik_id", currentDotaznik.dotaznik_id)
-      : await supabase.from("zakazka_dotazniky").insert(payload);
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    revalidatePath(`/zakazky/${id}`);
-  }
-
-  async function markQuestionnaireNotNeeded() {
-    "use server";
-    await setClientVerificationStatus("neni_potreba");
-  }
-
-  async function markQuestionnaireInternallyVerified() {
-    "use server";
-    await setClientVerificationStatus("overeno_interne");
-  }
-
-  async function createClientQuestionnaire() {
-    "use server";
-    const supabase = await createClient();
-
-    const { data: zakazka, error: zakazkaError } = await supabase
-      .from("zakazky")
-      .select("zakazka_id, klient_id")
-      .eq("zakazka_id", id)
-      .single();
-
-    if (zakazkaError) {
-      throw new Error(zakazkaError.message);
-    }
-
-    let emailTo: string | null = null;
-    if (zakazka.klient_id) {
-      const { data: klient, error: klientError } = await supabase
-        .from("klienti")
-        .select("email")
-        .eq("klient_id", zakazka.klient_id)
-        .maybeSingle();
-
-      if (klientError) {
-        throw new Error(klientError.message);
-      }
-
-      emailTo = klient?.email ?? null;
-    }
-
-    const rawToken = createClientQuestionnaireToken();
-    const tokenHash = hashClientQuestionnaireToken(rawToken);
-
-    const { data: link, error: linkError } = await supabase
-      .from("zakazka_client_links")
-      .insert({
-        zakazka_id: id,
-        klient_id: zakazka.klient_id,
-        token_hash: tokenHash,
-        email_to: emailTo,
-        stav: "vytvoren",
-      })
-      .select("link_id")
-      .single();
-
-    if (linkError) {
-      throw new Error(linkError.message);
-    }
-
-    const { data: currentDotaznik, error: currentError } = await supabase
-      .from("zakazka_dotazniky")
-      .select("dotaznik_id")
-      .eq("zakazka_id", id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (currentError) {
-      throw new Error(currentError.message);
-    }
-
-    const dotaznikPayload = {
-      zakazka_id: id,
-      link_id: link.link_id,
-      stav: "rozpracovano",
-      pozadovan_vyjezd_technika: false,
-      updated_at: new Date().toISOString(),
-    };
-
-    const { error: dotaznikError } = currentDotaznik?.dotaznik_id
-      ? await supabase
-          .from("zakazka_dotazniky")
-          .update(dotaznikPayload)
-          .eq("dotaznik_id", currentDotaznik.dotaznik_id)
-      : await supabase.from("zakazka_dotazniky").insert(dotaznikPayload);
-
-    if (dotaznikError) {
-      throw new Error(dotaznikError.message);
-    }
-
-    revalidatePath(`/zakazky/${id}`);
-    redirect(`/zakazky/${id}?dotaznik_token=${encodeURIComponent(rawToken)}`);
-  }
-
   const { data, error } = await supabase
     .from("zakazky")
     .select("*")
@@ -968,7 +880,7 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
   const { data: dotaznikRaw, error: dotaznikError } = await supabase
     .from("zakazka_dotazniky")
     .select(
-      "dotaznik_id, stav, link_id, pozadovan_vyjezd_technika, rizika, submitted_at, updated_at"
+      "dotaznik_id, stav, link_id, pozadovan_vyjezd_technika, rizika, kontakt_jmeno, kontakt_telefon, prijezd_poznamka, parkovani_poznamka, elektro_pripojka, elektro_jisteni, elektro_zasuvka, elektro_vzdalenost_m, odpovedi_extra, submitted_at, updated_at"
     )
     .eq("zakazka_id", id)
     .order("created_at", { ascending: false })
@@ -983,7 +895,7 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
 
   const { data: linkRaw, error: linkError } = await supabase
     .from("zakazka_client_links")
-    .select("link_id, stav, email_sent_at, opened_at, last_opened_at, open_count, created_at")
+    .select("link_id, stav, email_to, email_sent_at, opened_at, last_opened_at, open_count, created_at")
     .eq("zakazka_id", id)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -998,12 +910,12 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
     link: clientVerificationLink,
     dotaznik,
   });
-  const rawDotaznikToken = resolvedSearchParams?.dotaznik_token?.trim() || "";
-  const headersList = await headers();
-  const clientQuestionnaireBaseUrl = getClientQuestionnaireBaseUrl(headersList);
-  const newClientQuestionnaireLink = rawDotaznikToken
-    ? `${clientQuestionnaireBaseUrl}/dotaznik/${encodeURIComponent(rawDotaznikToken)}`
-    : null;
+  const technicalVerificationMessage =
+    resolvedSearchParams?.technicke_overeni === "sent" ||
+    resolvedSearchParams?.technicke_overeni === "missing_email" ||
+    resolvedSearchParams?.technicke_overeni === "missing_resend_key"
+      ? resolvedSearchParams.technicke_overeni
+      : null;
 
   let klientNazev: string | null = null;
   if (data.klient_id) {
@@ -1239,14 +1151,12 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
       <ZakazkaBasicLookCard realizace={(realizace ?? []) as RealizaceRow[]} data={data} />
 
       <ClientTechnicalVerificationCard
+        zakazkaId={id}
         statusLabel={clientVerificationStatus}
         link={clientVerificationLink}
         dotaznik={dotaznik}
-        publicLink={newClientQuestionnaireLink}
+        message={technicalVerificationMessage}
         hasSavedPlace={Boolean(data.misto_id)}
-        createQuestionnaireAction={createClientQuestionnaire}
-        markNotNeededAction={markQuestionnaireNotNeeded}
-        markInternallyVerifiedAction={markQuestionnaireInternallyVerified}
       />
 
       <PlanTechnikyCard items={technikaSummary} />
