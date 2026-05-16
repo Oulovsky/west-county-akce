@@ -790,10 +790,50 @@ export function ZakazkaLoadingScanClient({
             ) : null}
 
             {reserveMode && isLoadingItem(selectedItem) ? (
-              <div className="mt-4 rounded-2xl border border-blue-600 bg-blue-950/70 p-4 text-sm font-bold text-blue-100">
-                Režim rezervy: další úspěšný scan bude uložen jako rezerva nad plán.
+              <div className="mt-4 rounded-2xl border-2 border-blue-400 bg-blue-950 p-4 text-base font-black uppercase tracking-wide text-blue-50 shadow-2xl shadow-blue-950/50">
+                REŽIM REZERVY – další kus bude uložen jako rezerva nad plán
               </div>
             ) : null}
+
+            <div className="mt-4 rounded-2xl border-2 border-blue-500 bg-blue-950/70 p-5 shadow-2xl shadow-blue-950/40">
+              <div className="text-sm font-black uppercase tracking-wide text-blue-200">
+                Aktuální úkol
+              </div>
+              <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-blue-300">
+                    {workflowMode === "loading" ? "Nakládka" : "Vykládka"}
+                  </div>
+                  <div className="mt-1 text-3xl font-black leading-tight text-white">
+                    {selectedItem.nazev}
+                  </div>
+                </div>
+                <div className="shrink-0 rounded-xl border border-blue-400 bg-blue-900/70 px-4 py-3 text-center">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-blue-200">
+                    Skladová pozice
+                  </div>
+                  <div className="text-3xl font-black text-white">
+                    {positionText(selectedItem.pozice).replace("Pozice ", "")}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+                <CountBox
+                  label="Plán"
+                  value={isLoadingItem(selectedItem) ? selectedItem.plan : selectedItem.loaded}
+                />
+                <CountBox
+                  label="Naskenováno"
+                  value={isLoadingItem(selectedItem) ? selectedItem.loaded : selectedItem.returned}
+                />
+                <CountBox
+                  label="Rezerva"
+                  value={isLoadingItem(selectedItem) ? selectedItem.reserve : 0}
+                />
+                <CountBox label="Zbývá" value={selectedItem.remaining} />
+              </div>
+            </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
               {isLoadingItem(selectedItem) ? (
