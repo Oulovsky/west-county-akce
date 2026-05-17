@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
+import { logZakazkaHistory } from "@/lib/zakazka-history";
 import {
   buildQuestionnaireUrl,
   createClientQuestionnaireToken,
@@ -58,6 +59,13 @@ function getLogisticsUpdate(action: LogisticsAction, userId: string, timestamp: 
     vraceno_completed_by: userId,
     vraceno_completed_at: timestamp,
   };
+}
+
+function getLogisticsHistoryTitle(action: LogisticsAction) {
+  if (action === "start_loading") return "Zahájena nakládka.";
+  if (action === "complete_loading") return "Nakládka dokončena.";
+  if (action === "start_unloading") return "Zahájena vykládka.";
+  return "Vrácení dokončeno.";
 }
 
 function getClientQuestionnaireBaseUrl(headersList: Headers) {
@@ -205,6 +213,15 @@ export async function updateZakazkaLogisticsAction(formData: FormData) {
   if (error) {
     throw new Error(error.message);
   }
+
+  await logZakazkaHistory(supabase, {
+    zakazkaId,
+    eventType: `logistics_${action}`,
+    actorId: user.id,
+    title: getLogisticsHistoryTitle(action),
+    detail: null,
+    metadata: { action },
+  });
 
   revalidatePath(`/zakazky/${zakazkaId}`);
   revalidatePath("/zakazky");

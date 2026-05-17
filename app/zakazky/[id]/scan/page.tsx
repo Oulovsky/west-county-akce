@@ -10,6 +10,7 @@ import { insertSkladKusHistorie } from "@/lib/sklad/kusHistorie";
 import { extractSkladKusIdFromInput } from "@/lib/sklad/kusLabels";
 import { queryAktivniZakazkaKusu } from "@/lib/sklad/zakazkaKusy";
 import { createClient } from "@/lib/supabase/server";
+import { syncZakazkaLogisticsFromScan } from "@/lib/zakazka-logistics-sync";
 import {
   ZakazkaLoadingScanClient,
   type LoadingOkruh,
@@ -642,6 +643,15 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
 
     if (historyError) return { ok: false, error: historyError.message };
 
+    const logisticsSync = await syncZakazkaLogisticsFromScan(supabase, {
+      zakazkaId: id,
+      actorId: user?.id ?? null,
+    });
+
+    if (!logisticsSync.ok) {
+      console.error("Logistics sync after loading scan failed:", logisticsSync.error);
+    }
+
     revalidatePath(`/zakazky/${id}/scan`);
     revalidatePath(`/zakazky/${id}/nakladka`);
     revalidatePath(`/zakazky/${id}/technika`);
@@ -807,6 +817,15 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
     });
 
     if (historyError) return { ok: false, error: historyError.message };
+
+    const logisticsSync = await syncZakazkaLogisticsFromScan(supabase, {
+      zakazkaId: id,
+      actorId: user?.id ?? null,
+    });
+
+    if (!logisticsSync.ok) {
+      console.error("Logistics sync after unloading scan failed:", logisticsSync.error);
+    }
 
     const { counts } = await queryZakazkaKusyMovementCounts(supabase, id);
     const itemCounts = counts.get(cleanExpectedPolozkaId) ?? { loaded: 0, returned: 0 };

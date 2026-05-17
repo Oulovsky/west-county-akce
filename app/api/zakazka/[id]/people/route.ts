@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth/require-session";
 import { createClient } from "@/lib/supabase/server";
+import { logZakazkaHistory } from "@/lib/zakazka-history";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -46,6 +48,13 @@ function normalizeTypBloku(value: unknown): TypBloku {
   if (raw === "bourani") return "bourani";
 
   return "akce";
+}
+
+function getTypBlokuLabel(value: TypBloku) {
+  if (value === "sklad") return "Nakládka";
+  if (value === "stavba") return "Stavba";
+  if (value === "bourani") return "Bourání";
+  return "Provoz akce";
 }
 
 function getDefaultRangeForBlok(zakazka: ZakazkaRow, typBloku: TypBloku) {
@@ -330,6 +339,26 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         { status: 500 }
       );
     }
+
+    await logZakazkaHistory(supabase, {
+      zakazkaId,
+      eventType: "person_added",
+      actorId: session.user.id,
+      title: `Přidán člověk do fáze ${getTypBlokuLabel(typBloku)}.`,
+      detail: null,
+      metadata: {
+        assignment_id: insertResult.data.id,
+        target_user_id: userId,
+        typ_bloku: typBloku,
+        datum_od: requestedFrom ?? defaultRange.datum_od,
+        datum_do: requestedTo ?? defaultRange.datum_do,
+      },
+    });
+
+    revalidatePath(`/zakazky/${zakazkaId}`);
+    revalidatePath("/zakazky");
+    revalidatePath("/moje");
+    revalidatePath(`/moje/zakazky/${zakazkaId}`);
 
     return NextResponse.json(insertResult.data);
   } catch (e) {

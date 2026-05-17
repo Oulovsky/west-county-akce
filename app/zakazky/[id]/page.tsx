@@ -13,6 +13,7 @@ import { combineDateAndTime } from "./helpers";
 import { ZakazkaBasicLookCard } from "./components/ZakazkaBasicLookCard";
 import { ZakazkaScheduleCard } from "./components/ZakazkaScheduleCard";
 import { ZakazkaHeaderCard } from "./components/ZakazkaHeaderCard";
+import { HistoryTimelineCard, type TimelineEvent } from "./HistoryTimelineCard";
 import {
   ZakazkaPlaceConnectionCard,
   type ExistingPlaceOption,
@@ -29,6 +30,7 @@ import {
 } from "./actions";
 
 import { ZakazkaSubnav } from "@/components/zakazky/zakazka-subnav";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import {
   PlaceTechnicalNotesCard,
@@ -240,6 +242,36 @@ type LogisticsData = {
   vraceno_completed_at?: string | null;
 };
 
+type ZakazkaHistoryRow = {
+  historie_id: string;
+  zakazka_id: string;
+  event_type: string;
+  actor_id: string | null;
+  title: string;
+  detail: string | null;
+  metadata: unknown;
+  created_at: string | null;
+};
+
+type HistoryProfileRow = {
+  user_id: string;
+  email: string | null;
+  jmeno: string | null;
+  prijmeni: string | null;
+};
+
+type AssignmentHistoryRow = {
+  id: string | number;
+  user_id: string;
+  typ_bloku: string | null;
+  datum_od: string | null;
+  datum_do: string | null;
+  confirmation_status: string | null;
+  declined_reason: string | null;
+  created_at: string | null;
+  responded_at: string | null;
+};
+
 function getSkladovaPolozkaInfo(
   value: TechnikaSummaryRawRow["skladove_polozky"]
 ) {
@@ -387,6 +419,73 @@ function getLogisticsProfileName(
   return name || profile?.email || userId;
 }
 
+function getHistoryProfileName(
+  profilesById: Map<string, HistoryProfileRow>,
+  userId?: string | null
+) {
+  if (!userId) return "Systém";
+  const profile = profilesById.get(userId);
+  const name = [profile?.prijmeni, profile?.jmeno].filter(Boolean).join(" ").trim();
+  return name || profile?.email || userId;
+}
+
+function getHistoryMetadata(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
+}
+
+function getHistoryTargetUserId(value: unknown) {
+  const metadata = getHistoryMetadata(value);
+  const targetUserId = metadata.target_user_id;
+  return typeof targetUserId === "string" ? targetUserId : null;
+}
+
+function getHistoryTypeLabel(value: string) {
+  if (value.startsWith("person_")) return "Lidé";
+  if (value.startsWith("logistics_")) return "Logistika";
+  if (value.startsWith("scan_")) return "Scan";
+  return "Zakázka";
+}
+
+function formatScanAuditUdalost(typAkce: string | null, poznamka: string | null) {
+  const note = poznamka?.toLowerCase() ?? "";
+
+  if (note.includes("náhrada") || note.includes("nahrada")) return "Použita náhrada.";
+  if (note.includes("rezerva")) return "Naložena rezerva.";
+
+  if (typAkce === "nalozeno") return "Naložen kus.";
+  if (typAkce === "vraceno") return "Vrácen kus.";
+  if (typAkce === "poskozeno") return "Kus označen jako poškozený.";
+  if (typAkce === "blokovano") return "Kus zablokován.";
+
+  return typAkce?.trim() || "Scan workflow událost.";
+}
+
+function createLogisticsDerivedEvent({
+  id,
+  date,
+  actorId,
+  title,
+  profilesById,
+}: {
+  id: string;
+  date?: string | null;
+  actorId?: string | null;
+  title: string;
+  profilesById: Map<string, HistoryProfileRow>;
+}): TimelineEvent | null {
+  if (!date) return null;
+
+  return {
+    id,
+    date,
+    type: "Logistika",
+    actorLabel: getHistoryProfileName(profilesById, actorId),
+    title,
+    detail: null,
+  };
+}
+
 function LogisticsActionButton({
   zakazkaId,
   action,
@@ -453,7 +552,7 @@ function LogisticsCard({
         <div>
           <div className="text-lg font-semibold text-white">Logistika</div>
           <div className="mt-1 text-sm text-slate-400">
-            Základní provozní stav nakládky a vykládky bez scan workflow.
+            Provozní stav se automaticky odvozuje ze scan workflow. Ruční akce zůstávají jako záloha.
           </div>
         </div>
         <div className="rounded-md border border-blue-500/30 bg-blue-500/15 px-3 py-1 text-xs font-bold text-blue-100">
@@ -1409,6 +1508,215 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
     })
   );
 
+  const { data: historyRaw, error: historyError } = await supabase
+    .from("zakazka_historie")
+    .select("historie_id, zakazka_id, event_type, actor_id, title, detail, metadata, created_at")
+    .eq("zakazka_id", id)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (historyError) {
+    return <div>Chyba provozní historie: {historyError.message}</div>;
+  }
+
+  const historyRows = (historyRaw ?? []) as ZakazkaHistoryRow[];
+
+  const { data: assignmentHistoryRaw, error: assignmentHistoryError } = await supabase
+    .from("zakazka_lide")
+    .select("id, user_id, typ_bloku, datum_od, datum_do, confirmation_status, declined_reason, created_at, responded_at")
+    .eq("zakazka_id", id)
+    .order("created_at", { ascending: false });
+
+  if (assignmentHistoryError) {
+    return <div>Chyba historie lidí: {assignmentHistoryError.message}</div>;
+  }
+
+  const assignmentHistory = (assignmentHistoryRaw ?? []) as AssignmentHistoryRow[];
+
+  const { data: scanHistoryRaw, error: scanHistoryError } = await supabase
+    .from("sklad_kus_historie")
+    .select("historie_id, typ_akce, poznamka, created_at")
+    .eq("zakazka_id", id)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (scanHistoryError) {
+    return <div>Chyba scan historie: {scanHistoryError.message}</div>;
+  }
+
+  const historyUserIds = [
+    ...new Set(
+      [
+        ...historyRows.map((row) => row.actor_id),
+        ...historyRows.map((row) => getHistoryTargetUserId(row.metadata)),
+        ...assignmentHistory.map((row) => row.user_id),
+        data.nakladka_started_by,
+        data.nakladka_completed_by,
+        data.vykladka_started_by,
+        data.vraceno_completed_by,
+      ].filter(Boolean)
+    ),
+  ] as string[];
+  let historyProfilesById = new Map<string, HistoryProfileRow>();
+
+  if (historyUserIds.length > 0) {
+    const { data: historyProfilesRaw, error: historyProfilesError } = await supabase
+      .from("profiles")
+      .select("user_id, email, jmeno, prijmeni")
+      .in("user_id", historyUserIds);
+
+    if (historyProfilesError) {
+      return <div>Chyba profilů historie: {historyProfilesError.message}</div>;
+    }
+
+    historyProfilesById = new Map(
+      ((historyProfilesRaw ?? []) as HistoryProfileRow[]).map((profile) => [
+        profile.user_id,
+        profile,
+      ])
+    );
+  }
+
+  const centralTimelineEvents: TimelineEvent[] = historyRows
+    .filter((row) => Boolean(row.created_at))
+    .map((row) => {
+      const targetUserId = getHistoryTargetUserId(row.metadata);
+      const targetLabel = targetUserId ? getHistoryProfileName(historyProfilesById, targetUserId) : null;
+
+      return {
+        id: `history-${row.historie_id}`,
+        date: row.created_at as string,
+        type: getHistoryTypeLabel(row.event_type),
+        actorLabel: getHistoryProfileName(historyProfilesById, row.actor_id),
+        title: targetLabel ? `${row.title} (${targetLabel})` : row.title,
+        detail: row.detail,
+      };
+    });
+
+  const hasCentralLogisticsEvent = new Set(
+    historyRows.filter((row) => row.event_type.startsWith("logistics_")).map((row) => row.event_type)
+  );
+  const derivedLogisticsEvents = [
+    !hasCentralLogisticsEvent.has("logistics_start_loading")
+      ? createLogisticsDerivedEvent({
+          id: "logistics-start-loading",
+          date: data.nakladka_started_at,
+          actorId: data.nakladka_started_by,
+          title: "Zahájena nakládka.",
+          profilesById: historyProfilesById,
+        })
+      : null,
+    !hasCentralLogisticsEvent.has("logistics_complete_loading")
+      ? createLogisticsDerivedEvent({
+          id: "logistics-complete-loading",
+          date: data.nakladka_completed_at,
+          actorId: data.nakladka_completed_by,
+          title: "Nakládka dokončena.",
+          profilesById: historyProfilesById,
+        })
+      : null,
+    !hasCentralLogisticsEvent.has("logistics_start_unloading")
+      ? createLogisticsDerivedEvent({
+          id: "logistics-start-unloading",
+          date: data.vykladka_started_at,
+          actorId: data.vykladka_started_by,
+          title: "Zahájena vykládka.",
+          profilesById: historyProfilesById,
+        })
+      : null,
+    !hasCentralLogisticsEvent.has("logistics_complete_return")
+      ? createLogisticsDerivedEvent({
+          id: "logistics-complete-return",
+          date: data.vraceno_completed_at,
+          actorId: data.vraceno_completed_by,
+          title: "Vrácení dokončeno.",
+          profilesById: historyProfilesById,
+        })
+      : null,
+  ].filter((event): event is TimelineEvent => Boolean(event));
+
+  const centralAssignmentIds = new Set(
+    historyRows
+      .map((row) => getHistoryMetadata(row.metadata).assignment_id)
+      .filter((value): value is string | number => typeof value === "string" || typeof value === "number")
+      .map(String)
+  );
+  const assignmentTimelineEvents = assignmentHistory.flatMap((assignment) => {
+    if (centralAssignmentIds.has(String(assignment.id))) return [];
+
+    const events: TimelineEvent[] = [];
+    const userName = getHistoryProfileName(historyProfilesById, assignment.user_id);
+    const phase = getAssignmentPhaseLabel(assignment.typ_bloku);
+
+    if (assignment.created_at) {
+      events.push({
+        id: `assignment-created-${assignment.id}`,
+        date: assignment.created_at,
+        type: "Lidé",
+        actorLabel: "Systém",
+        title: `Přidán člověk: ${userName} → ${phase}.`,
+        detail: formatAssignmentRange(assignment.datum_od, assignment.datum_do),
+      });
+    }
+
+    if (assignment.responded_at) {
+      const status = String(assignment.confirmation_status ?? "");
+      events.push({
+        id: `assignment-response-${assignment.id}`,
+        date: assignment.responded_at,
+        type: "Lidé",
+        actorLabel: userName,
+        title:
+          status === "accepted"
+            ? "Potvrzuje účast."
+            : status === "declined"
+              ? "Odmítl účast."
+              : "Stav účasti změněn.",
+        detail: status === "declined" && assignment.declined_reason ? `Důvod: ${assignment.declined_reason}` : phase,
+      });
+    }
+
+    return events;
+  });
+
+  const scanTimelineEvents: TimelineEvent[] = ((scanHistoryRaw ?? []) as Array<{
+    historie_id: string;
+    typ_akce: string | null;
+    poznamka: string | null;
+    created_at: string | null;
+  }>)
+    .filter((row) => Boolean(row.created_at))
+    .map((row) => ({
+      id: `scan-${row.historie_id}`,
+      date: row.created_at as string,
+      type: "Scan",
+      actorLabel: "Scan workflow",
+      title: formatScanAuditUdalost(row.typ_akce, row.poznamka),
+      detail: row.poznamka,
+    }));
+
+  const createdAt = (data as { created_at?: string | null }).created_at;
+  const createdTimelineEvent: TimelineEvent[] = createdAt
+    ? [
+        {
+          id: "zakazka-created",
+          date: createdAt,
+          type: "Zakázka",
+          actorLabel: "Systém",
+          title: "Zakázka vytvořena.",
+          detail: null,
+        },
+      ]
+    : [];
+
+  const timelineEvents = [
+    ...createdTimelineEvent,
+    ...centralTimelineEvents,
+    ...derivedLogisticsEvents,
+    ...assignmentTimelineEvents,
+    ...scanTimelineEvents,
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
   const { data: dotaznikRaw, error: dotaznikError } = await supabase
     .from("zakazka_dotazniky")
     .select(
@@ -1806,6 +2114,8 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
         ) : null}
         <PeoplePool zakazkaId={id} />
       </div>
+
+      <HistoryTimelineCard events={timelineEvents} />
     </div>
   );
 }

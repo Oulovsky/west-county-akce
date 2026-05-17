@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -270,6 +271,7 @@ function getConflictText(conflict: ConflictInfo | null) {
 }
 
 export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
+  const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [current, setCurrent] = useState<Zakazka | null>(null);
@@ -454,6 +456,7 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
 
         setModal(null);
         await load();
+        router.refresh();
         return;
       }
 
@@ -484,6 +487,7 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
 
       setModal(null);
       await load();
+      router.refresh();
 
       if (failures.length > 0) {
         const prefix =
@@ -519,6 +523,7 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
 
       setModal(null);
       await load();
+      router.refresh();
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "Odebrání selhalo.");
     } finally {
