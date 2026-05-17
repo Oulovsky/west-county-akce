@@ -19,7 +19,7 @@ export type Zakazka = {
   cas_od: string | null;
   cas_do: string | null;
   zrusena?: boolean | null;
-  loading_status?: string | null;
+  logistika_stav?: string | null;
   declined_people_count?: number;
 };
 
@@ -93,6 +93,14 @@ function formatDatumCas(z: Zakazka) {
   return `${datumOd} ${casOd} → ${datumDo} ${casDo}`;
 }
 
+function getLogisticsStatusLabel(value?: string | null) {
+  if (value === "naklada_se") return "Nakládá se";
+  if (value === "nalozeno") return "Naloženo";
+  if (value === "vykladka") return "Probíhá vykládka";
+  if (value === "vraceno") return "Vráceno";
+  return "Čeká na nakládku";
+}
+
 function matchMode(zakazka: Zakazka, ted: Date, mode: FilterMode) {
   if (mode === "active") return jeProbihajici(zakazka, ted);
   if (mode === "future") return jeNadchazejici(zakazka, ted);
@@ -161,14 +169,12 @@ function ZakazkaCard({
                   <span className="font-semibold text-red-200">Stav:</span> Zrušená
                 </div>
               ) : null}
-              {zakazka.loading_status ? (
-                <div>
-                  <span className="font-semibold text-slate-200">Nakládka:</span>{" "}
-                  <span className="rounded-md border border-slate-700 bg-slate-900 px-2 py-0.5 text-xs font-bold text-slate-100">
-                    {zakazka.loading_status}
-                  </span>
-                </div>
-              ) : null}
+              <div>
+                <span className="font-semibold text-slate-200">Logistika:</span>{" "}
+                <span className="rounded-md border border-cyan-500/30 bg-cyan-500/15 px-2 py-0.5 text-xs font-bold text-cyan-100">
+                  {getLogisticsStatusLabel(zakazka.logistika_stav)}
+                </span>
+              </div>
               {zakazka.declined_people_count ? (
                 <div>
                   <span className="font-semibold text-red-200">Lidé:</span>{" "}

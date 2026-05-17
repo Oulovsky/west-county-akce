@@ -33,6 +33,7 @@ type ZakazkaRow = {
   datum_od: string | null;
   datum_do: string | null;
   zrusena: boolean | null;
+  logistika_stav: string | null;
 };
 
 type FilterMode = "all" | "pending" | "accepted" | "declined";
@@ -79,6 +80,19 @@ function getPhaseLabel(value?: string | null) {
   if (raw === "stavba") return "Stavba";
   if (raw === "bourani" || raw === "bourání") return "Bourání";
   return "Provoz akce";
+}
+
+function isLogisticsPhase(value?: string | null) {
+  const raw = String(value ?? "").trim().toLowerCase();
+  return raw === "sklad" || raw === "nakladka" || raw === "nakládka" || raw === "bourani" || raw === "bourání";
+}
+
+function getLogisticsStatusLabel(value?: string | null) {
+  if (value === "naklada_se") return "Nakládá se";
+  if (value === "nalozeno") return "Naloženo";
+  if (value === "vykladka") return "Probíhá vykládka";
+  if (value === "vraceno") return "Vráceno";
+  return "Čeká na nakládku";
 }
 
 function formatDateTime(value?: string | null) {
@@ -166,6 +180,12 @@ function AssignmentCard({ item }: { item: AssignmentWithZakazka }) {
         {status === "pending" ? (
           <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm font-semibold text-blue-100">
             Máte novou zakázku.
+          </div>
+        ) : null}
+
+        {isLogisticsPhase(assignment.typ_bloku) ? (
+          <div className="inline-flex w-fit rounded-md border border-cyan-500/30 bg-cyan-500/15 px-3 py-1 text-xs font-bold text-cyan-100">
+            {getLogisticsStatusLabel(zakazka?.logistika_stav)}
           </div>
         ) : null}
       </div>
@@ -329,7 +349,7 @@ export default async function MojePage({ searchParams }: PageProps) {
   if (zakazkaIds.length > 0) {
     const { data: zakazkyRaw, error: zakazkyError } = await supabase
       .from("zakazky")
-      .select("zakazka_id, cislo_zakazky, nazev, misto, misto_lat, misto_lng, poznamka, akce_od, akce_do, datum_od, datum_do, zrusena")
+      .select("zakazka_id, cislo_zakazky, nazev, misto, misto_lat, misto_lng, poznamka, akce_od, akce_do, datum_od, datum_do, zrusena, logistika_stav")
       .in("zakazka_id", zakazkaIds);
 
     if (zakazkyError) {

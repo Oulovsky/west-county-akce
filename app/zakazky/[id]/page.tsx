@@ -25,6 +25,7 @@ import {
   markQuestionnaireInternallyVerifiedAction,
   markQuestionnaireNotNeededAction,
   sendClientQuestionnaireAction,
+  updateZakazkaLogisticsAction,
 } from "./actions";
 
 import { ZakazkaSubnav } from "@/components/zakazky/zakazka-subnav";
@@ -212,6 +213,33 @@ type DeclinedAssignmentAlertItem = {
   reason: string;
 };
 
+type LogisticsStatus =
+  | "ceka_na_nakladku"
+  | "naklada_se"
+  | "nalozeno"
+  | "vykladka"
+  | "vraceno";
+
+type LogisticsProfileRow = {
+  user_id: string;
+  email: string | null;
+  jmeno: string | null;
+  prijmeni: string | null;
+};
+
+type LogisticsData = {
+  zakazka_id: string;
+  logistika_stav?: string | null;
+  nakladka_started_by?: string | null;
+  nakladka_started_at?: string | null;
+  nakladka_completed_by?: string | null;
+  nakladka_completed_at?: string | null;
+  vykladka_started_by?: string | null;
+  vykladka_started_at?: string | null;
+  vraceno_completed_by?: string | null;
+  vraceno_completed_at?: string | null;
+};
+
 function getSkladovaPolozkaInfo(
   value: TechnikaSummaryRawRow["skladove_polozky"]
 ) {
@@ -316,6 +344,174 @@ function getAssignmentPhaseLabel(value: string | null) {
 function getProfileName(profile: DeclinedAssignmentProfileRow | undefined, userId: string) {
   const name = [profile?.prijmeni, profile?.jmeno].filter(Boolean).join(" ").trim();
   return name || profile?.email || userId;
+}
+
+function normalizeLogisticsStatus(value?: string | null): LogisticsStatus {
+  if (value === "naklada_se") return "naklada_se";
+  if (value === "nalozeno") return "nalozeno";
+  if (value === "vykladka") return "vykladka";
+  if (value === "vraceno") return "vraceno";
+  return "ceka_na_nakladku";
+}
+
+function getLogisticsStatusLabel(value?: string | null) {
+  const status = normalizeLogisticsStatus(value);
+  if (status === "naklada_se") return "Nakládá se";
+  if (status === "nalozeno") return "Naloženo";
+  if (status === "vykladka") return "Probíhá vykládka";
+  if (status === "vraceno") return "Vráceno";
+  return "Čeká na nakládku";
+}
+
+function formatLogisticsDateTime(value?: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return date.toLocaleString("cs-CZ", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getLogisticsProfileName(
+  profilesById: Map<string, LogisticsProfileRow>,
+  userId?: string | null
+) {
+  if (!userId) return "—";
+  const profile = profilesById.get(userId);
+  const name = [profile?.prijmeni, profile?.jmeno].filter(Boolean).join(" ").trim();
+  return name || profile?.email || userId;
+}
+
+function LogisticsActionButton({
+  zakazkaId,
+  action,
+  label,
+  enabled,
+}: {
+  zakazkaId: string;
+  action: string;
+  label: string;
+  enabled: boolean;
+}) {
+  return (
+    <form action={updateZakazkaLogisticsAction}>
+      <input type="hidden" name="zakazka_id" value={zakazkaId} />
+      <input type="hidden" name="logistics_action" value={action} />
+      <button
+        type="submit"
+        disabled={!enabled}
+        className={[
+          "min-h-12 w-full rounded-xl border px-4 py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50",
+          enabled
+            ? "border-blue-500/40 bg-blue-600/20 text-blue-100 hover:bg-blue-600/30"
+            : "border-slate-700 bg-slate-900 text-slate-500",
+        ].join(" ")}
+      >
+        {label}
+      </button>
+    </form>
+  );
+}
+
+function LogisticsEventRow({
+  label,
+  userName,
+  timestamp,
+}: {
+  label: string;
+  userName: string;
+  timestamp?: string | null;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+      <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="mt-1 text-sm font-semibold text-white">{userName}</div>
+      <div className="mt-1 text-xs text-slate-400">{formatLogisticsDateTime(timestamp)}</div>
+    </div>
+  );
+}
+
+function LogisticsCard({
+  zakazkaId,
+  data,
+  profilesById,
+}: {
+  zakazkaId: string;
+  data: LogisticsData;
+  profilesById: Map<string, LogisticsProfileRow>;
+}) {
+  const status = normalizeLogisticsStatus(data.logistika_stav);
+
+  return (
+    <Card className="mt-6 space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-lg font-semibold text-white">Logistika</div>
+          <div className="mt-1 text-sm text-slate-400">
+            Základní provozní stav nakládky a vykládky bez scan workflow.
+          </div>
+        </div>
+        <div className="rounded-md border border-blue-500/30 bg-blue-500/15 px-3 py-1 text-xs font-bold text-blue-100">
+          {getLogisticsStatusLabel(data.logistika_stav)}
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <LogisticsEventRow
+          label="Nakládku zahájil"
+          userName={getLogisticsProfileName(profilesById, data.nakladka_started_by)}
+          timestamp={data.nakladka_started_at}
+        />
+        <LogisticsEventRow
+          label="Nakládku dokončil"
+          userName={getLogisticsProfileName(profilesById, data.nakladka_completed_by)}
+          timestamp={data.nakladka_completed_at}
+        />
+        <LogisticsEventRow
+          label="Vykládku zahájil"
+          userName={getLogisticsProfileName(profilesById, data.vykladka_started_by)}
+          timestamp={data.vykladka_started_at}
+        />
+        <LogisticsEventRow
+          label="Vrácení dokončil"
+          userName={getLogisticsProfileName(profilesById, data.vraceno_completed_by)}
+          timestamp={data.vraceno_completed_at}
+        />
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <LogisticsActionButton
+          zakazkaId={zakazkaId}
+          action="start_loading"
+          label="Zahájit nakládku"
+          enabled={status === "ceka_na_nakladku"}
+        />
+        <LogisticsActionButton
+          zakazkaId={zakazkaId}
+          action="complete_loading"
+          label="Dokončit nakládku"
+          enabled={status === "naklada_se"}
+        />
+        <LogisticsActionButton
+          zakazkaId={zakazkaId}
+          action="start_unloading"
+          label="Zahájit vykládku"
+          enabled={status === "nalozeno"}
+        />
+        <LogisticsActionButton
+          zakazkaId={zakazkaId}
+          action="complete_return"
+          label="Dokončit vrácení"
+          enabled={status === "vykladka"}
+        />
+      </div>
+    </Card>
+  );
 }
 
 function getClientVerificationStatus({
@@ -1044,6 +1240,36 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
     return <div>ZakĂˇzka nenalezena</div>;
   }
 
+  const logisticsUserIds = [
+    ...new Set(
+      [
+        data.nakladka_started_by,
+        data.nakladka_completed_by,
+        data.vykladka_started_by,
+        data.vraceno_completed_by,
+      ].filter(Boolean)
+    ),
+  ] as string[];
+  let logisticsProfilesById = new Map<string, LogisticsProfileRow>();
+
+  if (logisticsUserIds.length > 0) {
+    const { data: logisticsProfilesRaw, error: logisticsProfilesError } = await supabase
+      .from("profiles")
+      .select("user_id, email, jmeno, prijmeni")
+      .in("user_id", logisticsUserIds);
+
+    if (logisticsProfilesError) {
+      return <div>Chyba profilů logistiky: {logisticsProfilesError.message}</div>;
+    }
+
+    logisticsProfilesById = new Map(
+      ((logisticsProfilesRaw ?? []) as LogisticsProfileRow[]).map((profile) => [
+        profile.user_id,
+        profile,
+      ])
+    );
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -1488,6 +1714,8 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
       <ZakazkaHeaderCard zakazkaId={id} data={headerData} cancelAction={cancelZakazka} />
 
       <ZakazkaScheduleCard data={data} action={updateZakazkaSchedule} />
+
+      <LogisticsCard zakazkaId={id} data={data as LogisticsData} profilesById={logisticsProfilesById} />
 
       <ZakazkaBasicLookCard realizace={(realizace ?? []) as RealizaceRow[]} data={data} />
 

@@ -33,6 +33,7 @@ type ZakazkaRow = {
   akce_do: string | null;
   datum_od: string | null;
   datum_do: string | null;
+  logistika_stav: string | null;
 };
 
 type TechnikaRow = {
@@ -74,6 +75,19 @@ function getPhaseLabel(value?: string | null) {
   if (raw === "stavba") return "Stavba";
   if (raw === "bourani" || raw === "bourání") return "Bourání";
   return "Provoz akce";
+}
+
+function isLogisticsPhase(value?: string | null) {
+  const raw = String(value ?? "").trim().toLowerCase();
+  return raw === "sklad" || raw === "nakladka" || raw === "nakládka" || raw === "bourani" || raw === "bourání";
+}
+
+function getLogisticsStatusLabel(value?: string | null) {
+  if (value === "naklada_se") return "Nakládá se";
+  if (value === "nalozeno") return "Naloženo";
+  if (value === "vykladka") return "Probíhá vykládka";
+  if (value === "vraceno") return "Vráceno";
+  return "Čeká na nakládku";
 }
 
 function formatDateTime(value?: string | null) {
@@ -153,7 +167,7 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
 
   const { data: zakazkaRaw, error: zakazkaError } = await supabase
     .from("zakazky")
-    .select("zakazka_id, cislo_zakazky, nazev, misto, misto_lat, misto_lng, poznamka, akce_od, akce_do, datum_od, datum_do")
+    .select("zakazka_id, cislo_zakazky, nazev, misto, misto_lat, misto_lng, poznamka, akce_od, akce_do, datum_od, datum_do, logistika_stav")
     .eq("zakazka_id", id)
     .maybeSingle();
 
@@ -182,7 +196,7 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
     .from("technika_na_zakazce")
     .select("skladova_polozka_id, mnozstvi, skladove_polozky(nazev)")
     .eq("zakazka_id", id)
-    .order("created_at", { ascending: true });
+    .order("skladova_polozka_id", { ascending: true });
 
   if (technikaError) {
     return <div>Chyba načtení technického plánu: {technikaError.message}</div>;
@@ -254,6 +268,11 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
                       <div className="mt-1 text-sm text-slate-300">
                         {formatRange(assignment.datum_od, assignment.datum_do)}
                       </div>
+                  {isLogisticsPhase(assignment.typ_bloku) ? (
+                    <div className="mt-3 inline-flex rounded-md border border-cyan-500/30 bg-cyan-500/15 px-3 py-1 text-xs font-bold text-cyan-100">
+                      {getLogisticsStatusLabel(zakazka.logistika_stav)}
+                    </div>
+                  ) : null}
                     </div>
                     <Badge variant={getStatusVariant(status)}>{getStatusLabel(status)}</Badge>
                   </div>

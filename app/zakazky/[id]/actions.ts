@@ -26,6 +26,40 @@ function toOptionalNumber(value: unknown) {
   return Number.isFinite(number) ? number : null;
 }
 
+type LogisticsAction = "start_loading" | "complete_loading" | "start_unloading" | "complete_return";
+
+function getLogisticsUpdate(action: LogisticsAction, userId: string, timestamp: string) {
+  if (action === "start_loading") {
+    return {
+      logistika_stav: "naklada_se",
+      nakladka_started_by: userId,
+      nakladka_started_at: timestamp,
+    };
+  }
+
+  if (action === "complete_loading") {
+    return {
+      logistika_stav: "nalozeno",
+      nakladka_completed_by: userId,
+      nakladka_completed_at: timestamp,
+    };
+  }
+
+  if (action === "start_unloading") {
+    return {
+      logistika_stav: "vykladka",
+      vykladka_started_by: userId,
+      vykladka_started_at: timestamp,
+    };
+  }
+
+  return {
+    logistika_stav: "vraceno",
+    vraceno_completed_by: userId,
+    vraceno_completed_at: timestamp,
+  };
+}
+
 function getClientQuestionnaireBaseUrl(headersList: Headers) {
   const configured = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, "");
   if (configured) return configured;
@@ -138,6 +172,44 @@ export async function markQuestionnaireNotNeededAction(formData: FormData) {
 export async function markQuestionnaireInternallyVerifiedAction(formData: FormData) {
   const zakazkaId = getZakazkaId(formData);
   await setClientVerificationStatus(zakazkaId, "overeno_interne");
+}
+
+export async function updateZakazkaLogisticsAction(formData: FormData) {
+  const zakazkaId = getZakazkaId(formData);
+  const action = String(formData.get("logistics_action") ?? "") as LogisticsAction;
+
+  if (
+    action !== "start_loading" &&
+    action !== "complete_loading" &&
+    action !== "start_unloading" &&
+    action !== "complete_return"
+  ) {
+    throw new Error("Neplatná logistická akce.");
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    throw new Error("Pro změnu logistického stavu musíte být přihlášeni.");
+  }
+
+  const { error } = await supabase
+    .from("zakazky")
+    .update(getLogisticsUpdate(action, user.id, new Date().toISOString()))
+    .eq("zakazka_id", zakazkaId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidatePath(`/zakazky/${zakazkaId}`);
+  revalidatePath("/zakazky");
+  revalidatePath("/moje");
+  revalidatePath(`/moje/zakazky/${zakazkaId}`);
 }
 
 export async function createPlaceFromZakazkaAction(formData: FormData) {
