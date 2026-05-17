@@ -342,7 +342,14 @@ export function SkladTableRow({
           className="flex min-h-8 items-center justify-center px-1 text-center"
           title={SKLAD_SPRAVA_HINT_NA_ZAKAZKACH}
         >
-          <span style={tableValueBoxRight}>
+          <span
+            style={item.availability_future_collision ? tableDangerBoxRight : tableValueBoxRight}
+            title={
+              item.availability_future_collision
+                ? `Budoucí kapacitní kolize: plán/fyzicky ${formatNumber(item.availability_future_planned)} ks, použitelné ${formatNumber(item.availability_usable)} ks`
+                : SKLAD_SPRAVA_HINT_NA_ZAKAZKACH
+            }
+          >
             {formatNumber(item.na_akcich)}
           </span>
         </div>

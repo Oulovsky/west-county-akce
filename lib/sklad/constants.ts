@@ -89,6 +89,9 @@ export const SKLAD_REALTIME_CHANNEL = {
 export const SKLAD_KUS_STATUS_CLASS = {
   blokovano: "border-red-700 bg-red-950 text-red-200",
   poskozenoPouzitelne: "border-amber-700 bg-amber-950 text-amber-200",
+  oprava: "border-fuchsia-700 bg-fuchsia-950 text-fuchsia-200",
+  kontrola: "border-blue-700 bg-blue-950 text-blue-200",
+  vyrazeno: "border-zinc-700 bg-zinc-950 text-zinc-200",
   ok: "border-emerald-700 bg-emerald-950 text-emerald-200",
 } as const;
 
@@ -115,7 +118,7 @@ export const SKLAD_FALLBACK_PRIORITA_OPTIONS = [
 ] as const;
 
 export const SKLAD_KUS_SELECT_FIELDS =
-  "kus_id, skladova_polozka_id, poradove_cislo, evidencni_cislo, stav, poznamka, aktivni" as const;
+  "kus_id, skladova_polozka_id, poradove_cislo, evidencni_cislo, stav, poznamka, aktivni, servisni_poznamka, servisni_stav_changed_at, servisni_stav_changed_by" as const;
 
 export const SKLAD_POSKOZENI_SELECT_FIELDS =
   "poskozeni_id, pocet_kusu, blokuje_pouziti, datum_uzavreni" as const;

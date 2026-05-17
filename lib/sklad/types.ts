@@ -52,6 +52,9 @@ export type SkladKusRow = {
   stav: string;
   poznamka: string | null;
   aktivni: boolean;
+  servisni_poznamka?: string | null;
+  servisni_stav_changed_at?: string | null;
+  servisni_stav_changed_by?: string | null;
 };
 
 export type ZakazkaKusStav =
@@ -86,7 +89,12 @@ export type SkladKusHistorieTypAkce =
   | "vraceno"
   | "poskozeno"
   | "blokovano"
-  | "odblokovano";
+  | "odblokovano"
+  | "v_oprave"
+  | "ceka_na_kontrolu"
+  | "zkontrolovano"
+  | "vyrazeno"
+  | "servisni_poznamka";
 
 export type SkladKusHistorieRow = {
   historie_id: string;
@@ -138,6 +146,12 @@ export type SkladPolozkaRow = {
   na_akcich: number | null;
   na_zakazkach_fyzicky?: number | null;
   poskozene: number | null;
+  kusy_skladem?: number | null;
+  kusy_poskozene?: number | null;
+  kusy_blokovane_servis?: number | null;
+  availability_future_collision?: boolean | null;
+  availability_future_planned?: number | null;
+  availability_usable?: number | null;
   /** Sloupec pozice ve skladove_polozky — doplňuje se dotazem vedle RPC. */
   pozice?: number | string | null;
 };

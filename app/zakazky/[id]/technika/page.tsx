@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getRolePermissions } from "@/lib/roles";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { markZakazkaCriticalChangeIfApproved } from "@/lib/zakazka-critical-changes";
+import { getTechnikaAvailability } from "@/lib/technika-availability";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -54,6 +55,13 @@ type Radek = {
   rezervovano_jinde: number;
   k_dispozici: number;
   max_na_teto_zakazce: number;
+  blokovane: number;
+  v_oprave: number;
+  ceka_na_kontrolu: number;
+  vyrazene: number;
+  fyzicky_jinde: number;
+  rezervy_jinde: number;
+  kolize_dostupnosti: boolean;
 };
 
 type ZakazkaKusRow = {
@@ -107,22 +115,6 @@ async function nactiData(zakazkaId: string) {
   }
 
   const zakazka = zakazkaRaw as Zakazka;
-
-  const { data: vsechnyZakazkyRaw, error: vsechnyZakazkyError } = await supabase
-    .from("zakazky")
-    .select("zakazka_id, cislo_zakazky, nazev, datum_od, datum_do, cas_od, cas_do, zrusena")
-    .neq("zakazka_id", zakazkaId);
-
-  if (vsechnyZakazkyError) {
-    throw new Error(vsechnyZakazkyError.message);
-  }
-
-  const vsechnyZakazky = (vsechnyZakazkyRaw || []) as Zakazka[];
-
-  const kolidujiciZakazky = vsechnyZakazky.filter(
-    (z: Zakazka) => !z.zrusena && koliduje(zakazka, z)
-  );
-  const kolidujiciIds = kolidujiciZakazky.map((z: Zakazka) => z.zakazka_id);
 
   const { data: skladovePolozkyRaw, error: skladError } = await supabase.rpc(
     "get_skladove_polozky"
@@ -211,20 +203,21 @@ async function nactiData(zakazkaId: string) {
     realCounts.set(polozkaId, counts);
   }
 
-  let technikaJinde: TechnikaNaZakazce[] = [];
-
-  if (kolidujiciIds.length > 0) {
-    const { data, error } = await supabase
-      .from("technika_na_zakazce")
-      .select("zakazka_id, skladova_polozka_id, mnozstvi")
-      .in("zakazka_id", kolidujiciIds);
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    technikaJinde = (data || []) as TechnikaNaZakazce[];
-  }
+  const requestedItems = skladovePolozky.map((polozka) => {
+    const requestedQuantity =
+      technikaNaTetoZakazce.find(
+        (t: TechnikaNaZakazce) => t.skladova_polozka_id === polozka.skladova_polozka_id
+      )?.mnozstvi ?? 0;
+    return { skladova_polozka_id: polozka.skladova_polozka_id, requestedQuantity };
+  });
+  const availability = await getTechnikaAvailability({
+    supabase,
+    zakazkaId,
+    items: requestedItems,
+  });
+  const availabilityByItem = new Map(
+    availability.items.map((item) => [item.skladova_polozka_id, item])
+  );
 
   const radky: Radek[] = skladovePolozky.map((polozka: SkladovaPolozka) => {
     const naZakazce =
@@ -239,15 +232,10 @@ async function nactiData(zakazkaId: string) {
       rezerva: 0,
     };
 
-    const rezervovanoJinde = technikaJinde
-      .filter((t: TechnikaNaZakazce) => t.skladova_polozka_id === polozka.skladova_polozka_id)
-      .reduce((sum: number, t: TechnikaNaZakazce) => sum + Number(t.mnozstvi ?? 0), 0);
-
-    const poskozene = Number(polozka.poskozene ?? 0);
-    const maxNaTetoZakazce = Math.max(
-      0,
-      Number(polozka.celkem_k_dispozici ?? 0) - rezervovanoJinde - poskozene
-    );
+    const itemAvailability = availabilityByItem.get(polozka.skladova_polozka_id);
+    const rezervovanoJinde = itemAvailability?.plannedOnOtherOverlappingZakazky ?? 0;
+    const poskozene = itemAvailability?.damagedPieces ?? Number(polozka.poskozene ?? 0);
+    const maxNaTetoZakazce = itemAvailability?.availableQuantity ?? 0;
     const kDispozici = Math.max(0, maxNaTetoZakazce - naZakazce);
 
     return {
@@ -263,6 +251,13 @@ async function nactiData(zakazkaId: string) {
       rezervovano_jinde: Number(rezervovanoJinde ?? 0),
       k_dispozici: Number(kDispozici ?? 0),
       max_na_teto_zakazce: Number(maxNaTetoZakazce ?? 0),
+      blokovane: itemAvailability?.blockedPieces ?? 0,
+      v_oprave: itemAvailability?.repairPieces ?? 0,
+      ceka_na_kontrolu: itemAvailability?.pendingCheckPieces ?? 0,
+      vyrazene: itemAvailability?.retiredPieces ?? 0,
+      fyzicky_jinde: itemAvailability?.physicallyLoadedOnOtherZakazky ?? 0,
+      rezervy_jinde: itemAvailability?.reservePiecesOnOtherZakazky ?? 0,
+      kolize_dostupnosti: Boolean(itemAvailability?.hasCollision),
     };
   });
 

@@ -27,6 +27,8 @@ type ZakazkaRow = {
   bourani_do?: string | null;
   nazev?: string | null;
   typ_obsluhy?: string | null;
+  zrusena?: boolean | null;
+  workflow_stav?: string | null;
 };
 
 type TypBloku = "sklad" | "stavba" | "akce" | "bourani";

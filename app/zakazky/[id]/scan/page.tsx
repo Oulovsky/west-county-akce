@@ -10,7 +10,9 @@ import { insertSkladKusHistorie } from "@/lib/sklad/kusHistorie";
 import { extractSkladKusIdFromInput } from "@/lib/sklad/kusLabels";
 import { queryAktivniZakazkaKusu } from "@/lib/sklad/zakazkaKusy";
 import { createClient } from "@/lib/supabase/server";
+import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { syncZakazkaLogisticsFromScan } from "@/lib/zakazka-logistics-sync";
+import { getTechnikaAvailability } from "@/lib/technika-availability";
 import {
   ZakazkaLoadingScanClient,
   type LoadingOkruh,
@@ -84,6 +86,7 @@ type DamageInfo = {
 
 type ScanDecision =
   | "force_damaged_load"
+  | "force_capacity_load"
   | "use_replacement"
   | "return_to_stock"
   | "set_aside_damaged"
@@ -101,7 +104,9 @@ function formatZakazkaDate(zakazka: ZakazkaInfo) {
 }
 
 function isKusStateDamagedOrBlocked(stav: string | null | undefined) {
-  return stav === "poskozeno" || stav === "blokovano" || stav === "odpis";
+  return ["poskozeno", "blokovano", "v_oprave", "ceka_na_kontrolu", "odpis", "vyrazeno"].includes(
+    String(stav ?? "")
+  );
 }
 
 function formatDamageNote(kus: SkladKusRowForScan, damage: DamageInfo | null) {
@@ -460,7 +465,8 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
   async function scanLoadKus(
     input: string,
     expectedSkladovaPolozkaId: string,
-    decision?: ScanDecision
+    decision?: ScanDecision,
+    overrideReason?: string
   ): Promise<MovementScanResult> {
     "use server";
 
@@ -544,6 +550,7 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
     const isReserve = decision === "load_reserve";
     const damageNote = formatDamageNote(kus, damage);
     const isDamagedOrBlocked = Boolean(damage) || isKusStateDamagedOrBlocked(kus.stav);
+    const trimmedOverrideReason = String(overrideReason ?? "").trim();
 
     if (isReserve && isReplacement) {
       return {
@@ -552,7 +559,7 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
       };
     }
 
-    if (isReplacement && decision !== "use_replacement") {
+    if (isReplacement && decision !== "use_replacement" && decision !== "force_capacity_load") {
       return {
         ok: false,
         requiresDecision: true,
@@ -569,7 +576,12 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
       };
     }
 
-    if (isDamagedOrBlocked && !isReplacement && decision !== "force_damaged_load") {
+    if (
+      isDamagedOrBlocked &&
+      !isReplacement &&
+      decision !== "force_damaged_load" &&
+      decision !== "force_capacity_load"
+    ) {
       return {
         ok: false,
         requiresDecision: true,
@@ -584,6 +596,16 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
         damageNote,
         plannedItemName: plannedItem.nazev,
       };
+    }
+
+    if (
+      isDamagedOrBlocked &&
+      (decision === "force_damaged_load" ||
+        decision === "use_replacement" ||
+        decision === "force_capacity_load") &&
+      !trimmedOverrideReason
+    ) {
+      return { ok: false, error: "U naložení problémového kusu je povinný důvod override." };
     }
 
     const { data: planRaw, error: planError } = await supabase
@@ -602,6 +624,34 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
     const planCount = Number(plan.mnozstvi ?? 0);
     if (!Number.isFinite(planCount) || planCount <= 0) {
       return { ok: false, error: "Tento typ techniky nemá na zakázce kladné plánované množství." };
+    }
+
+    const availability = await getTechnikaAvailability({
+      supabase,
+      zakazkaId: id,
+      items: [{ skladova_polozka_id: cleanExpectedPolozkaId, requestedQuantity: planCount }],
+    });
+    const availabilityItem = availability.items[0];
+    const hasCapacityCollision = Boolean(availabilityItem?.hasCollision);
+    if (hasCapacityCollision && decision !== "force_capacity_load") {
+      return {
+        ok: false,
+        requiresDecision: true,
+        decision: "loading-capacity",
+        warning: "Položka je v kapacitní kolizi s jinou zakázkou nebo servisním stavem skladu.",
+        kus: {
+          kusId: kus.kus_id,
+          itemName: scannedItem.nazev,
+          poradoveCislo: kus.poradove_cislo,
+          pozice: scannedItem.pozice,
+        },
+        plannedItemName: plannedItem.nazev,
+        damageNote: `Plán ${availabilityItem?.requestedQuantity ?? planCount} ks, dostupné ${availabilityItem?.availableQuantity ?? 0} ks, chybí ${availabilityItem?.missingQuantity ?? 0} ks.`,
+      };
+    }
+
+    if (hasCapacityCollision && decision === "force_capacity_load" && !trimmedOverrideReason) {
+      return { ok: false, error: "U naložení přes kapacitní kolizi je povinný důvod override." };
     }
 
     const { data: activeAssignment, error: assignmentError } =
@@ -634,7 +684,7 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
         ? "Kus naložen jako rezerva nad plán."
         : "Kus naložen scanem v loading workflow zakázky.",
       isReplacement ? `Náhrada za plánovanou položku: ${plannedItem.nazev}` : null,
-      isDamagedOrBlocked ? `Naložen poškozený/blokovaný kus: ${damageNote}` : null,
+      isDamagedOrBlocked ? `Naložen problémový kus: ${damageNote}. Důvod override: ${trimmedOverrideReason}` : null,
     ].filter(Boolean);
 
     const { error: insertError } = await supabase.from(SKLAD_TABLE.zakazkaKusy).insert({
@@ -654,6 +704,42 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
     });
 
     if (historyError) return { ok: false, error: historyError.message };
+
+    if (isDamagedOrBlocked) {
+      await logZakazkaHistory(supabase, {
+        zakazkaId: id,
+        eventType: "stock_problem_piece_loaded_override",
+        actorId: user?.id ?? null,
+        title: "Problémový kus byl naložen přes override.",
+        detail: trimmedOverrideReason,
+        metadata: {
+          kus_id: kus.kus_id,
+          skladova_polozka_id: kus.skladova_polozka_id,
+          kus_stav: kus.stav,
+          damage_note: damageNote,
+          decision,
+        },
+      });
+    }
+
+    if (hasCapacityCollision) {
+      await logZakazkaHistory(supabase, {
+        zakazkaId: id,
+        eventType: "stock_capacity_collision_override",
+        actorId: user?.id ?? null,
+        title: "Kapacitní kolize techniky byla povolena při scanu.",
+        detail: trimmedOverrideReason,
+        metadata: {
+          skladova_polozka_id: cleanExpectedPolozkaId,
+          kus_id: kus.kus_id,
+          planned_quantity: availabilityItem?.requestedQuantity ?? planCount,
+          available_quantity: availabilityItem?.availableQuantity ?? 0,
+          missing_quantity: availabilityItem?.missingQuantity ?? 0,
+          planned_elsewhere: availabilityItem?.plannedOnOtherOverlappingZakazky ?? 0,
+          physically_loaded_elsewhere: availabilityItem?.physicallyLoadedOnOtherZakazky ?? 0,
+        },
+      });
+    }
 
     const logisticsSync = await syncZakazkaLogisticsFromScan(supabase, {
       zakazkaId: id,
@@ -696,7 +782,8 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
   async function scanUnloadKus(
     input: string,
     expectedSkladovaPolozkaId: string,
-    decision?: ScanDecision
+    decision?: ScanDecision,
+    _overrideReason?: string
   ): Promise<MovementScanResult> {
     "use server";
 

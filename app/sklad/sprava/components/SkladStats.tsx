@@ -16,6 +16,8 @@ type Props = {
   totalAkce: number;
   totalFyzickyNaZakazkach: number;
   totalPoskozene: number;
+  totalProblemove: number;
+  totalFutureCollisions: number;
 };
 
 export function SkladStats({
@@ -25,9 +27,11 @@ export function SkladStats({
   totalAkce,
   totalFyzickyNaZakazkach,
   totalPoskozene,
+  totalProblemove,
+  totalFutureCollisions,
 }: Props) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-8">
       <SkladStatCard
         label="Položek"
         value={itemsCount}
@@ -60,6 +64,18 @@ export function SkladStats({
         label="Poškozené"
         value={totalPoskozene}
         accent
+      />
+      <SkladStatCard
+        label="Blok / oprava"
+        value={totalProblemove}
+        hint="Kusy blokované, v opravě, čekající na kontrolu nebo vyřazené."
+        accent
+      />
+      <SkladStatCard
+        label="Budoucí kolize"
+        value={totalFutureCollisions}
+        hint="Položky, kde budoucí plán nebo fyzicky naložené kusy přesahují použitelnou kapacitu v ročním výhledu."
+        accent={totalFutureCollisions > 0}
       />
     </div>
   );

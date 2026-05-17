@@ -21,6 +21,16 @@ export function formatSkladKusHistorieTypAkce(
       return "Blokováno";
     case "odblokovano":
       return "Odblokováno";
+    case "v_oprave":
+      return "V opravě";
+    case "ceka_na_kontrolu":
+      return "Čeká na kontrolu";
+    case "zkontrolovano":
+      return "Zkontrolováno";
+    case "vyrazeno":
+      return "Vyřazeno";
+    case "servisni_poznamka":
+      return "Servisní poznámka";
     default:
       return typAkce?.trim() || "—";
   }

@@ -156,6 +156,8 @@ type AvailabilityConflict = {
   celkemSkladem: number;
   planovanoKolize: number;
   nedostupneKusy: number;
+  fyzickyNalozenoJinde: number;
+  rezervyJinde: number;
   dostupne: number;
   chybi: number;
 };
@@ -1044,91 +1046,43 @@ export default function NovaZakazkaPage() {
   async function checkAvailability(akceOd: string, akceDo: string) {
     if (aggregatedPlanRows.length === 0) return [];
 
-    const newStart = parseDate(akceOd);
-    const newEnd = parseDate(akceDo);
-    if (!newStart || !newEnd) return [];
-
-    const plannedIds = aggregatedPlanRows.map((row) => row.skladova_polozka_id);
-
-    const { data: zakazkyRaw, error: zakazkyError } = await supabase
-      .from("zakazky")
-      .select("zakazka_id, datum_od, datum_do, cas_od, cas_do, akce_od, akce_do, zrusena");
-
-    if (zakazkyError) {
-      throw new Error(zakazkyError.message);
-    }
-
-    const kolidujiciZakazky = ((zakazkyRaw ?? []) as ZakazkaAvailabilityRow[]).filter(
-      (zakazka) => {
-        if (zakazka.zrusena) return false;
-
-        const start = getZakazkaStart(zakazka);
-        const end = getZakazkaEnd(zakazka);
-        if (!start || !end) return false;
-
-        return rangesOverlap(newStart, newEnd, start, end);
-      }
-    );
-
-    const kolidujiciIds = kolidujiciZakazky.map((zakazka) => zakazka.zakazka_id);
-    const planovanoKolize = new Map<string, number>();
-
-    if (kolidujiciIds.length > 0) {
-      const { data: technikaRaw, error: technikaError } = await supabase
-        .from("technika_na_zakazce")
-        .select("zakazka_id, skladova_polozka_id, mnozstvi")
-        .in("zakazka_id", kolidujiciIds)
-        .in("skladova_polozka_id", plannedIds);
-
-      if (technikaError) {
-        throw new Error(technikaError.message);
-      }
-
-      for (const row of (technikaRaw ?? []) as TechnikaAvailabilityRow[]) {
-        planovanoKolize.set(
-          row.skladova_polozka_id,
-          (planovanoKolize.get(row.skladova_polozka_id) ?? 0) + toNumber(row.mnozstvi)
-        );
-      }
-    }
-
-    const nedostupneKusy = new Map<string, number>();
-    const { data: kusyRaw } = await supabase
-      .from("sklad_polozky_kusy")
-      .select("skladova_polozka_id, stav")
-      .in("skladova_polozka_id", plannedIds)
-      .in("stav", ["poskozeno", "blokovano", "odpis"]);
-
-    for (const row of (kusyRaw ?? []) as SkladKusAvailabilityRow[]) {
-      nedostupneKusy.set(
-        row.skladova_polozka_id,
-        (nedostupneKusy.get(row.skladova_polozka_id) ?? 0) + 1
-      );
-    }
-
-    return aggregatedPlanRows
-      .map((row) => {
-        const polozka = skladPolozkaMap.get(row.skladova_polozka_id);
-        const celkemSkladem = toNumber(polozka?.celkem_k_dispozici);
-        const kolize = planovanoKolize.get(row.skladova_polozka_id) ?? 0;
-        const nedostupne = nedostupneKusy.get(row.skladova_polozka_id) ?? 0;
-        const dostupne = Math.max(celkemSkladem - kolize - nedostupne, 0);
-        const chybi = Math.max(row.vysledneMnozstvi - dostupne, 0);
-
-        if (chybi <= 0) return null;
-
-        return {
+    const response = await fetch("/api/technika-availability", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: akceOd,
+        to: akceDo,
+        items: aggregatedPlanRows.map((row) => ({
           skladova_polozka_id: row.skladova_polozka_id,
-          nazev: row.nazev,
-          pozadovano: row.vysledneMnozstvi,
-          celkemSkladem,
-          planovanoKolize: kolize,
-          nedostupneKusy: nedostupne,
-          dostupne,
-          chybi,
-        };
-      })
-      .filter((row): row is AvailabilityConflict => Boolean(row));
+          requestedQuantity: row.vysledneMnozstvi,
+        })),
+      }),
+    });
+
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload?.error || "Dostupnost techniky se nepodařilo spočítat.");
+    }
+
+    return (payload.items ?? [])
+      .filter((item: any) => item.hasCollision)
+      .map((item: any) => ({
+        skladova_polozka_id: item.skladova_polozka_id,
+        nazev: item.nazev ?? "Technika",
+        pozadovano: toNumber(item.requestedQuantity),
+        celkemSkladem: toNumber(item.totalPieces),
+        planovanoKolize: toNumber(item.plannedOnOtherOverlappingZakazky),
+        nedostupneKusy:
+          toNumber(item.damagedPieces) +
+          toNumber(item.blockedPieces) +
+          toNumber(item.repairPieces) +
+          toNumber(item.pendingCheckPieces) +
+          toNumber(item.retiredPieces),
+        fyzickyNalozenoJinde: toNumber(item.physicallyLoadedOnOtherZakazky),
+        rezervyJinde: toNumber(item.reservePiecesOnOtherZakazky),
+        dostupne: toNumber(item.availableQuantity),
+        chybi: toNumber(item.missingQuantity),
+      }));
   }
 
   async function vygenerovatCisloZakazky() {
@@ -1477,7 +1431,7 @@ export default function NovaZakazkaPage() {
                   className="rounded-2xl border border-amber-900/70 bg-amber-950/30 p-4"
                 >
                   <div className="text-lg font-black text-white">{conflict.nazev}</div>
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm md:grid-cols-6">
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm md:grid-cols-8">
                     <div className="rounded-xl bg-slate-950 p-3">
                       <div className="text-xs text-slate-500">Požadováno</div>
                       <div className="font-black text-white">{formatNumber(conflict.pozadovano)}</div>
@@ -1493,6 +1447,14 @@ export default function NovaZakazkaPage() {
                     <div className="rounded-xl bg-slate-950 p-3">
                       <div className="text-xs text-slate-500">Poškoz./blok.</div>
                       <div className="font-black text-white">{formatNumber(conflict.nedostupneKusy)}</div>
+                    </div>
+                    <div className="rounded-xl bg-slate-950 p-3">
+                      <div className="text-xs text-slate-500">Fyzicky jinde</div>
+                      <div className="font-black text-white">{formatNumber(conflict.fyzickyNalozenoJinde)}</div>
+                    </div>
+                    <div className="rounded-xl bg-slate-950 p-3">
+                      <div className="text-xs text-slate-500">Rezervy</div>
+                      <div className="font-black text-white">{formatNumber(conflict.rezervyJinde)}</div>
                     </div>
                     <div className="rounded-xl bg-slate-950 p-3">
                       <div className="text-xs text-slate-500">Dostupné</div>

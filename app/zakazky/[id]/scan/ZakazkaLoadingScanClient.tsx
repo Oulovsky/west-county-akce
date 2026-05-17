@@ -43,6 +43,7 @@ export type MovementScanResult =
       requiresDecision: true;
       decision:
         | "loading-damaged"
+        | "loading-capacity"
         | "loading-replacement"
         | "unloading-damaged";
       warning: string;
@@ -119,17 +120,20 @@ type Props = {
   processLoadingScanAction: (
     input: string,
     expectedSkladovaPolozkaId: string,
-    decision?: ScanDecision
+    decision?: ScanDecision,
+    overrideReason?: string
   ) => Promise<MovementScanResult>;
   processUnloadingScanAction: (
     input: string,
     expectedSkladovaPolozkaId: string,
-    decision?: ScanDecision
+    decision?: ScanDecision,
+    overrideReason?: string
   ) => Promise<MovementScanResult>;
 };
 
 type ScanDecision =
   | "force_damaged_load"
+  | "force_capacity_load"
   | "use_replacement"
   | "return_to_stock"
   | "set_aside_damaged"
@@ -338,7 +342,7 @@ export function ZakazkaLoadingScanClient({
   }
 
   const processPayload = useCallback(
-    (payload: string, decision?: ScanDecision) => {
+    (payload: string, decision?: ScanDecision, overrideReason?: string) => {
       if (!selectedItem) {
         successCanAutoResumeRef.current = false;
         setResult({ ok: false, error: "Nejdřív vyber položku checklistu." });
@@ -365,7 +369,8 @@ export function ZakazkaLoadingScanClient({
         const next = await action(
           payload,
           selectedItem.skladovaPolozkaId,
-          effectiveDecision
+          effectiveDecision,
+          overrideReason
         );
         setResult(next);
 
@@ -533,8 +538,25 @@ export function ZakazkaLoadingScanClient({
   }
 
   function confirmDecision(decision: ScanDecision) {
+    let overrideReason: string | undefined;
+    if (
+      decision === "force_damaged_load" ||
+      decision === "force_capacity_load" ||
+      (decision === "use_replacement" && result?.ok === false && "damageNote" in result && result.damageNote)
+    ) {
+      const reason = window.prompt(
+        decision === "force_capacity_load"
+          ? "Důvod override kapacitní kolize:"
+          : "Důvod override pro naložení problémového kusu:"
+      );
+      if (!reason?.trim()) {
+        setResult({ ok: false, error: "U override je povinný důvod." });
+        return;
+      }
+      overrideReason = reason.trim();
+    }
     processingRef.current = false;
-    processPayload(value, decision);
+    processPayload(value, decision, overrideReason);
   }
 
   const emptyTitle =
@@ -1044,6 +1066,30 @@ export function ZakazkaLoadingScanClient({
                       className="min-h-16 rounded-2xl border border-slate-600 bg-slate-800 px-5 py-4 text-lg font-black text-white"
                     >
                       Zrušit scan
+                    </button>
+                  </>
+                ) : null}
+
+                {result.decision === "loading-capacity" ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => confirmDecision("force_capacity_load")}
+                      className="min-h-16 rounded-2xl border border-amber-500 bg-amber-600 px-5 py-4 text-lg font-black text-white shadow-lg shadow-amber-950/40 disabled:opacity-60"
+                    >
+                      Přesto naložit s důvodem
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => {
+                        setResult(null);
+                        setValue("");
+                      }}
+                      className="min-h-14 rounded-2xl border border-slate-600 bg-slate-900 px-5 py-3 text-base font-bold text-slate-100 disabled:opacity-60"
+                    >
+                      Zastavit scan
                     </button>
                   </>
                 ) : null}

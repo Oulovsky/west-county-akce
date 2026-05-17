@@ -135,7 +135,14 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
     return <div className="p-6 text-red-300">{attendanceError.message}</div>;
   }
 
-  const rows = (attendanceRaw ?? []) as AttendanceRow[];
+  const rows = ((attendanceRaw ?? []) as Array<
+    Omit<AttendanceRow, "zakazky"> & {
+      zakazky?: AttendanceRow["zakazky"] | AttendanceRow["zakazky"][];
+    }
+  >).map((row) => ({
+    ...row,
+    zakazky: Array.isArray(row.zakazky) ? (row.zakazky[0] ?? null) : (row.zakazky ?? null),
+  })) as AttendanceRow[];
   const userIds = [...new Set(rows.map((row) => row.user_id).filter(Boolean))];
   const profilesById = new Map<string, ProfileRow>();
 

@@ -252,6 +252,37 @@ export default function Page() {
         podkategorieCatalog
       );
 
+      const { data: kusyRaw, error: kusyError } = await supabase
+        .from(SKLAD_TABLE.skladPolozkyKusy)
+        .select("skladova_polozka_id, stav, aktivni");
+
+      if (kusyError && !options?.silent) {
+        alert(`Stavy kusů se nepodařilo načíst: ${kusyError.message}`);
+      }
+
+      const kusStatusCounts = new Map<
+        string,
+        { skladem: number; poskozene: number; problemove: number }
+      >();
+      for (const kus of (kusyRaw ?? []) as Array<{
+        skladova_polozka_id: string;
+        stav: string | null;
+        aktivni: boolean | null;
+      }>) {
+        const current = kusStatusCounts.get(kus.skladova_polozka_id) ?? {
+          skladem: 0,
+          poskozene: 0,
+          problemove: 0,
+        };
+        const stav = String(kus.stav ?? "").trim();
+        if (kus.aktivni !== false && stav === "skladem") current.skladem += 1;
+        if (stav === "poskozeno") current.poskozene += 1;
+        if (["blokovano", "v_oprave", "ceka_na_kontrolu", "odpis", "vyrazeno"].includes(stav) || kus.aktivni === false) {
+          current.problemove += 1;
+        }
+        kusStatusCounts.set(kus.skladova_polozka_id, current);
+      }
+
       const [
         { map: naZakazkachMap, error: naZakazkachErr },
         { map: fyzickyNaZakazkachMap, error: fyzickyNaZakazkachErr },
@@ -263,9 +294,48 @@ export default function Page() {
           querySpravaBlokujiciPoskozeneByPolozka(supabase),
         ]);
 
+      const futureAvailabilityMap = new Map<
+        string,
+        { planned: number; usable: number; collision: boolean }
+      >();
+      try {
+        const now = new Date();
+        const horizon = new Date(now);
+        horizon.setFullYear(horizon.getFullYear() + 1);
+        const availabilityResponse = await fetch("/api/technika-availability", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            from: now.toISOString(),
+            to: horizon.toISOString(),
+            items: enrichedPodkategorie.map((item) => ({
+              skladova_polozka_id: item.skladova_polozka_id,
+              requestedQuantity: 0,
+            })),
+          }),
+        });
+
+        const availabilityPayload = await availabilityResponse.json();
+        if (availabilityResponse.ok) {
+          for (const item of availabilityPayload.items ?? []) {
+            const planned = toNumber(item.plannedOnOtherOverlappingZakazky);
+            const loaded = toNumber(item.physicallyLoadedOnOtherZakazky);
+            const usable = toNumber(item.usablePieces);
+            futureAvailabilityMap.set(String(item.skladova_polozka_id), {
+              planned: Math.max(planned, loaded),
+              usable,
+              collision: Math.max(planned, loaded) > usable,
+            });
+          }
+        }
+      } catch {
+        // Přehled skladu zůstává použitelný i bez doplňkového kapacitního warningu.
+      }
+
       const mergedItems = enrichedPodkategorie.map((item) => {
         const id = item.skladova_polozka_id;
         const celkem = toNumber(item.celkem_k_dispozici);
+        const futureAvailability = futureAvailabilityMap.get(id);
 
         const naZakazkach =
           naZakazkachErr || !naZakazkachMap
@@ -281,6 +351,12 @@ export default function Page() {
             ...item,
             na_akcich: naZakazkach,
             na_zakazkach_fyzicky: fyzickyNaZakazkach,
+            kusy_skladem: kusStatusCounts.get(id)?.skladem ?? 0,
+            kusy_poskozene: kusStatusCounts.get(id)?.poskozene ?? 0,
+            kusy_blokovane_servis: kusStatusCounts.get(id)?.problemove ?? 0,
+            availability_future_collision: futureAvailability?.collision ?? false,
+            availability_future_planned: futureAvailability?.planned ?? null,
+            availability_usable: futureAvailability?.usable ?? null,
           };
         }
 
@@ -291,6 +367,12 @@ export default function Page() {
           na_akcich: naZakazkach,
           na_zakazkach_fyzicky: fyzickyNaZakazkach,
           na_sklade: computeSpravaNaSklade(celkem, naZakazkach, blok),
+          kusy_skladem: kusStatusCounts.get(id)?.skladem ?? 0,
+          kusy_poskozene: kusStatusCounts.get(id)?.poskozene ?? 0,
+          kusy_blokovane_servis: kusStatusCounts.get(id)?.problemove ?? 0,
+          availability_future_collision: futureAvailability?.collision ?? false,
+          availability_future_planned: futureAvailability?.planned ?? null,
+          availability_usable: futureAvailability?.usable ?? null,
         };
       });
 
@@ -1121,6 +1203,13 @@ export default function Page() {
     0
   );
 
+  const totalProblemove = items.reduce(
+    (sum, item) => sum + toNumber(item.kusy_blokovane_servis),
+    0
+  );
+
+  const totalFutureCollisions = items.filter((item) => item.availability_future_collision).length;
+
   const totalSkladem = items.reduce(
     (sum, item) => sum + toNumber(item.na_sklade),
     0
@@ -1153,6 +1242,12 @@ export default function Page() {
             Kompletní katalog. Editace přímo v tabulce, Enter uloží řádek, Ctrl+Z
             vrátí poslední změnu.
           </p>
+          <a
+            href="/sklad/servis"
+            className="mt-3 inline-flex rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm font-bold text-amber-100 transition hover:bg-amber-500/20"
+          >
+            Otevřít servis a blokace kusů
+          </a>
         </div>
 
         <SkladStats
@@ -1162,6 +1257,8 @@ export default function Page() {
           totalAkce={totalAkce}
           totalFyzickyNaZakazkach={totalFyzickyNaZakazkach}
           totalPoskozene={totalPoskozene}
+          totalProblemove={totalProblemove}
+          totalFutureCollisions={totalFutureCollisions}
         />
 
         <SpravaInventoryFilters

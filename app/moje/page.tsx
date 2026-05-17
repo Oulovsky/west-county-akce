@@ -547,7 +547,14 @@ export default async function MojePage({ searchParams }: PageProps) {
     return <div>Chyba načtení odpracovaných hodin: {attendancePaymentsError.message}</div>;
   }
 
-  const attendancePayments = (attendancePaymentsRaw ?? []) as AttendancePaymentRow[];
+  const attendancePayments = ((attendancePaymentsRaw ?? []) as Array<
+    Omit<AttendancePaymentRow, "zakazky"> & {
+      zakazky?: AttendancePaymentRow["zakazky"] | AttendancePaymentRow["zakazky"][];
+    }
+  >).map((row) => ({
+    ...row,
+    zakazky: Array.isArray(row.zakazky) ? (row.zakazky[0] ?? null) : (row.zakazky ?? null),
+  })) as AttendancePaymentRow[];
   const { data: ownProfileRaw, error: ownProfileError } = await supabase
     .from("profiles")
     .select("hodinovy_naklad_akce")

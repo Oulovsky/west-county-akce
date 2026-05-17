@@ -28,6 +28,10 @@ import {
   queryAktivniZakazkaKusu,
 } from "@/lib/sklad/zakazkaKusy";
 import { SkladKusQuickActions } from "./SkladKusQuickActions";
+import {
+  reportSkladKusDamageAction,
+  updateSkladKusServiceStateAction,
+} from "./actions";
 
 type PageProps = {
   params: Promise<{ kus_id: string }>;
@@ -112,6 +116,60 @@ function formatDamageSummary(item: SkladPoskozeniRow): string {
   ].filter(Boolean);
 
   return parts.join(" · ");
+}
+
+function getUnifiedKusStateLabel({
+  kus,
+  assignment,
+  openDamage,
+}: {
+  kus: SkladKusRow;
+  assignment: SkladKusZakazkaAssignmentRow | null;
+  openDamage: SkladPoskozeniRow[];
+}) {
+  if (!kus.aktivni || kus.stav === "vyrazeno" || kus.stav === "odpis") return "Vyřazeno";
+  if (kus.stav === "v_oprave") return "V opravě";
+  if (kus.stav === "ceka_na_kontrolu") return "Čeká na kontrolu";
+  if (kus.stav === "blokovano" || openDamage.some((item) => item.blokuje_pouziti)) return "Blokovaný";
+  if (kus.stav === "poskozeno" || openDamage.length > 0) return "Poškozený";
+  if (assignment) return "Na zakázce";
+  return "Skladem";
+}
+
+function ServiceActionForm({
+  kusId,
+  action,
+  label,
+  notePlaceholder,
+  danger = false,
+}: {
+  kusId: string;
+  action: string;
+  label: string;
+  notePlaceholder: string;
+  danger?: boolean;
+}) {
+  return (
+    <form action={updateSkladKusServiceStateAction} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+      <input type="hidden" name="kus_id" value={kusId} />
+      <input type="hidden" name="action" value={action} />
+      <textarea
+        name="note"
+        rows={2}
+        placeholder={notePlaceholder}
+        className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+      />
+      <button
+        type="submit"
+        className={[
+          "mt-2 min-h-12 w-full rounded-xl px-4 py-3 text-sm font-black text-white transition",
+          danger ? "bg-red-700 hover:bg-red-600" : "bg-blue-700 hover:bg-blue-600",
+        ].join(" ")}
+      >
+        {label}
+      </button>
+    </form>
+  );
 }
 
 export default async function SkladKusDetailPage({ params }: PageProps) {
@@ -202,6 +260,11 @@ export default async function SkladKusDetailPage({ params }: PageProps) {
   const kusStatus = getKusStatus(kus, openPoskozeni);
   const lastAudit = historie[0] ?? null;
   const lastOpenDamage = openPoskozeni[0] ?? null;
+  const lastZakazkaHistory = historie.find((item) => item.zakazka);
+  const lastScanHistory = historie.find((item) =>
+    ["nalozeno", "vraceno", "poskozeno"].includes(item.typ_akce)
+  );
+  const unifiedState = getUnifiedKusStateLabel({ kus, assignment, openDamage: openPoskozeni });
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-4 px-1 sm:px-0">
@@ -219,7 +282,7 @@ export default async function SkladKusDetailPage({ params }: PageProps) {
             tone="blue"
           />
           <DetailCard label="Pozice skladu" value={pozice} tone="emerald" />
-          <DetailCard label="Stav kusu" value={stav} tone="amber" />
+          <DetailCard label="Stav kusu" value={unifiedState} tone="amber" />
           <DetailCard label="Kategorie" value={row.kategorie_nazev ?? "—"} />
         </div>
       </section>
@@ -241,6 +304,12 @@ export default async function SkladKusDetailPage({ params }: PageProps) {
           <span className="text-slate-500">Poznámka kusu</span>
           <span className="text-right font-semibold text-white">
             {kus.poznamka?.trim() || "—"}
+          </span>
+        </div>
+        <div className="flex justify-between gap-4 border-t border-slate-800 pt-2">
+          <span className="text-slate-500">Servisní poznámka</span>
+          <span className="text-right font-semibold text-white">
+            {kus.servisni_poznamka?.trim() || "—"}
           </span>
         </div>
       </section>
@@ -268,7 +337,22 @@ export default async function SkladKusDetailPage({ params }: PageProps) {
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <SummaryRow label="Stav kusu">
-            {stav}
+            {stav} · {unifiedState}
+          </SummaryRow>
+          <SummaryRow label="Poslední zakázka">
+            {lastZakazkaHistory ? formatSkladKusHistorieZakazka(lastZakazkaHistory) : "—"}
+          </SummaryRow>
+          <SummaryRow label="Poslední scan">
+            {lastScanHistory ? (
+              <>
+                {formatSkladKusHistorieTypAkce(lastScanHistory.typ_akce)}
+                <span className="block text-xs font-medium text-slate-400">
+                  {formatDateTime(lastScanHistory.created_at)}
+                </span>
+              </>
+            ) : (
+              "—"
+            )}
           </SummaryRow>
           <SummaryRow label="Stav na zakázce">
             {assignment ? formatZakazkaKusStav(assignment.stav) : "Není na aktivní zakázce"}
@@ -357,6 +441,77 @@ export default async function SkladKusDetailPage({ params }: PageProps) {
         assignmentId={assignment?.id ?? null}
         currentZakazkaKusStav={assignment?.stav ?? null}
       />
+
+      <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+        <div>
+          <h2 className="text-xl font-black tracking-tight text-white">
+            Servis, poškození a blokace
+          </h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Rychlé provozní akce pro konkrétní kus. Každá změna se zapisuje do historie kusu.
+          </p>
+        </div>
+
+        <form action={reportSkladKusDamageAction} className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3">
+          <input type="hidden" name="kus_id" value={kus.kus_id} />
+          <input type="hidden" name="skladova_polozka_id" value={kus.skladova_polozka_id} />
+          <label className="text-sm font-semibold text-amber-100">
+            Nahlásit poškození
+            <textarea
+              name="note"
+              required
+              rows={3}
+              placeholder="Co je poškozené? Kdy a jak se to zjistilo?"
+              className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
+            />
+          </label>
+          <label className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-amber-100">
+            <input type="checkbox" name="blocks_use" value="true" className="h-4 w-4" />
+            Blokuje použití
+          </label>
+          <button
+            type="submit"
+            className="mt-3 min-h-12 w-full rounded-xl bg-amber-700 px-4 py-3 text-sm font-black text-white transition hover:bg-amber-600"
+          >
+            Nahlásit poškození
+          </button>
+        </form>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <ServiceActionForm
+            kusId={kus.kus_id}
+            action="block"
+            label="Označit jako blokované"
+            notePlaceholder="Proč se kus nesmí naložit?"
+            danger
+          />
+          <ServiceActionForm
+            kusId={kus.kus_id}
+            action="repair"
+            label="Poslat do opravy"
+            notePlaceholder="Co se má opravit?"
+          />
+          <ServiceActionForm
+            kusId={kus.kus_id}
+            action="return_service"
+            label="Vrátit ze servisu"
+            notePlaceholder="Co servis provedl? Kus půjde na kontrolu."
+          />
+          <ServiceActionForm
+            kusId={kus.kus_id}
+            action="checked"
+            label="Označit jako zkontrolované"
+            notePlaceholder="Výsledek kontroly"
+          />
+          <ServiceActionForm
+            kusId={kus.kus_id}
+            action="retire"
+            label="Vyřadit kus"
+            notePlaceholder="Důvod vyřazení"
+            danger
+          />
+        </div>
+      </section>
 
       <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
         <h2 className="text-xl font-black tracking-tight text-white">

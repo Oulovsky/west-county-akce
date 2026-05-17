@@ -22,6 +22,13 @@ type Radek = {
   rezervovano_jinde: number;
   k_dispozici: number;
   max_na_teto_zakazce: number;
+  blokovane: number;
+  v_oprave: number;
+  ceka_na_kontrolu: number;
+  vyrazene: number;
+  fyzicky_jinde: number;
+  rezervy_jinde: number;
+  kolize_dostupnosti: boolean;
 };
 
 type TechnikaNaZakazceRow = {
@@ -282,7 +289,7 @@ export default function TechnikaClient({
 
                     {radek.rezervovano_jinde > 0 ? (
                       <Badge variant="warning">
-                        Rezervováno jinde: {radek.rezervovano_jinde} ks
+                        Plánováno jinde: {radek.rezervovano_jinde} ks
                       </Badge>
                     ) : (
                       <Badge variant="success">Bez kolize skladu</Badge>
@@ -290,6 +297,18 @@ export default function TechnikaClient({
 
                     {radek.poskozene > 0 ? (
                       <Badge variant="danger">Poškozené: {radek.poskozene} ks</Badge>
+                    ) : null}
+                    {radek.blokovane > 0 ? (
+                      <Badge variant="danger">Blokované: {radek.blokovane} ks</Badge>
+                    ) : null}
+                    {radek.v_oprave > 0 ? (
+                      <Badge variant="warning">V opravě: {radek.v_oprave} ks</Badge>
+                    ) : null}
+                    {radek.ceka_na_kontrolu > 0 ? (
+                      <Badge variant="warning">Čeká na kontrolu: {radek.ceka_na_kontrolu} ks</Badge>
+                    ) : null}
+                    {radek.kolize_dostupnosti ? (
+                      <Badge variant="danger">Kapacitní kolize</Badge>
                     ) : null}
                     {radek.rezerva_na_zakazce > 0 ? (
                       <Badge variant="warning">Rezerva: {radek.rezerva_na_zakazce} ks</Badge>
@@ -320,9 +339,10 @@ export default function TechnikaClient({
               <div className="grid gap-3 md:grid-cols-6">
                 <StatBox label="Sklad celkem" value={`${radek.sklad_celkem} ks`} />
                 <StatBox label="Poškozené" value={`${radek.poskozene} ks`} />
-                <StatBox label="Rezervováno jinde" value={`${radek.rezervovano_jinde} ks`} />
-                <StatBox label="K dispozici" value={`${radek.k_dispozici} ks`} />
-                <StatBox label="Maximum pro zakázku" value={`${radek.max_na_teto_zakazce} ks`} />
+                <StatBox label="Blok/oprava/kontrola" value={`${radek.blokovane + radek.v_oprave + radek.ceka_na_kontrolu} ks`} />
+                <StatBox label="Plánováno jinde" value={`${radek.rezervovano_jinde} ks`} />
+                <StatBox label="Fyzicky jinde" value={`${radek.fyzicky_jinde} ks`} />
+                <StatBox label="K dispozici pro plán" value={`${radek.max_na_teto_zakazce} ks`} />
                 <StatBox label="Reálný stav" value={`${radek.skutecne_na_zakazce} ks`} />
                 <StatBox label="Rezerva" value={`${radek.rezerva_na_zakazce} ks`} />
                 <StatBox label="Vráceno" value={`${radek.vraceno_ze_zakazky} ks`} />

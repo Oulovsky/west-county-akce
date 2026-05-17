@@ -274,9 +274,26 @@ export function formatSkladKusDuplicatePoradiMessage(poradi: number): string {
 const SKLAD_KUS_STAV_LABELS: Record<string, string> = {
   skladem: "Skladem",
   na_akci: "Na akci / legacy stav",
+  na_zakazce: "Na zakázce",
   poskozeno: "Poškozeno",
+  blokovano: "Blokováno",
+  v_oprave: "V opravě",
+  ceka_na_kontrolu: "Čeká na kontrolu",
   odpis: "Odpis",
+  vyrazeno: "Vyřazeno",
 };
+
+export function isSkladKusProblemState(stav: string | null | undefined): boolean {
+  return ["poskozeno", "blokovano", "v_oprave", "ceka_na_kontrolu", "odpis", "vyrazeno"].includes(
+    String(stav ?? "").trim()
+  );
+}
+
+export function isSkladKusHardBlockedState(stav: string | null | undefined): boolean {
+  return ["blokovano", "v_oprave", "ceka_na_kontrolu", "odpis", "vyrazeno"].includes(
+    String(stav ?? "").trim()
+  );
+}
 
 /** Text prázdného rozpisu kusů ve správě skladu. */
 export function getSpravaKusyEmptyMessage(celkemKDispozici: number): string {
@@ -331,7 +348,34 @@ export function getKusStatus(
 
   const blokuje = otevrene.some((p) => p.blokuje_pouziti);
 
-  if (blokuje) {
+  if (!kus.aktivni || kus.stav === "vyrazeno" || kus.stav === "odpis") {
+    return {
+      text: "vyřazeno",
+      className: SKLAD_KUS_STATUS_CLASS.vyrazeno,
+      blokovano: 1,
+      pouzitelne: "✕",
+    };
+  }
+
+  if (kus.stav === "v_oprave") {
+    return {
+      text: "v opravě",
+      className: SKLAD_KUS_STATUS_CLASS.oprava,
+      blokovano: 1,
+      pouzitelne: "✕",
+    };
+  }
+
+  if (kus.stav === "ceka_na_kontrolu") {
+    return {
+      text: "čeká na kontrolu",
+      className: SKLAD_KUS_STATUS_CLASS.kontrola,
+      blokovano: 1,
+      pouzitelne: "!",
+    };
+  }
+
+  if (blokuje || kus.stav === "blokovano") {
     return {
       text: "blokováno",
       className: SKLAD_KUS_STATUS_CLASS.blokovano,
@@ -340,7 +384,7 @@ export function getKusStatus(
     };
   }
 
-  if (otevrene.length > 0) {
+  if (otevrene.length > 0 || kus.stav === "poskozeno") {
     return {
       text: "poškozeno, použitelné",
       className: SKLAD_KUS_STATUS_CLASS.poskozenoPouzitelne,
