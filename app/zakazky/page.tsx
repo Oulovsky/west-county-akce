@@ -17,7 +17,7 @@ export default async function ZakazkyPage() {
 
   const { data, error } = await supabase
     .from("zakazky")
-    .select("zakazka_id, cislo_zakazky, nazev, misto, misto_id, datum_od, datum_do, cas_od, cas_do, zrusena, logistika_stav, client_approval_status, workflow_stav")
+    .select("zakazka_id, cislo_zakazky, nazev, misto, misto_id, datum_od, datum_do, cas_od, cas_do, zrusena, logistika_stav, client_approval_status, workflow_stav, workflow_change_pending, workflow_change_summary")
     .order("datum_od", { ascending: true })
     .order("cas_od", { ascending: true });
 

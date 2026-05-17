@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { markZakazkaCriticalChangeIfApproved } from "@/lib/zakazka-critical-changes";
 
 async function getCurrentUserId() {
   const supabase = await createClient();
@@ -19,6 +20,16 @@ async function getCurrentUserId() {
 
 export async function acceptAssignmentAction(assignmentId: string) {
   const { supabase, userId } = await getCurrentUserId();
+  const { data: assignment, error: assignmentError } = await supabase
+    .from("zakazka_lide")
+    .select("id, zakazka_id")
+    .eq("id", assignmentId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (assignmentError) {
+    throw new Error(assignmentError.message);
+  }
 
   const { error } = await supabase
     .from("zakazka_lide")
@@ -45,6 +56,16 @@ export async function declineAssignmentAction(assignmentId: string, reason: stri
   }
 
   const { supabase, userId } = await getCurrentUserId();
+  const { data: assignment, error: assignmentError } = await supabase
+    .from("zakazka_lide")
+    .select("id, zakazka_id")
+    .eq("id", assignmentId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (assignmentError) {
+    throw new Error(assignmentError.message);
+  }
 
   const { error } = await supabase
     .from("zakazka_lide")
@@ -58,6 +79,18 @@ export async function declineAssignmentAction(assignmentId: string, reason: stri
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  if (assignment?.zakazka_id) {
+    const changeResult = await markZakazkaCriticalChangeIfApproved(supabase, {
+      zakazkaId: assignment.zakazka_id,
+      actorId: userId,
+      changes: ["lide"],
+      detail: "Člověk odmítl účast po klientském schválení zakázky.",
+      metadata: { assignment_id: assignmentId, declined_reason: trimmedReason },
+    });
+    if (!changeResult.ok) throw new Error(changeResult.error);
+    revalidatePath(`/zakazky/${assignment.zakazka_id}`);
   }
 
   revalidatePath("/moje");

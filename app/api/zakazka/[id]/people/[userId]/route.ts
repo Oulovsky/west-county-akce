@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth/require-session";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
+import { markZakazkaCriticalChangeIfApproved } from "@/lib/zakazka-critical-changes";
 
 type RouteContext = {
   params: Promise<{ id: string; userId: string }>;
@@ -21,6 +22,16 @@ function hasInvalidRange(from?: string | null, to?: string | null) {
   if (!Number.isFinite(fromTime) || !Number.isFinite(toTime)) return true;
 
   return fromTime >= toTime;
+}
+
+function rangesOverlap(fromA?: string | null, toA?: string | null, fromB?: string | null, toB?: string | null) {
+  if (!fromA || !toA || !fromB || !toB) return false;
+  const aStart = new Date(fromA).getTime();
+  const aEnd = new Date(toA).getTime();
+  const bStart = new Date(fromB).getTime();
+  const bEnd = new Date(toB).getTime();
+  if (![aStart, aEnd, bStart, bEnd].every(Number.isFinite)) return false;
+  return aStart < bEnd && aEnd > bStart;
 }
 
 function normalizeStatus(value: unknown) {
@@ -64,10 +75,48 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       : null;
     const declinedReason =
       confirmationStatus === "declined" ? normalizeOptionalText(body.declined_reason) : null;
+    const overrideReason = normalizeOptionalText(body.people_conflict_override_reason);
 
     if (hasInvalidRange(datumOd, datumDo)) {
       return NextResponse.json(
         { error: "Začátek přiřazení musí být dřív než konec." },
+        { status: 400 }
+      );
+    }
+
+    const { data: currentAssignment, error: currentError } = await supabase
+      .from("zakazka_lide")
+      .select("id, zakazka_id, user_id, datum_od, datum_do, typ_bloku")
+      .eq("id", assignmentId)
+      .maybeSingle();
+
+    if (currentError) {
+      return NextResponse.json({ error: currentError.message }, { status: 500 });
+    }
+    if (!currentAssignment) {
+      return NextResponse.json({ error: "Přiřazení nebylo nalezeno." }, { status: 404 });
+    }
+
+    const nextFrom = datumOd ?? null;
+    const nextTo = datumDo ?? null;
+    const { data: sameUserAssignments, error: sameUserError } = await supabase
+      .from("zakazka_lide")
+      .select("id, zakazka_id, user_id, datum_od, datum_do, typ_bloku")
+      .eq("user_id", currentAssignment.user_id)
+      .neq("id", assignmentId);
+
+    if (sameUserError) {
+      return NextResponse.json({ error: sameUserError.message }, { status: 500 });
+    }
+
+    const hasConflict = ((sameUserAssignments ?? []) as Array<{
+      datum_od?: string | null;
+      datum_do?: string | null;
+    }>).some((row) => rangesOverlap(nextFrom, nextTo, row.datum_od, row.datum_do));
+
+    if (hasConflict && !overrideReason) {
+      return NextResponse.json(
+        { error: "U kolize lidí je povinné vyplnit důvod override." },
         { status: 400 }
       );
     }
@@ -107,8 +156,42 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
         datum_od: result.data.datum_od,
         datum_do: result.data.datum_do,
         confirmation_status: result.data.confirmation_status,
+        people_conflict_override_reason: hasConflict ? overrideReason : null,
       },
     });
+
+    if (hasConflict) {
+      await logZakazkaHistory(supabase, {
+        zakazkaId: result.data.zakazka_id,
+        eventType: "people_conflict_override",
+        actorId: session.user.id,
+        title: "Kolize lidí byla povolena přes override.",
+        detail: overrideReason,
+        metadata: {
+          assignment_id: result.data.id,
+          target_user_id: result.data.user_id,
+          typ_bloku: result.data.typ_bloku,
+          datum_od: result.data.datum_od,
+          datum_do: result.data.datum_do,
+        },
+      });
+    }
+
+    const changeResult = await markZakazkaCriticalChangeIfApproved(supabase, {
+      zakazkaId: result.data.zakazka_id,
+      actorId: session.user.id,
+      changes: ["lide"],
+      detail: "Změněno pokrytí práce po klientském schválení.",
+      metadata: {
+        assignment_id: result.data.id,
+        target_user_id: result.data.user_id,
+        typ_bloku: result.data.typ_bloku,
+        conflict_override_reason: hasConflict ? overrideReason : null,
+      },
+    });
+    if (!changeResult.ok) {
+      return NextResponse.json({ error: changeResult.error }, { status: 500 });
+    }
 
     revalidatePath(`/zakazky/${result.data.zakazka_id}`);
     revalidatePath("/zakazky");
@@ -169,6 +252,21 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
           datum_do: assignmentBeforeDelete.datum_do,
         },
       });
+
+      const changeResult = await markZakazkaCriticalChangeIfApproved(supabase, {
+        zakazkaId: assignmentBeforeDelete.zakazka_id,
+        actorId: session.user.id,
+        changes: ["lide"],
+        detail: "Odebráno pokrytí práce po klientském schválení.",
+        metadata: {
+          assignment_id: assignmentBeforeDelete.id,
+          target_user_id: assignmentBeforeDelete.user_id,
+          typ_bloku: assignmentBeforeDelete.typ_bloku,
+        },
+      });
+      if (!changeResult.ok) {
+        return NextResponse.json({ error: changeResult.error }, { status: 500 });
+      }
 
       revalidatePath(`/zakazky/${assignmentBeforeDelete.zakazka_id}`);
       revalidatePath("/zakazky");

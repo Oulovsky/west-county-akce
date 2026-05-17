@@ -57,7 +57,7 @@ export async function issueInvoiceAction(zakazkaId: string): Promise<ActionResul
 
     const { data: zakazkaRaw, error: zakazkaError } = await supabase
       .from("zakazky")
-      .select("fakturacni_firma_id, workflow_stav")
+      .select("fakturacni_firma_id, workflow_stav, workflow_change_pending")
       .eq("zakazka_id", zakazkaId)
       .maybeSingle();
 
@@ -65,6 +65,13 @@ export async function issueInvoiceAction(zakazkaId: string): Promise<ActionResul
     if (!zakazkaRaw) return { ok: false, error: "Zakázka nebyla nalezena." };
 
     const workflowStatus = normalizeWorkflowStatus(zakazkaRaw.workflow_stav);
+    if (zakazkaRaw.workflow_change_pending) {
+      return {
+        ok: false,
+        error: "Zakázka má neodsouhlasené změny po klientském schválení. Nejdřív je pošlete klientovi k potvrzení.",
+      };
+    }
+
     if (workflowStatus !== "dokonceno") {
       return {
         ok: false,

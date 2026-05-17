@@ -7,6 +7,7 @@ import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { setZakazkaWorkflowStatus } from "@/lib/zakazka-workflow";
+import { isApprovedOrLaterWorkflowStatus } from "@/lib/zakazka-critical-changes";
 import {
   buildQuestionnaireUrl,
   createClientQuestionnaireToken,
@@ -423,7 +424,7 @@ export async function sendClientQuestionnaireAction(formData: FormData) {
 
   const { data: zakazka, error: zakazkaError } = await supabase
     .from("zakazky")
-    .select("zakazka_id, klient_id, nazev, misto, akce_od, akce_do, datum_od, datum_do")
+    .select("zakazka_id, klient_id, nazev, misto, akce_od, akce_do, datum_od, datum_do, workflow_stav, workflow_change_pending")
     .eq("zakazka_id", zakazkaId)
     .single();
 
@@ -566,7 +567,7 @@ export async function sendClientApprovalAction(formData: FormData) {
 
   const { data: zakazka, error: zakazkaError } = await supabase
     .from("zakazky")
-    .select("zakazka_id, klient_id, nazev, misto, akce_od, akce_do, datum_od, datum_do")
+    .select("zakazka_id, klient_id, nazev, misto, akce_od, akce_do, datum_od, datum_do, workflow_stav, workflow_change_pending")
     .eq("zakazka_id", zakazkaId)
     .single();
 
@@ -668,13 +669,25 @@ export async function sendClientApprovalAction(formData: FormData) {
     throw new Error(updateZakazkaError.message);
   }
 
-  await setZakazkaWorkflowStatus(supabase, {
-    zakazkaId,
-    nextStatus: "cekani_na_schvaleni",
-    actorId: null,
-    source: "client_approval_sent",
-    metadata: { link_id: link.link_id },
-  });
+  if (isApprovedOrLaterWorkflowStatus(zakazka.workflow_stav)) {
+    await logZakazkaHistory(supabase, {
+      zakazkaId,
+      eventType: "workflow_changes_sent_for_approval",
+      actorId: null,
+      title: "Změny zakázky byly odeslány klientovi k novému potvrzení.",
+      detail: `Odesláno na ${recipientEmail}.`,
+      metadata: { link_id: link.link_id },
+    });
+  } else {
+    const workflowResult = await setZakazkaWorkflowStatus(supabase, {
+      zakazkaId,
+      nextStatus: "cekani_na_schvaleni",
+      actorId: null,
+      source: "client_approval_sent",
+      metadata: { link_id: link.link_id },
+    });
+    if (!workflowResult.ok) throw new Error(workflowResult.error);
+  }
 
   await logZakazkaHistory(supabase, {
     zakazkaId,

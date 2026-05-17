@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth/require-session";
 import { createClient } from "@/lib/supabase/server";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
+import { markZakazkaCriticalChangeIfApproved } from "@/lib/zakazka-critical-changes";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -99,6 +100,21 @@ function hasInvalidRange(from?: string | null, to?: string | null) {
   if (!Number.isFinite(fromTime) || !Number.isFinite(toTime)) return true;
 
   return fromTime >= toTime;
+}
+
+function rangesOverlap(fromA?: string | null, toA?: string | null, fromB?: string | null, toB?: string | null) {
+  if (!fromA || !toA || !fromB || !toB) return false;
+  const aStart = new Date(fromA).getTime();
+  const aEnd = new Date(toA).getTime();
+  const bStart = new Date(fromB).getTime();
+  const bEnd = new Date(toB).getTime();
+  if (![aStart, aEnd, bStart, bEnd].every(Number.isFinite)) return false;
+  return aStart < bEnd && aEnd > bStart;
+}
+
+function normalizeOverrideReason(value: unknown) {
+  const text = String(value ?? "").trim();
+  return text || null;
 }
 
 async function loadZakazkaByEitherKey(
@@ -315,14 +331,37 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     }
 
     const defaultRange = getDefaultRangeForBlok(zakazkaResult.data, typBloku);
+    const finalFrom = requestedFrom ?? defaultRange.datum_od;
+    const finalTo = requestedTo ?? defaultRange.datum_do;
+    const overrideReason = normalizeOverrideReason(body.people_conflict_override_reason);
+    const { data: sameUserAssignments, error: sameUserError } = await supabase
+      .from("zakazka_lide")
+      .select("id, zakazka_id, user_id, datum_od, datum_do, typ_bloku")
+      .eq("user_id", userId)
+      .neq("zakazka_id", zakazkaId);
+
+    if (sameUserError) {
+      return NextResponse.json({ error: sameUserError.message }, { status: 500 });
+    }
+
+    const hasConflict = ((sameUserAssignments ?? []) as AssignmentRow[]).some((row) =>
+      rangesOverlap(finalFrom, finalTo, row.datum_od, row.datum_do)
+    );
+
+    if (hasConflict && !overrideReason) {
+      return NextResponse.json(
+        { error: "U kolize lidí je povinné vyplnit důvod override." },
+        { status: 400 }
+      );
+    }
 
     const insertResult = await supabase
       .from("zakazka_lide")
       .insert({
         zakazka_id: zakazkaId,
         user_id: userId,
-        datum_od: requestedFrom ?? defaultRange.datum_od,
-        datum_do: requestedTo ?? defaultRange.datum_do,
+        datum_od: finalFrom,
+        datum_do: finalTo,
         role_na_zakazce: "technik",
         typ_bloku: typBloku,
         poznamka: null,
@@ -350,10 +389,44 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         assignment_id: insertResult.data.id,
         target_user_id: userId,
         typ_bloku: typBloku,
-        datum_od: requestedFrom ?? defaultRange.datum_od,
-        datum_do: requestedTo ?? defaultRange.datum_do,
+        datum_od: finalFrom,
+        datum_do: finalTo,
+        people_conflict_override_reason: hasConflict ? overrideReason : null,
       },
     });
+
+    if (hasConflict) {
+      await logZakazkaHistory(supabase, {
+        zakazkaId,
+        eventType: "people_conflict_override",
+        actorId: session.user.id,
+        title: "Kolize lidí byla povolena přes override.",
+        detail: overrideReason,
+        metadata: {
+          assignment_id: insertResult.data.id,
+          target_user_id: userId,
+          typ_bloku: typBloku,
+          datum_od: finalFrom,
+          datum_do: finalTo,
+        },
+      });
+    }
+
+    const changeResult = await markZakazkaCriticalChangeIfApproved(supabase, {
+      zakazkaId,
+      actorId: session.user.id,
+      changes: ["lide"],
+      detail: "Změněno pokrytí práce po klientském schválení.",
+      metadata: {
+        assignment_id: insertResult.data.id,
+        target_user_id: userId,
+        typ_bloku: typBloku,
+        conflict_override_reason: hasConflict ? overrideReason : null,
+      },
+    });
+    if (!changeResult.ok) {
+      return NextResponse.json({ error: changeResult.error }, { status: 500 });
+    }
 
     revalidatePath(`/zakazky/${zakazkaId}`);
     revalidatePath("/zakazky");

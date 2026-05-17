@@ -26,6 +26,8 @@ export type Zakazka = {
   logistika_stav?: string | null;
   client_approval_status?: string | null;
   workflow_stav?: string | null;
+  workflow_change_pending?: boolean | null;
+  workflow_change_summary?: string | null;
   declined_people_count?: number;
 };
 
@@ -183,6 +185,16 @@ function ZakazkaCard({
                   {getWorkflowStatusLabel(zakazka.workflow_stav)}
                 </span>
               </div>
+              {zakazka.workflow_change_pending ? (
+                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-100">
+                  <div className="font-bold">Vyžaduje nové potvrzení klientem</div>
+                  {zakazka.workflow_change_summary ? (
+                    <div className="mt-1 text-xs text-amber-200">
+                      {zakazka.workflow_change_summary}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               <div>
                 <span className="font-semibold text-slate-200">Logistika:</span>{" "}
                 <span className="rounded-md border border-cyan-500/30 bg-cyan-500/15 px-2 py-0.5 text-xs font-bold text-cyan-100">

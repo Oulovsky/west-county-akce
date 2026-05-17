@@ -79,6 +79,7 @@ type ModalState =
       currentFrom: string;
       currentTo: string;
       typBloku: TypBloku;
+      overrideReason: string;
     }
   | {
       mode: "edit";
@@ -91,6 +92,7 @@ type ModalState =
       poznamka: string;
       confirmationStatus: string;
       declinedReason: string;
+      overrideReason: string;
     };
 
 type ConflictInfo = {
@@ -403,6 +405,7 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
       currentFrom: toInput(range.from),
       currentTo: toInput(range.to),
       typBloku,
+      overrideReason: "",
     });
   }
 
@@ -418,6 +421,7 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
       poznamka: assignment.poznamka ?? "",
       confirmationStatus: normalizeConfirmationStatus(assignment.confirmation_status),
       declinedReason: assignment.declined_reason ?? "",
+      overrideReason: "",
     });
   }
 
@@ -432,6 +436,20 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
 
     if (hasInvalidRange(modal.currentFrom, modal.currentTo)) {
       setToast({ type: "error", message: "Začátek přiřazení musí být dřív než konec." });
+      return;
+    }
+
+    const hasPeopleConflict =
+      modal.mode === "add"
+        ? modal.userIds.some((userId) =>
+            Boolean(getConflictForRange(userId, modal.currentFrom, modal.currentTo))
+          )
+        : Boolean(getConflictForRange(modal.userId, modal.currentFrom, modal.currentTo));
+    if (hasPeopleConflict && !modal.overrideReason.trim()) {
+      setToast({
+        type: "error",
+        message: "U kolize lidí je povinné vyplnit důvod override.",
+      });
       return;
     }
 
@@ -453,6 +471,7 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
             poznamka: modal.poznamka,
             confirmation_status: nextStatus,
             declined_reason: nextStatus === "declined" ? modal.declinedReason : null,
+            people_conflict_override_reason: modal.overrideReason.trim() || null,
           }),
         });
 
@@ -480,6 +499,7 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
             ...payload,
             user_id: userId,
             typ_bloku: modal.typBloku,
+            people_conflict_override_reason: modal.overrideReason.trim() || null,
           }),
         });
 
@@ -964,9 +984,20 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
                     </div>
                   ))}
                 </div>
-                <div className="mt-2 text-xs text-orange-200/75">
-                  Varování zatím přidání neblokuje.
-                </div>
+                <Field label="Důvod override kolize">
+                  <Textarea
+                    value={modal.overrideReason}
+                    onChange={(event) =>
+                      setModal((state) =>
+                        state && state.mode === "add"
+                          ? { ...state, overrideReason: event.target.value }
+                          : state
+                      )
+                    }
+                    rows={3}
+                    placeholder="Proč je kolize v tomto případě provozně v pořádku?"
+                  />
+                </Field>
               </div>
             ) : null}
 
@@ -979,9 +1010,20 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
                   </div>
                 </div>
                 <div className="mt-2 text-sm text-orange-200/90">{modalConflictText}</div>
-                <div className="mt-2 text-xs text-orange-200/75">
-                  Varování zatím uložení neblokuje.
-                </div>
+                <Field label="Důvod override kolize">
+                  <Textarea
+                    value={modal.overrideReason}
+                    onChange={(event) =>
+                      setModal((state) =>
+                        state && state.mode === "edit"
+                          ? { ...state, overrideReason: event.target.value }
+                          : state
+                      )
+                    }
+                    rows={3}
+                    placeholder="Proč je kolize v tomto případě provozně v pořádku?"
+                  />
+                </Field>
               </div>
             ) : null}
 

@@ -5,6 +5,7 @@ import { hashClientApprovalToken } from "@/lib/client-approval";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { setZakazkaWorkflowStatus } from "@/lib/zakazka-workflow";
+import { clearZakazkaCriticalChangePending } from "@/lib/zakazka-critical-changes";
 
 type ApprovalDecision = "approve" | "decline";
 
@@ -103,13 +104,29 @@ export async function submitClientApprovalDecisionAction(
   if (zakazkaError) throw new Error(zakazkaError.message);
 
   if (decision === "approve") {
-    await setZakazkaWorkflowStatus(supabase, {
+    await clearZakazkaCriticalChangePending(supabase, {
+      zakazkaId: link.zakazka_id,
+      actorId: null,
+      source: "client_reapproval",
+    });
+
+    const workflowResult = await setZakazkaWorkflowStatus(supabase, {
       zakazkaId: link.zakazka_id,
       nextStatus: "schvaleno_klientem",
       actorId: null,
       source: "client_approval_approved",
       metadata: { link_id: link.link_id },
     });
+    if (!workflowResult.ok) {
+      await logZakazkaHistory(supabase, {
+        zakazkaId: link.zakazka_id,
+        eventType: "workflow_reapproval_without_status_change",
+        actorId: null,
+        title: "Klient potvrdil změny bez změny hlavního workflow stavu.",
+        detail: workflowResult.error ?? null,
+        metadata: { link_id: link.link_id },
+      });
+    }
   }
 
   await logZakazkaHistory(supabase, {

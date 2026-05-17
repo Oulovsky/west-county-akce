@@ -2,6 +2,8 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { createClient as createServerClient } from "@/lib/supabase/server";
+import { markZakazkaCriticalChangeIfApproved } from "@/lib/zakazka-critical-changes";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -128,6 +130,10 @@ export default async function EditZakazkyPage({ params }: PageProps) {
 
   async function updateZakazka(formData: FormData) {
     "use server";
+    const serverSupabase = await createServerClient();
+    const {
+      data: { user },
+    } = await serverSupabase.auth.getUser();
 
     const nazev = String(formData.get("nazev") ?? "");
     const misto = String(formData.get("misto") ?? "");
@@ -214,7 +220,7 @@ export default async function EditZakazkyPage({ params }: PageProps) {
     let mistoId = mistoIdRaw || null;
 
     if (!mistoId && misto.trim() && mistoLat != null && mistoLng != null) {
-      const { data: mistoData, error: mistoError } = await supabase
+      const { data: mistoData, error: mistoError } = await serverSupabase
         .from("mista_konani")
         .insert({
           klient_id: klientId,
@@ -234,7 +240,7 @@ export default async function EditZakazkyPage({ params }: PageProps) {
       mistoId = mistoData.misto_id;
     }
 
-    const { error } = await supabase
+    const { error } = await serverSupabase
       .from("zakazky")
       .update({
         nazev,
@@ -272,6 +278,21 @@ export default async function EditZakazkyPage({ params }: PageProps) {
     if (error) {
       throw new Error(`Uložení zakázky selhalo: ${error.message}`);
     }
+
+    const changeResult = await markZakazkaCriticalChangeIfApproved(serverSupabase, {
+      zakazkaId: id,
+      actorId: user?.id ?? null,
+      changes: ["termin", "misto", "gps", "fakturacni_firma"],
+      detail: "Změněny základní údaje zakázky po klientském schválení.",
+      metadata: {
+        akce_od: akceOd,
+        akce_do: akceDo,
+        misto,
+        misto_id: mistoId,
+        fakturacni_firma_id: fakturacniFirmaIdRaw || null,
+      },
+    });
+    if (!changeResult.ok) throw new Error(changeResult.error);
 
     revalidatePath(`/zakazky/${id}`);
     revalidatePath(`/zakazky/${id}/edit`);

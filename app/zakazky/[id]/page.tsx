@@ -44,6 +44,7 @@ import {
   type FakturacniFirma,
 } from "@/lib/fakturacni-firmy";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
+import { markZakazkaCriticalChangeIfApproved } from "@/lib/zakazka-critical-changes";
 import {
   getWorkflowBadgeClassName,
   getWorkflowStatusLabel,
@@ -1710,6 +1711,38 @@ function WorkflowCard({
   );
 }
 
+function WorkflowChangePendingWarning({
+  zakazkaId,
+  summary,
+}: {
+  zakazkaId: string;
+  summary?: string | null;
+}) {
+  return (
+    <Card className="mt-6 border-amber-500/40 bg-amber-500/10">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="text-xl font-black text-amber-100">
+            Zakázka byla změněna po klientském schválení
+          </div>
+          <p className="mt-2 max-w-3xl text-sm font-semibold leading-relaxed text-amber-100/90">
+            Zakázka byla změněna po klientském schválení a vyžaduje nové potvrzení klientem.
+          </p>
+          {summary ? (
+            <p className="mt-2 text-sm text-amber-200">Změny: {summary}</p>
+          ) : null}
+        </div>
+        <form action={sendClientApprovalAction}>
+          <input type="hidden" name="zakazka_id" value={zakazkaId} />
+          <button className="rounded-xl bg-amber-500 px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-amber-400">
+            Odeslat změny klientovi ke schválení
+          </button>
+        </form>
+      </div>
+    </Card>
+  );
+}
+
 function InvoiceCard({
   zakazkaId,
   invoice,
@@ -1796,6 +1829,9 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
   async function updateZakazkaSchedule(formData: FormData) {
     "use server";
     const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     const akceOd = combineDateAndTime(
       String(formData.get("akce_od_datum") ?? ""),
@@ -1823,7 +1859,17 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
       throw new Error(error.message);
     }
 
+    const changeResult = await markZakazkaCriticalChangeIfApproved(supabase, {
+      zakazkaId: id,
+      actorId: user?.id ?? null,
+      changes: ["termin"],
+      detail: "Změněn termín akce po klientském schválení.",
+      metadata: { akce_od: akceOd, akce_do: akceDo },
+    });
+    if (!changeResult.ok) throw new Error(changeResult.error);
+
     revalidatePath(`/zakazky/${id}`);
+    revalidatePath("/zakazky");
     revalidatePath("/kalendar");
     revalidatePath("/kalendar/lide");
   }
@@ -1861,6 +1907,28 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
 
     if (error) throw new Error(error.message);
 
+    const criticalChanges = [
+      "cena_techniky",
+      "cena_personalu",
+      "sleva",
+      "konecna_cena",
+      "fakturacni_firma",
+    ] as const;
+    const changeResult = await markZakazkaCriticalChangeIfApproved(supabase, {
+      zakazkaId,
+      actorId: user?.id ?? null,
+      changes: [...criticalChanges],
+      detail: "Změněna cenová rekapitulace nebo fakturační firma po klientském schválení.",
+      metadata: {
+        cena_techniky: techPrice,
+        cena_personalu: staffPrice,
+        sleva_percent: discountPercent,
+        konecna_cena: finalPrice,
+        fakturacni_firma_id: fakturacniFirmaId,
+      },
+    });
+    if (!changeResult.ok) throw new Error(changeResult.error);
+
     await logZakazkaHistory(supabase, {
       zakazkaId,
       eventType: "pricing_updated",
@@ -1878,6 +1946,7 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
     });
 
     revalidatePath(`/zakazky/${zakazkaId}`);
+    revalidatePath("/zakazky");
   }
 
   async function cancelZakazka() {
@@ -2719,6 +2788,13 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
   return (
     <div className="w-full">
       <ZakazkaHeaderCard zakazkaId={id} data={headerData} cancelAction={cancelZakazka} />
+
+      {(data as { workflow_change_pending?: boolean | null }).workflow_change_pending ? (
+        <WorkflowChangePendingWarning
+          zakazkaId={id}
+          summary={(data as { workflow_change_summary?: string | null }).workflow_change_summary}
+        />
+      ) : null}
 
       <WorkflowCard
         status={(data as { workflow_stav?: string | null }).workflow_stav}

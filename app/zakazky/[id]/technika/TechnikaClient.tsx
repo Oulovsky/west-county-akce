@@ -5,6 +5,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Field } from "@/components/ui/field";
+import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/lib/supabase";
 
 type Radek = {
@@ -67,6 +69,7 @@ export default function TechnikaClient({
   canEdit: boolean;
 }) {
   const [data, setData] = useState<Radek[]>(initialData);
+  const [overrideReasons, setOverrideReasons] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setData(initialData);
@@ -326,7 +329,34 @@ export default function TechnikaClient({
               </div>
 
               {canEdit ? (
-                <div className="flex flex-wrap items-center gap-4 pt-1">
+                <div className="space-y-3 pt-1">
+                  {plusDisabled ? (
+                    <div className="rounded-2xl border border-orange-500/30 bg-orange-500/10 px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="warning">Kolize skladu</Badge>
+                        <div className="text-sm font-semibold text-orange-100">
+                          Přidání překračuje dostupné množství. Pro override je povinný důvod.
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <Field label="Důvod override kolize skladu">
+                          <Textarea
+                            value={overrideReasons[radek.skladova_polozka_id] ?? ""}
+                            onChange={(event) =>
+                              setOverrideReasons((prev) => ({
+                                ...prev,
+                                [radek.skladova_polozka_id]: event.target.value,
+                              }))
+                            }
+                            rows={3}
+                            placeholder="Např. externí půjčovna, klient dodá vlastní kus, ruční ověření dostupnosti..."
+                          />
+                        </Field>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="flex flex-wrap items-center gap-4">
                   <form action={uberAction}>
                     <input type="hidden" name="zakazka_id" value={zakazkaId} />
                     <input
@@ -359,14 +389,20 @@ export default function TechnikaClient({
                       name="skladova_polozka_id"
                       value={radek.skladova_polozka_id}
                     />
+                    <input
+                      type="hidden"
+                      name="sklad_conflict_override_reason"
+                      value={overrideReasons[radek.skladova_polozka_id] ?? ""}
+                    />
                     <button
                       type="submit"
-                      disabled={plusDisabled}
+                      disabled={plusDisabled && !(overrideReasons[radek.skladova_polozka_id] ?? "").trim()}
                       className="flex h-12 w-12 items-center justify-center rounded-xl border border-blue-500/40 bg-blue-600 text-3xl font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       +
                     </button>
                   </form>
+                </div>
                 </div>
               ) : null}
             </Card>

@@ -1,6 +1,8 @@
 import { revalidatePath, unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getRolePermissions } from "@/lib/roles";
+import { logZakazkaHistory } from "@/lib/zakazka-history";
+import { markZakazkaCriticalChangeIfApproved } from "@/lib/zakazka-critical-changes";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -312,17 +314,36 @@ export default async function TechnikaZakazkyPage({ params }: PageProps) {
     if (!canEdit) return;
 
     const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     const zakazkaId = String(formData.get("zakazka_id") || "");
     const skladovaPolozkaId = String(formData.get("skladova_polozka_id") || "");
+    const overrideReason = String(formData.get("sklad_conflict_override_reason") ?? "").trim();
 
     const { radky } = await nactiData(zakazkaId);
     const radek = radky.find((r: Radek) => r.skladova_polozka_id === skladovaPolozkaId);
     if (!radek) return;
 
-    if (radek.na_zakazce >= radek.max_na_teto_zakazce) {
-      revalidatePath(`/zakazky/${zakazkaId}/technika`);
-      return;
+    const hasStockConflict = radek.na_zakazce >= radek.max_na_teto_zakazce;
+    if (hasStockConflict && !overrideReason) {
+      throw new Error("U kolize skladu je povinné vyplnit důvod override.");
+    }
+
+    if (hasStockConflict) {
+      await logZakazkaHistory(supabase, {
+        zakazkaId,
+        eventType: "stock_conflict_override",
+        actorId: user?.id ?? null,
+        title: "Kolize skladu byla povolena přes override.",
+        detail: overrideReason,
+        metadata: {
+          skladova_polozka_id: skladovaPolozkaId,
+          na_zakazce: radek.na_zakazce,
+          max_na_teto_zakazce: radek.max_na_teto_zakazce,
+        },
+      });
     }
 
     const noveMnozstvi = radek.na_zakazce + 1;
@@ -340,6 +361,19 @@ export default async function TechnikaZakazkyPage({ params }: PageProps) {
       throw new Error(error.message);
     }
 
+    const changeResult = await markZakazkaCriticalChangeIfApproved(supabase, {
+      zakazkaId,
+      actorId: user?.id ?? null,
+      changes: ["technicky_plan"],
+      detail: "Změněn technický plán po klientském schválení.",
+      metadata: {
+        skladova_polozka_id: skladovaPolozkaId,
+        mnozstvi: noveMnozstvi,
+        stock_conflict_override_reason: hasStockConflict ? overrideReason : null,
+      },
+    });
+    if (!changeResult.ok) throw new Error(changeResult.error);
+
     revalidatePath(`/zakazky/${zakazkaId}/technika`);
     revalidatePath(`/zakazky/${zakazkaId}`);
     revalidatePath("/zakazky");
@@ -351,6 +385,9 @@ export default async function TechnikaZakazkyPage({ params }: PageProps) {
     if (!canEdit) return;
 
     const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     const zakazkaId = String(formData.get("zakazka_id") || "");
     const skladovaPolozkaId = String(formData.get("skladova_polozka_id") || "");
@@ -391,6 +428,18 @@ export default async function TechnikaZakazkyPage({ params }: PageProps) {
     revalidatePath(`/zakazky/${zakazkaId}/technika`);
     revalidatePath(`/zakazky/${zakazkaId}`);
     revalidatePath("/zakazky");
+
+    const changeResult = await markZakazkaCriticalChangeIfApproved(supabase, {
+      zakazkaId,
+      actorId: user?.id ?? null,
+      changes: ["technicky_plan"],
+      detail: "Změněn technický plán po klientském schválení.",
+      metadata: {
+        skladova_polozka_id: skladovaPolozkaId,
+        mnozstvi: noveMnozstvi,
+      },
+    });
+    if (!changeResult.ok) throw new Error(changeResult.error);
   }
 
   const { zakazka, radky } = await nactiData(id);
