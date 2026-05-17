@@ -1837,6 +1837,24 @@ function InvoiceCard({
 }) {
   const printHref = invoice ? `/zakazky/${zakazkaId}/faktura/${invoice.id}/print` : null;
   const pdfHref = invoice ? `/zakazky/${zakazkaId}/faktura/${invoice.id}/pdf` : null;
+  const exportHref = invoice ? `/admin/faktury/export?invoice_id=${invoice.id}` : null;
+  const paymentStatus = String(invoice?.payment_status ?? "neuhrazeno");
+  const paymentStatusLabel =
+    paymentStatus === "uhrazeno"
+      ? "Uhrazeno"
+      : paymentStatus === "po_splatnosti"
+        ? "Po splatnosti"
+        : paymentStatus === "stornovano"
+          ? "Stornováno"
+          : "Neuhrazeno";
+  const invoiceStatusLabel =
+    invoice?.stav === "stornovano"
+      ? "Stornováno"
+      : invoice?.stav === "odeslano"
+        ? "Odesláno"
+        : invoice?.stav === "vystaveno"
+          ? "Vystaveno"
+          : "Návrh";
 
   return (
     <Card className="mt-6 space-y-4 border-slate-700 bg-[#0b1324]">
@@ -1854,9 +1872,7 @@ function InvoiceCard({
         <div className="grid gap-3 text-sm md:grid-cols-4">
           <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
             <div className="text-xs uppercase tracking-wide text-slate-500">Stav</div>
-            <div className="mt-1 font-bold text-white">
-              {invoice.stav === "odeslano" ? "Odesláno" : invoice.stav === "vystaveno" ? "Vystaveno" : "Návrh"}
-            </div>
+            <div className="mt-1 font-bold text-white">{invoiceStatusLabel}</div>
           </div>
           <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
             <div className="text-xs uppercase tracking-wide text-slate-500">Vystaveno</div>
@@ -1878,6 +1894,45 @@ function InvoiceCard({
             <div className="text-xs uppercase tracking-wide text-slate-500">Email</div>
             <div className="mt-1 font-bold text-white">{invoice.email_to ?? "Neuvedeno"}</div>
           </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Stav úhrady</div>
+            <div className="mt-1 font-bold text-white">{paymentStatusLabel}</div>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Variabilní symbol</div>
+            <div className="mt-1 font-bold text-white">{String(invoice.variabilni_symbol ?? "Neuvedeno")}</div>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+            <div className="text-xs uppercase tracking-wide text-slate-500">DUZP</div>
+            <div className="mt-1 font-bold text-white">
+              {invoice.duzp_at
+                ? new Intl.DateTimeFormat("cs-CZ", { dateStyle: "medium" }).format(new Date(String(invoice.duzp_at)))
+                : "Neuvedeno"}
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Celkem s DPH</div>
+            <div className="mt-1 font-bold text-white">{formatMoney(invoice.celkem_s_dph as number | string | null)}</div>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 md:col-span-4">
+            <div className="text-xs uppercase tracking-wide text-slate-500">DPH rekapitulace</div>
+            <div className="mt-1 font-bold text-white">
+              Základ {formatMoney(invoice.zaklad_dane as number | string | null)} · DPH{" "}
+              {invoice.platce_dph === false ? "0 %" : formatPercent(invoice.dph_sazba as number | string | null)}{" "}
+              {formatMoney(invoice.dph_castka as number | string | null)}
+            </div>
+            {invoice.paid_at ? (
+              <div className="mt-1 text-xs text-slate-400">
+                Uhrazeno{" "}
+                {new Intl.DateTimeFormat("cs-CZ", { dateStyle: "medium" }).format(new Date(String(invoice.paid_at)))} ·{" "}
+                {formatMoney(invoice.paid_amount as number | string | null)}
+                {invoice.paid_note ? ` · ${invoice.paid_note}` : ""}
+              </div>
+            ) : null}
+            {invoice.storno_reason ? (
+              <div className="mt-1 text-xs text-red-200">Storno: {String(invoice.storno_reason)}</div>
+            ) : null}
+          </div>
         </div>
       ) : (
         <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">
@@ -1891,6 +1946,15 @@ function InvoiceCard({
         printHref={printHref}
         pdfHref={pdfHref}
       />
+
+      {exportHref ? (
+        <a
+          href={exportHref}
+          className="inline-flex w-fit rounded-xl border border-cyan-500/40 bg-cyan-500/15 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/25"
+        >
+          Export pro účetní CSV
+        </a>
+      ) : null}
 
       {previewData ? (
         <div className="flex flex-wrap items-center gap-3">
@@ -2911,6 +2975,11 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
   };
   const currentBeforeDiscount = computedTechPrice + computedStaffPrice;
   const currentFinalPrice = toCount((data as PricingData).cilova_cena) || currentBeforeDiscount;
+  const currentVatPayer = effectiveFakturacniFirma?.platce_dph ?? true;
+  const currentVatRate = currentVatPayer ? toCount(effectiveFakturacniFirma?.vychozi_sazba_dph ?? 21) : 0;
+  const currentTaxBase = currentFinalPrice;
+  const currentVatAmount = Number(((currentTaxBase * currentVatRate) / 100).toFixed(2));
+  const currentTotalWithVat = currentTaxBase + currentVatAmount;
   const currentInvoiceData: InvoiceDocumentData = {
     ...invoiceBaseData,
     pricing: {
@@ -2920,6 +2989,11 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
       discountPercent: calculateDiscountPercent(currentBeforeDiscount, currentFinalPrice),
       discountAmount: Math.max(currentBeforeDiscount - currentFinalPrice, 0),
       finalPrice: currentFinalPrice,
+      vatPayer: currentVatPayer,
+      vatRate: currentVatRate,
+      taxBase: currentTaxBase,
+      vatAmount: currentVatAmount,
+      totalWithVat: currentTotalWithVat,
     },
   };
   const invoicePreviewData = latestInvoice ? buildInvoiceDataFromRow(latestInvoice as any) : currentInvoiceData;

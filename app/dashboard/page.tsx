@@ -160,7 +160,7 @@ export default async function DashboardPage() {
     transportRes,
   ] = await Promise.all([
     supabase.from("zakazky").select("zakazka_id, cislo_zakazky, nazev, datum_od, akce_od, logistika_stav, workflow_stav, workflow_change_pending, client_approval_status, zrusena, konecna_cena, cilova_cena, cena_pred_slevou, cena_techniky, cena_personalu").order("datum_od", { ascending: true }),
-    supabase.from("zakazka_faktury").select("id, zakazka_id, cislo_dokladu, stav, splatnost_at, konecna_cena"),
+    supabase.from("zakazka_faktury").select("id, zakazka_id, cislo_dokladu, stav, payment_status, splatnost_at, konecna_cena, celkem_s_dph"),
     supabase.from("dochazka_zakazky").select("id, zakazka_id, user_id, checkin_at, checkout_at, approved_duration_minutes, payment_status"),
     supabase.from("profiles").select("user_id, email, jmeno, prijmeni, hodinovy_naklad_akce"),
     supabase.from("cestovni_nahrady").select("id, zakazka_id, user_id, km, sazba_za_km, castka, status"),
@@ -192,7 +192,7 @@ export default async function DashboardPage() {
   const conflictZakazky = activeZakazky.filter((row) => conflictZakazkaIds.has(row.zakazka_id));
 
   const invoices = invoicesRes.data ?? [];
-  const unpaidInvoices = invoices.filter((row: any) => row.stav !== "zaplaceno");
+  const unpaidInvoices = invoices.filter((row: any) => row.stav !== "stornovano" && row.payment_status !== "uhrazeno");
   const workWaiting = attendance
     .filter((row) => row.payment_status === "ceka_na_proplaceni")
     .reduce((sum, row) => {
@@ -281,7 +281,7 @@ export default async function DashboardPage() {
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Faktury čekají" value={formatMoneyCzk(unpaidInvoices.reduce((sum: number, row: any) => sum + toNumber(row.konecna_cena), 0))} tone="warning" />
+        <StatCard label="Faktury čekají" value={formatMoneyCzk(unpaidInvoices.reduce((sum: number, row: any) => sum + (toNumber(row.celkem_s_dph) || toNumber(row.konecna_cena)), 0))} tone="warning" />
         <StatCard label="Práce k proplacení" value={formatMoneyCzk(workWaiting)} tone="warning" />
         <StatCard label="Cesty ke schválení" value={travelWaitingApproval.length} tone="warning" />
         <StatCard label="Cesty k proplacení" value={formatMoneyCzk(travelWaitingPayment)} tone="warning" />

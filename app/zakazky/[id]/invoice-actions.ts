@@ -42,6 +42,10 @@ function getPublicBaseUrl(headersList: Headers) {
   return `${proto}://${host}`;
 }
 
+function buildVariableSymbol(documentNumber: string) {
+  return documentNumber.replace(/\D/g, "") || documentNumber;
+}
+
 export async function issueInvoiceAction(zakazkaId: string): Promise<ActionResult> {
   try {
     const supabase = await createClient();
@@ -87,15 +91,20 @@ export async function issueInvoiceAction(zakazkaId: string): Promise<ActionResul
 
     if (numberError) throw new Error(numberError.message);
     const documentNumber = String(numberRaw);
+    const variableSymbol = buildVariableSymbol(documentNumber);
+    const taxableSupplyAt = now.toISOString();
 
     const { data: invoiceRaw, error: invoiceError } = await supabase
       .from("zakazka_faktury")
       .insert({
         zakazka_id: zakazkaId,
         cislo_dokladu: documentNumber,
+        variabilni_symbol: variableSymbol,
         stav: "vystaveno",
+        payment_status: "neuhrazeno",
         vystaveno_at: now.toISOString(),
         splatnost_at: due.toISOString(),
+        duzp_at: taxableSupplyAt,
         fakturacni_firma_id: zakazkaRaw?.fakturacni_firma_id ?? null,
         supplier_snapshot: invoiceData.supplier,
         customer_snapshot: invoiceData.customer,
@@ -106,6 +115,11 @@ export async function issueInvoiceAction(zakazkaId: string): Promise<ActionResul
         sleva_percent: invoiceData.pricing.discountPercent,
         sleva_castka: invoiceData.pricing.discountAmount,
         konecna_cena: invoiceData.pricing.finalPrice,
+        platce_dph: invoiceData.pricing.vatPayer ?? true,
+        dph_sazba: invoiceData.pricing.vatRate ?? 21,
+        zaklad_dane: invoiceData.pricing.taxBase ?? invoiceData.pricing.finalPrice,
+        dph_castka: invoiceData.pricing.vatAmount ?? 0,
+        celkem_s_dph: invoiceData.pricing.totalWithVat ?? invoiceData.pricing.finalPrice,
         created_by: user.id,
       })
       .select("id")
@@ -118,7 +132,7 @@ export async function issueInvoiceAction(zakazkaId: string): Promise<ActionResul
       nextStatus: "fakturovano",
       actorId: user.id,
       source: "invoice_issue",
-      metadata: { invoice_id: invoiceRaw.id, cislo_dokladu: documentNumber },
+      metadata: { invoice_id: invoiceRaw.id, cislo_dokladu: documentNumber, variabilni_symbol: variableSymbol },
     });
 
     await logZakazkaHistory(supabase, {
@@ -143,6 +157,8 @@ export async function issueInvoiceAction(zakazkaId: string): Promise<ActionResul
 
     revalidatePath(`/zakazky/${zakazkaId}`);
     revalidatePath("/zakazky");
+    revalidatePath("/dashboard");
+    revalidatePath("/admin/faktury");
     return { ok: true };
   } catch (error) {
     return { ok: false, error: getErrorMessage(error) };
@@ -161,13 +177,14 @@ export async function sendInvoiceEmailAction(
 
     const { data: invoiceRaw, error: invoiceError } = await supabase
       .from("zakazka_faktury")
-      .select("id, cislo_dokladu, customer_snapshot")
+      .select("id, cislo_dokladu, stav, customer_snapshot")
       .eq("id", invoiceId)
       .eq("zakazka_id", zakazkaId)
       .maybeSingle();
 
     if (invoiceError) throw new Error(invoiceError.message);
     if (!invoiceRaw) return { ok: false, error: "Faktura nebyla nalezena." };
+    if (invoiceRaw.stav === "stornovano") return { ok: false, error: "Stornovanou fakturu nelze odeslat klientovi." };
 
     const customer = (invoiceRaw.customer_snapshot ?? {}) as { email?: string | null; name?: string | null };
     const emailTo = customer.email?.trim();
@@ -229,6 +246,128 @@ export async function sendInvoiceEmailAction(
     });
 
     revalidatePath(`/zakazky/${zakazkaId}`);
+    revalidatePath("/dashboard");
+    revalidatePath("/admin/faktury");
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: getErrorMessage(error) };
+  }
+}
+
+export async function markInvoicePaidAction(
+  zakazkaId: string,
+  invoiceId: string,
+  paidAmount?: number | null,
+  paidNote?: string | null
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient();
+    const user = await getUserOrThrow(supabase);
+    const { data: invoiceRaw, error: invoiceError } = await supabase
+      .from("zakazka_faktury")
+      .select("id, cislo_dokladu, stav, celkem_s_dph, konecna_cena")
+      .eq("id", invoiceId)
+      .eq("zakazka_id", zakazkaId)
+      .maybeSingle();
+
+    if (invoiceError) throw new Error(invoiceError.message);
+    if (!invoiceRaw) return { ok: false, error: "Faktura nebyla nalezena." };
+    if (invoiceRaw.stav === "stornovano") return { ok: false, error: "Stornovanou fakturu nelze označit jako uhrazenou." };
+
+    const now = new Date().toISOString();
+    const amount = Number(paidAmount ?? invoiceRaw.celkem_s_dph ?? invoiceRaw.konecna_cena ?? 0);
+    const { error: updateError } = await supabase
+      .from("zakazka_faktury")
+      .update({
+        payment_status: "uhrazeno",
+        paid_at: now,
+        paid_amount: Number.isFinite(amount) ? amount : 0,
+        paid_note: paidNote?.trim() || null,
+        paid_by: user.id,
+        updated_at: now,
+      })
+      .eq("id", invoiceId);
+
+    if (updateError) throw new Error(updateError.message);
+
+    await logZakazkaHistory(supabase, {
+      zakazkaId,
+      eventType: "invoice_paid",
+      actorId: user.id,
+      title: `Faktura ${invoiceRaw.cislo_dokladu} byla označena jako uhrazená.`,
+      detail: paidNote?.trim() || null,
+      metadata: { invoice_id: invoiceId, paid_amount: Number.isFinite(amount) ? amount : 0 },
+    });
+
+    revalidatePath(`/zakazky/${zakazkaId}`);
+    revalidatePath("/dashboard");
+    revalidatePath("/admin/faktury");
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: getErrorMessage(error) };
+  }
+}
+
+export async function cancelInvoiceAction(
+  zakazkaId: string,
+  invoiceId: string,
+  reason: string
+): Promise<ActionResult> {
+  try {
+    const trimmedReason = reason.trim();
+    if (!trimmedReason) return { ok: false, error: "Storno faktury vyžaduje důvod." };
+
+    const supabase = await createClient();
+    const user = await getUserOrThrow(supabase);
+    const { data: invoiceRaw, error: invoiceError } = await supabase
+      .from("zakazka_faktury")
+      .select("id, cislo_dokladu, stav")
+      .eq("id", invoiceId)
+      .eq("zakazka_id", zakazkaId)
+      .maybeSingle();
+
+    if (invoiceError) throw new Error(invoiceError.message);
+    if (!invoiceRaw) return { ok: false, error: "Faktura nebyla nalezena." };
+    if (invoiceRaw.stav === "stornovano") return { ok: false, error: "Faktura už je stornovaná." };
+
+    const now = new Date().toISOString();
+    const { error: updateError } = await supabase
+      .from("zakazka_faktury")
+      .update({
+        stav: "stornovano",
+        payment_status: "stornovano",
+        stornovano_at: now,
+        stornovano_by: user.id,
+        storno_reason: trimmedReason,
+        updated_at: now,
+      })
+      .eq("id", invoiceId);
+
+    if (updateError) throw new Error(updateError.message);
+
+    await logZakazkaHistory(supabase, {
+      zakazkaId,
+      eventType: "invoice_cancelled",
+      actorId: user.id,
+      title: `Faktura ${invoiceRaw.cislo_dokladu} byla stornována.`,
+      detail: trimmedReason,
+      metadata: { invoice_id: invoiceId, reason: trimmedReason },
+    });
+
+    await createNotificationsForRoles(supabase, ["admin", "sef"], {
+      type: "invoice_cancelled",
+      priority: "warning",
+      title: `Faktura ${invoiceRaw.cislo_dokladu} byla stornována`,
+      message: trimmedReason,
+      relatedZakazkaId: zakazkaId,
+      relatedFakturaId: invoiceId,
+      actionUrl: `/zakazky/${zakazkaId}`,
+      dedupeKeyPrefix: `invoice-cancelled:${invoiceId}`,
+    });
+
+    revalidatePath(`/zakazky/${zakazkaId}`);
+    revalidatePath("/dashboard");
+    revalidatePath("/admin/faktury");
     return { ok: true };
   } catch (error) {
     return { ok: false, error: getErrorMessage(error) };

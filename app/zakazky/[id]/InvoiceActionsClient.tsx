@@ -3,7 +3,9 @@
 import { useTransition } from "react";
 import {
   archiveZakazkaAction,
+  cancelInvoiceAction,
   issueInvoiceAction,
+  markInvoicePaidAction,
   sendInvoiceEmailAction,
 } from "./invoice-actions";
 
@@ -69,6 +71,47 @@ export function InvoiceActionsClient({
           className="rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-60"
         >
           Odeslat fakturu klientovi
+        </button>
+      ) : null}
+
+      {invoiceId ? (
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => {
+            const amountRaw = window.prompt("Částka úhrady v Kč (prázdné = celkem podle faktury):", "");
+            if (amountRaw === null) return;
+            const note = window.prompt("Poznámka k úhradě (volitelné):", "") ?? "";
+            const trimmedAmount = amountRaw.trim();
+            const amount = trimmedAmount ? Number(trimmedAmount.replace(",", ".")) : null;
+            if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
+              window.alert("Částka úhrady musí být číslo 0 nebo vyšší.");
+              return;
+            }
+            run(() => markInvoicePaidAction(zakazkaId, invoiceId, amount, note));
+          }}
+          className="rounded-xl border border-lime-500/40 bg-lime-500/15 px-4 py-2 text-sm font-semibold text-lime-100 transition hover:bg-lime-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Označit jako uhrazeno
+        </button>
+      ) : null}
+
+      {invoiceId ? (
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => {
+            const reason = window.prompt("Důvod storna faktury:");
+            if (reason === null) return;
+            if (!reason.trim()) {
+              window.alert("Storno faktury vyžaduje důvod.");
+              return;
+            }
+            run(() => cancelInvoiceAction(zakazkaId, invoiceId, reason));
+          }}
+          className="rounded-xl border border-red-500/40 bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Stornovat fakturu
         </button>
       ) : null}
 

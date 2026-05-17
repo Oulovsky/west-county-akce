@@ -289,7 +289,34 @@ function UserEditorRow({
   }
 
   return (
-    <div className="grid gap-4 rounded-xl border border-slate-700 bg-slate-950/40 p-4 xl:grid-cols-[1.1fr_1fr_auto]">
+    <details className="group rounded-xl border border-slate-700 bg-slate-950/40">
+      <summary className="grid cursor-pointer list-none gap-2 px-4 py-3 transition hover:bg-slate-900/60 sm:grid-cols-[1fr_auto] sm:items-center">
+        <div className="min-w-0">
+          <div className="truncate font-bold text-white">{savedName || savedEmail}</div>
+          <div className="mt-1 truncate text-xs text-slate-400">
+            {savedEmail} · {savedRole} · {normalizeCost(savedHourlyCost)} Kč/h
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          {user.private_vehicle ? (
+            <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-1 font-semibold text-blue-100">
+              soukromé vozidlo
+            </span>
+          ) : null}
+          {user.aktivni === false ? (
+            <span className="rounded-full border border-slate-600 bg-slate-800 px-2 py-1 font-semibold text-slate-300">
+              neaktivní
+            </span>
+          ) : (
+            <span className="rounded-full border border-emerald-600/40 bg-emerald-950/30 px-2 py-1 font-semibold text-emerald-200">
+              aktivní
+            </span>
+          )}
+          <span className="text-slate-400 transition group-open:rotate-180">v</span>
+        </div>
+      </summary>
+
+      <div className="grid gap-4 border-t border-slate-800 p-4 xl:grid-cols-[1.1fr_1fr_auto]">
       <div className="min-w-0">
         <label className="block">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -547,7 +574,8 @@ function UserEditorRow({
           </button>
         ) : null}
       </div>
-    </div>
+      </div>
+    </details>
   );
 }
 

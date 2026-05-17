@@ -55,9 +55,15 @@ type ProfileRow = {
 type InvoiceRow = {
   id: string;
   cislo_dokladu: string;
+  variabilni_symbol?: string | null;
   stav: string;
   vystaveno_at: string | null;
   splatnost_at: string | null;
+  duzp_at?: string | null;
+  payment_status?: string | null;
+  paid_at?: string | null;
+  paid_amount?: number | string | null;
+  paid_note?: string | null;
   supplier_snapshot: InvoiceParty;
   customer_snapshot: InvoiceParty;
   order_snapshot: InvoiceDocumentData["order"];
@@ -67,6 +73,11 @@ type InvoiceRow = {
   sleva_percent: number | string | null;
   sleva_castka: number | string | null;
   konecna_cena: number | string | null;
+  platce_dph?: boolean | null;
+  dph_sazba?: number | string | null;
+  zaklad_dane?: number | string | null;
+  dph_castka?: number | string | null;
+  celkem_s_dph?: number | string | null;
 };
 
 function toNumber(value: number | string | null | undefined) {
@@ -145,9 +156,8 @@ export async function buildCurrentInvoiceData(supabase: any, zakazkaId: string):
     .order("nazev", { ascending: true });
 
   if (firmyError) throw new Error(firmyError.message);
-  const supplier = fakturacniFirmaToInvoiceParty(
-    getEffectiveFakturacniFirma((firmyRaw ?? []) as FakturacniFirma[], zakazka.fakturacni_firma_id)
-  );
+  const effectiveFirma = getEffectiveFakturacniFirma((firmyRaw ?? []) as FakturacniFirma[], zakazka.fakturacni_firma_id);
+  const supplier = fakturacniFirmaToInvoiceParty(effectiveFirma);
 
   const { data: technikaRaw, error: technikaError } = await supabase
     .from("technika_na_zakazce")
@@ -195,6 +205,11 @@ export async function buildCurrentInvoiceData(supabase: any, zakazkaId: string):
   const beforeDiscount = techPrice + staffPrice;
   const finalPrice = toNumber(zakazka.cilova_cena) || beforeDiscount;
   const discountAmount = Math.max(beforeDiscount - finalPrice, 0);
+  const vatPayer = effectiveFirma?.platce_dph ?? true;
+  const vatRate = vatPayer ? toNumber(effectiveFirma?.vychozi_sazba_dph ?? 21) : 0;
+  const taxBase = finalPrice;
+  const vatAmount = Number((taxBase * vatRate / 100).toFixed(2));
+  const totalWithVat = taxBase + vatAmount;
 
   return {
     supplier,
@@ -213,16 +228,33 @@ export async function buildCurrentInvoiceData(supabase: any, zakazkaId: string):
       discountPercent: calculateDiscountPercent(beforeDiscount, finalPrice),
       discountAmount,
       finalPrice,
+      vatPayer,
+      vatRate,
+      taxBase,
+      vatAmount,
+      totalWithVat,
     },
   };
 }
 
 export function buildInvoiceDataFromRow(invoice: InvoiceRow): InvoiceDocumentData {
+  const finalPrice = toNumber(invoice.konecna_cena);
+  const taxBase = toNumber(invoice.zaklad_dane) || finalPrice;
+  const vatRate = toNumber(invoice.dph_sazba);
+  const vatAmount = toNumber(invoice.dph_castka);
+  const totalWithVat = toNumber(invoice.celkem_s_dph) || taxBase + vatAmount;
+
   return {
     meta: {
       documentNumber: invoice.cislo_dokladu,
+      variableSymbol: invoice.variabilni_symbol ?? invoice.cislo_dokladu.replace(/\D/g, ""),
       issuedAt: invoice.vystaveno_at,
       dueAt: invoice.splatnost_at,
+      taxableSupplyAt: invoice.duzp_at ?? invoice.vystaveno_at,
+      paymentStatus: invoice.payment_status,
+      paidAt: invoice.paid_at,
+      paidAmount: toNumber(invoice.paid_amount),
+      paidNote: invoice.paid_note,
       status: invoice.stav,
     },
     supplier: invoice.supplier_snapshot ?? {},
@@ -234,7 +266,12 @@ export function buildInvoiceDataFromRow(invoice: InvoiceRow): InvoiceDocumentDat
       beforeDiscount: toNumber(invoice.cena_pred_slevou),
       discountPercent: toNumber(invoice.sleva_percent),
       discountAmount: toNumber(invoice.sleva_castka),
-      finalPrice: toNumber(invoice.konecna_cena),
+      finalPrice,
+      vatPayer: invoice.platce_dph ?? true,
+      vatRate,
+      taxBase,
+      vatAmount,
+      totalWithVat,
     },
   };
 }

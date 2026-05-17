@@ -14,6 +14,8 @@ export type FakturacniFirma = {
   iban: string | null;
   swift: string | null;
   poznamka: string | null;
+  platce_dph?: boolean | null;
+  vychozi_sazba_dph?: number | string | null;
   aktivni: boolean;
   vychozi: boolean;
   created_at?: string | null;

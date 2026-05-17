@@ -23,13 +23,24 @@ export type InvoicePricing = {
   discountPercent: number;
   discountAmount: number;
   finalPrice: number;
+  vatPayer?: boolean;
+  vatRate?: number;
+  taxBase?: number;
+  vatAmount?: number;
+  totalWithVat?: number;
 };
 
 export type InvoiceMeta = {
   documentNumber?: string | null;
+  variableSymbol?: string | null;
   issuedAt?: string | null;
   dueAt?: string | null;
-  status?: "navrh" | "vystaveno" | "odeslano" | string | null;
+  taxableSupplyAt?: string | null;
+  paymentStatus?: string | null;
+  paidAt?: string | null;
+  paidAmount?: number | null;
+  paidNote?: string | null;
+  status?: "navrh" | "vystaveno" | "odeslano" | "stornovano" | string | null;
 };
 
 export type InvoiceDocumentData = {
@@ -70,9 +81,17 @@ function formatDate(value?: string | null) {
 }
 
 function getInvoiceStatusLabel(value?: string | null) {
+  if (value === "stornovano") return "Stornováno";
   if (value === "vystaveno") return "Vystaveno";
   if (value === "odeslano") return "Odesláno";
   return "Návrh";
+}
+
+function getPaymentStatusLabel(value?: string | null) {
+  if (value === "uhrazeno") return "Uhrazeno";
+  if (value === "po_splatnosti") return "Po splatnosti";
+  if (value === "stornovano") return "Stornováno";
+  return "Neuhrazeno";
 }
 
 function PartyBlock({ title, party, showBank = false }: { title: string; party: InvoiceParty; showBank?: boolean }) {
@@ -105,13 +124,23 @@ function AmountRow({ label, value, strong = false }: { label: string; value: str
 
 export function InvoiceDocument({ data }: { data: InvoiceDocumentData }) {
   const { meta, supplier, customer, order, pricing } = data;
+  const taxBase = pricing.taxBase ?? pricing.finalPrice;
+  const vatRate = pricing.vatRate ?? 0;
+  const vatAmount = pricing.vatAmount ?? 0;
+  const totalWithVat = pricing.totalWithVat ?? pricing.finalPrice;
+  const isCancelled = meta?.status === "stornovano" || meta?.paymentStatus === "stornovano";
 
   return (
     <article className="invoice-document mx-auto max-w-4xl bg-white p-6 text-slate-950 shadow-xl print:shadow-none sm:p-8">
+      {isCancelled ? (
+        <div className="mb-4 rounded-2xl border border-red-300 bg-red-50 px-5 py-3 text-sm font-black uppercase tracking-wide text-red-700">
+          Stornovaný doklad
+        </div>
+      ) : null}
       <header className="flex flex-col gap-4 border-b border-slate-300 pb-6 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="text-sm font-bold uppercase tracking-[0.2em] text-slate-500">
-            Objednávka / cenové potvrzení
+            Faktura / podklad pro účetní
           </div>
           <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">
             {valueOrMissing(meta?.documentNumber ?? order.orderNumber)}
@@ -121,9 +150,12 @@ export function InvoiceDocument({ data }: { data: InvoiceDocumentData }) {
         <div className="rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-700">
           <div>Stav: {getInvoiceStatusLabel(meta?.status)}</div>
           <div>Číslo dokladu: {valueOrMissing(meta?.documentNumber)}</div>
+          <div>Variabilní symbol: {valueOrMissing(meta?.variableSymbol)}</div>
           <div>Datum vystavení: {formatDate(meta?.issuedAt)}</div>
           <div>Splatnost: {formatDate(meta?.dueAt)}</div>
-          <div>DPH: Neuvedeno</div>
+          <div>DUZP: {formatDate(meta?.taxableSupplyAt)}</div>
+          <div>Stav úhrady: {getPaymentStatusLabel(meta?.paymentStatus)}</div>
+          <div>DPH: {pricing.vatPayer === false ? "Neplátce DPH" : formatPercent(vatRate)}</div>
           <div>QR platba: Neuvedeno</div>
         </div>
       </header>
@@ -173,7 +205,9 @@ export function InvoiceDocument({ data }: { data: InvoiceDocumentData }) {
           <AmountRow label="Cena před slevou" value={formatMoney(pricing.beforeDiscount)} />
           <AmountRow label="Sleva" value={formatPercent(pricing.discountPercent)} />
           <AmountRow label="Sleva Kč" value={`-${formatMoney(pricing.discountAmount)}`} />
-          <AmountRow label="Konečná cena" value={formatMoney(pricing.finalPrice)} strong />
+          <AmountRow label="Základ daně" value={formatMoney(taxBase)} />
+          <AmountRow label={`DPH ${pricing.vatPayer === false ? "0 %" : formatPercent(vatRate)}`} value={formatMoney(vatAmount)} />
+          <AmountRow label="Celkem s DPH" value={formatMoney(totalWithVat)} strong />
         </div>
       </section>
 

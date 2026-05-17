@@ -28,6 +28,8 @@ type FormState = {
   iban: string;
   swift: string;
   poznamka: string;
+  platce_dph: boolean;
+  vychozi_sazba_dph: string;
   aktivni: boolean;
   vychozi: boolean;
 };
@@ -62,6 +64,8 @@ const emptyForm: FormState = {
   iban: "",
   swift: "",
   poznamka: "",
+  platce_dph: true,
+  vychozi_sazba_dph: "21",
   aktivni: true,
   vychozi: false,
 };
@@ -98,6 +102,8 @@ function toForm(firma: FakturacniFirma): FormState {
     iban: firma.iban ?? "",
     swift: firma.swift ?? "",
     poznamka: firma.poznamka ?? "",
+    platce_dph: firma.platce_dph ?? true,
+    vychozi_sazba_dph: String(firma.vychozi_sazba_dph ?? 21),
     aktivni: firma.aktivni,
     vychozi: firma.vychozi,
   };
@@ -248,7 +254,8 @@ export default function FakturacniFirmyClient({ firmy }: { firmy: FakturacniFirm
                   {[firma.ulice, [firma.psc, firma.mesto].filter(Boolean).join(" ")].filter(Boolean).join(", ") || "Adresa neuvedena"}
                 </div>
                 <div className="mt-1 text-xs text-slate-500">
-                  IČO: {firma.ico || "Neuvedeno"} · DIČ: {firma.dic || "Neuvedeno"} · Účet: {firma.bankovni_ucet || firma.iban || "Neuvedeno"}
+                  IČO: {firma.ico || "Neuvedeno"} · DIČ: {firma.dic || "Neuvedeno"} · Účet: {firma.bankovni_ucet || firma.iban || "Neuvedeno"} ·{" "}
+                  {firma.platce_dph === false ? "Neplátce DPH" : `DPH ${firma.vychozi_sazba_dph ?? 21} %`}
                 </div>
               </div>
 
@@ -318,9 +325,26 @@ export default function FakturacniFirmyClient({ firmy }: { firmy: FakturacniFirm
             <Field label="DIČ">
               <Input value={form.dic} onChange={(event) => update("dic", event.target.value)} />
             </Field>
+            <Field label="Výchozí sazba DPH (%)">
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                value={form.vychozi_sazba_dph}
+                onChange={(event) => update("vychozi_sazba_dph", event.target.value)}
+              />
+            </Field>
             <Field label="Email">
               <Input type="email" value={form.email} onChange={(event) => update("email", event.target.value)} />
             </Field>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="inline-flex items-center gap-2 text-sm text-slate-200">
+              <input type="checkbox" checked={form.platce_dph} onChange={(event) => update("platce_dph", event.target.checked)} />
+              Plátce DPH
+            </label>
             <Field label="Telefon">
               <Input value={form.telefon} onChange={(event) => update("telefon", event.target.value)} />
             </Field>

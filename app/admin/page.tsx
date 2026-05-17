@@ -4,10 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getUsers } from "./users/actions";
 import { getAdminAuditLog } from "./audit/actions";
 import { getFakturacniFirmy } from "./fakturacni-firmy/actions";
+import { getAccountantConfig } from "./accountant/actions";
 
 import UsersClient from "./UsersClient";
 import AuditLog from "./AuditLog";
 import FakturacniFirmyClient from "./FakturacniFirmyClient";
+import AccountantConfigForm from "./AccountantConfigForm";
 
 function AdminSection({
   title,
@@ -74,6 +76,7 @@ export default async function AdminPage() {
 
   const users = await getUsers();
   const fakturacniFirmy = await getFakturacniFirmy();
+  const accountantConfig = await getAccountantConfig();
   const auditLogs = await getAdminAuditLog();
 
   return (
@@ -96,6 +99,24 @@ export default async function AdminPage() {
             Otevřít proplacení práce
           </Link>
         </div>
+      </AdminSection>
+
+      <AdminSection title="Faktury / účetní podklady">
+        <div className="space-y-3">
+          <p className="text-sm text-slate-400">
+            Přehled faktur podle úhrad, splatnosti a období včetně CSV exportu pro účetní.
+          </p>
+          <Link
+            href="/admin/faktury"
+            className="inline-flex rounded-xl border border-blue-500/40 bg-blue-600/20 px-4 py-3 text-sm font-bold text-blue-100 transition hover:bg-blue-600/30"
+          >
+            Otevřít faktury
+          </Link>
+        </div>
+      </AdminSection>
+
+      <AdminSection title="Účetní">
+        <AccountantConfigForm config={accountantConfig} />
       </AdminSection>
 
       <AdminSection title="Vozidla">

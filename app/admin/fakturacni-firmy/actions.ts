@@ -18,6 +18,11 @@ function textOrNull(value: FormDataEntryValue | null) {
   return text || null;
 }
 
+function numberOrDefault(value: FormDataEntryValue | null, fallback: number) {
+  const parsed = Number(String(value ?? "").trim().replace(",", "."));
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
 async function requireAdmin() {
   const supabase = await createClient();
   const {
@@ -84,6 +89,8 @@ export async function saveFakturacniFirma(formData: FormData): Promise<ActionRes
       iban: textOrNull(formData.get("iban")),
       swift: textOrNull(formData.get("swift")),
       poznamka: textOrNull(formData.get("poznamka")),
+      platce_dph: formData.get("platce_dph") === "on",
+      vychozi_sazba_dph: numberOrDefault(formData.get("vychozi_sazba_dph"), 21),
       aktivni: formData.get("aktivni") !== "off",
       vychozi,
       updated_at: new Date().toISOString(),
