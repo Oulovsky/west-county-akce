@@ -19,7 +19,7 @@ async function loadValidLink(rawToken: string) {
 
   const { data, error } = await supabase
     .from("zakazka_approval_links")
-    .select("link_id, zakazka_id, revoked_at, approved_at, declined_at")
+    .select("link_id, zakazka_id, revoked_at, approved_at, declined_at, approval_snapshot")
     .eq("token_hash", tokenHash)
     .maybeSingle();
 
@@ -31,9 +31,21 @@ async function loadValidLink(rawToken: string) {
     revoked_at: string | null;
     approved_at: string | null;
     declined_at: string | null;
+    approval_snapshot: { version?: number } | null;
   } | null;
 
   if (!link || link.revoked_at || link.approved_at || link.declined_at) {
+    return { supabase, link: null };
+  }
+  if (link.approval_snapshot?.version !== 1) {
+    await logZakazkaHistory(supabase, {
+      zakazkaId: link.zakazka_id,
+      eventType: "client_approval_legacy_link_blocked",
+      actorId: null,
+      title: "Starší schvalovací odkaz bez snapshotu byl zablokován.",
+      detail: "Klientské schválení nebylo přijato, protože odkaz neobsahuje verzovaný snapshot.",
+      metadata: { link_id: link.link_id, source: "public_approval" },
+    });
     return { supabase, link: null };
   }
 

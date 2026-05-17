@@ -22,6 +22,10 @@ import {
   getTravelAmount,
   getTravelStatusLabel,
 } from "@/lib/transport";
+import {
+  getNotificationPriorityClass,
+  getNotificationPriorityLabel,
+} from "@/lib/notifications";
 
 type AssignmentRow = {
   id: string | number;
@@ -108,6 +112,16 @@ type TravelPaymentRow = {
   poznamka: string | null;
   status: string;
   submitted_at: string | null;
+};
+
+type MyNotificationRow = {
+  id: string;
+  typ: string;
+  priorita: string;
+  titulek: string;
+  zprava: string;
+  akce_url: string | null;
+  created_at: string;
 };
 
 const FILTERS: Array<{ key: FilterMode; label: string }> = [
@@ -224,6 +238,58 @@ function getNavigationUrl(zakazka: ZakazkaRow | null) {
   return query
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
     : null;
+}
+
+function MyNotificationsCard({ notifications }: { notifications: MyNotificationRow[] }) {
+  return (
+    <Card className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-black text-white">Moje notifikace</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Rychlý přehled nepřečtených provozních upozornění.
+          </p>
+        </div>
+        <Link
+          href="/notifikace"
+          className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-bold text-slate-100 transition hover:bg-slate-800"
+        >
+          Všechny notifikace
+        </Link>
+      </div>
+
+      {notifications.length === 0 ? (
+        <div className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-400">
+          Nemáte žádné nepřečtené notifikace.
+        </div>
+      ) : (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {notifications.map((notification) => {
+            const body = (
+              <div className={`h-full rounded-xl border px-4 py-3 ${getNotificationPriorityClass(notification.priorita)}`}>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="font-black text-white">{notification.titulek}</div>
+                  <Badge variant={notification.priorita === "critical" ? "danger" : notification.priorita === "warning" ? "warning" : "default"}>
+                    {getNotificationPriorityLabel(notification.priorita)}
+                  </Badge>
+                </div>
+                <div className="mt-2 text-sm text-slate-200">{notification.zprava}</div>
+                <div className="mt-2 text-xs text-slate-400">{formatDateTime(notification.created_at)} · {notification.typ}</div>
+              </div>
+            );
+
+            return notification.akce_url ? (
+              <Link key={notification.id} href={notification.akce_url} className="block transition hover:opacity-85">
+                {body}
+              </Link>
+            ) : (
+              <div key={notification.id}>{body}</div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
 }
 
 type AssignmentWithZakazka = {
@@ -650,6 +716,21 @@ export default async function MojePage({ searchParams }: PageProps) {
     redirect("/login");
   }
 
+  const { data: notificationsRaw, error: notificationsError } = await supabase
+    .from("notifikace")
+    .select("id, typ, priorita, titulek, zprava, akce_url, created_at")
+    .eq("user_id", user.id)
+    .is("read_at", null)
+    .is("dismissed_at", null)
+    .order("created_at", { ascending: false })
+    .limit(6);
+
+  if (notificationsError) {
+    return <div>Chyba načtení notifikací: {notificationsError.message}</div>;
+  }
+
+  const myNotifications = (notificationsRaw ?? []) as MyNotificationRow[];
+
   const { data: assignmentsRaw, error: assignmentsError } = await supabase
     .from("zakazka_lide")
     .select(
@@ -819,6 +900,8 @@ export default async function MojePage({ searchParams }: PageProps) {
           <Badge variant="default">{assignments.length} přiřazení</Badge>
         </div>
       </Card>
+
+      <MyNotificationsCard notifications={myNotifications} />
 
       <FilterPills activeFilter={activeFilter} />
 

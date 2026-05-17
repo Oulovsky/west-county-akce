@@ -9,7 +9,15 @@ type RouteContext = {
 export async function GET(req: NextRequest, { params }: RouteContext) {
   const { invoiceId } = await params;
   const renderUrl = new URL(buildInvoiceRenderPath(invoiceId), req.url);
-  const pdf = await renderInvoicePdf({ url: renderUrl.toString() });
+  let pdf: Uint8Array;
+
+  try {
+    pdf = await renderInvoicePdf({ url: renderUrl.toString() });
+  } catch (error) {
+    console.error("Invoice PDF render failed, falling back to HTML render:", error);
+    renderUrl.searchParams.set("fallback", "pdf_unavailable");
+    return NextResponse.redirect(renderUrl);
+  }
 
   return new NextResponse(Buffer.from(pdf), {
     headers: {

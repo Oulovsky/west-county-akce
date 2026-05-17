@@ -710,7 +710,7 @@ export async function sendClientApprovalAction(formData: FormData) {
     actorId: null,
     title: "Finální zakázka odeslána klientovi ke schválení.",
     detail: `Odesláno na ${recipientEmail}.`,
-    metadata: { link_id: link.link_id },
+    metadata: { link_id: link.link_id, approval_snapshot_version: approvalSnapshot.version, approval_snapshot_created_at: approvalSnapshot.createdAt },
   });
 
   revalidatePath(`/zakazky/${zakazkaId}`);

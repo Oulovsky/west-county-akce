@@ -1230,44 +1230,52 @@ export default function NovaZakazkaPage() {
       const mistoGpsPresnost = toOptionalNumber(mistoGps.accuracyM);
       let klientId = selectedKlientId || null;
       let mistoId = selectedMistoId || null;
-      let createdMistoId: string | null = null;
+      const mistoPayload =
+        !mistoId && misto.trim() && mistoLat != null && mistoLng != null
+          ? {
+              klient_id: klientId,
+              nazev: misto,
+              adresa_text: misto,
+              lat: mistoLat,
+              lng: mistoLng,
+              radius_m: mistoGpsRadius,
+            }
+          : null;
 
-      async function cleanupPartialCreate(zakazkaId?: string | null) {
-        if (zakazkaId) {
-          await supabase.from("zakazky").delete().eq("zakazka_id", zakazkaId);
-        }
-        if (createdMistoId) {
-          await supabase.from("mista_konani").delete().eq("misto_id", createdMistoId);
-        }
-      }
+      const realizaceNaUlozeni = realizaceList.filter(
+        (item, index) => index === 0 || !isRealizaceEffectivelyEmpty(item)
+      );
+      const realizacePayload = realizaceNaUlozeni.map((item, index) => {
+        const ledWidthNumber = item.ledWidth ? Number(item.ledWidth.replace(",", ".")) : null;
+        const ledHeightNumber = item.ledHeight ? Number(item.ledHeight.replace(",", ".")) : null;
 
-      if (!mistoId && misto.trim() && mistoLat != null && mistoLng != null) {
-        const { data: mistoData, error: mistoError } = await supabase
-          .from("mista_konani")
-          .insert({
-            klient_id: klientId,
-            nazev: misto,
-            adresa_text: misto,
-            lat: mistoLat,
-            lng: mistoLng,
-            radius_m: mistoGpsRadius,
-          })
-          .select("misto_id")
-          .single();
+        return {
+          nazev: item.nazev || `Stage ${index + 1}`,
+          poradi: index + 1,
+          stage_typ: item.stagePreset || null,
+          stage_sirka: item.stageWidth ? Number(item.stageWidth.replace(",", ".")) : null,
+          stage_hloubka: item.stageDepth ? Number(item.stageDepth.replace(",", ".")) : null,
+          sound_typ: item.soundPreset || null,
+          lights_typ: item.lightsPreset || null,
+          led_typ: item.ledKind || null,
+          led_sirka: ledWidthNumber,
+          led_vyska: ledHeightNumber,
+          led_rohy: item.ledKind === "p6_4_mantel" ? false : item.ledRohy,
+          kamery: item.kamery,
+          dron: item.dron,
+        };
+      });
+      const technikaPayload = aggregatedPlanRows.map((row) => ({
+        skladova_polozka_id: row.skladova_polozka_id,
+        mnozstvi: row.vysledneMnozstvi,
+      }));
 
-        if (mistoError) {
-          showError(mistoError.message);
-          setUkladam(false);
-          return;
-        }
-
-        mistoId = mistoData.misto_id;
-        createdMistoId = mistoData.misto_id;
-      }
-
-      const { data, error } = await supabase
-        .from("zakazky")
-        .insert({
+      const { data: zakazkaId, error } = await supabase
+        .rpc("create_zakazka_atomic", {
+          misto_payload: mistoPayload,
+          realizace_payload: realizacePayload,
+          technika_payload: technikaPayload,
+          zakazka_payload: {
           cislo_zakazky: cisloZakazky,
           stav_zakazky_id: "7a0e168f-216f-40bd-b33e-3f1f517620da",
           nazev,
@@ -1329,80 +1337,18 @@ export default function NovaZakazkaPage() {
           dron: prvniRealizace.dron,
 
           poznamka: finalPoznamka || null,
-        })
-        .select("zakazka_id")
-        .single();
+          },
+        });
 
       if (error) {
-        await cleanupPartialCreate(null);
         showError(error.message);
         setUkladam(false);
         return;
       }
-
-      const zakazkaId = data.zakazka_id;
-
-      await supabase
-        .from("zakazka_realizace")
-        .delete()
-        .eq("zakazka_id", zakazkaId);
-
-      const realizaceNaUlozeni = realizaceList.filter(
-        (item, index) => index === 0 || !isRealizaceEffectivelyEmpty(item)
-      );
-
-      if (realizaceNaUlozeni.length > 0) {
-        const payload = realizaceNaUlozeni.map((item, index) => {
-          const ledWidthNumber = item.ledWidth ? Number(item.ledWidth.replace(",", ".")) : null;
-          const ledHeightNumber = item.ledHeight ? Number(item.ledHeight.replace(",", ".")) : null;
-
-          return {
-            zakazka_id: zakazkaId,
-            nazev: item.nazev || `Stage ${index + 1}`,
-            poradi: index + 1,
-            stage_typ: item.stagePreset || null,
-            stage_sirka: item.stageWidth ? Number(item.stageWidth.replace(",", ".")) : null,
-            stage_hloubka: item.stageDepth ? Number(item.stageDepth.replace(",", ".")) : null,
-            sound_typ: item.soundPreset || null,
-            lights_typ: item.lightsPreset || null,
-            led_typ: item.ledKind || null,
-            led_sirka: ledWidthNumber,
-            led_vyska: ledHeightNumber,
-            led_rohy: item.ledKind === "p6_4_mantel" ? false : item.ledRohy,
-            kamery: item.kamery,
-            dron: item.dron,
-          };
-        });
-
-        const { error: realizaceError } = await supabase
-          .from("zakazka_realizace")
-          .insert(payload);
-
-        if (realizaceError) {
-          await cleanupPartialCreate(zakazkaId);
-          showError(realizaceError.message);
-          setUkladam(false);
-          return;
-        }
-      }
-
-      if (aggregatedPlanRows.length > 0) {
-        const technikaPayload = aggregatedPlanRows.map((row) => ({
-          zakazka_id: zakazkaId,
-          skladova_polozka_id: row.skladova_polozka_id,
-          mnozstvi: row.vysledneMnozstvi,
-        }));
-
-        const { error: technikaError } = await supabase
-          .from("technika_na_zakazce")
-          .insert(technikaPayload);
-
-        if (technikaError) {
-          await cleanupPartialCreate(zakazkaId);
-          showError(technikaError.message);
-          setUkladam(false);
-          return;
-        }
+      if (!zakazkaId) {
+        showError("Zakázka nebyla vytvořena. Chybí ID nové zakázky.");
+        setUkladam(false);
+        return;
       }
 
       router.push(`/zakazky/${zakazkaId}`);

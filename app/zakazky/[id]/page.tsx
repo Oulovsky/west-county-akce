@@ -3280,6 +3280,18 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
     (item) =>
       item.damagedPieces + item.blockedPieces + item.repairPieces + item.pendingCheckPieces + item.retiredPieces > 0
   );
+  const overrideEvents = historyRows.filter((row) => {
+    const type = String(row.event_type ?? "");
+    return type.includes("override") || type.includes("collision");
+  });
+  const hasTechnikaAvailabilityOverride = overrideEvents.some((row) => {
+    const type = String(row.event_type ?? "");
+    return type.includes("stock_capacity") || type.includes("technika");
+  });
+  const hasProblemPieceOverride = overrideEvents.some((row) => {
+    const type = String(row.event_type ?? "");
+    return type.includes("stock_problem_piece") || type.includes("loaded_override");
+  });
   const approvedWorkflowStates = ["schvaleno_klientem", "priprava", "v_realizaci", "dokonceno", "fakturovano", "archiv"];
   const isApprovedWorkflow = approvedWorkflowStates.includes(String(data.workflow_stav));
   const logisticsReady = Boolean(data.odjezd_ze_skladu || data.sraz_na_miste);
@@ -3300,10 +3312,12 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
     },
     {
       label: "Dostupnost techniky",
-      status: availabilityCollisions.length > 0 ? "warning" : "ok",
+      status: availabilityCollisions.length > 0 && !hasTechnikaAvailabilityOverride ? "danger" : availabilityCollisions.length > 0 ? "warning" : "ok",
       detail:
         availabilityCollisions.length > 0
-          ? `${availabilityCollisions.length} položek má kapacitní kolizi. Zkontrolujte plán techniky a override důvody.`
+          ? hasTechnikaAvailabilityOverride
+            ? `${availabilityCollisions.length} položek má kapacitní kolizi, ale v historii je evidovaný override. Zkontrolujte, že důvod stále platí.`
+            : `${availabilityCollisions.length} položek má kapacitní kolizi bez evidovaného override.`
           : "Kapacitní dostupnost bez kolize podle aktuální serverové kontroly.",
       href: `/zakazky/${id}/technika`,
     },
@@ -3335,10 +3349,12 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
     },
     {
       label: "Problémové kusy",
-      status: problematicAvailabilityItems.length > 0 ? "warning" : "ok",
+      status: problematicAvailabilityItems.length > 0 && !hasProblemPieceOverride ? "danger" : problematicAvailabilityItems.length > 0 ? "warning" : "ok",
       detail:
         problematicAvailabilityItems.length > 0
-          ? `${problematicAvailabilityItems.length} položek má poškozené, blokované nebo servisní kusy. Při scanu může být nutný override.`
+          ? hasProblemPieceOverride
+            ? `${problematicAvailabilityItems.length} položek má problémové kusy, ale v historii je evidovaný override naložení.`
+            : `${problematicAvailabilityItems.length} položek má problémové kusy bez evidovaného override.`
           : "Bez problémových kusů v plánu podle aktuální kontroly.",
       href: `/zakazky/${id}/technika`,
     },

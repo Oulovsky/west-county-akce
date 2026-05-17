@@ -13,6 +13,34 @@ export type CreateNotificationInput = {
   dedupeKey?: string | null;
 };
 
+export type NotificationRunStats = {
+  created: number;
+  skipped: number;
+  failed: number;
+};
+
+export function emptyNotificationRunStats(): NotificationRunStats {
+  return { created: 0, skipped: 0, failed: 0 };
+}
+
+export function mergeNotificationRunStats(
+  target: NotificationRunStats,
+  source: NotificationRunStats
+) {
+  target.created += source.created;
+  target.skipped += source.skipped;
+  target.failed += source.failed;
+  return target;
+}
+
+export function statsFromNotificationResult(result: Awaited<ReturnType<typeof createNotification>>) {
+  const stats = emptyNotificationRunStats();
+  if (!result.ok) stats.failed += 1;
+  else if (result.skipped) stats.skipped += 1;
+  else stats.created += 1;
+  return stats;
+}
+
 export function getNotificationPriorityLabel(priority?: string | null) {
   if (priority === "critical") return "Kritické";
   if (priority === "warning") return "Warning";
@@ -73,14 +101,17 @@ export async function createNotificationsForUsers(
     dedupeKeyPrefix?: string | null;
   }
 ) {
+  const stats = emptyNotificationRunStats();
   const uniqueUserIds = [...new Set(userIds.filter(Boolean).map(String))];
   for (const userId of uniqueUserIds) {
-    await createNotification(supabase, {
+    const result = await createNotification(supabase, {
       ...input,
       userId,
       dedupeKey: input.dedupeKeyPrefix ? `${input.dedupeKeyPrefix}:${userId}` : null,
     });
+    mergeNotificationRunStats(stats, statsFromNotificationResult(result));
   }
+  return stats;
 }
 
 export async function getUsersByRoles(supabase: any, roles: string[]) {
@@ -106,5 +137,5 @@ export async function createNotificationsForRoles(
   }
 ) {
   const userIds = await getUsersByRoles(supabase, roles);
-  await createNotificationsForUsers(supabase, userIds, input);
+  return createNotificationsForUsers(supabase, userIds, input);
 }

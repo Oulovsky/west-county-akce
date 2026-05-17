@@ -193,7 +193,21 @@ export async function sendInvoiceEmailAction(
     const headersList = await headers();
     const baseUrl = getPublicBaseUrl(headersList);
     const pdfUrl = `${baseUrl}${buildInvoiceRenderPath(invoiceId)}`;
-    const pdf = await renderInvoicePdf({ url: pdfUrl });
+    let pdf: Uint8Array | null = null;
+    let pdfFallbackReason: string | null = null;
+    try {
+      pdf = await renderInvoicePdf({ url: pdfUrl });
+    } catch (error) {
+      pdfFallbackReason = getErrorMessage(error);
+      await logZakazkaHistory(supabase, {
+        zakazkaId,
+        eventType: "invoice_pdf_fallback",
+        actorId: user.id,
+        title: `PDF faktury ${invoiceRaw.cislo_dokladu} se nepodařilo vygenerovat.`,
+        detail: pdfFallbackReason,
+        metadata: { invoice_id: invoiceId, fallback_url: pdfUrl },
+      });
+    }
 
     const resend = new Resend(resendApiKey);
     const { error: resendError } = await resend.emails.send({
@@ -204,15 +218,21 @@ export async function sendInvoiceEmailAction(
         <div style="font-family:Arial,sans-serif;line-height:1.5;color:#0f172a;max-width:640px;margin:0 auto;padding:24px">
           <h1 style="font-size:24px;margin:0 0 16px">Faktura ${invoiceRaw.cislo_dokladu}</h1>
           <p>Dobrý den,</p>
-          <p>v příloze posíláme doklad k zakázce.</p>
+          ${
+            pdf
+              ? "<p>v příloze posíláme doklad k zakázce.</p>"
+              : `<p>PDF přílohu se teď nepodařilo vygenerovat, doklad ale můžete otevřít přes bezpečný odkaz:</p><p><a href="${pdfUrl}">Otevřít fakturu</a></p>`
+          }
         </div>
       `,
-      attachments: [
-        {
-          filename: `faktura-${invoiceRaw.cislo_dokladu}.pdf`,
-          content: Buffer.from(pdf).toString("base64"),
-        },
-      ],
+      attachments: pdf
+        ? [
+            {
+              filename: `faktura-${invoiceRaw.cislo_dokladu}.pdf`,
+              content: Buffer.from(pdf).toString("base64"),
+            },
+          ]
+        : undefined,
     });
 
     if (resendError) throw new Error(resendError.message);
@@ -230,8 +250,8 @@ export async function sendInvoiceEmailAction(
       eventType: "invoice_sent",
       actorId: user.id,
       title: `Faktura ${invoiceRaw.cislo_dokladu} byla odeslána klientovi.`,
-      detail: emailTo,
-      metadata: { invoice_id: invoiceId, email_to: emailTo },
+      detail: pdfFallbackReason ? `${emailTo} · PDF fallback: ${pdfFallbackReason}` : emailTo,
+      metadata: { invoice_id: invoiceId, email_to: emailTo, pdf_fallback: Boolean(pdfFallbackReason) },
     });
 
     await createNotificationsForRoles(supabase, ["admin", "sef"], {

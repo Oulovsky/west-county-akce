@@ -2,6 +2,9 @@ import {
   createNotification,
   createNotificationsForRoles,
   createNotificationsForUsers,
+  emptyNotificationRunStats,
+  mergeNotificationRunStats,
+  statsFromNotificationResult,
 } from "@/lib/notifications";
 
 function inRange(value: string | null | undefined, from: Date, to: Date) {
@@ -39,11 +42,14 @@ function zakazkaStart(row: any) {
 export async function runReminderEngine(supabase: any, nowInput = new Date()) {
   const now = nowInput;
   const result = {
+    notifications: emptyNotificationRunStats(),
     tomorrowEvents: 0,
     departureSoon: 0,
     openAttendance: 0,
     unpaidWork: 0,
     pendingApprovals: 0,
+    clientApprovals: 0,
+    longRepairs: 0,
     overdueInvoices: 0,
   };
 
@@ -53,7 +59,7 @@ export async function runReminderEngine(supabase: any, nowInput = new Date()) {
 
   const { data: zakazky } = await supabase
     .from("zakazky")
-    .select("zakazka_id, cislo_zakazky, nazev, datum_od, akce_od, odjezd_ze_skladu, zrusena, workflow_stav, workflow_change_pending")
+    .select("zakazka_id, cislo_zakazky, nazev, datum_od, akce_od, odjezd_ze_skladu, zrusena, workflow_stav, workflow_change_pending, client_approval_status")
     .neq("workflow_stav", "zruseno");
 
   for (const zakazka of zakazky ?? []) {
@@ -67,7 +73,7 @@ export async function runReminderEngine(supabase: any, nowInput = new Date()) {
         .select("user_id")
         .eq("zakazka_id", zakazka.zakazka_id);
 
-      await createNotificationsForUsers(
+      mergeNotificationRunStats(result.notifications, await createNotificationsForUsers(
         supabase,
         (assignments ?? []).map((row: { user_id: string | null }) => row.user_id),
         {
@@ -79,12 +85,12 @@ export async function runReminderEngine(supabase: any, nowInput = new Date()) {
           actionUrl: `/moje/zakazky/${zakazka.zakazka_id}`,
           dedupeKeyPrefix: `reminder:tomorrow:${zakazka.zakazka_id}:${tomorrowStart.toISOString().slice(0, 10)}`,
         }
-      );
+      ));
       result.tomorrowEvents += 1;
     }
 
     if (inRange(zakazka.odjezd_ze_skladu, now, addHours(now, 2))) {
-      await createNotificationsForRoles(supabase, ["admin", "sef", "skladnik"], {
+      mergeNotificationRunStats(result.notifications, await createNotificationsForRoles(supabase, ["admin", "sef", "skladnik"], {
         type: "zakazka_departure_soon",
         priority: "critical",
         title: "Odjezd/nakládka do 2 hodin",
@@ -92,12 +98,12 @@ export async function runReminderEngine(supabase: any, nowInput = new Date()) {
         relatedZakazkaId: zakazka.zakazka_id,
         actionUrl: `/zakazky/${zakazka.zakazka_id}/nakladka`,
         dedupeKeyPrefix: `reminder:departure:${zakazka.zakazka_id}:${new Date(zakazka.odjezd_ze_skladu).toISOString().slice(0, 13)}`,
-      });
+      }));
       result.departureSoon += 1;
     }
 
     if (zakazka.workflow_change_pending) {
-      await createNotificationsForRoles(supabase, ["admin", "sef"], {
+      mergeNotificationRunStats(result.notifications, await createNotificationsForRoles(supabase, ["admin", "sef"], {
         type: "zakazka_pending_reapproval",
         priority: "warning",
         title: "Zakázka čeká na znovuschválení změn",
@@ -105,8 +111,21 @@ export async function runReminderEngine(supabase: any, nowInput = new Date()) {
         relatedZakazkaId: zakazka.zakazka_id,
         actionUrl: `/zakazky/${zakazka.zakazka_id}`,
         dedupeKeyPrefix: `reminder:pending-reapproval:${zakazka.zakazka_id}`,
-      });
+      }));
       result.pendingApprovals += 1;
+    }
+
+    if (zakazka.workflow_stav === "cekani_na_schvaleni" || zakazka.client_approval_status === "sent_for_approval") {
+      mergeNotificationRunStats(result.notifications, await createNotificationsForRoles(supabase, ["admin", "sef"], {
+        type: "zakazka_waiting_client_approval",
+        priority: "warning",
+        title: "Zakázka čeká na schválení klientem",
+        message: title,
+        relatedZakazkaId: zakazka.zakazka_id,
+        actionUrl: `/zakazky/${zakazka.zakazka_id}#schvaleni-klienta`,
+        dedupeKeyPrefix: `reminder:client-approval:${zakazka.zakazka_id}`,
+      }));
+      result.clientApprovals += 1;
     }
   }
 
@@ -118,7 +137,7 @@ export async function runReminderEngine(supabase: any, nowInput = new Date()) {
     .lte("checkin_at", openAttendanceLimit);
 
   for (const row of openAttendance ?? []) {
-    await createNotification(supabase, {
+    mergeNotificationRunStats(result.notifications, statsFromNotificationResult(await createNotification(supabase, {
       userId: row.user_id,
       type: "attendance_open_too_long",
       priority: "warning",
@@ -127,8 +146,8 @@ export async function runReminderEngine(supabase: any, nowInput = new Date()) {
       relatedZakazkaId: row.zakazka_id,
       actionUrl: `/moje/zakazky/${row.zakazka_id}`,
       dedupeKey: `reminder:open-attendance:${row.id}`,
-    });
-    await createNotificationsForRoles(supabase, ["admin", "sef"], {
+    })));
+    mergeNotificationRunStats(result.notifications, await createNotificationsForRoles(supabase, ["admin", "sef"], {
       type: "attendance_open_too_long_admin",
       priority: "warning",
       title: "Neukončená docházka zaměstnance",
@@ -136,7 +155,7 @@ export async function runReminderEngine(supabase: any, nowInput = new Date()) {
       relatedZakazkaId: row.zakazka_id,
       actionUrl: `/zakazky/${row.zakazka_id}`,
       dedupeKeyPrefix: `reminder:open-attendance-admin:${row.id}`,
-    });
+    }));
     result.openAttendance += 1;
   }
 
@@ -148,7 +167,7 @@ export async function runReminderEngine(supabase: any, nowInput = new Date()) {
     .lte("checkout_at", unpaidLimit);
 
   for (const row of unpaid ?? []) {
-    await createNotificationsForRoles(supabase, ["admin", "sef"], {
+    mergeNotificationRunStats(result.notifications, await createNotificationsForRoles(supabase, ["admin", "sef"], {
       type: "attendance_payment_waiting_long",
       priority: "warning",
       title: "Práce čeká dlouho na proplacení",
@@ -156,8 +175,29 @@ export async function runReminderEngine(supabase: any, nowInput = new Date()) {
       relatedZakazkaId: row.zakazka_id,
       actionUrl: "/admin/proplaceni",
       dedupeKeyPrefix: `reminder:unpaid-work:${row.id}`,
-    });
+    }));
     result.unpaidWork += 1;
+  }
+
+  const longRepairLimit = addDays(now, -14).toISOString();
+  const { data: longRepairPieces } = await supabase
+    .from("sklad_polozky_kusy")
+    .select("kus_id, skladova_polozka_id, stav, servisni_stav_changed_at, skladove_polozky(nazev)")
+    .eq("stav", "v_oprave")
+    .lte("servisni_stav_changed_at", longRepairLimit);
+
+  for (const piece of longRepairPieces ?? []) {
+    const item = Array.isArray(piece.skladove_polozky) ? piece.skladove_polozky[0] : piece.skladove_polozky;
+    mergeNotificationRunStats(result.notifications, await createNotificationsForRoles(supabase, ["admin", "sef", "skladnik"], {
+      type: "stock_piece_repair_too_long",
+      priority: "warning",
+      title: "Kus je dlouho v opravě",
+      message: item?.nazev ? `${item.nazev} je v opravě déle než 14 dní.` : "Kus skladu je v opravě déle než 14 dní.",
+      relatedKusId: piece.kus_id,
+      actionUrl: `/sklad/kus/${piece.kus_id}`,
+      dedupeKeyPrefix: `reminder:long-repair:${piece.kus_id}`,
+    }));
+    result.longRepairs += 1;
   }
 
   const { data: overdueInvoices } = await supabase
@@ -165,10 +205,19 @@ export async function runReminderEngine(supabase: any, nowInput = new Date()) {
     .select("id, zakazka_id, cislo_dokladu, splatnost_at, stav, payment_status")
     .lt("splatnost_at", now.toISOString())
     .neq("stav", "stornovano")
-    .neq("payment_status", "uhrazeno");
+    .or("payment_status.is.null,payment_status.neq.uhrazeno");
 
   for (const invoice of overdueInvoices ?? []) {
-    await createNotificationsForRoles(supabase, ["admin", "sef"], {
+    if (invoice.payment_status !== "po_splatnosti") {
+      await supabase
+        .from("zakazka_faktury")
+        .update({ payment_status: "po_splatnosti", updated_at: now.toISOString() })
+        .eq("id", invoice.id)
+        .neq("payment_status", "uhrazeno")
+        .neq("stav", "stornovano");
+    }
+
+    mergeNotificationRunStats(result.notifications, await createNotificationsForRoles(supabase, ["admin", "sef"], {
       type: "invoice_overdue_placeholder",
       priority: "warning",
       title: "Faktura po splatnosti",
@@ -177,7 +226,7 @@ export async function runReminderEngine(supabase: any, nowInput = new Date()) {
       relatedFakturaId: invoice.id,
       actionUrl: `/zakazky/${invoice.zakazka_id}`,
       dedupeKeyPrefix: `reminder:invoice-overdue:${invoice.id}`,
-    });
+    }));
     result.overdueInvoices += 1;
   }
 

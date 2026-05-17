@@ -10,6 +10,7 @@ import UsersClient from "./UsersClient";
 import AuditLog from "./AuditLog";
 import FakturacniFirmyClient from "./FakturacniFirmyClient";
 import AccountantConfigForm from "./AccountantConfigForm";
+import { ReminderRunClient } from "./reminders/ReminderRunClient";
 
 function AdminSection({
   title,
@@ -133,16 +134,18 @@ export default async function AdminPage() {
         </div>
       </AdminSection>
 
-      <AdminSection title="Notifikace a remindery">
-        <div className="space-y-3">
+      <AdminSection title="Notifikace a kontroly">
+        <div className="space-y-4">
           <p className="text-sm text-slate-400">
-            Manuální spuštění reminder enginu pro zítřejší akce, odjezdy, docházku a čekající proplacení.
+            Ruční provozní kontroly pro zítřejší akce, odjezdy, docházku, proplacení,
+            schválení klientem, servis a faktury po splatnosti.
           </p>
+          <ReminderRunClient />
           <Link
             href="/admin/reminders"
-            className="inline-flex rounded-xl border border-blue-500/40 bg-blue-600/20 px-4 py-3 text-sm font-bold text-blue-100 transition hover:bg-blue-600/30"
+            className="inline-flex rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-bold text-slate-200 transition hover:bg-slate-800"
           >
-            Otevřít reminder engine
+            Pokročilé
           </Link>
         </div>
       </AdminSection>
