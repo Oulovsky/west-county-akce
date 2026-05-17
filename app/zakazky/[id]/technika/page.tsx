@@ -4,6 +4,7 @@ import { getRolePermissions } from "@/lib/roles";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { markZakazkaCriticalChangeIfApproved } from "@/lib/zakazka-critical-changes";
 import { getTechnikaAvailability } from "@/lib/technika-availability";
+import { createNotificationsForRoles } from "@/lib/notifications";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -355,6 +356,15 @@ export default async function TechnikaZakazkyPage({ params }: PageProps) {
           na_zakazce: radek.na_zakazce,
           max_na_teto_zakazce: radek.max_na_teto_zakazce,
         },
+      });
+      await createNotificationsForRoles(supabase, ["admin", "sef", "skladnik"], {
+        type: "stock_capacity_override",
+        priority: "warning",
+        title: "Override dostupnosti techniky",
+        message: overrideReason,
+        relatedZakazkaId: zakazkaId,
+        actionUrl: `/zakazky/${zakazkaId}/technika`,
+        dedupeKeyPrefix: `stock-plan-override:${zakazkaId}:${skladovaPolozkaId}:${Date.now()}`,
       });
     }
 

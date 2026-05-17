@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getPaymentAmount, getApprovedMinutes, formatMoneyCzk } from "@/lib/payments";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { createClient } from "@/lib/supabase/server";
+import { createNotification } from "@/lib/notifications";
 
 async function requirePaymentManager() {
   const supabase = await createClient();
@@ -122,6 +123,17 @@ export async function approveTravelReimbursementAction(formData: FormData) {
     metadata: { travel_id: travelId, target_user_id: travel.user_id },
   });
 
+  await createNotification(supabase, {
+    userId: travel.user_id,
+    type: "travel_reimbursement_approved",
+    priority: "info",
+    title: "Cestovní náhrada byla schválena",
+    message: formatMoneyCzk(Number(travel.castka ?? 0)),
+    relatedZakazkaId: travel.zakazka_id,
+    actionUrl: "/moje",
+    dedupeKey: `travel-approved:${travelId}`,
+  });
+
   revalidatePath("/admin/proplaceni");
   revalidatePath("/moje");
   revalidatePath(`/zakazky/${travel.zakazka_id}`);
@@ -161,6 +173,17 @@ export async function rejectTravelReimbursementAction(formData: FormData) {
     title: "Cestovní náhrada byla zamítnuta.",
     detail: reason,
     metadata: { travel_id: travelId, target_user_id: travel.user_id },
+  });
+
+  await createNotification(supabase, {
+    userId: travel.user_id,
+    type: "travel_reimbursement_rejected",
+    priority: "warning",
+    title: "Cestovní náhrada byla zamítnuta",
+    message: reason,
+    relatedZakazkaId: travel.zakazka_id,
+    actionUrl: "/moje",
+    dedupeKey: `travel-rejected:${travelId}`,
   });
 
   revalidatePath("/admin/proplaceni");
@@ -205,6 +228,17 @@ export async function markTravelReimbursementPaidAction(formData: FormData) {
     title: "Cestovní náhrada byla označena jako proplacená.",
     detail: formatMoneyCzk(Number(travel.castka ?? 0)),
     metadata: { travel_id: travelId, target_user_id: travel.user_id },
+  });
+
+  await createNotification(supabase, {
+    userId: travel.user_id,
+    type: "travel_reimbursement_paid",
+    priority: "info",
+    title: "Cestovní náhrada byla proplacena",
+    message: formatMoneyCzk(Number(travel.castka ?? 0)),
+    relatedZakazkaId: travel.zakazka_id,
+    actionUrl: "/moje",
+    dedupeKey: `travel-paid:${travelId}`,
   });
 
   revalidatePath("/admin/proplaceni");

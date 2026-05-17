@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { DEFAULT_KM_RATE, getTransportTypeLabel, normalizeTransportType } from "@/lib/transport";
+import { createNotificationsForRoles } from "@/lib/notifications";
 
 function getString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -230,6 +231,16 @@ async function maybeCreateTravelReimbursement({
     title: "Zadána cestovní náhrada.",
     detail: `${km} km × ${sazba} Kč/km`,
     metadata: { transport_id: transportId, target_user_id: userId, km, sazba_za_km: sazba },
+  });
+
+  await createNotificationsForRoles(supabase, ["admin", "sef"], {
+    type: "travel_reimbursement_pending",
+    priority: "warning",
+    title: "Cestovní náhrada čeká na schválení",
+    message: `${km} km × ${sazba} Kč/km`,
+    relatedZakazkaId: zakazkaId,
+    actionUrl: "/admin/proplaceni",
+    dedupeKeyPrefix: `travel-reimbursement-pending:${zakazkaId}:${userId}:${Date.now()}`,
   });
 }
 

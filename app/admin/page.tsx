@@ -112,6 +112,20 @@ export default async function AdminPage() {
         </div>
       </AdminSection>
 
+      <AdminSection title="Notifikace a remindery">
+        <div className="space-y-3">
+          <p className="text-sm text-slate-400">
+            Manuální spuštění reminder enginu pro zítřejší akce, odjezdy, docházku a čekající proplacení.
+          </p>
+          <Link
+            href="/admin/reminders"
+            className="inline-flex rounded-xl border border-blue-500/40 bg-blue-600/20 px-4 py-3 text-sm font-bold text-blue-100 transition hover:bg-blue-600/30"
+          >
+            Otevřít reminder engine
+          </Link>
+        </div>
+      </AdminSection>
+
       <AdminSection title="Fakturační firmy">
         <FakturacniFirmyClient firmy={fakturacniFirmy} />
       </AdminSection>

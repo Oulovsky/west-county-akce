@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { markZakazkaCriticalChangeIfApproved } from "@/lib/zakazka-critical-changes";
+import { createNotificationsForRoles } from "@/lib/notifications";
 
 async function getCurrentUserId() {
   const supabase = await createClient();
@@ -90,6 +91,17 @@ export async function declineAssignmentAction(assignmentId: string, reason: stri
       metadata: { assignment_id: assignmentId, declined_reason: trimmedReason },
     });
     if (!changeResult.ok) throw new Error(changeResult.error);
+
+    await createNotificationsForRoles(supabase, ["admin", "sef"], {
+      type: "assignment_declined",
+      priority: "critical",
+      title: "Člověk odmítl práci",
+      message: trimmedReason,
+      relatedZakazkaId: assignment.zakazka_id,
+      actionUrl: `/zakazky/${assignment.zakazka_id}/people`,
+      dedupeKeyPrefix: `assignment-declined:${assignmentId}`,
+    });
+
     revalidatePath(`/zakazky/${assignment.zakazka_id}`);
   }
 

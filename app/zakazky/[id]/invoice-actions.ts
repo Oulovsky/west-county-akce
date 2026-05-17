@@ -8,6 +8,7 @@ import { buildCurrentInvoiceData } from "@/lib/invoice-data";
 import { renderInvoicePdf } from "@/lib/invoice-pdf";
 import { buildInvoiceRenderPath } from "@/lib/invoice-render-token";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
+import { createNotificationsForRoles } from "@/lib/notifications";
 import {
   getWorkflowStatusLabel,
   normalizeWorkflowStatus,
@@ -129,6 +130,17 @@ export async function issueInvoiceAction(zakazkaId: string): Promise<ActionResul
       metadata: { invoice_id: invoiceRaw.id, cislo_dokladu: documentNumber },
     });
 
+    await createNotificationsForRoles(supabase, ["admin", "sef"], {
+      type: "invoice_issued",
+      priority: "info",
+      title: `Faktura ${documentNumber} byla vystavena`,
+      message: `Konečná cena: ${new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(invoiceData.pricing.finalPrice)}.`,
+      relatedZakazkaId: zakazkaId,
+      relatedFakturaId: invoiceRaw.id,
+      actionUrl: `/zakazky/${zakazkaId}`,
+      dedupeKeyPrefix: `invoice-issued:${invoiceRaw.id}`,
+    });
+
     revalidatePath(`/zakazky/${zakazkaId}`);
     revalidatePath("/zakazky");
     return { ok: true };
@@ -203,6 +215,17 @@ export async function sendInvoiceEmailAction(
       title: `Faktura ${invoiceRaw.cislo_dokladu} byla odeslána klientovi.`,
       detail: emailTo,
       metadata: { invoice_id: invoiceId, email_to: emailTo },
+    });
+
+    await createNotificationsForRoles(supabase, ["admin", "sef"], {
+      type: "invoice_sent",
+      priority: "info",
+      title: `Faktura ${invoiceRaw.cislo_dokladu} byla odeslána`,
+      message: emailTo,
+      relatedZakazkaId: zakazkaId,
+      relatedFakturaId: invoiceId,
+      actionUrl: `/zakazky/${zakazkaId}`,
+      dedupeKeyPrefix: `invoice-sent:${invoiceId}`,
     });
 
     revalidatePath(`/zakazky/${zakazkaId}`);

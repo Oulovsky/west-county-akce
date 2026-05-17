@@ -5,6 +5,7 @@ import { SKLAD_TABLE } from "@/lib/sklad/constants";
 import { insertSkladKusHistorie } from "@/lib/sklad/kusHistorie";
 import type { SkladKusHistorieTypAkce } from "@/lib/sklad/types";
 import { createClient } from "@/lib/supabase/server";
+import { createNotificationsForRoles } from "@/lib/notifications";
 
 type ServiceAction = "damage" | "block" | "repair" | "return_service" | "checked" | "retire";
 
@@ -98,6 +99,18 @@ export async function updateSkladKusServiceStateAction(formData: FormData) {
     poznamka: note ? `${config.defaultNote} ${note}` : config.defaultNote,
   });
 
+  if (["damage", "block", "repair", "return_service", "retire"].includes(action)) {
+    await createNotificationsForRoles(supabase, ["admin", "sef", "skladnik"], {
+      type: "stock_piece_problem",
+      priority: action === "retire" || action === "block" ? "critical" : "warning",
+      title: "Změna servisního stavu kusu",
+      message: note ? `${config.defaultNote} ${note}` : config.defaultNote,
+      relatedKusId: kusId,
+      actionUrl: `/sklad/kus/${kusId}`,
+      dedupeKeyPrefix: `stock-service:${kusId}:${config.stav}:${Date.now()}`,
+    });
+  }
+
   revalidatePath(`/sklad/kus/${kusId}`);
   revalidatePath(`/sklad/${kus.skladova_polozka_id}`);
   revalidatePath("/sklad/sprava");
@@ -144,6 +157,16 @@ export async function reportSkladKusDamageAction(formData: FormData) {
     kusId,
     typAkce: blocksUse ? "blokovano" : "poskozeno",
     poznamka: blocksUse ? `Nahlášeno blokující poškození: ${note}` : `Nahlášeno poškození: ${note}`,
+  });
+
+  await createNotificationsForRoles(supabase, ["admin", "sef", "skladnik"], {
+    type: "stock_piece_damage_reported",
+    priority: blocksUse ? "critical" : "warning",
+    title: "Nahlášen problémový kus",
+    message: note,
+    relatedKusId: kusId,
+    actionUrl: `/sklad/kus/${kusId}`,
+    dedupeKeyPrefix: `stock-damage:${kusId}:${Date.now()}`,
   });
 
   revalidatePath(`/sklad/kus/${kusId}`);

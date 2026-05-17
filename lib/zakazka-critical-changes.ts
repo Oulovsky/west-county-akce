@@ -1,4 +1,5 @@
 import { logZakazkaHistory } from "@/lib/zakazka-history";
+import { createNotificationsForRoles } from "@/lib/notifications";
 import {
   normalizeWorkflowStatus,
   type ZakazkaWorkflowStatus,
@@ -104,6 +105,16 @@ export async function markZakazkaCriticalChangeIfApproved(
       previous_change_pending: Boolean(zakazka?.workflow_change_pending),
       ...(metadata ?? {}),
     },
+  });
+
+  await createNotificationsForRoles(supabase, ["admin", "sef"], {
+    type: "zakazka_changed_after_approval",
+    priority: "critical",
+    title: "Zakázka změněna po schválení",
+    message: detail ?? `Kritické změny: ${summary}. Vyžaduje nové potvrzení klientem.`,
+    relatedZakazkaId: zakazkaId,
+    actionUrl: `/zakazky/${zakazkaId}`,
+    dedupeKeyPrefix: `workflow-critical-change:${zakazkaId}:${now}`,
   });
 
   return { ok: true, marked: true };

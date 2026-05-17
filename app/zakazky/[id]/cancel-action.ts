@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
+import { createNotificationsForRoles, createNotificationsForUsers } from "@/lib/notifications";
 import { setZakazkaWorkflowStatus } from "@/lib/zakazka-workflow";
 import { SKLAD_TABLE } from "@/lib/sklad/constants";
 import { insertSkladKusHistorie } from "@/lib/sklad/kusHistorie";
@@ -141,6 +142,35 @@ export async function cancelZakazkaAction(formData: FormData) {
       invoice_number: invoice?.cislo_dokladu ?? null,
       invoice_override_reason: invoiceOverrideReason,
     },
+  });
+
+  const { data: people } = await supabase
+    .from("zakazka_lide")
+    .select("user_id")
+    .eq("zakazka_id", zakazkaId);
+
+  await createNotificationsForUsers(
+    supabase,
+    (people ?? []).map((row: { user_id: string | null }) => row.user_id),
+    {
+      type: "zakazka_cancelled",
+      priority: "critical",
+      title: "Zakázka byla zrušena",
+      message: reason,
+      relatedZakazkaId: zakazkaId,
+      actionUrl: `/moje/zakazky/${zakazkaId}`,
+      dedupeKeyPrefix: `zakazka-cancelled:${zakazkaId}`,
+    }
+  );
+
+  await createNotificationsForRoles(supabase, ["admin", "sef", "skladnik"], {
+    type: "zakazka_cancelled_admin",
+    priority: "critical",
+    title: "Zakázka byla zrušena",
+    message: reason,
+    relatedZakazkaId: zakazkaId,
+    actionUrl: `/zakazky/${zakazkaId}`,
+    dedupeKeyPrefix: `zakazka-cancelled-admin:${zakazkaId}`,
   });
 
   revalidatePath(`/zakazky/${zakazkaId}`);

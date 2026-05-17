@@ -4,6 +4,7 @@ import { requireSession } from "@/lib/auth/require-session";
 import { createClient } from "@/lib/supabase/server";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { markZakazkaCriticalChangeIfApproved } from "@/lib/zakazka-critical-changes";
+import { createNotification, createNotificationsForRoles } from "@/lib/notifications";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -484,6 +485,17 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       },
     });
 
+    await createNotification(supabase, {
+      userId,
+      type: "assignment_created",
+      priority: "info",
+      title: "Nová práce na zakázce",
+      message: `Byl(a) jste přiřazen(a) do fáze ${getTypBlokuLabel(typBloku)}.`,
+      relatedZakazkaId: zakazkaId,
+      actionUrl: `/moje/zakazky/${zakazkaId}`,
+      dedupeKey: `assignment-created:${insertResult.data.id}:${userId}`,
+    });
+
     if (hasConflict) {
       await logZakazkaHistory(supabase, {
         zakazkaId,
@@ -498,6 +510,15 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
           datum_od: finalFrom,
           datum_do: finalTo,
         },
+      });
+      await createNotificationsForRoles(supabase, ["admin", "sef"], {
+        type: "people_conflict_override",
+        priority: "warning",
+        title: "Kolize lidí byla povolena",
+        message: overrideReason || "Přiřazení člověka bylo provedeno přes kolizi.",
+        relatedZakazkaId: zakazkaId,
+        actionUrl: `/zakazky/${zakazkaId}/people`,
+        dedupeKeyPrefix: `people-conflict:${insertResult.data.id}`,
       });
     }
 

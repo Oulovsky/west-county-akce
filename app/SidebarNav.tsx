@@ -47,6 +47,35 @@ function NavLink({
 export default function SidebarNav() {
   const router = useRouter();
   const pathname = usePathname();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadUnreadCount() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { count, error } = await supabase
+        .from("notifikace")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .is("read_at", null)
+        .is("dismissed_at", null);
+
+      if (!active || error) return;
+      setUnreadCount(count ?? 0);
+    }
+
+    void loadUnreadCount();
+    const interval = window.setInterval(() => void loadUnreadCount(), 60000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [pathname]);
 
   if (pathname.startsWith("/dotaznik/")) {
     return null;
@@ -86,6 +115,19 @@ export default function SidebarNav() {
       <NavLink href="/admin" danger>
         Admin
       </NavLink>
+
+      <Link
+        href="/notifikace"
+        className="relative rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 transition hover:bg-blue-600/10 hover:text-blue-100"
+        title="Notifikace"
+      >
+        Zvonek
+        {unreadCount > 0 ? (
+          <span className="absolute -right-2 -top-2 min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-center text-[11px] font-black text-white">
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </span>
+        ) : null}
+      </Link>
 
       <button
         onClick={() => void handleLogout()}

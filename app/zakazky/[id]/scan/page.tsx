@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase/server";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { syncZakazkaLogisticsFromScan } from "@/lib/zakazka-logistics-sync";
 import { getTechnikaAvailability } from "@/lib/technika-availability";
+import { createNotificationsForRoles } from "@/lib/notifications";
 import {
   ZakazkaLoadingScanClient,
   type LoadingOkruh,
@@ -720,6 +721,16 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
           decision,
         },
       });
+      await createNotificationsForRoles(supabase, ["admin", "sef", "skladnik"], {
+        type: "stock_problem_piece_loaded_override",
+        priority: "critical",
+        title: "Problémový kus naložen přes override",
+        message: trimmedOverrideReason || damageNote,
+        relatedZakazkaId: id,
+        relatedKusId: kus.kus_id,
+        actionUrl: `/zakazky/${id}/scan`,
+        dedupeKeyPrefix: `problem-piece-loaded:${id}:${kus.kus_id}:${Date.now()}`,
+      });
     }
 
     if (hasCapacityCollision) {
@@ -738,6 +749,16 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
           planned_elsewhere: availabilityItem?.plannedOnOtherOverlappingZakazky ?? 0,
           physically_loaded_elsewhere: availabilityItem?.physicallyLoadedOnOtherZakazky ?? 0,
         },
+      });
+      await createNotificationsForRoles(supabase, ["admin", "sef", "skladnik"], {
+        type: "stock_capacity_collision_override",
+        priority: "warning",
+        title: "Kapacitní kolize při scanu",
+        message: trimmedOverrideReason,
+        relatedZakazkaId: id,
+        relatedKusId: kus.kus_id,
+        actionUrl: `/zakazky/${id}/scan`,
+        dedupeKeyPrefix: `scan-capacity-override:${id}:${kus.kus_id}:${Date.now()}`,
       });
     }
 
