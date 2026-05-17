@@ -10,6 +10,7 @@ import {
   createEmployee,
   deactivateEmployee,
   updateUserActionCost,
+  updateUserBankDetails,
   updateUserEmail,
   updateUserName,
   updateUserRole,
@@ -22,6 +23,9 @@ type UserRow = {
   jmeno?: string | null;
   prijmeni?: string | null;
   hodinovy_naklad_akce?: number | string | null;
+  bank_account_number?: string | null;
+  bank_code?: string | null;
+  iban?: string | null;
   aktivni?: boolean | null;
 };
 
@@ -55,6 +59,12 @@ function UserEditorRow({
   const [savedHourlyCost, setSavedHourlyCost] = useState(
     user.hodinovy_naklad_akce == null ? "" : String(user.hodinovy_naklad_akce)
   );
+  const [bankAccountNumber, setBankAccountNumber] = useState(user.bank_account_number ?? "");
+  const [savedBankAccountNumber, setSavedBankAccountNumber] = useState(user.bank_account_number ?? "");
+  const [bankCode, setBankCode] = useState(user.bank_code ?? "");
+  const [savedBankCode, setSavedBankCode] = useState(user.bank_code ?? "");
+  const [iban, setIban] = useState(user.iban ?? "");
+  const [savedIban, setSavedIban] = useState(user.iban ?? "");
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -69,7 +79,22 @@ function UserEditorRow({
     const nextCost = user.hodinovy_naklad_akce == null ? "" : String(user.hodinovy_naklad_akce);
     setHourlyCost(nextCost);
     setSavedHourlyCost(nextCost);
-  }, [user.role, user.jmeno, user.prijmeni, user.email, user.hodinovy_naklad_akce]);
+    setBankAccountNumber(user.bank_account_number ?? "");
+    setSavedBankAccountNumber(user.bank_account_number ?? "");
+    setBankCode(user.bank_code ?? "");
+    setSavedBankCode(user.bank_code ?? "");
+    setIban(user.iban ?? "");
+    setSavedIban(user.iban ?? "");
+  }, [
+    user.role,
+    user.jmeno,
+    user.prijmeni,
+    user.email,
+    user.hodinovy_naklad_akce,
+    user.bank_account_number,
+    user.bank_code,
+    user.iban,
+  ]);
 
   function saveName(nextName = name) {
     const current = nextName.trim();
@@ -137,6 +162,32 @@ function UserEditorRow({
         router.refresh();
       } else {
         onToast({ message: result.error || "Uložení hodinové mzdy selhalo", type: "error" });
+      }
+    });
+  }
+
+  function saveBankField(
+    field: "bank_account_number" | "bank_code" | "iban",
+    nextValue: string,
+    savedValue: string,
+    setSaved: (value: string) => void,
+    setCurrent: (value: string) => void,
+    label: string
+  ) {
+    const current = field === "iban" ? nextValue.trim().replace(/\s+/g, "").toUpperCase() : nextValue.trim();
+    const saved = field === "iban" ? savedValue.trim().replace(/\s+/g, "").toUpperCase() : savedValue.trim();
+    if (current === saved || isPending) return;
+
+    startTransition(async () => {
+      const result = await updateUserBankDetails(user.user_id, field, current);
+      if (result.ok) {
+        setCurrent(current);
+        setSaved(current);
+        onToast({ message: `${label} uložen`, type: "success" });
+        router.refresh();
+      } else {
+        setCurrent(savedValue);
+        onToast({ message: result.error || `Uložení ${label.toLowerCase()} selhalo`, type: "error" });
       }
     });
   }
@@ -255,6 +306,93 @@ function UserEditorRow({
           <span id={`${user.user_id}-hourly-cost-help`} className="mt-1 block text-xs text-slate-400 sm:col-start-2 sm:row-start-3">
             Interní kalkulační náklad, ne reálná mzda zaměstnance.
           </span>
+        </label>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-[1fr_6rem] xl:col-span-2">
+        <label className="block">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Číslo účtu
+          </span>
+          <input
+            value={bankAccountNumber}
+            onChange={(event) => setBankAccountNumber(event.target.value)}
+            onBlur={(event) =>
+              saveBankField(
+                "bank_account_number",
+                event.currentTarget.value,
+                savedBankAccountNumber,
+                setSavedBankAccountNumber,
+                setBankAccountNumber,
+                "Číslo účtu"
+              )
+            }
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                event.currentTarget.blur();
+              }
+              if (event.key === "Escape") {
+                setBankAccountNumber(savedBankAccountNumber);
+                event.currentTarget.blur();
+              }
+            }}
+            placeholder="123456789"
+            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60"
+            disabled={isPending}
+          />
+        </label>
+
+        <label className="block">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Kód banky
+          </span>
+          <input
+            value={bankCode}
+            onChange={(event) => setBankCode(event.target.value)}
+            onBlur={(event) =>
+              saveBankField("bank_code", event.currentTarget.value, savedBankCode, setSavedBankCode, setBankCode, "Kód banky")
+            }
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                event.currentTarget.blur();
+              }
+              if (event.key === "Escape") {
+                setBankCode(savedBankCode);
+                event.currentTarget.blur();
+              }
+            }}
+            placeholder="0800"
+            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60"
+            disabled={isPending}
+          />
+        </label>
+
+        <label className="block sm:col-span-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            IBAN volitelně
+          </span>
+          <input
+            value={iban}
+            onChange={(event) => setIban(event.target.value)}
+            onBlur={(event) =>
+              saveBankField("iban", event.currentTarget.value, savedIban, setSavedIban, setIban, "IBAN")
+            }
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                event.currentTarget.blur();
+              }
+              if (event.key === "Escape") {
+                setIban(savedIban);
+                event.currentTarget.blur();
+              }
+            }}
+            placeholder="CZ..."
+            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60"
+            disabled={isPending}
+          />
         </label>
       </div>
 

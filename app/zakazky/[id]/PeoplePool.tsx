@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import Toast from "@/components/Toast";
+import { updateAttendanceManualAction } from "./dochazka-actions";
 
 type TypBloku = "sklad" | "stavba" | "akce" | "bourani";
 
@@ -29,6 +30,25 @@ type Assignment = {
   confirmation_status?: string | null;
   declined_reason?: string | null;
   responded_at?: string | null;
+  attendance_rows?: AttendanceRow[];
+  attendance_actual_minutes?: number;
+  attendance_planned_minutes?: number;
+  attendance_active?: boolean;
+};
+
+type AttendanceRow = {
+  id: string;
+  typ_faze?: string | null;
+  checkin_at?: string | null;
+  checkout_at?: string | null;
+  gps_checkin_lat?: number | string | null;
+  gps_checkin_lng?: number | string | null;
+  gps_checkout_lat?: number | string | null;
+  gps_checkout_lng?: number | string | null;
+  gps_accuracy?: number | string | null;
+  gps_checkout_accuracy?: number | string | null;
+  manual_override?: boolean | null;
+  override_reason?: string | null;
 };
 
 type Zakazka = {
@@ -100,6 +120,11 @@ type ConflictInfo = {
   otherFrom?: string | null;
   otherTo?: string | null;
   otherTypBloku: TypBloku;
+};
+
+type AttendanceModalState = {
+  row: AttendanceRow;
+  userName: string;
 };
 
 type BlockConfig = {
@@ -261,6 +286,29 @@ function formatAssignmentRange(from?: string | null, to?: string | null) {
   return "Čas není zadaný";
 }
 
+function formatDuration(minutes?: number | null) {
+  const safeMinutes = Number(minutes ?? 0);
+  if (!Number.isFinite(safeMinutes) || safeMinutes === 0) return "0 h";
+  const sign = safeMinutes < 0 ? "-" : "";
+  const absolute = Math.abs(safeMinutes);
+  const hours = Math.floor(absolute / 60);
+  const rest = absolute % 60;
+  if (hours <= 0) return `${sign}${rest} min`;
+  if (rest === 0) return `${sign}${hours} h`;
+  return `${sign}${hours} h ${rest} min`;
+}
+
+function gpsText(row: AttendanceRow) {
+  const points: string[] = [];
+  if (row.gps_checkin_lat != null && row.gps_checkin_lng != null) {
+    points.push(`Start: ${Number(row.gps_checkin_lat).toFixed(5)}, ${Number(row.gps_checkin_lng).toFixed(5)}`);
+  }
+  if (row.gps_checkout_lat != null && row.gps_checkout_lng != null) {
+    points.push(`Konec: ${Number(row.gps_checkout_lat).toFixed(5)}, ${Number(row.gps_checkout_lng).toFixed(5)}`);
+  }
+  return points.length > 0 ? points.join(" · ") : "GPS není uložená";
+}
+
 function getConflictText(conflict: ConflictInfo | null) {
   if (!conflict) return null;
 
@@ -280,6 +328,7 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
   const [current, setCurrent] = useState<Zakazka | null>(null);
   const [other, setOther] = useState<OtherRow[]>([]);
   const [modal, setModal] = useState<ModalState | null>(null);
+  const [attendanceModal, setAttendanceModal] = useState<AttendanceModalState | null>(null);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
@@ -573,6 +622,25 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
     await removeAssignmentById(modal.assignmentId, modal.userName, modal.typBloku);
   }
 
+  async function saveAttendanceOverride(formData: FormData) {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await updateAttendanceManualAction(formData);
+      setAttendanceModal(null);
+      await load();
+      router.refresh();
+      setToast({ type: "success", message: "Docházka byla ručně opravena." });
+    } catch (error) {
+      setToast({
+        type: "error",
+        message: error instanceof Error ? error.message : "Docházku se nepodařilo upravit.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const isBezObsluhy = String(current?.typ_obsluhy ?? "").trim() === "bez_obsluhy";
 
   const assignmentsByBlock = useMemo(() => {
@@ -731,6 +799,66 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
                           <div className="mt-3 text-sm text-slate-300">
                             {formatAssignmentRange(assignment.datum_od, assignment.datum_do)}
                           </div>
+                          <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
+                            <div className="grid gap-2 text-xs sm:grid-cols-3">
+                              <div>
+                                <div className="uppercase tracking-wide text-slate-500">Plán</div>
+                                <div className="mt-1 font-bold text-slate-100">
+                                  {formatDuration(assignment.attendance_planned_minutes)}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="uppercase tracking-wide text-slate-500">Skutečně</div>
+                                <div className="mt-1 font-bold text-emerald-100">
+                                  {formatDuration(assignment.attendance_actual_minutes)}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="uppercase tracking-wide text-slate-500">Rozdíl</div>
+                                <div className="mt-1 font-bold text-blue-100">
+                                  {formatDuration(
+                                    (assignment.attendance_actual_minutes ?? 0) -
+                                      (assignment.attendance_planned_minutes ?? 0)
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            {assignment.attendance_active ? (
+                              <div className="mt-2 inline-flex rounded-md border border-emerald-500/30 bg-emerald-500/15 px-2 py-1 text-xs font-bold text-emerald-100">
+                                Právě pracuje
+                              </div>
+                            ) : null}
+                            {assignment.attendance_rows?.length ? (
+                              <div className="mt-3 space-y-2">
+                                {assignment.attendance_rows.slice(0, 3).map((row) => (
+                                  <div
+                                    key={row.id}
+                                    className="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-xs text-slate-300"
+                                  >
+                                    <div className="font-semibold text-slate-100">
+                                      {formatDateTimeShort(row.checkin_at)} →{" "}
+                                      {row.checkout_at ? formatDateTimeShort(row.checkout_at) : "běží"}
+                                    </div>
+                                    <div className="mt-1">{gpsText(row)}</div>
+                                    {row.manual_override ? (
+                                      <div className="mt-1 text-amber-200">
+                                        Ruční oprava: {row.override_reason || "bez důvodu"}
+                                      </div>
+                                    ) : null}
+                                    <button
+                                      type="button"
+                                      onClick={() => setAttendanceModal({ row, userName })}
+                                      className="mt-2 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs font-bold text-slate-100 transition hover:bg-slate-800"
+                                    >
+                                      Ručně opravit
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="mt-2 text-xs text-slate-500">Zatím bez reálné docházky.</div>
+                            )}
+                          </div>
                           {confirmationStatus === "declined" && assignment.declined_reason ? (
                             <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-100">
                               Důvod odmítnutí: {assignment.declined_reason}
@@ -796,6 +924,59 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
           );
         })}
       </div>
+
+      <Modal
+        open={Boolean(attendanceModal)}
+        onClose={() => setAttendanceModal(null)}
+        title="Ruční oprava docházky"
+        widthClassName="max-w-lg"
+      >
+        {attendanceModal ? (
+          <form action={(formData) => void saveAttendanceOverride(formData)} className="space-y-4">
+            <input type="hidden" name="attendance_id" value={attendanceModal.row.id} />
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+              <div className="text-xs uppercase tracking-wide text-slate-500">Člověk</div>
+              <div className="mt-1 text-base font-bold text-white">{attendanceModal.userName}</div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Začátek práce">
+                <Input
+                  type="datetime-local"
+                  name="checkin_at"
+                  defaultValue={toInput(attendanceModal.row.checkin_at)}
+                  required
+                />
+              </Field>
+              <Field label="Konec práce">
+                <Input
+                  type="datetime-local"
+                  name="checkout_at"
+                  defaultValue={toInput(attendanceModal.row.checkout_at)}
+                />
+              </Field>
+            </div>
+            <Field label="Důvod ruční opravy">
+              <Textarea
+                name="override_reason"
+                rows={4}
+                required
+                placeholder="Např. zaměstnanec zapomněl ukončit práci, špatný signál, oprava podle šéfa na místě..."
+              />
+            </Field>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-xs text-slate-300">
+              {gpsText(attendanceModal.row)}
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button type="submit" disabled={saving}>
+                {saving ? "Ukládám..." : "Uložit opravu"}
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => setAttendanceModal(null)} disabled={saving}>
+                Zavřít
+              </Button>
+            </div>
+          </form>
+        ) : null}
+      </Modal>
 
       <Modal
         open={!!modal}

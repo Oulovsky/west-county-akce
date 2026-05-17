@@ -596,6 +596,7 @@ function getHistoryTargetUserId(value: unknown) {
 function getHistoryTypeLabel(value: string) {
   if (value.startsWith("workflow_")) return "Workflow";
   if (value.startsWith("invoice_")) return "Fakturace";
+  if (value.startsWith("attendance_")) return "Docházka";
   if (value.startsWith("person_")) return "Lidé";
   if (value.startsWith("logistics_")) return "Logistika";
   if (value.startsWith("scan_")) return "Scan";

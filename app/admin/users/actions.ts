@@ -78,7 +78,7 @@ export async function getUsers() {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("user_id, email, role, jmeno, prijmeni, hodinovy_naklad_akce, aktivni")
+    .select("user_id, email, role, jmeno, prijmeni, hodinovy_naklad_akce, bank_account_number, bank_code, iban, aktivni")
     .order("aktivni", { ascending: false })
     .order("prijmeni", { ascending: true })
     .order("jmeno", { ascending: true });
@@ -145,6 +145,35 @@ export async function updateUserActionCost(
     }
 
     revalidatePath("/admin");
+    return { ok: true };
+  } catch (error: unknown) {
+    return { ok: false, error: getErrorMessage(error) };
+  }
+}
+
+export async function updateUserBankDetails(
+  targetUserId: string,
+  field: "bank_account_number" | "bank_code" | "iban",
+  value: string
+): Promise<ActionResult> {
+  try {
+    const { supabase, error: authError } = await requireAdmin();
+    if (authError) return { ok: false, error: authError };
+
+    const normalized = value.trim();
+    const patch: Record<string, string | null> = {};
+
+    if (field === "bank_account_number") patch.bank_account_number = normalized || null;
+    else if (field === "bank_code") patch.bank_code = normalized || null;
+    else if (field === "iban") patch.iban = normalized.replace(/\s+/g, "").toUpperCase() || null;
+    else return { ok: false, error: "Neplatné bankovní pole." };
+
+    const { error } = await supabase.from("profiles").update(patch).eq("user_id", targetUserId);
+
+    if (error) return { ok: false, error: error.message };
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/proplaceni");
     return { ok: true };
   } catch (error: unknown) {
     return { ok: false, error: getErrorMessage(error) };

@@ -112,6 +112,14 @@ function rangesOverlap(fromA?: string | null, toA?: string | null, fromB?: strin
   return aStart < bEnd && aEnd > bStart;
 }
 
+function minutesBetween(from?: string | null, to?: string | null) {
+  if (!from || !to) return 0;
+  const start = new Date(from).getTime();
+  const end = new Date(to).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+  return Math.round((end - start) / 60000);
+}
+
 function normalizeOverrideReason(value: unknown) {
   const text = String(value ?? "").trim();
   return text || null;
@@ -233,8 +241,54 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
       }
     }
 
+    const assignments = (assignmentsResult.data ?? []) as AssignmentRow[];
+    const assignmentIds = assignments.map((assignment) => String(assignment.id));
+    const attendanceByAssignment = new Map<string, any[]>();
+
+    if (assignmentIds.length > 0) {
+      const { data: attendanceRows, error: attendanceError } = await supabase
+        .from("dochazka_zakazky")
+        .select("id, assignment_id, user_id, typ_faze, checkin_at, checkout_at, gps_checkin_lat, gps_checkin_lng, gps_checkout_lat, gps_checkout_lng, gps_accuracy, gps_checkout_accuracy, manual_override, override_reason, approved_by, approved_at")
+        .eq("zakazka_id", zakazkaId)
+        .in("assignment_id", assignmentIds)
+        .order("checkin_at", { ascending: false });
+
+      if (attendanceError) {
+        return NextResponse.json(
+          {
+            error: attendanceError.message,
+            assignments,
+            currentZakazka: zakazkaResult.data ?? null,
+            other: [],
+          },
+          { status: 500 }
+        );
+      }
+
+      for (const row of attendanceRows ?? []) {
+        const key = String(row.assignment_id);
+        const rows = attendanceByAssignment.get(key) ?? [];
+        rows.push(row);
+        attendanceByAssignment.set(key, rows);
+      }
+    }
+
+    const assignmentsWithAttendance = assignments.map((assignment) => {
+      const rows = attendanceByAssignment.get(String(assignment.id)) ?? [];
+      return {
+        ...assignment,
+        attendance_rows: rows,
+        attendance_actual_minutes: rows.reduce(
+          (sum, row) => sum + minutesBetween(row.checkin_at, row.checkout_at),
+          0
+        ),
+        attendance_planned_minutes: minutesBetween(assignment.datum_od, assignment.datum_do),
+        attendance_active: rows.some((row) => !row.checkout_at),
+      };
+    });
+
     return NextResponse.json({
-      assignments: assignmentsResult.data ?? [],
+      assignments: assignmentsWithAttendance,
       currentZakazka: zakazkaResult.data ?? null,
       other: otherRows
         .filter((row) => !otherZakazkyById.get(row.zakazka_id)?.zrusena)

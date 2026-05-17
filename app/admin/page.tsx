@@ -1,4 +1,5 @@
 ﻿import type React from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getUsers } from "./users/actions";
 import { getAdminAuditLog } from "./audit/actions";
@@ -81,6 +82,20 @@ export default async function AdminPage() {
 
       <AdminSection title="Zaměstnanci" defaultOpen>
         <UsersClient users={users} />
+      </AdminSection>
+
+      <AdminSection title="Proplacení práce">
+        <div className="space-y-3">
+          <p className="text-sm text-slate-400">
+            Přehled uznaných hodin, QR platby a označení práce jako proplacené.
+          </p>
+          <Link
+            href="/admin/proplaceni"
+            className="inline-flex rounded-xl border border-blue-500/40 bg-blue-600/20 px-4 py-3 text-sm font-bold text-blue-100 transition hover:bg-blue-600/30"
+          >
+            Otevřít proplacení práce
+          </Link>
+        </div>
       </AdminSection>
 
       <AdminSection title="Fakturační firmy">

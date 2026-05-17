@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
 import { ParticipationActions } from "../../ParticipationActions";
+import { AttendanceActions } from "../../AttendanceActions";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -19,6 +20,7 @@ type AssignmentRow = {
   poznamka: string | null;
   confirmation_status: string | null;
   declined_reason: string | null;
+  active_attendance_id?: string | null;
 };
 
 type ZakazkaRow = {
@@ -194,6 +196,28 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
   }
 
   const assignments = (assignmentsRaw ?? []) as AssignmentRow[];
+  const assignmentIds = assignments.map((assignment) => String(assignment.id));
+  if (assignmentIds.length > 0) {
+    const { data: activeAttendanceRaw, error: activeAttendanceError } = await supabase
+      .from("dochazka_zakazky")
+      .select("id, assignment_id")
+      .eq("user_id", user.id)
+      .is("checkout_at", null)
+      .in("assignment_id", assignmentIds);
+
+    if (activeAttendanceError) {
+      return <div>Chyba načtení docházky: {activeAttendanceError.message}</div>;
+    }
+
+    const activeByAssignment = new Map(
+      (activeAttendanceRaw ?? []).map((row) => [String(row.assignment_id), row.id as string])
+    );
+
+    for (const assignment of assignments) {
+      assignment.active_attendance_id = activeByAssignment.get(String(assignment.id)) ?? null;
+    }
+  }
+
   const { data: technikaRaw, error: technikaError } = await supabase
     .from("technika_na_zakazce")
     .select("skladova_polozka_id, mnozstvi, skladove_polozky(nazev)")
@@ -307,6 +331,13 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
 
                   {!zakazka.zrusena ? (
                     <ParticipationActions assignmentId={String(assignment.id)} status={status} />
+                  ) : null}
+
+                  {!zakazka.zrusena && status === "accepted" ? (
+                    <AttendanceActions
+                      assignmentId={String(assignment.id)}
+                      active={Boolean(assignment.active_attendance_id)}
+                    />
                   ) : null}
                 </Card>
               );

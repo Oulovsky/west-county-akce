@@ -3,7 +3,17 @@ import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
+import { getAttendancePhaseLabel } from "@/lib/zakazka-attendance";
+import {
+  formatHours,
+  formatMoneyCzk,
+  getApprovedMinutes,
+  getMeasuredMinutes,
+  getPaymentAmount,
+  getPaymentStatusLabel,
+} from "@/lib/payments";
 import { ParticipationActions } from "./ParticipationActions";
+import { AttendanceActions } from "./AttendanceActions";
 
 type AssignmentRow = {
   id: string | number;
@@ -18,6 +28,7 @@ type AssignmentRow = {
   responded_at: string | null;
   assigned_at: string | null;
   created_at: string | null;
+  active_attendance_id?: string | null;
 };
 
 type ZakazkaRow = {
@@ -40,6 +51,20 @@ type FilterMode = "all" | "pending" | "accepted" | "declined";
 
 type PageProps = {
   searchParams?: Promise<{ filtr?: string }>;
+};
+
+type AttendancePaymentRow = {
+  id: string;
+  zakazka_id: string;
+  assignment_id: string | null;
+  user_id: string;
+  typ_faze: string | null;
+  checkin_at: string | null;
+  checkout_at: string | null;
+  approved_duration_minutes: number | string | null;
+  payment_status: string | null;
+  profiles?: { hodinovy_naklad_akce: number | string | null } | null;
+  zakazky?: { cislo_zakazky: string | null; nazev: string | null } | null;
 };
 
 const FILTERS: Array<{ key: FilterMode; label: string }> = [
@@ -137,6 +162,11 @@ function getFilteredEmptyText(filter: FilterMode) {
   if (filter === "accepted") return "Zatím nemáte potvrzené žádné práce.";
   if (filter === "declined") return "Nemáte žádná odmítnutá přiřazení.";
   return "Aktuálně nemáte žádné přiřazené zakázky.";
+}
+
+function toNumber(value: number | string | null | undefined) {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
 }
 
 function getNavigationUrl(zakazka: ZakazkaRow | null) {
@@ -266,6 +296,13 @@ function AssignmentCard({ item }: { item: AssignmentWithZakazka }) {
       </div>
 
       {!cancelled ? <ParticipationActions assignmentId={String(assignment.id)} status={status} /> : null}
+
+      {!cancelled && status === "accepted" ? (
+        <AttendanceActions
+          assignmentId={String(assignment.id)}
+          active={Boolean(assignment.active_attendance_id)}
+        />
+      ) : null}
     </Card>
   );
 }
@@ -327,6 +364,102 @@ function AssignmentSection({
   );
 }
 
+function WorkPaymentsOverview({ rows }: { rows: AttendancePaymentRow[] }) {
+  const items = rows
+    .filter((row) => row.checkout_at)
+    .map((row) => {
+      const measuredMinutes = getMeasuredMinutes(row.checkin_at, row.checkout_at);
+      const approvedMinutes = getApprovedMinutes(row);
+      const hourlyRate = toNumber(row.profiles?.hodinovy_naklad_akce);
+      const amount = getPaymentAmount(approvedMinutes, hourlyRate);
+      return { row, measuredMinutes, approvedMinutes, hourlyRate, amount };
+    });
+
+  const waitingTotal = items
+    .filter((item) => item.row.payment_status !== "proplaceno")
+    .reduce((sum, item) => sum + item.amount, 0);
+  const paidTotal = items
+    .filter((item) => item.row.payment_status === "proplaceno")
+    .reduce((sum, item) => sum + item.amount, 0);
+
+  return (
+    <Card className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-black text-white">Moje odpracované hodiny</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Provozní přehled uznané práce a interního proplacení.
+          </p>
+        </div>
+        <Badge variant="default">{items.length} záznamů</Badge>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-amber-200/80">Čeká na proplacení</div>
+          <div className="mt-1 text-2xl font-black text-amber-100">{formatMoneyCzk(waitingTotal)}</div>
+        </div>
+        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-emerald-200/80">Už proplaceno</div>
+          <div className="mt-1 text-2xl font-black text-emerald-100">{formatMoneyCzk(paidTotal)}</div>
+        </div>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-slate-400">
+          Zatím nemáte ukončenou žádnou práci.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {items.map((item) => {
+            const title = [item.row.zakazky?.cislo_zakazky, item.row.zakazky?.nazev]
+              .filter(Boolean)
+              .join(" · ") || "Zakázka";
+            const paid = item.row.payment_status === "proplaceno";
+            return (
+              <div key={item.row.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="font-bold text-white">{title}</div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      {getAttendancePhaseLabel(item.row.typ_faze)} · {formatDateTime(item.row.checkin_at)}
+                    </div>
+                  </div>
+                  <Badge variant={paid ? "success" : "warning"}>
+                    {getPaymentStatusLabel(item.row.payment_status)}
+                  </Badge>
+                </div>
+                <div className="mt-3 grid gap-2 text-sm sm:grid-cols-5">
+                  <div>
+                    <div className="text-xs uppercase tracking-wide text-slate-500">Naměřeno</div>
+                    <div className="font-bold text-slate-100">{formatHours(item.measuredMinutes)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-wide text-slate-500">Schváleno</div>
+                    <div className="font-bold text-emerald-100">{formatHours(item.approvedMinutes)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-wide text-slate-500">Sazba</div>
+                    <div className="font-bold text-slate-100">{formatMoneyCzk(item.hourlyRate)} / h</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-wide text-slate-500">Částka</div>
+                    <div className="font-black text-blue-100">{formatMoneyCzk(item.amount)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-wide text-slate-500">Stav</div>
+                    <div className="font-bold text-slate-100">{getPaymentStatusLabel(item.row.payment_status)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export default async function MojePage({ searchParams }: PageProps) {
   const resolvedSearchParams = await searchParams;
   const activeFilter = normalizeFilter(resolvedSearchParams?.filtr);
@@ -353,6 +486,28 @@ export default async function MojePage({ searchParams }: PageProps) {
   }
 
   const assignments = (assignmentsRaw ?? []) as AssignmentRow[];
+  const assignmentIds = assignments.map((assignment) => String(assignment.id));
+  if (assignmentIds.length > 0) {
+    const { data: activeAttendanceRaw, error: activeAttendanceError } = await supabase
+      .from("dochazka_zakazky")
+      .select("id, assignment_id")
+      .eq("user_id", user.id)
+      .is("checkout_at", null)
+      .in("assignment_id", assignmentIds);
+
+    if (activeAttendanceError) {
+      return <div>Chyba načtení docházky: {activeAttendanceError.message}</div>;
+    }
+
+    const activeByAssignment = new Map(
+      (activeAttendanceRaw ?? []).map((row) => [String(row.assignment_id), row.id as string])
+    );
+
+    for (const assignment of assignments) {
+      assignment.active_attendance_id = activeByAssignment.get(String(assignment.id)) ?? null;
+    }
+  }
+
   const zakazkaIds = [...new Set(assignments.map((assignment) => assignment.zakazka_id))];
   let zakazkyById = new Map<string, ZakazkaRow>();
 
@@ -380,6 +535,33 @@ export default async function MojePage({ searchParams }: PageProps) {
   const filteredItems =
     activeFilter === "all" ? items : items.filter((item) => item.status === activeFilter);
 
+  const { data: attendancePaymentsRaw, error: attendancePaymentsError } = await supabase
+    .from("dochazka_zakazky")
+    .select("id, zakazka_id, assignment_id, user_id, typ_faze, checkin_at, checkout_at, approved_duration_minutes, payment_status, zakazky(cislo_zakazky, nazev)")
+    .eq("user_id", user.id)
+    .not("checkout_at", "is", null)
+    .order("checkin_at", { ascending: false })
+    .limit(50);
+
+  if (attendancePaymentsError) {
+    return <div>Chyba načtení odpracovaných hodin: {attendancePaymentsError.message}</div>;
+  }
+
+  const attendancePayments = (attendancePaymentsRaw ?? []) as AttendancePaymentRow[];
+  const { data: ownProfileRaw, error: ownProfileError } = await supabase
+    .from("profiles")
+    .select("hodinovy_naklad_akce")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (ownProfileError) {
+    return <div>Chyba načtení sazby: {ownProfileError.message}</div>;
+  }
+
+  for (const row of attendancePayments) {
+    row.profiles = { hodinovy_naklad_akce: ownProfileRaw?.hodinovy_naklad_akce ?? 0 };
+  }
+
   return (
     <div className="space-y-6">
       <Card className="space-y-3">
@@ -396,6 +578,8 @@ export default async function MojePage({ searchParams }: PageProps) {
       </Card>
 
       <FilterPills activeFilter={activeFilter} />
+
+      <WorkPaymentsOverview rows={attendancePayments} />
 
       {activeFilter === "all" ? (
         <>
