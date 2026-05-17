@@ -12,6 +12,7 @@ type AssignmentRow = {
   datum_od: string | null;
   datum_do: string | null;
   typ_bloku: string | null;
+  poznamka: string | null;
   confirmation_status: string | null;
   declined_reason: string | null;
   responded_at: string | null;
@@ -24,6 +25,8 @@ type ZakazkaRow = {
   cislo_zakazky: string | null;
   nazev: string | null;
   misto: string | null;
+  misto_lat: number | string | null;
+  misto_lng: number | string | null;
   poznamka: string | null;
   akce_od: string | null;
   akce_do: string | null;
@@ -32,10 +35,28 @@ type ZakazkaRow = {
   zrusena: boolean | null;
 };
 
+type FilterMode = "all" | "pending" | "accepted" | "declined";
+
+type PageProps = {
+  searchParams?: Promise<{ filtr?: string }>;
+};
+
+const FILTERS: Array<{ key: FilterMode; label: string }> = [
+  { key: "all", label: "Vše" },
+  { key: "pending", label: "Nové" },
+  { key: "accepted", label: "Potvrzené" },
+  { key: "declined", label: "Odmítnuté" },
+];
+
 function normalizeStatus(value?: string | null) {
   if (value === "accepted") return "accepted";
   if (value === "declined") return "declined";
   return "pending";
+}
+
+function normalizeFilter(value?: string | null): FilterMode {
+  if (value === "pending" || value === "accepted" || value === "declined") return value;
+  return "all";
 }
 
 function getStatusLabel(value?: string | null) {
@@ -89,7 +110,196 @@ function getZakazkaTitle(zakazka?: ZakazkaRow | null) {
   return [zakazka.cislo_zakazky, zakazka.nazev].filter(Boolean).join(" · ") || "Zakázka";
 }
 
-export default async function MojePage() {
+function getFilteredTitle(filter: FilterMode) {
+  if (filter === "pending") return "Nové";
+  if (filter === "accepted") return "Potvrzené zakázky";
+  if (filter === "declined") return "Odmítnuté";
+  return "Vše";
+}
+
+function getFilteredEmptyText(filter: FilterMode) {
+  if (filter === "pending") return "Žádná nová práce nečeká na potvrzení.";
+  if (filter === "accepted") return "Zatím nemáte potvrzené žádné práce.";
+  if (filter === "declined") return "Nemáte žádná odmítnutá přiřazení.";
+  return "Aktuálně nemáte žádné přiřazené zakázky.";
+}
+
+function getNavigationUrl(zakazka: ZakazkaRow | null) {
+  const lat = Number(zakazka?.misto_lat ?? NaN);
+  const lng = Number(zakazka?.misto_lng ?? NaN);
+
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}`;
+  }
+
+  const query = String(zakazka?.misto ?? "").trim();
+  return query
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
+    : null;
+}
+
+type AssignmentWithZakazka = {
+  assignment: AssignmentRow;
+  zakazka: ZakazkaRow | null;
+  status: "pending" | "accepted" | "declined";
+};
+
+function AssignmentCard({ item }: { item: AssignmentWithZakazka }) {
+  const { assignment, zakazka, status } = item;
+  const navigationUrl = getNavigationUrl(zakazka);
+
+  return (
+    <Card className="space-y-4">
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xl font-black leading-tight text-white">
+              {getZakazkaTitle(zakazka)}
+            </div>
+            <div className="mt-2 text-sm font-semibold text-slate-300">
+              {zakazka?.misto || "Místo není vyplněné"}
+            </div>
+          </div>
+          <Badge variant={getStatusVariant(status)}>{getStatusLabel(status)}</Badge>
+        </div>
+
+        {status === "pending" ? (
+          <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm font-semibold text-blue-100">
+            Máte novou zakázku.
+          </div>
+        ) : null}
+      </div>
+
+      <div className="grid gap-3">
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Datum a čas práce</div>
+          <div className="mt-1 text-base font-bold text-white">
+            {formatRange(assignment.datum_od, assignment.datum_do)}
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Fáze práce</div>
+            <div className="mt-1 text-sm font-semibold text-white">
+              {getPhaseLabel(assignment.typ_bloku)}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Stav</div>
+            <div className="mt-1 text-sm font-semibold text-white">{getStatusLabel(status)}</div>
+          </div>
+        </div>
+      </div>
+
+      {assignment.poznamka ? (
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Poznámka k přiřazení</div>
+          <div className="mt-1 whitespace-pre-wrap text-sm text-slate-200">{assignment.poznamka}</div>
+        </div>
+      ) : null}
+
+      {zakazka?.poznamka ? (
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Poznámka k zakázce</div>
+          <div className="mt-1 whitespace-pre-wrap text-sm text-slate-200">{zakazka.poznamka}</div>
+        </div>
+      ) : null}
+
+      {status === "declined" && assignment.declined_reason ? (
+        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+          Důvod odmítnutí: {assignment.declined_reason}
+        </div>
+      ) : null}
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Link
+          href={`/moje/zakazky/${assignment.zakazka_id}`}
+          className="inline-flex min-h-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-5 py-3 text-sm font-bold text-slate-100 transition hover:bg-slate-700"
+        >
+          Otevřít zakázku
+        </Link>
+        {navigationUrl ? (
+          <a
+            href={navigationUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-12 items-center justify-center rounded-xl border border-blue-500/40 bg-blue-600/20 px-5 py-3 text-sm font-bold text-blue-100 transition hover:bg-blue-600/30"
+          >
+            Navigovat
+          </a>
+        ) : (
+          <div className="inline-flex min-h-12 items-center justify-center rounded-xl border border-slate-800 bg-slate-900 px-5 py-3 text-sm font-semibold text-slate-500">
+            Navigace není dostupná
+          </div>
+        )}
+      </div>
+
+      <ParticipationActions assignmentId={String(assignment.id)} status={status} />
+    </Card>
+  );
+}
+
+function FilterPills({ activeFilter }: { activeFilter: FilterMode }) {
+  return (
+    <div className="flex gap-2 overflow-x-auto pb-1">
+      {FILTERS.map((filter) => {
+        const active = filter.key === activeFilter;
+        const href = filter.key === "all" ? "/moje" : `/moje?filtr=${filter.key}`;
+
+        return (
+          <Link
+            key={filter.key}
+            href={href}
+            className={[
+              "whitespace-nowrap rounded-full border px-4 py-2 text-sm font-bold transition",
+              active
+                ? "border-blue-400 bg-blue-600 text-white"
+                : "border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800",
+            ].join(" ")}
+          >
+            {filter.label}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+function AssignmentSection({
+  title,
+  items,
+  emptyText,
+}: {
+  title: string;
+  items: AssignmentWithZakazka[];
+  emptyText: string;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-xl font-bold text-white">{title}</h2>
+        <Badge variant="default">{items.length}</Badge>
+      </div>
+
+      {items.length === 0 ? (
+        <Card>
+          <div className="text-sm text-slate-400">{emptyText}</div>
+        </Card>
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-2">
+          {items.map((item) => (
+            <AssignmentCard key={String(item.assignment.id)} item={item} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+export default async function MojePage({ searchParams }: PageProps) {
+  const resolvedSearchParams = await searchParams;
+  const activeFilter = normalizeFilter(resolvedSearchParams?.filtr);
   const supabase = await createClient();
   const {
     data: { user },
@@ -102,7 +312,7 @@ export default async function MojePage() {
   const { data: assignmentsRaw, error: assignmentsError } = await supabase
     .from("zakazka_lide")
     .select(
-      "id, zakazka_id, user_id, datum_od, datum_do, typ_bloku, confirmation_status, declined_reason, responded_at, assigned_at, created_at"
+      "id, zakazka_id, user_id, datum_od, datum_do, typ_bloku, poznamka, confirmation_status, declined_reason, responded_at, assigned_at, created_at"
     )
     .eq("user_id", user.id)
     .order("datum_od", { ascending: true, nullsFirst: false })
@@ -119,7 +329,7 @@ export default async function MojePage() {
   if (zakazkaIds.length > 0) {
     const { data: zakazkyRaw, error: zakazkyError } = await supabase
       .from("zakazky")
-      .select("zakazka_id, cislo_zakazky, nazev, misto, poznamka, akce_od, akce_do, datum_od, datum_do, zrusena")
+      .select("zakazka_id, cislo_zakazky, nazev, misto, misto_lat, misto_lng, poznamka, akce_od, akce_do, datum_od, datum_do, zrusena")
       .in("zakazka_id", zakazkaIds);
 
     if (zakazkyError) {
@@ -128,6 +338,17 @@ export default async function MojePage() {
 
     zakazkyById = new Map(((zakazkyRaw ?? []) as ZakazkaRow[]).map((zakazka) => [zakazka.zakazka_id, zakazka]));
   }
+
+  const items: AssignmentWithZakazka[] = assignments.map((assignment) => ({
+    assignment,
+    zakazka: zakazkyById.get(assignment.zakazka_id) ?? null,
+    status: normalizeStatus(assignment.confirmation_status),
+  }));
+  const pendingItems = items.filter((item) => item.status === "pending");
+  const acceptedItems = items.filter((item) => item.status === "accepted");
+  const declinedItems = items.filter((item) => item.status === "declined");
+  const filteredItems =
+    activeFilter === "all" ? items : items.filter((item) => item.status === activeFilter);
 
   return (
     <div className="space-y-6">
@@ -144,79 +365,34 @@ export default async function MojePage() {
         </div>
       </Card>
 
-      {assignments.length === 0 ? (
-        <Card>
-          <div className="text-sm text-slate-400">Aktuálně nemáte žádné přiřazené zakázky.</div>
-        </Card>
+      <FilterPills activeFilter={activeFilter} />
+
+      {activeFilter === "all" ? (
+        <>
+          <AssignmentSection
+            title="Čeká na potvrzení"
+            items={pendingItems}
+            emptyText="Žádná nová práce nečeká na potvrzení."
+          />
+
+          <AssignmentSection
+            title="Potvrzené zakázky"
+            items={acceptedItems}
+            emptyText="Zatím nemáte potvrzené žádné práce."
+          />
+
+          <AssignmentSection
+            title="Odmítnuté"
+            items={declinedItems}
+            emptyText="Nemáte žádná odmítnutá přiřazení."
+          />
+        </>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {assignments.map((assignment) => {
-            const zakazka = zakazkyById.get(assignment.zakazka_id) ?? null;
-            const status = normalizeStatus(assignment.confirmation_status);
-
-            return (
-              <Card key={String(assignment.id)} className="space-y-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="text-lg font-semibold text-white">
-                      {getZakazkaTitle(zakazka)}
-                    </div>
-                    <div className="mt-1 text-sm text-slate-400">
-                      {zakazka?.misto || "Místo není vyplněné"}
-                    </div>
-                  </div>
-                  <Badge variant={getStatusVariant(status)}>{getStatusLabel(status)}</Badge>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Fáze práce</div>
-                    <div className="mt-1 text-sm font-semibold text-white">
-                      {getPhaseLabel(assignment.typ_bloku)}
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Čas</div>
-                    <div className="mt-1 text-sm font-semibold text-white">
-                      {formatRange(assignment.datum_od, assignment.datum_do)}
-                    </div>
-                  </div>
-                </div>
-
-                {zakazka?.poznamka ? (
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Poznámka</div>
-                    <div className="mt-1 whitespace-pre-wrap text-sm text-slate-200">
-                      {zakazka.poznamka}
-                    </div>
-                  </div>
-                ) : null}
-
-                {status === "declined" && assignment.declined_reason ? (
-                  <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-                    Důvod odmítnutí: {assignment.declined_reason}
-                  </div>
-                ) : null}
-
-                {status === "pending" ? (
-                  <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
-                    Máte novou zakázku.
-                  </div>
-                ) : null}
-
-                <div className="flex flex-wrap gap-2">
-                  <Link
-                    href={`/zakazky/${assignment.zakazka_id}`}
-                    className="rounded-xl border border-slate-700 bg-slate-800 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:bg-slate-700"
-                  >
-                    Otevřít zakázku
-                  </Link>
-                  <ParticipationActions assignmentId={String(assignment.id)} status={status} />
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+        <AssignmentSection
+          title={getFilteredTitle(activeFilter)}
+          items={filteredItems}
+          emptyText={getFilteredEmptyText(activeFilter)}
+        />
       )}
     </div>
   );
