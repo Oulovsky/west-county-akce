@@ -124,7 +124,7 @@ export function SkladDetailMainRow({
 
       <div className="bg-slate-950/30 px-3 py-3">
         <div className={rowGridClassName}>
-          <div className="flex items-center px-2">
+          <div className="flex min-w-0 items-center px-1">
             <input
               form={editFormId}
               name="nazev"
@@ -134,7 +134,7 @@ export function SkladDetailMainRow({
             />
           </div>
 
-          <div className="flex items-center px-2">
+          <div className="flex min-w-0 items-center px-1">
             <select
               value={kategorieId}
               onChange={(e) => onKategorieChange(e.target.value)}
@@ -149,7 +149,7 @@ export function SkladDetailMainRow({
             </select>
           </div>
 
-          <div className="flex items-center px-2">
+          <div className="flex min-w-0 items-center px-1">
             <select
               value={podkategorieId}
               onChange={(e) => onPodkategorieChange(e.target.value)}
@@ -238,18 +238,6 @@ export function SkladDetailMainRow({
           </div>
 
           <div className={centerCellClassName}>
-            <span className={boxClassName("justify-center text-center text-slate-500")}>—</span>
-          </div>
-
-          <div className={centerCellClassName}>
-            <span className={boxClassName("justify-center text-center text-slate-500")}>—</span>
-          </div>
-
-          <div className={centerCellClassName}>
-            <span className={boxClassName("justify-center text-center text-slate-500")}>—</span>
-          </div>
-
-          <div className={centerCellClassName}>
             <span
               className={[
                 boxClassName("justify-center text-center"),
@@ -266,7 +254,7 @@ export function SkladDetailMainRow({
             <button
               type="submit"
               form={editFormId}
-              className="h-12 w-full rounded-xl border border-emerald-700 bg-emerald-900 px-3 text-sm font-semibold text-white transition hover:bg-emerald-800"
+              className="h-9 w-full rounded-lg border border-emerald-700 bg-emerald-900 px-1 text-xs font-semibold text-white transition hover:bg-emerald-800"
             >
               Uložit
             </button>

@@ -11,16 +11,16 @@ export function SkladDetailTableHeader() {
   return (
     <div className="bg-slate-950/30 px-3 pt-3">
       <div className={headerGridClassName}>
-        <div className="flex items-center px-2">
-          <span className={headerBoxClassName()}>Název</span>
+        <div className="flex min-w-0 items-center px-1">
+          <span className={headerBoxClassName("truncate")}>Název</span>
         </div>
 
-        <div className="flex items-center px-2">
-          <span className={headerBoxClassName()}>Kategorie</span>
+        <div className="flex min-w-0 items-center px-1">
+          <span className={headerBoxClassName("truncate")}>Kategorie</span>
         </div>
 
-        <div className="flex items-center px-2">
-          <span className={headerBoxClassName()}>Podkategorie</span>
+        <div className="flex min-w-0 items-center px-1">
+          <span className={headerBoxClassName("truncate")}>Podkategorie</span>
         </div>
 
         <div className={centerCellClassName}>
@@ -48,19 +48,7 @@ export function SkladDetailTableHeader() {
         </div>
 
         <div className={centerCellClassName}>
-          <span className={headerBoxClassName("justify-center text-center")}>Hodnota</span>
-        </div>
-
-        <div className={centerCellClassName}>
-          <span className={headerBoxClassName("justify-center text-center")}>Pořízeno</span>
-        </div>
-
-        <div className={centerCellClassName}>
-          <span className={headerBoxClassName("justify-center text-center")}>Odpisy</span>
-        </div>
-
-        <div className={centerCellClassName}>
-          <span className={headerBoxClassName("justify-center text-center")}>Současná hodnota</span>
+          <span className={headerBoxClassName("justify-center text-center")}>Hodnota / odpisy</span>
         </div>
 
         <div className={centerCellClassName}>
