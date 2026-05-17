@@ -92,6 +92,10 @@ export default function SidebarNav() {
         Moje
       </NavLink>
 
+      <NavLink href="/dashboard" exact>
+        Dashboard
+      </NavLink>
+
       <NavLink href="/kalendar" exact>
         Kalendář
       </NavLink>

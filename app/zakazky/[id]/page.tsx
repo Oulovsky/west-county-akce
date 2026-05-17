@@ -52,6 +52,8 @@ import {
 } from "@/lib/zakazka-workflow";
 import { buildInvoiceDataFromRow } from "@/lib/invoice-data";
 import { InvoiceActionsClient } from "./InvoiceActionsClient";
+import { getApprovedMinutes, getPaymentAmount } from "@/lib/payments";
+import { getTravelAmount } from "@/lib/transport";
 import {
   PlaceTechnicalNotesCard,
   type MistoKonaniRow,
@@ -1746,6 +1748,84 @@ function WorkflowChangePendingWarning({
   );
 }
 
+function OperationalSummaryCard({
+  plannedPrice,
+  discountAmount,
+  finalPrice,
+  estimatedTechCost,
+  estimatedPeopleCost,
+  estimatedTransportCost,
+  approvedWorkPayments,
+  approvedTravelPayments,
+}: {
+  plannedPrice: number;
+  discountAmount: number;
+  finalPrice: number;
+  estimatedTechCost: number;
+  estimatedPeopleCost: number;
+  estimatedTransportCost: number;
+  approvedWorkPayments: number;
+  approvedTravelPayments: number;
+}) {
+  const totalOperationalCost =
+    estimatedTechCost + estimatedPeopleCost + estimatedTransportCost + approvedWorkPayments + approvedTravelPayments;
+  const margin = finalPrice - totalOperationalCost;
+  const marginPercent = finalPrice > 0 ? (margin / finalPrice) * 100 : 0;
+
+  return (
+    <Card className="mt-6 space-y-5 border-slate-700 bg-[#0b1324]">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-black text-white">Provozní souhrn</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Interní odhad ziskovosti zakázky. Není to účetnictví ani daňový report.
+          </p>
+        </div>
+        <Badge variant={margin >= 0 ? "success" : "danger"}>
+          Marže {formatMoney(margin)} ({formatPercent(marginPercent)})
+        </Badge>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Plánovaná cena</div>
+          <div className="mt-1 text-lg font-black text-white">{formatMoney(plannedPrice)}</div>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Sleva</div>
+          <div className="mt-1 text-lg font-black text-amber-100">{formatMoney(discountAmount)}</div>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Konečná cena</div>
+          <div className="mt-1 text-lg font-black text-emerald-100">{formatMoney(finalPrice)}</div>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Orientační náklady</div>
+          <div className="mt-1 text-lg font-black text-red-100">{formatMoney(totalOperationalCost)}</div>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Odhad techniky</div>
+          <div className="mt-1 font-bold text-slate-100">{formatMoney(estimatedTechCost)}</div>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Odhad lidí</div>
+          <div className="mt-1 font-bold text-slate-100">{formatMoney(estimatedPeopleCost)}</div>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Odhad dopravy</div>
+          <div className="mt-1 font-bold text-slate-100">{formatMoney(estimatedTransportCost)}</div>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Schválené proplacení</div>
+          <div className="mt-1 font-bold text-slate-100">
+            Práce {formatMoney(approvedWorkPayments)} · Cesty {formatMoney(approvedTravelPayments)}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function InvoiceCard({
   zakazkaId,
   invoice,
@@ -2648,6 +2728,76 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
   });
   const computedStaffPrice = staffCostItems.reduce((sum, item) => sum + item.total, 0);
 
+  const { data: attendancePaymentsRaw, error: attendancePaymentsError } = await supabase
+    .from("dochazka_zakazky")
+    .select("user_id, checkin_at, checkout_at, approved_duration_minutes, payment_status")
+    .eq("zakazka_id", id)
+    .not("checkout_at", "is", null);
+
+  if (attendancePaymentsError) {
+    return <div>Chyba proplacení práce: {attendancePaymentsError.message}</div>;
+  }
+
+  const attendancePayments = (attendancePaymentsRaw ?? []) as Array<{
+    user_id: string;
+    checkin_at: string | null;
+    checkout_at: string | null;
+    approved_duration_minutes: number | string | null;
+    payment_status: string | null;
+  }>;
+  const attendanceUserIds = [...new Set(attendancePayments.map((row) => row.user_id).filter(Boolean))];
+  const attendanceProfilesById = new Map<string, PricingProfileRow>();
+
+  if (attendanceUserIds.length > 0) {
+    const { data: attendanceProfilesRaw, error: attendanceProfilesError } = await supabase
+      .from("profiles")
+      .select("user_id, hodinovy_naklad_akce")
+      .in("user_id", attendanceUserIds);
+
+    if (attendanceProfilesError) {
+      return <div>Chyba sazeb proplacení práce: {attendanceProfilesError.message}</div>;
+    }
+
+    for (const profile of (attendanceProfilesRaw ?? []) as PricingProfileRow[]) {
+      attendanceProfilesById.set(profile.user_id, profile);
+    }
+  }
+
+  const approvedWorkPayments = attendancePayments.reduce((sum, row) => {
+    const rate = toCount(attendanceProfilesById.get(row.user_id)?.hodinovy_naklad_akce);
+    return sum + getPaymentAmount(getApprovedMinutes(row), rate);
+  }, 0);
+
+  const { data: travelPaymentsRaw, error: travelPaymentsError } = await supabase
+    .from("cestovni_nahrady")
+    .select("km, sazba_za_km, castka, status")
+    .eq("zakazka_id", id);
+
+  if (travelPaymentsError) {
+    return <div>Chyba cestovních náhrad: {travelPaymentsError.message}</div>;
+  }
+
+  const travelPayments = (travelPaymentsRaw ?? []) as Array<{
+    km: number | string;
+    sazba_za_km: number | string;
+    castka: number | string | null;
+    status: string | null;
+  }>;
+  const approvedTravelPayments = travelPayments
+    .filter((row) => row.status === "schvaleno" || row.status === "proplaceno")
+    .reduce((sum, row) => sum + toCount(row.castka ?? getTravelAmount(row.km, row.sazba_za_km)), 0);
+
+  const { data: transportRowsRaw, error: transportRowsError } = await supabase
+    .from("zakazka_doprava")
+    .select("id")
+    .eq("zakazka_id", id);
+
+  if (transportRowsError) {
+    return <div>Chyba dopravy: {transportRowsError.message}</div>;
+  }
+
+  const estimatedTransportCost = approvedTravelPayments;
+
   const planRows = (technikaSummaryRaw ?? []) as LoadingPlanRow[];
 
   const { data: loadingAssignmentsRaw, error: loadingAssignmentsError } = await supabase
@@ -2849,6 +2999,17 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
         fakturacniFirmy={fakturacniFirmy}
         selectedFakturacniFirmaId={effectiveFakturacniFirma?.id ?? data.fakturacni_firma_id ?? null}
         action={updateZakazkaPricing}
+      />
+
+      <OperationalSummaryCard
+        plannedPrice={currentBeforeDiscount}
+        discountAmount={Math.max(currentBeforeDiscount - currentFinalPrice, 0)}
+        finalPrice={currentFinalPrice}
+        estimatedTechCost={computedTechPrice}
+        estimatedPeopleCost={computedStaffPrice}
+        estimatedTransportCost={estimatedTransportCost}
+        approvedWorkPayments={approvedWorkPayments}
+        approvedTravelPayments={approvedTravelPayments}
       />
 
       <InvoiceCard zakazkaId={id} invoice={latestInvoice} previewData={invoicePreviewData} />
