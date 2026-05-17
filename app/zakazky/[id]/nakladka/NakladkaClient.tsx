@@ -242,7 +242,7 @@ export default function NakladkaClient({
 
       const naAute = current?.nalozeno ?? 0;
       const planDalsi = next?.plan ?? 0;
-      const nazev = current?.nazev ?? next?.nazev ?? "NeznĂˇmĂˇ poloĹľka";
+      const nazev = current?.nazev ?? next?.nazev ?? "Neznámá položka";
 
       const nechatNaAute = Math.min(naAute, planDalsi);
       const vylozit = Math.max(naAute - planDalsi, 0);
@@ -281,18 +281,18 @@ export default function NakladkaClient({
     <div className="space-y-6">
       <Card>
         <div className="grid gap-3 md:grid-cols-3">
-          <StatBox label="PlĂˇn celkem" value={`${celkemPlan} ks`} />
-          <StatBox label="NaloĹľeno celkem" value={`${celkemNalozeno} ks`} />
-          <StatBox label="HotovĂ© poloĹľky" value={hotovoPolozek} />
+          <StatBox label="Plán celkem" value={`${celkemPlan} ks`} />
+          <StatBox label="Naloženo celkem" value={`${celkemNalozeno} ks`} />
+          <StatBox label="Hotové položky" value={hotovoPolozek} />
         </div>
       </Card>
 
       <Card>
         <div className="space-y-4">
           <div>
-            <div className="text-lg font-semibold text-white">PorovnĂˇnĂ­ s dalĹˇĂ­ zakĂˇzkou</div>
+            <div className="text-lg font-semibold text-white">Porovnání s další zakázkou</div>
             <div className="mt-1 text-sm text-slate-400">
-              SkladnĂ­k uvidĂ­, co mĂˇ nechat na autÄ›, co vyloĹľit a co doloĹľit.
+              Skladník uvidí, co má nechat na autě, co vyložit a co doložit.
             </div>
           </div>
 
@@ -306,7 +306,7 @@ export default function NakladkaClient({
                   : "border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
               }`}
             >
-              Porovnat s dalĹˇĂ­ zakĂˇzkou
+              Porovnat s další zakázkou
             </button>
 
             <button
@@ -318,21 +318,21 @@ export default function NakladkaClient({
                   : "border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
               }`}
             >
-              Vybrat zakĂˇzku
+              Vybrat zakázku
             </button>
           </div>
 
           {compareMode === "manual" ? (
             <div className="max-w-xl">
               <label className="mb-2 block text-sm font-medium text-slate-300">
-                PorovnĂˇvacĂ­ zakĂˇzka
+                Porovnávací zakázka
               </label>
               <select
                 value={selectedCompareZakazkaId || autoCompareZakazkaId || compareOptions[0]?.zakazka_id || ""}
                 onChange={(e) => setSelectedCompareZakazkaId(e.target.value)}
                 className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-500"
               >
-                <option value="">NevybrĂˇno</option>
+                <option value="">Nevybráno</option>
                 {compareOptions.map((option) => (
                   <option key={option.zakazka_id} value={option.zakazka_id}>
                     {option.label}
@@ -345,14 +345,14 @@ export default function NakladkaClient({
           {activeCompareZakazka ? (
             <>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="default">PorovnĂˇnĂ­</Badge>
+                <Badge variant="default">Porovnání</Badge>
                 <Badge variant="warning">{activeCompareZakazka.label}</Badge>
               </div>
 
               <div className="grid gap-3 md:grid-cols-3">
-                <StatBox label="Nechat na autÄ›" value={`${summaryNechat} ks`} />
-                <StatBox label="VyloĹľit" value={`${summaryVylozit} ks`} />
-                <StatBox label="DoloĹľit" value={`${summaryDolozit} ks`} />
+                <StatBox label="Nechat na autě" value={`${summaryNechat} ks`} />
+                <StatBox label="Vyložit" value={`${summaryVylozit} ks`} />
+                <StatBox label="Doložit" value={`${summaryDolozit} ks`} />
               </div>
 
               <div className="grid gap-4">
@@ -363,16 +363,16 @@ export default function NakladkaClient({
                         <div className="space-y-2">
                           <div className="text-2xl font-bold text-white">{row.nazev}</div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="default">Na autÄ›: {row.naAute} ks</Badge>
-                            <Badge variant="warning">DalĹˇĂ­ zakĂˇzka: {row.planDalsi} ks</Badge>
+                            <Badge variant="default">Na autě: {row.naAute} ks</Badge>
+                            <Badge variant="warning">Další zakázka: {row.planDalsi} ks</Badge>
                           </div>
                         </div>
                       </div>
 
                       <div className="grid gap-3 md:grid-cols-3">
-                        <StatBox label="Nechat na autÄ›" value={`${row.nechatNaAute} ks`} />
-                        <StatBox label="VyloĹľit" value={`${row.vylozit} ks`} />
-                        <StatBox label="DoloĹľit" value={`${row.dolozit} ks`} />
+                        <StatBox label="Nechat na autě" value={`${row.nechatNaAute} ks`} />
+                        <StatBox label="Vyložit" value={`${row.vylozit} ks`} />
+                        <StatBox label="Doložit" value={`${row.dolozit} ks`} />
                       </div>
                     </div>
                   </Card>
@@ -381,7 +381,7 @@ export default function NakladkaClient({
             </>
           ) : (
             <div className="rounded-xl border border-dashed border-slate-700 px-4 py-4 text-sm text-slate-400">
-              NenĂ­ k dispozici ĹľĂˇdnĂˇ navazujĂ­cĂ­ zakĂˇzka pro porovnĂˇnĂ­.
+              Není k dispozici žádná navazující zakázka pro porovnání.
             </div>
           )}
         </div>
@@ -390,7 +390,7 @@ export default function NakladkaClient({
       {data.length === 0 ? (
         <Card>
           <div className="text-sm text-slate-400">
-            ZatĂ­m nenĂ­ co naklĂˇdat. Nejprve doplĹ techniku na zakĂˇzce.
+            Zatím není co nakládat. Nejprve doplň techniku na zakázce.
           </div>
         </Card>
       ) : (
@@ -412,9 +412,9 @@ export default function NakladkaClient({
                       <div className="text-2xl font-bold text-white">{r.nazev}</div>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="default">PlĂˇn: {r.plan} ks</Badge>
+                        <Badge variant="default">Plán: {r.plan} ks</Badge>
                         <Badge variant={hotovo ? "success" : "warning"}>
-                          {hotovo ? "Hotovo" : "RozpracovĂˇno"}
+                          {hotovo ? "Hotovo" : "Rozpracováno"}
                         </Badge>
                       </div>
                     </div>
@@ -427,13 +427,13 @@ export default function NakladkaClient({
                   </div>
 
                   <div className="grid gap-3 md:grid-cols-2">
-                    <StatBox label="PlĂˇn" value={`${r.plan} ks`} />
-                    <StatBox label="NaloĹľeno" value={`${r.nalozeno} ks`} />
+                    <StatBox label="Plán" value={`${r.plan} ks`} />
+                    <StatBox label="Naloženo" value={`${r.nalozeno} ks`} />
                   </div>
 
                   <div>
                     <div className="mb-2 flex items-center justify-between gap-3 text-sm text-slate-400">
-                      <span>PrĹŻbÄ›h</span>
+                      <span>Průběh</span>
                       <span>{Math.round(progress)} %</span>
                     </div>
 

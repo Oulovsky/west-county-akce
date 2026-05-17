@@ -9,6 +9,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
+import Toast from "@/components/Toast";
 
 type TypBloku = "sklad" | "stavba" | "akce" | "bourani";
 
@@ -278,6 +279,7 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
   const [other, setOther] = useState<OtherRow[]>([]);
   const [modal, setModal] = useState<ModalState | null>(null);
   const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
     void load();
@@ -326,7 +328,10 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
       setAssignments([]);
       setCurrent(null);
       setOther([]);
-      window.alert(error instanceof Error ? error.message : "Načtení lidí selhalo.");
+      setToast({
+        type: "error",
+        message: error instanceof Error ? error.message : "Načtení lidí selhalo.",
+      });
     }
   }
 
@@ -418,14 +423,15 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
 
   async function save() {
     if (!modal) return;
+    if (saving) return;
 
     if (modal.mode === "add" && modal.userIds.length === 0) {
-      window.alert("Vyber alespoň jednoho člověka pro přiřazení.");
+      setToast({ type: "error", message: "Vyber alespoň jednoho člověka pro přiřazení." });
       return;
     }
 
     if (hasInvalidRange(modal.currentFrom, modal.currentTo)) {
-      window.alert("Začátek přiřazení musí být dřív než konec.");
+      setToast({ type: "error", message: "Začátek přiřazení musí být dřív než konec." });
       return;
     }
 
@@ -457,6 +463,7 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
         setModal(null);
         await load();
         router.refresh();
+        setToast({ type: "success", message: "Přiřazení bylo upraveno." });
         return;
       }
 
@@ -494,16 +501,22 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
           successCount > 0
             ? `Přidáno ${successCount} lidí. Některé se nepodařilo přidat:`
             : "Nepodařilo se přidat vybrané lidi:";
-        window.alert(`${prefix}\n${failures.join("\n")}`);
+        setToast({ type: "error", message: `${prefix} ${failures.join(" ")}` });
+      } else if (successCount > 0) {
+        setToast({ type: "success", message: `Přidáno ${successCount} lidí.` });
       }
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Uložení selhalo.");
+      setToast({
+        type: "error",
+        message: error instanceof Error ? error.message : "Uložení selhalo.",
+      });
     } finally {
       setSaving(false);
     }
   }
 
   async function removeAssignmentById(assignmentId: string, userName: string, typBloku: TypBloku) {
+    if (saving) return;
     const confirmed = window.confirm(
       `Odebrat přiřazení člověka ${userName} z fáze ${getTypBlokuLabel(typBloku)}?`
     );
@@ -524,8 +537,12 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
       setModal(null);
       await load();
       router.refresh();
+      setToast({ type: "success", message: "Přiřazení bylo odebráno." });
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Odebrání selhalo.");
+      setToast({
+        type: "error",
+        message: error instanceof Error ? error.message : "Odebrání selhalo.",
+      });
     } finally {
       setSaving(false);
     }
@@ -597,6 +614,10 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
 
   return (
     <>
+      {toast ? (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      ) : null}
+
       <Card className="space-y-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

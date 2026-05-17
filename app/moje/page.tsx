@@ -166,11 +166,11 @@ function AssignmentCard({ item }: { item: AssignmentWithZakazka }) {
     <Card className="space-y-4">
       <div className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-xl font-black leading-tight text-white">
+          <div className="min-w-0 overflow-hidden">
+            <div className="break-words text-xl font-black leading-tight text-white">
               {getZakazkaTitle(zakazka)}
             </div>
-            <div className="mt-2 text-sm font-semibold text-slate-300">
+            <div className="mt-2 break-words text-sm font-semibold text-slate-300">
               {zakazka?.misto || "Místo není vyplněné"}
             </div>
           </div>
@@ -215,14 +215,14 @@ function AssignmentCard({ item }: { item: AssignmentWithZakazka }) {
       {assignment.poznamka ? (
         <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
           <div className="text-xs uppercase tracking-wide text-slate-500">Poznámka k přiřazení</div>
-          <div className="mt-1 whitespace-pre-wrap text-sm text-slate-200">{assignment.poznamka}</div>
+          <div className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-200">{assignment.poznamka}</div>
         </div>
       ) : null}
 
       {zakazka?.poznamka ? (
         <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
           <div className="text-xs uppercase tracking-wide text-slate-500">Poznámka k zakázce</div>
-          <div className="mt-1 whitespace-pre-wrap text-sm text-slate-200">{zakazka.poznamka}</div>
+          <div className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-200">{zakazka.poznamka}</div>
         </div>
       ) : null}
 

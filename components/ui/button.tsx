@@ -11,7 +11,7 @@ export function Button({
   ...props
 }: ButtonProps) {
   const base =
-    "rounded-xl px-5 py-3 font-semibold transition disabled:cursor-not-allowed disabled:opacity-70";
+    "rounded-xl px-5 py-3 font-semibold transition focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:ring-offset-2 focus:ring-offset-slate-950 disabled:cursor-not-allowed disabled:opacity-70";
 
   const variants: Record<NonNullable<ButtonProps["variant"]>, string> = {
     primary: "bg-blue-600 text-white hover:bg-blue-500",

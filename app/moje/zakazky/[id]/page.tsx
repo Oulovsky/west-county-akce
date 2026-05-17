@@ -214,8 +214,8 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
       <Card className="space-y-4">
         <div>
           <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">Moje práce</div>
-          <h1 className="mt-2 text-3xl font-black leading-tight text-white">{getZakazkaTitle(zakazka)}</h1>
-          <div className="mt-3 text-base font-semibold text-slate-300">
+          <h1 className="mt-2 break-words text-3xl font-black leading-tight text-white">{getZakazkaTitle(zakazka)}</h1>
+          <div className="mt-3 break-words text-base font-semibold text-slate-300">
             {zakazka.misto || "Místo není vyplněné"}
           </div>
         </div>
@@ -259,20 +259,20 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
               const status = normalizeStatus(assignment.confirmation_status);
 
               return (
-                <Card key={String(assignment.id)} className="space-y-4">
+                <Card key={String(assignment.id)} className="space-y-4 overflow-hidden">
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
+                    <div className="min-w-0">
                       <div className="text-lg font-bold text-white">
                         {getPhaseLabel(assignment.typ_bloku)}
                       </div>
                       <div className="mt-1 text-sm text-slate-300">
                         {formatRange(assignment.datum_od, assignment.datum_do)}
                       </div>
-                  {isLogisticsPhase(assignment.typ_bloku) ? (
-                    <div className="mt-3 inline-flex rounded-md border border-cyan-500/30 bg-cyan-500/15 px-3 py-1 text-xs font-bold text-cyan-100">
-                      {getLogisticsStatusLabel(zakazka.logistika_stav)}
-                    </div>
-                  ) : null}
+                      {isLogisticsPhase(assignment.typ_bloku) ? (
+                        <div className="mt-3 inline-flex rounded-md border border-cyan-500/30 bg-cyan-500/15 px-3 py-1 text-xs font-bold text-cyan-100">
+                          {getLogisticsStatusLabel(zakazka.logistika_stav)}
+                        </div>
+                      ) : null}
                     </div>
                     <Badge variant={getStatusVariant(status)}>{getStatusLabel(status)}</Badge>
                   </div>
@@ -282,7 +282,7 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
                       <div className="text-xs uppercase tracking-wide text-slate-500">
                         Poznámka k přiřazení
                       </div>
-                      <div className="mt-1 whitespace-pre-wrap text-sm text-slate-200">
+                      <div className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-200">
                         {assignment.poznamka}
                       </div>
                     </div>
@@ -305,7 +305,7 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
       {zakazka.poznamka ? (
         <Card className="space-y-2">
           <h2 className="text-xl font-bold text-white">Poznámka k zakázce</h2>
-          <div className="whitespace-pre-wrap text-sm text-slate-200">{zakazka.poznamka}</div>
+          <div className="whitespace-pre-wrap break-words text-sm text-slate-200">{zakazka.poznamka}</div>
         </Card>
       ) : null}
 
@@ -320,7 +320,7 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
                 key={`${item.skladova_polozka_id}-${getTechnikaName(item.skladove_polozky)}`}
                 className="flex items-center justify-between gap-3 py-3 text-sm"
               >
-                <div className="font-semibold text-slate-100">
+                <div className="min-w-0 break-words font-semibold text-slate-100">
                   {getTechnikaName(item.skladove_polozky)}
                 </div>
                 <div className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 font-bold text-slate-200">

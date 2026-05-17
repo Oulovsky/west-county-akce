@@ -77,14 +77,14 @@ export function HistoryTimelineCard({ events }: { events: TimelineEvent[] }) {
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-start justify-between gap-4 text-left"
+        className="flex w-full items-start justify-between gap-4 rounded-2xl text-left outline-none transition focus:ring-2 focus:ring-blue-400/40"
       >
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <div className="text-lg font-semibold text-white">Historie zakázky</div>
             <Badge variant="default">{events.length} událostí</Badge>
           </div>
-          <div className="mt-1 text-sm text-slate-400">{lastEventLabel}</div>
+          <div className="mt-1 break-words text-sm text-slate-400">{lastEventLabel}</div>
         </div>
         <div className="rounded-full border border-slate-700 bg-slate-950/70 p-2">
           <ChevronIcon open={open} />
@@ -97,21 +97,21 @@ export function HistoryTimelineCard({ events }: { events: TimelineEvent[] }) {
             Zatím bez provozní historie.
           </div>
         ) : (
-          <div className="max-h-[36rem] space-y-3 overflow-y-auto pr-1">
+          <div className="max-h-[36rem] space-y-3 overflow-y-auto overflow-x-hidden pr-1">
             {events.map((event) => (
               <div
                 key={event.id}
                 className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  <div className="min-w-0 overflow-hidden">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="default">{event.type}</Badge>
-                      <div className="font-semibold text-white">{event.title}</div>
+                      <div className="break-words font-semibold text-white">{event.title}</div>
                     </div>
-                    <div className="mt-2 text-sm text-slate-300">{event.actorLabel}</div>
+                    <div className="mt-2 break-words text-sm text-slate-300">{event.actorLabel}</div>
                     {event.detail ? (
-                      <div className="mt-2 whitespace-pre-wrap text-sm text-slate-400">
+                      <div className="mt-2 whitespace-pre-wrap break-words text-sm text-slate-400">
                         {event.detail}
                       </div>
                     ) : null}

@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, useTransition } from "react";
+import Toast from "@/components/Toast";
 import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -190,24 +192,62 @@ function ZakazkaCard({
         </div>
 
         {canDeletePermanently ? (
-          <form action={smazatTrvaleAction} className="shrink-0">
-            <input type="hidden" name="zakazka_id" value={zakazka.zakazka_id} />
-            <button
-              type="submit"
-              onClick={(e) => {
-                const ok = window.confirm(
-                  `Trvale smazat zakázku ${zakazka.cislo_zakazky} – ${zakazka.nazev}?`
-                );
-                if (!ok) e.preventDefault();
-              }}
-              className="rounded-xl border border-red-500/40 bg-red-600/20 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-600/30"
-            >
-              Smazat trvale
-            </button>
-          </form>
+          <PermanentDeleteButton zakazka={zakazka} smazatTrvaleAction={smazatTrvaleAction} />
         ) : null}
       </div>
     </Card>
+  );
+}
+
+function PermanentDeleteButton({
+  zakazka,
+  smazatTrvaleAction,
+}: {
+  zakazka: Zakazka;
+  smazatTrvaleAction: (formData: FormData) => Promise<void>;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  function remove() {
+    if (isPending) return;
+
+    const ok = window.confirm(
+      `Trvale smazat zakázku ${zakazka.cislo_zakazky} – ${zakazka.nazev}?`
+    );
+    if (!ok) return;
+
+    startTransition(async () => {
+      try {
+        const formData = new FormData();
+        formData.set("zakazka_id", zakazka.zakazka_id);
+        await smazatTrvaleAction(formData);
+        router.refresh();
+        setToast({ type: "success", message: "Zakázka byla trvale smazána." });
+      } catch (error) {
+        setToast({
+          type: "error",
+          message: error instanceof Error ? error.message : "Zakázku se nepodařilo smazat.",
+        });
+      }
+    });
+  }
+
+  return (
+    <div className="shrink-0">
+      {toast ? (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      ) : null}
+      <button
+        type="button"
+        onClick={remove}
+        disabled={isPending}
+        className="rounded-xl border border-red-500/40 bg-red-600/20 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-600/30 focus:outline-none focus:ring-2 focus:ring-red-400/50 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {isPending ? "Mažu..." : "Smazat trvale"}
+      </button>
+    </div>
   );
 }
 

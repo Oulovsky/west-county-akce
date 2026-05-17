@@ -634,11 +634,8 @@ function getClientVerificationStatus({
   return "Dotazník nevytvořen";
 }
 
-// TODO: Dočasné řešení bez DB změny. Náhrady se teď párují podle názvu
-// plánované položky ze sklad_kus_historie.poznamka. Dlouhodobě má
-// zakazka_kusy nést explicitní planned_skladova_polozka_id /
-// splnuje_skladova_polozka_id, aby se náhrady počítaly spolehlivě bez
-// parsování textu.
+// Dočasné párování náhrad podle názvu plánované položky ze sklad_kus_historie.poznamka.
+// Přesnější model může později nést explicitní planned_skladova_polozka_id.
 function extractReplacementPlannedItemName(note: string | null | undefined) {
   const text = note ?? "";
   const marker = "Náhrada za plánovanou položku:";
@@ -1292,7 +1289,7 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
     );
 
     if (!akceOd || !akceDo) {
-      throw new Error("VyplĹ zaÄŤĂˇtek a konec akce.");
+      throw new Error("Vyplň začátek a konec akce.");
     }
 
     const { error } = await supabase
@@ -1336,7 +1333,7 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
   }
 
   if (!data) {
-    return <div>ZakĂˇzka nenalezena</div>;
+    return <div>Zakázka nenalezena</div>;
   }
 
   const logisticsUserIds = [

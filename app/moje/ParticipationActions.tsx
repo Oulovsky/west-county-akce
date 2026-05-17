@@ -1,6 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import Toast from "@/components/Toast";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,23 +14,31 @@ type ParticipationActionsProps = {
 };
 
 export function ParticipationActions({ assignmentId, status }: ParticipationActionsProps) {
+  const router = useRouter();
   const [declineOpen, setDeclineOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function accept() {
+    if (isPending || status === "accepted") return;
     setError(null);
     startTransition(async () => {
       try {
         await acceptAssignmentAction(assignmentId);
+        router.refresh();
+        setToast({ type: "success", message: "Účast byla potvrzena." });
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Potvrzení se nepodařilo uložit.");
+        const message = e instanceof Error ? e.message : "Potvrzení se nepodařilo uložit.";
+        setError(message);
+        setToast({ type: "error", message });
       }
     });
   }
 
   function decline() {
+    if (isPending) return;
     const trimmedReason = reason.trim();
 
     if (!trimmedReason) {
@@ -42,17 +52,25 @@ export function ParticipationActions({ assignmentId, status }: ParticipationActi
         await declineAssignmentAction(assignmentId, trimmedReason);
         setDeclineOpen(false);
         setReason("");
+        router.refresh();
+        setToast({ type: "success", message: "Odmítnutí bylo uloženo." });
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Odmítnutí se nepodařilo uložit.");
+        const message = e instanceof Error ? e.message : "Odmítnutí se nepodařilo uložit.";
+        setError(message);
+        setToast({ type: "error", message });
       }
     });
   }
 
   return (
     <>
+      {toast ? (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      ) : null}
+
       <div className="flex flex-wrap gap-2">
         <Button type="button" onClick={accept} disabled={isPending || status === "accepted"}>
-          {status === "accepted" ? "Potvrzeno" : "Přijmout"}
+          {isPending ? "Ukládám..." : status === "accepted" ? "Potvrzeno" : "Přijmout"}
         </Button>
         <Button
           type="button"
@@ -61,9 +79,9 @@ export function ParticipationActions({ assignmentId, status }: ParticipationActi
             setError(null);
             setDeclineOpen(true);
           }}
-          disabled={isPending}
+          disabled={isPending || status === "declined"}
         >
-          Odmítnout
+          {status === "declined" ? "Odmítnuto" : "Odmítnout"}
         </Button>
       </div>
 

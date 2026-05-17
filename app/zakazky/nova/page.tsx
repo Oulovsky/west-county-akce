@@ -9,6 +9,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { Textarea } from "@/components/ui/textarea";
+import Toast from "@/components/Toast";
 import { GpsLocationFields, type SavedPlaceSuggestion } from "../GpsLocationFields";
 import { KlientSelectWithCreate, type KlientOption } from "../KlientSelectWithCreate";
 
@@ -432,6 +433,11 @@ export default function NovaZakazkaPage() {
   const [skladError, setSkladError] = useState<string | null>(null);
   const [manualPlanItems, setManualPlanItems] = useState<ManualPlanItem[]>([]);
   const [availabilityConflicts, setAvailabilityConflicts] = useState<AvailabilityConflict[]>([]);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  function showError(message: string) {
+    setToast({ type: "error", message });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -1136,8 +1142,10 @@ export default function NovaZakazkaPage() {
   }
 
   async function ulozit(forceAvailabilityWarning = false) {
+    if (ukladam) return;
+
     if (!nazev || !misto || !akceOdDatum || !akceDoDatum) {
-      alert("Vyplň název, místo, akce od a akce do.");
+      showError("Vyplň název, místo, akce od a akce do.");
       return;
     }
 
@@ -1154,29 +1162,29 @@ export default function NovaZakazkaPage() {
     const bouraniDo = combineDateAndTime(bouraniDoDatum, bouraniDoCas);
 
     if (!akceOd || !akceDo) {
-      alert("Vyplň začátek a konec akce.");
+      showError("Vyplň začátek a konec akce.");
       return;
     }
 
     if (new Date(akceOd).getTime() >= new Date(akceDo).getTime()) {
-      alert("Konec akce musí být později než začátek akce.");
+      showError("Konec akce musí být později než začátek akce.");
       return;
     }
 
     if (typObsluhy === "bez_obsluhy") {
       if (!stavbaOd || !stavbaDo || !bouraniOd || !bouraniDo) {
-        alert("U zakázky bez obsluhy je povinná stavba i bourání.");
+        showError("U zakázky bez obsluhy je povinná stavba i bourání.");
         return;
       }
     }
 
     if (stavbaOd && stavbaDo && new Date(stavbaOd).getTime() >= new Date(stavbaDo).getTime()) {
-      alert("Konec stavby musí být později než začátek stavby.");
+      showError("Konec stavby musí být později než začátek stavby.");
       return;
     }
 
     if (bouraniOd && bouraniDo && new Date(bouraniOd).getTime() >= new Date(bouraniDo).getTime()) {
-      alert("Konec bourání musí být později než začátek bourání.");
+      showError("Konec bourání musí být později než začátek bourání.");
       return;
     }
 
@@ -1195,17 +1203,17 @@ export default function NovaZakazkaPage() {
 
       if (item.ledKind) {
         if (!item.ledWidth || !item.ledHeight) {
-          alert(`U ${item.nazev} vyplň šířku i výšku LED.`);
+          showError(`U ${item.nazev} vyplň šířku i výšku LED.`);
           return;
         }
 
         if (!ledRequestedArea || ledRequestedArea <= 0) {
-          alert(`LED plocha u ${item.nazev} musí být větší než 0.`);
+          showError(`LED plocha u ${item.nazev} musí být větší než 0.`);
           return;
         }
 
         if (ledMaxArea && ledRequestedArea > ledMaxArea) {
-          alert(
+          showError(
             `Požadovaná LED plocha ${ledRequestedArea} m² překračuje maximum ${ledMaxArea} m² pro ${getLedKindLabel(item.ledKind)} u ${item.nazev}.`
           );
           return;
@@ -1267,7 +1275,7 @@ export default function NovaZakazkaPage() {
           .single();
 
         if (mistoError) {
-          alert(mistoError.message);
+          showError(mistoError.message);
           setUkladam(false);
           return;
         }
@@ -1343,7 +1351,7 @@ export default function NovaZakazkaPage() {
         .single();
 
       if (error) {
-        alert(error.message);
+        showError(error.message);
         setUkladam(false);
         return;
       }
@@ -1387,7 +1395,7 @@ export default function NovaZakazkaPage() {
           .insert(payload);
 
         if (realizaceError) {
-          alert(realizaceError.message);
+          showError(realizaceError.message);
           setUkladam(false);
           return;
         }
@@ -1405,7 +1413,7 @@ export default function NovaZakazkaPage() {
           .insert(technikaPayload);
 
         if (technikaError) {
-          alert(technikaError.message);
+          showError(technikaError.message);
           setUkladam(false);
           return;
         }
@@ -1415,13 +1423,17 @@ export default function NovaZakazkaPage() {
       router.refresh();
     } catch (e) {
       const message = e instanceof Error ? e.message : "Neznámá chyba";
-      alert(message);
+      showError(message);
       setUkladam(false);
     }
   }
 
   return (
     <div className="w-full">
+      {toast ? (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      ) : null}
+
       {availabilityConflicts.length > 0 ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4">
           <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl border-2 border-amber-500 bg-slate-950 p-5 shadow-2xl shadow-amber-950/40">
