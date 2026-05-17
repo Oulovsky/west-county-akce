@@ -188,6 +188,30 @@ type ClientVerificationPhotoRow = {
   created_at: string | null;
 };
 
+type DeclinedAssignmentRow = {
+  id: string | number;
+  user_id: string;
+  datum_od: string | null;
+  datum_do: string | null;
+  typ_bloku: string | null;
+  declined_reason: string | null;
+};
+
+type DeclinedAssignmentProfileRow = {
+  user_id: string;
+  email: string | null;
+  jmeno: string | null;
+  prijmeni: string | null;
+};
+
+type DeclinedAssignmentAlertItem = {
+  id: string;
+  userName: string;
+  phase: string;
+  timeRange: string;
+  reason: string;
+};
+
 function getSkladovaPolozkaInfo(
   value: TechnikaSummaryRawRow["skladove_polozky"]
 ) {
@@ -256,6 +280,42 @@ function formatPhotoType(value: string | null) {
   if (value === "prostor") return "Prostor";
   if (value === "jina") return "Jiná";
   return "Jiná";
+}
+
+function formatAssignmentDateTime(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toLocaleString("cs-CZ", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatAssignmentRange(from: string | null, to: string | null) {
+  const fromText = formatAssignmentDateTime(from);
+  const toText = formatAssignmentDateTime(to);
+
+  if (fromText && toText) return `${fromText} – ${toText}`;
+  if (fromText) return `Od ${fromText}`;
+  if (toText) return `Do ${toText}`;
+  return "Čas není zadaný";
+}
+
+function getAssignmentPhaseLabel(value: string | null) {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (raw === "sklad" || raw === "nakladka" || raw === "nakládka") return "Nakládka";
+  if (raw === "stavba") return "Stavba";
+  if (raw === "bourani" || raw === "bourání") return "Bourání";
+  return "Provoz akce";
+}
+
+function getProfileName(profile: DeclinedAssignmentProfileRow | undefined, userId: string) {
+  const name = [profile?.prijmeni, profile?.jmeno].filter(Boolean).join(" ").trim();
+  return name || profile?.email || userId;
 }
 
 function getClientVerificationStatus({
@@ -1078,6 +1138,51 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
     existingPlacesForLink = (placesRaw ?? []) as ExistingPlaceOption[];
   }
 
+  const { data: declinedAssignmentsRaw, error: declinedAssignmentsError } = await supabase
+    .from("zakazka_lide")
+    .select("id, user_id, datum_od, datum_do, typ_bloku, declined_reason")
+    .eq("zakazka_id", id)
+    .eq("confirmation_status", "declined")
+    .order("datum_od", { ascending: true, nullsFirst: false });
+
+  if (declinedAssignmentsError) {
+    return <div>Chyba odmítnutých přiřazení: {declinedAssignmentsError.message}</div>;
+  }
+
+  const declinedAssignments = (declinedAssignmentsRaw ?? []) as DeclinedAssignmentRow[];
+  const declinedUserIds = [
+    ...new Set(declinedAssignments.map((assignment) => assignment.user_id).filter(Boolean)),
+  ];
+  let declinedProfilesById = new Map<string, DeclinedAssignmentProfileRow>();
+
+  if (declinedUserIds.length > 0) {
+    const { data: declinedProfilesRaw, error: declinedProfilesError } = await supabase
+      .from("profiles")
+      .select("user_id, email, jmeno, prijmeni")
+      .in("user_id", declinedUserIds);
+
+    if (declinedProfilesError) {
+      return <div>Chyba profilů odmítnutých lidí: {declinedProfilesError.message}</div>;
+    }
+
+    declinedProfilesById = new Map(
+      ((declinedProfilesRaw ?? []) as DeclinedAssignmentProfileRow[]).map((profile) => [
+        profile.user_id,
+        profile,
+      ])
+    );
+  }
+
+  const declinedAssignmentAlerts: DeclinedAssignmentAlertItem[] = declinedAssignments.map(
+    (assignment) => ({
+      id: String(assignment.id),
+      userName: getProfileName(declinedProfilesById.get(assignment.user_id), assignment.user_id),
+      phase: getAssignmentPhaseLabel(assignment.typ_bloku),
+      timeRange: formatAssignmentRange(assignment.datum_od, assignment.datum_do),
+      reason: assignment.declined_reason?.trim() || "Důvod není vyplněný.",
+    })
+  );
+
   const { data: dotaznikRaw, error: dotaznikError } = await supabase
     .from("zakazka_dotazniky")
     .select(
@@ -1431,6 +1536,46 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
       </div>
 
       <div className="mt-10">
+        {declinedAssignmentAlerts.length > 0 ? (
+          <Card className="mb-4 border-red-500/30 bg-red-500/10">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-lg font-bold text-red-100">
+                  Někdo odmítl přiřazení k této zakázce
+                </div>
+                <div className="mt-1 text-sm text-red-100/80">
+                  Je potřeba vyřešit pokrytí práce.
+                </div>
+              </div>
+              <div className="rounded-md border border-red-400/40 bg-red-500/20 px-3 py-1 text-xs font-bold text-red-100">
+                {declinedAssignmentAlerts.length === 1
+                  ? "1 odmítnutí"
+                  : `${declinedAssignmentAlerts.length} odmítnutí`}
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              {declinedAssignmentAlerts.map((item) => (
+                <div
+                  key={item.id}
+                  className="rounded-2xl border border-red-400/25 bg-slate-950/60 px-4 py-3"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="font-semibold text-white">{item.userName}</div>
+                      <div className="mt-1 text-sm text-slate-300">
+                        {item.phase} · {item.timeRange}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 text-sm text-red-100">
+                    <span className="font-semibold">Důvod:</span> {item.reason}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ) : null}
         <PeoplePool zakazkaId={id} />
       </div>
     </div>

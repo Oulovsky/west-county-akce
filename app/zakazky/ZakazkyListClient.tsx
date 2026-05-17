@@ -20,6 +20,7 @@ export type Zakazka = {
   cas_do: string | null;
   zrusena?: boolean | null;
   loading_status?: string | null;
+  declined_people_count?: number;
 };
 
 type FilterMode = "all" | "active" | "future" | "past";
@@ -165,6 +166,16 @@ function ZakazkaCard({
                   <span className="font-semibold text-slate-200">Nakládka:</span>{" "}
                   <span className="rounded-md border border-slate-700 bg-slate-900 px-2 py-0.5 text-xs font-bold text-slate-100">
                     {zakazka.loading_status}
+                  </span>
+                </div>
+              ) : null}
+              {zakazka.declined_people_count ? (
+                <div>
+                  <span className="font-semibold text-red-200">Lidé:</span>{" "}
+                  <span className="rounded-md border border-red-500/40 bg-red-500/15 px-2 py-0.5 text-xs font-bold text-red-100">
+                    {zakazka.declined_people_count === 1
+                      ? "Odmítnutý člověk"
+                      : `${zakazka.declined_people_count} odmítnutí`}
                   </span>
                 </div>
               ) : null}

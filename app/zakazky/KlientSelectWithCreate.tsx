@@ -102,6 +102,19 @@ function normalizePsc(value: unknown) {
   return getString(value).replace(/\s+/g, "");
 }
 
+function dedupeClientsById(clients: KlientOption[]) {
+  const seen = new Set<string>();
+  const uniqueClients: KlientOption[] = [];
+
+  for (const client of clients) {
+    if (seen.has(client.klient_id)) continue;
+    seen.add(client.klient_id);
+    uniqueClients.push(client);
+  }
+
+  return uniqueClients;
+}
+
 export function KlientSelectWithCreate({
   clients,
   selectedId,
@@ -121,7 +134,7 @@ export function KlientSelectWithCreate({
   const currentSelectedId = selectedId ?? localSelectedId;
   const sortedClients = useMemo(
     () =>
-      [...clients, ...createdClients].sort((a, b) =>
+      dedupeClientsById([...clients, ...createdClients]).sort((a, b) =>
         a.nazev.localeCompare(b.nazev, "cs")
       ),
     [clients, createdClients]
@@ -217,7 +230,12 @@ export function KlientSelectWithCreate({
     }
 
     const created = data as KlientOption;
-    setCreatedClients((current) => [...current, created]);
+    setCreatedClients((current) =>
+      clients.some((client) => client.klient_id === created.klient_id) ||
+      current.some((client) => client.klient_id === created.klient_id)
+        ? current
+        : [...current, created]
+    );
     onClientCreated?.(created);
     setSelected(created.klient_id);
     setForm(emptyForm);

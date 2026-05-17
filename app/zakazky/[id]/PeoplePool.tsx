@@ -22,6 +22,9 @@ type Assignment = {
   datum_do?: string | null;
   has_conflict?: boolean;
   typ_bloku?: string | null;
+  confirmation_status?: string | null;
+  declined_reason?: string | null;
+  responded_at?: string | null;
 };
 
 type Zakazka = {
@@ -44,13 +47,13 @@ type Zakazka = {
 };
 
 type OtherZakazka = {
-  id?: string;
   zakazka_id?: string;
   nazev?: string | null;
 };
 
 type OtherRow = {
   id?: string | number;
+  zakazka_id?: string | null;
   user_id: string;
   datum_od?: string | null;
   datum_do?: string | null;
@@ -67,6 +70,13 @@ type PeopleResponse = {
 
 type ModalState =
   | {
+      mode: "add";
+      userIds: string[];
+      currentFrom: string;
+      currentTo: string;
+      typBloku: TypBloku;
+    }
+  | {
       mode: "edit";
       assignmentId: string;
       userId: string;
@@ -74,32 +84,13 @@ type ModalState =
       currentFrom: string;
       currentTo: string;
       typBloku: TypBloku;
-    }
-  | {
-      mode: "conflict";
-      assignmentId: string | null;
-      userId: string;
-      userName: string;
-      currentFrom: string;
-      currentTo: string;
-      typBloku: TypBloku;
-      otherAssignmentId: string | null;
-      otherZakazkaNazev: string;
-      otherFrom: string;
-      otherTo: string;
-      otherTypBloku: TypBloku;
     };
 
-type PersonChipProps = {
-  firstName: string;
-  lastName: string;
-  tone: "assigned" | "available" | "conflict";
-  onClick: () => void;
-  badge?: string;
-  warningMark?: boolean;
-  secondaryBadge?: string;
-  details?: string[];
-  conflictDetail?: string | null;
+type ConflictInfo = {
+  otherName: string;
+  otherFrom?: string | null;
+  otherTo?: string | null;
+  otherTypBloku: TypBloku;
 };
 
 type BlockConfig = {
@@ -111,92 +102,32 @@ type BlockConfig = {
 const BLOCKS: BlockConfig[] = [
   {
     key: "sklad",
-    title: "Sklad / logistika",
-    description: "Odjezd ze skladu až sraz na místě.",
+    title: "Nakládka",
+    description: "Příprava, odjezd ze skladu a sraz na místě.",
   },
   {
     key: "stavba",
     title: "Stavba",
-    description: "Blok stavby před akcí.",
+    description: "Technická stavba před akcí.",
   },
   {
     key: "akce",
-    title: "Akce",
-    description: "Hlavní průběh akce.",
+    title: "Provoz akce",
+    description: "Pokrytí práce během samotné akce.",
   },
   {
     key: "bourani",
     title: "Bourání",
-    description: "Samostatný blok bourání.",
+    description: "Demontáž a návrat po akci.",
   },
 ];
-
-function PersonChip({
-  firstName,
-  lastName,
-  tone,
-  onClick,
-  badge,
-  warningMark = false,
-  secondaryBadge,
-  details = [],
-  conflictDetail = null,
-}: PersonChipProps) {
-  const toneClassName =
-    tone === "conflict"
-      ? "border-orange-500/40 bg-orange-500/15 hover:bg-orange-500/20"
-      : tone === "assigned"
-        ? "border-blue-500/30 bg-blue-500/15 hover:bg-blue-500/20"
-        : "border-slate-700 bg-slate-900/70 hover:bg-slate-800/80";
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`relative min-w-[160px] rounded-2xl border px-4 py-3 text-left transition ${toneClassName}`}
-    >
-      <div className="text-sm text-slate-300">{firstName}</div>
-      <div className="text-base font-semibold text-white">{lastName || "\u00A0"}</div>
-
-      {badge || secondaryBadge ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {badge ? (
-            <Badge variant={tone === "conflict" ? "warning" : "default"}>{badge}</Badge>
-          ) : null}
-
-          {secondaryBadge ? <Badge variant="default">{secondaryBadge}</Badge> : null}
-        </div>
-      ) : null}
-
-      {details.length > 0 ? (
-        <div className="mt-3 space-y-1 text-xs font-medium text-slate-300">
-          {details.map((detail) => (
-            <div key={detail}>{detail}</div>
-          ))}
-        </div>
-      ) : null}
-
-      {conflictDetail ? (
-        <div className="mt-3 rounded-xl border border-orange-400/30 bg-orange-500/10 px-3 py-2 text-xs font-semibold text-orange-100">
-          {conflictDetail}
-        </div>
-      ) : null}
-
-      {warningMark ? (
-        <div className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-orange-200 text-xs font-bold text-orange-900 shadow">
-          !
-        </div>
-      ) : null}
-    </button>
-  );
-}
 
 function normalizeTypBloku(value?: string | null): TypBloku {
   const raw = String(value ?? "").trim().toLowerCase();
 
-  if (raw === "sklad") return "sklad";
+  if (raw === "sklad" || raw === "nakladka" || raw === "nakládka") return "sklad";
   if (raw === "stavba") return "stavba";
-  if (raw === "bourani") return "bourani";
+  if (raw === "bourani" || raw === "bourání") return "bourani";
 
   return "akce";
 }
@@ -204,11 +135,133 @@ function normalizeTypBloku(value?: string | null): TypBloku {
 function getTypBlokuLabel(value?: string | null) {
   const typ = normalizeTypBloku(value);
 
-  if (typ === "sklad") return "Sklad";
+  if (typ === "sklad") return "Nakládka";
   if (typ === "stavba") return "Stavba";
   if (typ === "bourani") return "Bourání";
 
-  return "Akce";
+  return "Provoz akce";
+}
+
+function normalizeConfirmationStatus(value?: string | null) {
+  const raw = String(value ?? "").trim().toLowerCase();
+
+  if (raw === "accepted") return "accepted";
+  if (raw === "declined") return "declined";
+
+  return "pending";
+}
+
+function getConfirmationStatusLabel(value?: string | null) {
+  const status = normalizeConfirmationStatus(value);
+
+  if (status === "accepted") return "Potvrzeno";
+  if (status === "declined") return "Odmítnuto";
+
+  return "Čeká";
+}
+
+function getConfirmationStatusVariant(value?: string | null) {
+  const status = normalizeConfirmationStatus(value);
+
+  if (status === "accepted") return "success";
+  if (status === "declined") return "danger";
+
+  return "warning";
+}
+
+function splitName(fullName: string) {
+  const trimmed = fullName.trim();
+  const parts = trimmed ? trimmed.split(/\s+/) : [];
+
+  return {
+    firstName: parts[0] || "Bez",
+    lastName: parts.slice(1).join(" ") || "jména",
+  };
+}
+
+function toInput(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function joinDateAndTime(date?: string | null, time?: string | null) {
+  if (!date || !time) return "";
+  return `${date.slice(0, 10)}T${time.slice(0, 5)}`;
+}
+
+function overlaps(
+  aFrom?: string | null,
+  aTo?: string | null,
+  bFrom?: string | null,
+  bTo?: string | null
+) {
+  if (!aFrom || !aTo || !bFrom || !bTo) return false;
+
+  const aStart = new Date(aFrom);
+  const aEnd = new Date(aTo);
+  const bStart = new Date(bFrom);
+  const bEnd = new Date(bTo);
+
+  if (
+    Number.isNaN(aStart.getTime()) ||
+    Number.isNaN(aEnd.getTime()) ||
+    Number.isNaN(bStart.getTime()) ||
+    Number.isNaN(bEnd.getTime())
+  ) {
+    return false;
+  }
+
+  return aStart < bEnd && aEnd > bStart;
+}
+
+function hasInvalidRange(from?: string | null, to?: string | null) {
+  if (!from || !to) return false;
+
+  const fromTime = new Date(from).getTime();
+  const toTime = new Date(to).getTime();
+
+  if (!Number.isFinite(fromTime) || !Number.isFinite(toTime)) return true;
+
+  return fromTime >= toTime;
+}
+
+function formatDateTimeShort(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toLocaleString("cs-CZ", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatAssignmentRange(from?: string | null, to?: string | null) {
+  const fromText = formatDateTimeShort(from);
+  const toText = formatDateTimeShort(to);
+
+  if (fromText && toText) return `${fromText} – ${toText}`;
+  if (fromText) return `Od ${fromText}`;
+  if (toText) return `Do ${toText}`;
+  return "Čas není zadaný";
+}
+
+function getConflictText(conflict: ConflictInfo | null) {
+  if (!conflict) return null;
+
+  const range = formatAssignmentRange(conflict.otherFrom, conflict.otherTo);
+  const block = getTypBlokuLabel(conflict.otherTypBloku);
+  const name = conflict.otherName || "Jiná zakázka";
+
+  return range === "Čas není zadaný"
+    ? `${name} · ${block}`
+    : `${name} · ${block} · ${range}`;
 }
 
 export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
@@ -225,10 +278,7 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
 
   async function parseJsonSafe(response: Response) {
     const text = await response.text();
-
-    if (!text) {
-      return {};
-    }
+    if (!text) return {};
 
     try {
       return JSON.parse(text);
@@ -273,35 +323,6 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
     }
   }
 
-  function toInput(v?: string | null) {
-    if (!v) return "";
-    const d = new Date(v);
-    if (Number.isNaN(d.getTime())) return "";
-    const offset = d.getTimezoneOffset() * 60000;
-    return new Date(d.getTime() - offset).toISOString().slice(0, 16);
-  }
-
-  function join(d?: string | null, t?: string | null) {
-    if (!d || !t) return "";
-    return `${d.slice(0, 10)}T${t.slice(0, 5)}`;
-  }
-
-  function overlaps(
-    aFrom?: string | null,
-    aTo?: string | null,
-    bFrom?: string | null,
-    bTo?: string | null
-  ) {
-    if (!aFrom || !aTo || !bFrom || !bTo) return false;
-
-    const aStart = new Date(aFrom);
-    const aEnd = new Date(aTo);
-    const bStart = new Date(bFrom);
-    const bEnd = new Date(bTo);
-
-    return aStart < bEnd && aEnd > bStart;
-  }
-
   function getRangeForBlok(typBloku: TypBloku) {
     if (!current) {
       return { from: "", to: "" };
@@ -329,24 +350,27 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
     }
 
     return {
-      from: current.akce_od ?? join(current.datum_od, current.cas_od),
-      to: current.akce_do ?? join(current.datum_do, current.cas_do),
+      from: current.akce_od ?? joinDateAndTime(current.datum_od, current.cas_od),
+      to: current.akce_do ?? joinDateAndTime(current.datum_do, current.cas_do),
     };
   }
 
-  function getCurrentZakazkaLabel(typBloku?: string | null) {
-    return `${current?.nazev || "Aktuální zakázka"} – ${getTypBlokuLabel(typBloku)}`;
+  function getUserName(userId: string) {
+    return users.find((user) => user.user_id === userId)?.user_name || "Bez jména";
   }
 
-  function getConflictForRange(userId: string, from?: string | null, to?: string | null) {
-    for (const r of other.filter((x) => x.user_id === userId)) {
-      if (overlaps(from, to, r.datum_od, r.datum_do)) {
+  function getConflictForRange(
+    userId: string,
+    from?: string | null,
+    to?: string | null
+  ): ConflictInfo | null {
+    for (const row of other.filter((item) => item.user_id === userId)) {
+      if (overlaps(from, to, row.datum_od, row.datum_do)) {
         return {
-          otherAssignmentId: r.id != null ? String(r.id) : null,
-          otherName: r.zakazky?.nazev || "Jiná zakázka",
-          from: toInput(r.datum_od),
-          to: toInput(r.datum_do),
-          otherTypBloku: normalizeTypBloku(r.typ_bloku),
+          otherName: row.zakazky?.nazev || "Jiná zakázka",
+          otherFrom: row.datum_od,
+          otherTo: row.datum_do,
+          otherTypBloku: normalizeTypBloku(row.typ_bloku),
         };
       }
     }
@@ -354,191 +378,106 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
     return null;
   }
 
-  function getConflictForAssignment(a: Assignment) {
-    return getConflictForRange(a.user_id, a.datum_od, a.datum_do);
+  function getConflictForAssignment(assignment: Assignment) {
+    return getConflictForRange(assignment.user_id, assignment.datum_od, assignment.datum_do);
   }
 
-  function formatDateTimeShort(value?: string | null) {
-    if (!value) return "";
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return "";
-
-    return d.toLocaleString("cs-CZ", {
-      day: "2-digit",
-      month: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-
-  function formatAssignmentRange(from?: string | null, to?: string | null) {
-    const fromText = formatDateTimeShort(from);
-    const toText = formatDateTimeShort(to);
-
-    if (fromText && toText) return `${fromText} – ${toText}`;
-    if (fromText) return `Od ${fromText}`;
-    if (toText) return `Do ${toText}`;
-    return "Čas není zadaný";
-  }
-
-  function formatConflictDetail(conflict: ReturnType<typeof getConflictForRange>) {
-    if (!conflict) return null;
-
-    const name = conflict.otherName?.trim();
-    const range = formatAssignmentRange(conflict.from, conflict.to);
-    const hasRange = range !== "Čas není zadaný";
-
-    if (name && name !== "Jiná zakázka") {
-      return hasRange ? `Kolize: ${name} · ${range}` : `Kolize: ${name}`;
-    }
-
-    return hasRange
-      ? `Kolize s jinou zakázkou · ${range}`
-      : "Kolize s jinou zakázkou";
-  }
-
-  function getConflictForPoolUser(userId: string, typBloku: TypBloku) {
-    if (!current) return null;
-
+  function openAdd(typBloku: TypBloku) {
     const range = getRangeForBlok(typBloku);
-
-    return getConflictForRange(userId, range.from, range.to);
-  }
-
-  async function assign(userId: string, typBloku: TypBloku) {
-    const conflict = getConflictForPoolUser(userId, typBloku);
-    const user = users.find((x) => x.user_id === userId);
-    const range = getRangeForBlok(typBloku);
-
-    if (conflict && user) {
-      setModal({
-        mode: "conflict",
-        assignmentId: null,
-        userId,
-        userName: user.user_name,
-        currentFrom: toInput(range.from),
-        currentTo: toInput(range.to),
-        typBloku,
-        otherAssignmentId: conflict.otherAssignmentId,
-        otherZakazkaNazev: conflict.otherName,
-        otherFrom: conflict.from,
-        otherTo: conflict.to,
-        otherTypBloku: conflict.otherTypBloku,
-      });
-      return;
-    }
-
-    const response = await fetch(`/api/zakazka/${zakazkaId}/people`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: userId, typ_bloku: typBloku }),
-    });
-
-    if (!response.ok) {
-      window.alert(await getErrorMessage(response, "Nepodařilo se přiřadit člověka."));
-      return;
-    }
-
-    await load();
-  }
-
-  function openEdit(a: Assignment) {
-    const u = users.find((x) => x.user_id === a.user_id);
-    if (!u) return;
-
-    const conflict = getConflictForAssignment(a);
-    const typBloku = normalizeTypBloku(a.typ_bloku);
-
-    if (conflict) {
-      setModal({
-        mode: "conflict",
-        assignmentId: String(a.id),
-        userId: a.user_id,
-        userName: u.user_name,
-        currentFrom: toInput(a.datum_od),
-        currentTo: toInput(a.datum_do),
-        typBloku,
-        otherAssignmentId: conflict.otherAssignmentId,
-        otherZakazkaNazev: conflict.otherName,
-        otherFrom: conflict.from,
-        otherTo: conflict.to,
-        otherTypBloku: conflict.otherTypBloku,
-      });
-      return;
-    }
 
     setModal({
-      mode: "edit",
-      assignmentId: String(a.id),
-      userId: a.user_id,
-      userName: u.user_name,
-      currentFrom: toInput(a.datum_od),
-      currentTo: toInput(a.datum_do),
+      mode: "add",
+      userIds: [],
+      currentFrom: toInput(range.from),
+      currentTo: toInput(range.to),
       typBloku,
+    });
+  }
+
+  function openEdit(assignment: Assignment) {
+    setModal({
+      mode: "edit",
+      assignmentId: String(assignment.id),
+      userId: assignment.user_id,
+      userName: getUserName(assignment.user_id),
+      currentFrom: toInput(assignment.datum_od),
+      currentTo: toInput(assignment.datum_do),
+      typBloku: normalizeTypBloku(assignment.typ_bloku),
     });
   }
 
   async function save() {
     if (!modal) return;
 
+    if (modal.mode === "add" && modal.userIds.length === 0) {
+      window.alert("Vyber alespoň jednoho člověka pro přiřazení.");
+      return;
+    }
+
+    if (hasInvalidRange(modal.currentFrom, modal.currentTo)) {
+      window.alert("Začátek přiřazení musí být dřív než konec.");
+      return;
+    }
+
     setSaving(true);
 
     try {
-      if (modal.assignmentId) {
-        const currentResponse = await fetch(
-          `/api/zakazka/${zakazkaId}/people/${modal.assignmentId}`,
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              datum_od: modal.currentFrom || null,
-              datum_do: modal.currentTo || null,
-            }),
-          }
-        );
+      const payload = {
+        datum_od: modal.currentFrom || null,
+        datum_do: modal.currentTo || null,
+      };
 
-        if (!currentResponse.ok) {
-          throw new Error(await getErrorMessage(currentResponse, "Nepodařilo se uložit změny."));
+      if (modal.mode === "edit") {
+        const response = await fetch(`/api/zakazka/${zakazkaId}/people/${modal.assignmentId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          throw new Error(await getErrorMessage(response, "Uložení přiřazení selhalo."));
         }
-      } else {
-        const assignResponse = await fetch(`/api/zakazka/${zakazkaId}/people`, {
+
+        setModal(null);
+        await load();
+        return;
+      }
+
+      const failures: string[] = [];
+      let successCount = 0;
+
+      for (const userId of modal.userIds) {
+        if (assignedUserIdsByBlock[modal.typBloku].has(userId)) continue;
+
+        const response = await fetch(`/api/zakazka/${zakazkaId}/people`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            user_id: modal.userId,
+            ...payload,
+            user_id: userId,
             typ_bloku: modal.typBloku,
           }),
         });
 
-        if (!assignResponse.ok) {
-          throw new Error(
-            await getErrorMessage(assignResponse, "Nepodařilo se přiřadit člověka.")
-          );
+        if (response.ok) {
+          successCount += 1;
+          continue;
         }
-      }
 
-      if (modal.mode === "conflict" && modal.otherAssignmentId) {
-        const otherResponse = await fetch(
-          `/api/zakazka/${zakazkaId}/people/${modal.otherAssignmentId}`,
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              datum_od: modal.otherFrom || null,
-              datum_do: modal.otherTo || null,
-            }),
-          }
-        );
-
-        if (!otherResponse.ok) {
-          throw new Error(
-            await getErrorMessage(otherResponse, "Nepodařilo se uložit kolizní zakázku.")
-          );
-        }
+        const message = await getErrorMessage(response, "Nepodařilo se přidat člověka.");
+        failures.push(`${getUserName(userId)}: ${message}`);
       }
 
       setModal(null);
       await load();
+
+      if (failures.length > 0) {
+        const prefix =
+          successCount > 0
+            ? `Přidáno ${successCount} lidí. Některé se nepodařilo přidat:`
+            : "Nepodařilo se přidat vybrané lidi:";
+        window.alert(`${prefix}\n${failures.join("\n")}`);
+      }
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "Uložení selhalo.");
     } finally {
@@ -547,17 +486,14 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
   }
 
   async function removeAssignment() {
-    if (!modal || !modal.assignmentId) return;
+    if (!modal || modal.mode !== "edit") return;
 
     setSaving(true);
 
     try {
-      const response = await fetch(
-        `/api/zakazka/${zakazkaId}/people/${modal.assignmentId}`,
-        {
-          method: "DELETE",
-        }
-      );
+      const response = await fetch(`/api/zakazka/${zakazkaId}/people/${modal.assignmentId}`, {
+        method: "DELETE",
+      });
 
       if (!response.ok) {
         throw new Error(await getErrorMessage(response, "Nepodařilo se odebrat přiřazení."));
@@ -576,136 +512,187 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
 
   const assignmentsByBlock = useMemo(() => {
     return {
-      sklad: assignments.filter((a) => normalizeTypBloku(a.typ_bloku) === "sklad"),
-      stavba: assignments.filter((a) => normalizeTypBloku(a.typ_bloku) === "stavba"),
-      akce: assignments.filter((a) => normalizeTypBloku(a.typ_bloku) === "akce"),
-      bourani: assignments.filter((a) => normalizeTypBloku(a.typ_bloku) === "bourani"),
+      sklad: assignments.filter((assignment) => normalizeTypBloku(assignment.typ_bloku) === "sklad"),
+      stavba: assignments.filter(
+        (assignment) => normalizeTypBloku(assignment.typ_bloku) === "stavba"
+      ),
+      akce: assignments.filter((assignment) => normalizeTypBloku(assignment.typ_bloku) === "akce"),
+      bourani: assignments.filter(
+        (assignment) => normalizeTypBloku(assignment.typ_bloku) === "bourani"
+      ),
     };
   }, [assignments]);
 
   const assignedUserIdsByBlock = useMemo(() => {
     return {
-      sklad: new Set(assignmentsByBlock.sklad.map((a) => a.user_id)),
-      stavba: new Set(assignmentsByBlock.stavba.map((a) => a.user_id)),
-      akce: new Set(assignmentsByBlock.akce.map((a) => a.user_id)),
-      bourani: new Set(assignmentsByBlock.bourani.map((a) => a.user_id)),
+      sklad: new Set(assignmentsByBlock.sklad.map((assignment) => assignment.user_id)),
+      stavba: new Set(assignmentsByBlock.stavba.map((assignment) => assignment.user_id)),
+      akce: new Set(assignmentsByBlock.akce.map((assignment) => assignment.user_id)),
+      bourani: new Set(assignmentsByBlock.bourani.map((assignment) => assignment.user_id)),
     };
   }, [assignmentsByBlock]);
 
-  function getPoolForBlock(typBloku: TypBloku) {
-    if (isBezObsluhy && typBloku === "akce") {
-      return [];
-    }
+  const selectedAddUserIds = modal?.mode === "add" ? modal.userIds : [];
+  const modalAddConflicts =
+    modal?.mode === "add"
+      ? modal.userIds
+          .map((userId) => ({
+            userId,
+            userName: getUserName(userId),
+            conflict: getConflictForRange(userId, modal.currentFrom, modal.currentTo),
+          }))
+          .filter((item): item is { userId: string; userName: string; conflict: ConflictInfo } =>
+            Boolean(item.conflict)
+          )
+      : [];
+  const modalEditConflict =
+    modal?.mode === "edit"
+      ? getConflictForRange(modal.userId, modal.currentFrom, modal.currentTo)
+      : null;
+  const modalUserName = modal?.mode === "edit" ? modal.userName : "";
+  const modalConflictText = getConflictText(modalEditConflict);
 
-    return users.filter((u) => !assignedUserIdsByBlock[typBloku].has(u.user_id));
-  }
+  function toggleModalUser(userId: string) {
+    setModal((state) => {
+      if (!state || state.mode !== "add") return state;
+      if (assignedUserIdsByBlock[state.typBloku].has(userId)) return state;
 
-  function name(n: string) {
-    const p = n.split(" ");
-    return { f: p[0] || "", l: p.slice(1).join(" ") };
+      const isSelected = state.userIds.includes(userId);
+      return {
+        ...state,
+        userIds: isSelected
+          ? state.userIds.filter((currentUserId) => currentUserId !== userId)
+          : [...state.userIds, userId],
+      };
+    });
   }
 
   return (
     <>
-      <div className="space-y-6">
+      <Card className="space-y-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-lg font-semibold text-white">Pokrytí práce</div>
+            <p className="mt-1 max-w-3xl text-sm text-slate-400">
+              Neřešíme odborné role. Jde o to, kdo je v daném čase k dispozici pro práci na
+              zakázce.
+            </p>
+          </div>
+          <Badge variant="default">{assignments.length} přiřazení</Badge>
+        </div>
+      </Card>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
         {BLOCKS.map((block) => {
           const assigned = assignmentsByBlock[block.key];
-          const pool = getPoolForBlock(block.key);
-          const hidePool = isBezObsluhy && block.key === "akce";
+          const range = getRangeForBlok(block.key);
+          const hideAdd = isBezObsluhy && block.key === "akce";
 
           return (
-            <Card key={block.key} className="space-y-5">
+            <Card key={block.key} className="space-y-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="text-lg font-semibold text-white">{block.title}</div>
                   <div className="mt-1 text-sm text-slate-400">
-                    {hidePool
-                      ? "Hlavní průběh akce. U zakázky bez obsluhy se do tohoto bloku lidé nepřiřazují."
+                    {hideAdd
+                      ? "U zakázky bez obsluhy se do fáze Provoz akce lidé nepřiřazují."
                       : block.description}
                   </div>
                 </div>
+                <Badge variant="default">{assigned.length} lidí</Badge>
+              </div>
 
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="default">{assigned.length} přiřazených</Badge>
-                  {!hidePool ? <Badge variant="default">{pool.length} k dispozici</Badge> : null}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Čas od</div>
+                  <div className="mt-1 text-sm font-semibold text-white">
+                    {formatDateTimeShort(range.from) || "Není zadáno"}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Čas do</div>
+                  <div className="mt-1 text-sm font-semibold text-white">
+                    {formatDateTimeShort(range.to) || "Není zadáno"}
+                  </div>
                 </div>
               </div>
 
               <div className="space-y-3">
-                <div className="text-sm font-medium text-slate-300">Přiřazení lidé</div>
-
                 {assigned.length > 0 ? (
-                  <div className="flex flex-wrap gap-3">
-                    {assigned.map((a) => {
-                      const u = users.find((x) => x.user_id === a.user_id);
-                      if (!u) return null;
-
-                      const n = name(u.user_name);
-                      const conflict = getConflictForAssignment(a);
-                      const hasConflict = Boolean(a.has_conflict || conflict);
-                      const blockLabel = getTypBlokuLabel(a.typ_bloku);
+                  <div className="space-y-2">
+                    {assigned.map((assignment) => {
+                      const userName = getUserName(assignment.user_id);
+                      const nameParts = splitName(userName);
+                      const conflict = getConflictForAssignment(assignment);
+                      const conflictText = getConflictText(conflict);
+                      const confirmationStatus = normalizeConfirmationStatus(
+                        assignment.confirmation_status
+                      );
 
                       return (
-                        <PersonChip
-                          key={String(a.id)}
-                          firstName={n.f}
-                          lastName={n.l}
-                          tone={hasConflict ? "conflict" : "assigned"}
-                          onClick={() => openEdit(a)}
-                          badge={hasConflict ? "Kolize" : "Přiřazeno"}
-                          secondaryBadge={blockLabel}
-                          details={[
-                            `Blok: ${blockLabel}`,
-                            `Čas: ${formatAssignmentRange(a.datum_od, a.datum_do)}`,
-                          ]}
-                          conflictDetail={formatConflictDetail(conflict)}
-                          warningMark={hasConflict}
-                        />
+                        <button
+                          key={String(assignment.id)}
+                          type="button"
+                          onClick={() => openEdit(assignment)}
+                          className={[
+                            "w-full rounded-2xl border px-4 py-3 text-left transition",
+                            conflict || assignment.has_conflict
+                              ? "border-orange-500/40 bg-orange-500/10 hover:bg-orange-500/15"
+                              : "border-slate-800 bg-slate-950/70 hover:bg-slate-900",
+                          ].join(" ")}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <div className="text-sm text-slate-300">{nameParts.firstName}</div>
+                              <div className="text-base font-semibold text-white">
+                                {nameParts.lastName}
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap justify-end gap-2">
+                              <Badge
+                                variant={getConfirmationStatusVariant(
+                                  assignment.confirmation_status
+                                )}
+                              >
+                                {getConfirmationStatusLabel(assignment.confirmation_status)}
+                              </Badge>
+                              {conflict || assignment.has_conflict ? (
+                                <Badge variant="warning">Kolize</Badge>
+                              ) : null}
+                            </div>
+                          </div>
+                          <div className="mt-3 text-sm text-slate-300">
+                            {formatAssignmentRange(assignment.datum_od, assignment.datum_do)}
+                          </div>
+                          {confirmationStatus === "declined" && assignment.declined_reason ? (
+                            <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-100">
+                              Důvod odmítnutí: {assignment.declined_reason}
+                            </div>
+                          ) : null}
+                          {conflictText ? (
+                            <div className="mt-3 rounded-xl border border-orange-400/30 bg-orange-500/10 px-3 py-2 text-xs font-semibold text-orange-100">
+                              Kolize: {conflictText}
+                            </div>
+                          ) : null}
+                        </button>
                       );
                     })}
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/50 px-4 py-5 text-sm text-slate-400">
-                    V tomto bloku zatím nikdo není přiřazený.
+                    V této fázi zatím nikdo není přiřazený.
                   </div>
                 )}
               </div>
 
-              {!hidePool ? (
-                <div className="space-y-3">
-                  <div className="text-sm font-medium text-slate-300">Dostupní lidé pro blok</div>
-
-                  {pool.length > 0 ? (
-                    <div className="flex flex-wrap gap-3">
-                      {pool.map((u) => {
-                        const n = name(u.user_name);
-                        const conflict = getConflictForPoolUser(u.user_id, block.key);
-
-                        return (
-                          <PersonChip
-                            key={`${block.key}-${u.user_id}`}
-                            firstName={n.f}
-                            lastName={n.l}
-                            tone={conflict ? "conflict" : "available"}
-                            onClick={() => void assign(u.user_id, block.key)}
-                            badge={conflict ? "Kolize" : "Dostupný"}
-                            secondaryBadge={getTypBlokuLabel(block.key)}
-                            warningMark={Boolean(conflict)}
-                          />
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/50 px-4 py-5 text-sm text-slate-400">
-                      Pro tento blok už nikdo další k dispozici není.
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/50 px-4 py-5 text-sm text-slate-400">
-                  U zakázky bez obsluhy je blok Akce jen informativní. Lidé se přiřazují pouze do Stavby a Bourání.
-                </div>
-              )}
+              <Button
+                variant="secondary"
+                onClick={() => openAdd(block.key)}
+                disabled={hideAdd}
+                className="w-full justify-center"
+              >
+                Přidat člověka
+              </Button>
             </Card>
           );
         })}
@@ -714,103 +701,171 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
       <Modal
         open={!!modal}
         onClose={() => setModal(null)}
-        title={modal?.userName}
-        widthClassName="max-w-2xl"
+        title={
+          modal
+            ? modal.mode === "add"
+              ? `Přidat lidi · ${getTypBlokuLabel(modal.typBloku)}`
+              : `Upravit přiřazení · ${modalUserName}`
+            : undefined
+        }
+        widthClassName="max-w-xl"
       >
         {modal ? (
-          <div className="space-y-6">
-            {modal.mode === "conflict" ? (
+          <div className="space-y-5">
+            {modal.mode === "add" ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-white">Vyber lidi pro fázi</div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      Vybráno {selectedAddUserIds.length} lidí
+                    </div>
+                  </div>
+                  <Badge variant="default">{getTypBlokuLabel(modal.typBloku)}</Badge>
+                </div>
+
+                <div className="max-h-[42vh] space-y-2 overflow-y-auto pr-1">
+                  {users.map((user) => {
+                    const alreadyAssigned = assignedUserIdsByBlock[modal.typBloku].has(user.user_id);
+                    const checked = modal.userIds.includes(user.user_id);
+                    const conflict = getConflictForRange(
+                      user.user_id,
+                      modal.currentFrom,
+                      modal.currentTo
+                    );
+
+                    return (
+                      <label
+                        key={user.user_id}
+                        className={[
+                          "flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 transition",
+                          alreadyAssigned
+                            ? "cursor-not-allowed border-slate-800 bg-slate-900/50 opacity-60"
+                            : checked
+                              ? "border-blue-500/50 bg-blue-500/15"
+                              : conflict
+                                ? "border-orange-500/35 bg-orange-500/10 hover:bg-orange-500/15"
+                                : "border-slate-800 bg-slate-950/70 hover:bg-slate-900",
+                        ].join(" ")}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={alreadyAssigned}
+                          onChange={() => toggleModalUser(user.user_id)}
+                          className="mt-1 h-5 w-5 rounded border-slate-600 bg-slate-950 accent-blue-500"
+                        />
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="font-semibold text-white">{user.user_name}</div>
+                            {alreadyAssigned ? (
+                              <Badge variant="default">už přiřazen</Badge>
+                            ) : null}
+                            {!alreadyAssigned && conflict ? (
+                              <Badge variant="warning">Kolize</Badge>
+                            ) : null}
+                          </div>
+
+                          {!alreadyAssigned && conflict ? (
+                            <div className="mt-2 text-xs font-semibold text-orange-100">
+                              {getConflictText(conflict)}
+                            </div>
+                          ) : null}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+                <div className="text-xs uppercase tracking-wide text-slate-500">Člověk</div>
+                <div className="mt-1 text-base font-semibold text-white">{modal.userName}</div>
+              </div>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Od">
+                <Input
+                  type="datetime-local"
+                  value={modal.currentFrom}
+                  onChange={(event) =>
+                    setModal((state) =>
+                      state ? { ...state, currentFrom: event.target.value } : state
+                    )
+                  }
+                />
+              </Field>
+
+              <Field label="Do">
+                <Input
+                  type="datetime-local"
+                  value={modal.currentTo}
+                  onChange={(event) =>
+                    setModal((state) =>
+                      state ? { ...state, currentTo: event.target.value } : state
+                    )
+                  }
+                />
+              </Field>
+            </div>
+
+            {modal.mode === "add" && modalAddConflicts.length > 0 ? (
               <div className="rounded-2xl border border-orange-500/30 bg-orange-500/10 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <Badge variant="warning">Kolize</Badge>
-                  <div className="text-sm font-medium text-orange-100">
-                    Tento člověk je ve stejném čase na jiné zakázce.
+                  <div className="text-sm font-semibold text-orange-100">
+                    Někteří vybraní lidé mají ve stejném čase jiné přiřazení.
                   </div>
                 </div>
-                <div className="mt-2 text-sm text-orange-200/90">
-                  Uprav časy tak, aby se zakázky nepřekrývaly.
+                <div className="mt-3 space-y-1 text-sm text-orange-200/90">
+                  {modalAddConflicts.map((item) => (
+                    <div key={item.userId}>
+                      {item.userName}: {getConflictText(item.conflict)}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2 text-xs text-orange-200/75">
+                  Varování zatím přidání neblokuje.
                 </div>
               </div>
             ) : null}
 
-            {modal.mode === "conflict" ? (
-              <Card className="space-y-4 border-orange-500/20">
-                <div>
-                  <div className="text-base font-semibold text-white">
-                    {modal.otherZakazkaNazev || "Jiná zakázka"} – {getTypBlokuLabel(modal.otherTypBloku)}
+            {modal.mode === "edit" && modalConflictText ? (
+              <div className="rounded-2xl border border-orange-500/30 bg-orange-500/10 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <Badge variant="warning">Kolize</Badge>
+                  <div className="text-sm font-semibold text-orange-100">
+                    Tento člověk má ve stejném čase jiné přiřazení.
                   </div>
-                  <div className="mt-1 text-sm text-slate-400">Kolizní zakázka</div>
                 </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Field label="Od">
-                    <Input
-                      type="datetime-local"
-                      value={modal.otherFrom}
-                      onChange={(e) =>
-                        setModal((m) =>
-                          m && m.mode === "conflict"
-                            ? { ...m, otherFrom: e.target.value }
-                            : m
-                        )
-                      }
-                    />
-                  </Field>
-
-                  <Field label="Do">
-                    <Input
-                      type="datetime-local"
-                      value={modal.otherTo}
-                      onChange={(e) =>
-                        setModal((m) =>
-                          m && m.mode === "conflict"
-                            ? { ...m, otherTo: e.target.value }
-                            : m
-                        )
-                      }
-                    />
-                  </Field>
+                <div className="mt-2 text-sm text-orange-200/90">{modalConflictText}</div>
+                <div className="mt-2 text-xs text-orange-200/75">
+                  Varování zatím uložení neblokuje.
                 </div>
-              </Card>
+              </div>
             ) : null}
 
-            <Card className="space-y-4">
-              <div>
-                <div className="text-base font-semibold text-white">
-                  {getCurrentZakazkaLabel(modal.typBloku)}
-                </div>
-                <div className="mt-1 text-sm text-slate-400">Upravované přiřazení</div>
+            {hasInvalidRange(modal.currentFrom, modal.currentTo) ? (
+              <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-100">
+                Začátek přiřazení musí být dřív než konec.
               </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Od">
-                  <Input
-                    type="datetime-local"
-                    value={modal.currentFrom}
-                    onChange={(e) =>
-                      setModal((m) => (m ? { ...m, currentFrom: e.target.value } : m))
-                    }
-                  />
-                </Field>
-
-                <Field label="Do">
-                  <Input
-                    type="datetime-local"
-                    value={modal.currentTo}
-                    onChange={(e) =>
-                      setModal((m) => (m ? { ...m, currentTo: e.target.value } : m))
-                    }
-                  />
-                </Field>
-              </div>
-            </Card>
+            ) : null}
 
             <div className="flex flex-wrap gap-3 pt-1">
-              <Button onClick={() => void save()} disabled={saving}>
-                {saving ? "Ukládám..." : "Uložit"}
+              <Button
+                onClick={() => void save()}
+                disabled={saving || (modal.mode === "add" && modal.userIds.length === 0)}
+              >
+                {saving
+                  ? "Ukládám..."
+                  : modal.mode === "add"
+                    ? "Přidat vybrané"
+                    : "Uložit"}
               </Button>
 
-              {modal.assignmentId ? (
+              {modal.mode === "edit" ? (
                 <Button
                   variant="secondary"
                   onClick={() => void removeAssignment()}

@@ -28,6 +28,16 @@ type ZakazkaRow = {
 
 type TypBloku = "sklad" | "stavba" | "akce" | "bourani";
 
+type AssignmentRow = {
+  id: string | number;
+  zakazka_id: string;
+  user_id: string;
+  datum_od?: string | null;
+  datum_do?: string | null;
+  typ_bloku?: string | null;
+  created_at?: string | null;
+};
+
 function normalizeTypBloku(value: unknown): TypBloku {
   const raw = String(value ?? "").trim().toLowerCase();
 
@@ -64,6 +74,22 @@ function getDefaultRangeForBlok(zakazka: ZakazkaRow, typBloku: TypBloku) {
     datum_od: zakazka.akce_od ?? null,
     datum_do: zakazka.akce_do ?? null,
   };
+}
+
+function normalizeOptionalDateTime(value: unknown) {
+  const text = String(value ?? "").trim();
+  return text ? text : null;
+}
+
+function hasInvalidRange(from?: string | null, to?: string | null) {
+  if (!from || !to) return false;
+
+  const fromTime = new Date(from).getTime();
+  const toTime = new Date(to).getTime();
+
+  if (!Number.isFinite(fromTime) || !Number.isFinite(toTime)) return true;
+
+  return fromTime >= toTime;
 }
 
 async function loadZakazkaByEitherKey(
@@ -135,7 +161,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 
     const otherResult = await supabase
       .from("zakazka_lide")
-      .select("*")
+      .select("id, zakazka_id, user_id, datum_od, datum_do, typ_bloku, created_at")
       .neq("zakazka_id", zakazkaId);
 
     if (otherResult.error) {
@@ -150,10 +176,42 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
       );
     }
 
+    const otherRows = ((otherResult.data ?? []) as AssignmentRow[]).filter(
+      (row) => row.zakazka_id
+    );
+    const otherZakazkaIds = [...new Set(otherRows.map((row) => row.zakazka_id))];
+    const otherZakazkyById = new Map<string, { zakazka_id: string; nazev: string | null }>();
+
+    if (otherZakazkaIds.length > 0) {
+      const { data: otherZakazky, error: otherZakazkyError } = await supabase
+        .from("zakazky")
+        .select("zakazka_id, nazev")
+        .in("zakazka_id", otherZakazkaIds);
+
+      if (otherZakazkyError) {
+        return NextResponse.json(
+          {
+            error: otherZakazkyError.message,
+            assignments: assignmentsResult.data ?? [],
+            currentZakazka: zakazkaResult.data ?? null,
+            other: [],
+          },
+          { status: 500 }
+        );
+      }
+
+      for (const zakazka of otherZakazky ?? []) {
+        otherZakazkyById.set(zakazka.zakazka_id, zakazka);
+      }
+    }
+
     return NextResponse.json({
       assignments: assignmentsResult.data ?? [],
       currentZakazka: zakazkaResult.data ?? null,
-      other: otherResult.data ?? [],
+      other: otherRows.map((row) => ({
+        ...row,
+        zakazky: otherZakazkyById.get(row.zakazka_id) ?? null,
+      })),
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
@@ -218,6 +276,16 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       );
     }
 
+    const requestedFrom = normalizeOptionalDateTime(body.datum_od);
+    const requestedTo = normalizeOptionalDateTime(body.datum_do);
+
+    if (hasInvalidRange(requestedFrom, requestedTo)) {
+      return NextResponse.json(
+        { error: "Začátek přiřazení musí být dřív než konec." },
+        { status: 400 }
+      );
+    }
+
     const existingResult = await supabase
       .from("zakazka_lide")
       .select("*")
@@ -244,10 +312,13 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       .insert({
         zakazka_id: zakazkaId,
         user_id: userId,
-        datum_od: defaultRange.datum_od,
-        datum_do: defaultRange.datum_do,
+        datum_od: requestedFrom ?? defaultRange.datum_od,
+        datum_do: requestedTo ?? defaultRange.datum_do,
         role_na_zakazce: "technik",
         typ_bloku: typBloku,
+        confirmation_status: "pending",
+        declined_reason: null,
+        responded_at: null,
       })
       .select("*")
       .single();

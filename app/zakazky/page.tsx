@@ -16,6 +16,10 @@ type ZakazkaKusRow = {
   stav: string | null;
 };
 
+type DeclinedPeopleRow = {
+  zakazka_id: string;
+};
+
 function getLoadingStatusLabel({
   plan,
   aktivni,
@@ -78,6 +82,7 @@ export default async function ZakazkyPage() {
     const [
       { data: planRaw, error: planError },
       { data: kusyRaw, error: kusyError },
+      { data: declinedRaw, error: declinedError },
     ] = await Promise.all([
       supabase
         .from("technika_na_zakazce")
@@ -87,6 +92,11 @@ export default async function ZakazkyPage() {
         .from("zakazka_kusy")
         .select("zakazka_id, stav")
         .in("zakazka_id", zakazkaIds),
+      supabase
+        .from("zakazka_lide")
+        .select("zakazka_id")
+        .eq("confirmation_status", "declined")
+        .in("zakazka_id", zakazkaIds),
     ]);
 
     if (planError) {
@@ -95,6 +105,10 @@ export default async function ZakazkyPage() {
 
     if (kusyError) {
       return <div>Chyba stavu nakládky: {kusyError.message}</div>;
+    }
+
+    if (declinedError) {
+      return <div>Chyba odmítnutí lidí: {declinedError.message}</div>;
     }
 
     const planByZakazka = new Map<string, number>();
@@ -127,6 +141,14 @@ export default async function ZakazkyPage() {
       countsByZakazka.set(row.zakazka_id, counts);
     }
 
+    const declinedCountsByZakazka = new Map<string, number>();
+    for (const row of (declinedRaw ?? []) as DeclinedPeopleRow[]) {
+      declinedCountsByZakazka.set(
+        row.zakazka_id,
+        (declinedCountsByZakazka.get(row.zakazka_id) ?? 0) + 1
+      );
+    }
+
     for (const zakazka of zakazky) {
       const counts = countsByZakazka.get(zakazka.zakazka_id) ?? {
         aktivni: 0,
@@ -140,6 +162,7 @@ export default async function ZakazkyPage() {
         vraceno: counts.vraceno,
         poskozeno: counts.poskozeno,
       });
+      zakazka.declined_people_count = declinedCountsByZakazka.get(zakazka.zakazka_id) ?? 0;
     }
   }
 

@@ -59,6 +59,10 @@ export default function SidebarNav() {
 
   return (
     <nav className="flex items-center gap-2">
+      <NavLink href="/moje" exact>
+        Moje
+      </NavLink>
+
       <NavLink href="/kalendar" exact>
         Kalendář
       </NavLink>
