@@ -53,9 +53,6 @@ export function SkladTableHeader({ tableGrid = SPRAVA_TABLE_GRID }: Props) {
         Cena pro akce
       </span>
       <span className="flex min-h-8 items-center justify-center px-1 text-center">
-        Rent
-      </span>
-      <span className="flex min-h-8 items-center justify-center px-1 text-center">
         Detail
       </span>
     </section>

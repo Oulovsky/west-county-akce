@@ -72,7 +72,6 @@ export default function Page() {
     pozice: "",
     jednotka: "ks",
     naklad: "",
-    rent: "",
   });
 
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -92,7 +91,6 @@ export default function Page() {
   const [newPodkategorieId, setNewPodkategorieId] = useState("");
   const [newBlokId, setNewBlokId] = useState("");
   const [newNaklad, setNewNaklad] = useState("");
-  const [newRent, setNewRent] = useState("");
 
   const lastChange = useRef<{ before: SkladPolozkaRow; after: SkladPolozkaRow } | null>(null);
 
@@ -628,7 +626,6 @@ export default function Page() {
     setNewKusy("1");
     setNewJednotka(jednotky[0]?.nazev ?? "ks");
     setNewNaklad("");
-    setNewRent("");
   }
 
   function openAddModal() {
@@ -652,7 +649,6 @@ export default function Page() {
           : String(item.pozice),
       jednotka: item.jednotka ?? "ks",
       naklad: item.interni_naklad == null ? "" : String(item.interni_naklad),
-      rent: item.fakturacni_cena == null ? "" : String(item.fakturacni_cena),
     });
   }
 
@@ -664,7 +660,6 @@ export default function Page() {
       pozice: "",
       jednotka: "ks",
       naklad: "",
-      rent: "",
     });
   }
 
@@ -677,7 +672,6 @@ export default function Page() {
         pozice: string;
         jednotka: string;
         naklad: string;
-        rent: string;
       },
       options: { exitEdit: boolean }
     ) => {
@@ -686,7 +680,6 @@ export default function Page() {
 
       const parsedKusy = Number(snapshot.kusy);
       const parsedNaklad = snapshot.naklad === "" ? null : Number(snapshot.naklad);
-      const parsedRent = snapshot.rent === "" ? null : Number(snapshot.rent);
       const parsedPozice =
         snapshot.pozice.trim() === "" ? null : Number(snapshot.pozice);
 
@@ -715,18 +708,12 @@ export default function Page() {
         return;
       }
 
-      if (parsedRent !== null && !Number.isFinite(parsedRent)) {
-        alert("Rent musí být číslo.");
-        return;
-      }
-
       const updated: SkladPolozkaRow = {
         ...oldItem,
         nazev: snapshot.nazev.trim(),
         celkem_k_dispozici: parsedKusy,
         jednotka: snapshot.jednotka.trim(),
         interni_naklad: parsedNaklad,
-        fakturacni_cena: parsedRent,
         pozice: parsedPozice,
       };
 
@@ -749,7 +736,7 @@ export default function Page() {
         p_kusy: updated.celkem_k_dispozici,
         p_jednotka: updated.jednotka,
         p_naklad: updated.interni_naklad,
-        p_rent: updated.fakturacni_cena,
+        p_rent: oldItem.fakturacni_cena,
       });
 
       setSavingId(null);
@@ -1076,7 +1063,6 @@ export default function Page() {
   async function handleCreateItem() {
     const parsedKusy = Number(newKusy);
     const parsedNaklad = newNaklad === "" ? null : Number(newNaklad);
-    const parsedRent = newRent === "" ? null : Number(newRent);
 
     if (!newBlokId) {
       alert("Vyber okruh.");
@@ -1108,11 +1094,6 @@ export default function Page() {
       return;
     }
 
-    if (parsedRent !== null && !Number.isFinite(parsedRent)) {
-      alert("Rent musí být číslo.");
-      return;
-    }
-
     setIsCreating(true);
 
     const createRes = await supabase.rpc("create_skladova_polozka", {
@@ -1122,7 +1103,7 @@ export default function Page() {
       p_jednotka: newJednotka.trim(),
       p_celkem_k_dispozici: parsedKusy,
       p_interni_naklad: parsedNaklad,
-      p_fakturacni_cena: parsedRent,
+      p_fakturacni_cena: null,
       p_aktivni: true,
       p_poznamka: null,
     });
@@ -1298,8 +1279,6 @@ export default function Page() {
         setNewJednotka={setNewJednotka}
         newNaklad={newNaklad}
         setNewNaklad={setNewNaklad}
-        newRent={newRent}
-        setNewRent={setNewRent}
         newKategorieOptions={newKategorieOptions}
         newPodkategorieOptions={newPodkategorieOptions}
         onQuickCreateBlok={handleQuickCreateBlok}

@@ -55,6 +55,18 @@ export type SkladKusRow = {
   servisni_poznamka?: string | null;
   servisni_stav_changed_at?: string | null;
   servisni_stav_changed_by?: string | null;
+  porizovaci_hodnota?: number | string | null;
+  datum_porizeni?: string | null;
+  odpisove_pasmo_id?: string | null;
+};
+
+/** Konfigurace interních odpisů pro konkrétní kusy techniky. */
+export type SkladOdpisovePasmo = {
+  odpisove_pasmo_id: string;
+  nazev: string;
+  pocet_mesicu: number | string;
+  aktivni: boolean;
+  poradi: number | string | null;
 };
 
 export type ZakazkaKusStav =

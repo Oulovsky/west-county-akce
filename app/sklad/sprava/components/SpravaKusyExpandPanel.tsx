@@ -50,7 +50,6 @@ export type SpravaKusyInheritedColumns = Pick<
   | "pozice"
   | "jednotka"
   | "interni_naklad"
-  | "fakturacni_cena"
 >;
 
 type Props = {
@@ -322,12 +321,6 @@ function SpravaExpandKusRow({
         <div className="flex min-h-8 items-center justify-center px-1 pt-0.5 text-center">
           <span style={tableValueBoxRight} className="truncate text-[11px]">
             {formatMoney(inherited.interni_naklad)}
-          </span>
-        </div>
-
-        <div className="flex min-h-8 items-center justify-center px-1 pt-0.5 text-center">
-          <span style={tableValueBoxRight} className="truncate text-[11px]">
-            {formatMoney(inherited.fakturacni_cena)}
           </span>
         </div>
 

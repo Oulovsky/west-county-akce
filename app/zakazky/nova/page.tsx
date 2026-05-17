@@ -173,7 +173,7 @@ const selectChevronStyle = {
 } as const;
 
 const AVAILABILITY_WARNING_NOTE =
-  "Upozornění dostupnosti: některé položky překračují dostupné množství. Řešení: půjčit / doplnit externě.";
+  "Upozornění dostupnosti: některé položky překračují dostupné množství. Řešení: doplnit externě nebo upravit technický plán.";
 
 const STAGE_PRESET_DIMENSIONS: Record<string, { width: string; depth: string }> = {
   mala: { width: "6", depth: "4" },
@@ -1379,7 +1379,7 @@ export default function NovaZakazkaPage() {
                 </h2>
                 <p className="mt-2 text-sm leading-relaxed text-slate-300">
                   Zakázku můžeš přesto uložit. Do poznámky se doplní informace, že
-                  chybějící položky je potřeba půjčit nebo doplnit externě.
+                  chybějící položky je potřeba doplnit externě nebo upravit v technickém plánu.
                 </p>
               </div>
             </div>

@@ -5,10 +5,11 @@ import {
   getKusStatus,
   getSkladKusDisplayLabel,
 } from "@/lib/sklad/helpers";
-import type { SkladDetailRow, SkladKusRow, SkladPoskozeniRow } from "@/lib/sklad/types";
+import type { SkladDetailRow, SkladKusRow, SkladOdpisovePasmo, SkladPoskozeniRow } from "@/lib/sklad/types";
 import type { UpdateKusPoradiResult } from "../actions/updateKusPoradi";
 import { boxClassName, statusBoxClassName } from "../helpers/classNames";
 import { SKLAD_DETAIL_CENTER_CELL_CLASS_NAME } from "../helpers/tableLayout";
+import { SkladKusAssetFields } from "./SkladKusAssetFields";
 import { SkladDetailKusPoradiField } from "./SkladDetailKusPoradiField";
 
 const QR_DETAIL_TRIGGER =
@@ -18,6 +19,7 @@ type SkladDetailKusRowProps = {
   kus: SkladKusRow;
   row: SkladDetailRow;
   poskozeni: SkladPoskozeniRow[];
+  odpisovaPasma: SkladOdpisovePasmo[];
   rowGridClassName: string;
   deleteKusAction: (formData: FormData) => Promise<void>;
   updateKusPoradiAction: (
@@ -29,6 +31,7 @@ export function SkladDetailKusRow({
   kus,
   row,
   poskozeni,
+  odpisovaPasma,
   rowGridClassName,
   deleteKusAction,
   updateKusPoradiAction,
@@ -119,11 +122,7 @@ export function SkladDetailKusRow({
         </span>
       </div>
 
-      <div className={centerCellClassName}>
-        <span className={boxClassName("justify-center text-center")}>
-          {formatMoney(row.fakturacni_cena)}
-        </span>
-      </div>
+      <SkladKusAssetFields kus={kus} odpisovaPasma={odpisovaPasma} />
 
       <div className={centerCellClassName}>
         <span

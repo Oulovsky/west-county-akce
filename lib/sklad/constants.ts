@@ -71,6 +71,7 @@ export const SKLAD_TABLE = {
   jednotkySkladu: "jednotky_skladu",
   typyPoskozeni: "typy_poskozeni",
   priorityPoskozeni: "priority_poskozeni",
+  odpisovaPasma: "sklad_odpisova_pasma",
   technikaNaZakazce: "technika_na_zakazce",
   zakazkaKusy: "zakazka_kusy",
   zakazky: "zakazky",
@@ -118,7 +119,7 @@ export const SKLAD_FALLBACK_PRIORITA_OPTIONS = [
 ] as const;
 
 export const SKLAD_KUS_SELECT_FIELDS =
-  "kus_id, skladova_polozka_id, poradove_cislo, evidencni_cislo, stav, poznamka, aktivni, servisni_poznamka, servisni_stav_changed_at, servisni_stav_changed_by" as const;
+  "kus_id, skladova_polozka_id, poradove_cislo, evidencni_cislo, stav, poznamka, aktivni, servisni_poznamka, servisni_stav_changed_at, servisni_stav_changed_by, porizovaci_hodnota, datum_porizeni, odpisove_pasmo_id" as const;
 
 export const SKLAD_POSKOZENI_SELECT_FIELDS =
   "poskozeni_id, pocet_kusu, blokuje_pouziti, datum_uzavreni" as const;

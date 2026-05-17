@@ -48,7 +48,19 @@ export function SkladDetailTableHeader() {
         </div>
 
         <div className={centerCellClassName}>
-          <span className={headerBoxClassName("justify-center text-center")}>Rent</span>
+          <span className={headerBoxClassName("justify-center text-center")}>Hodnota</span>
+        </div>
+
+        <div className={centerCellClassName}>
+          <span className={headerBoxClassName("justify-center text-center")}>Pořízeno</span>
+        </div>
+
+        <div className={centerCellClassName}>
+          <span className={headerBoxClassName("justify-center text-center")}>Odpisy</span>
+        </div>
+
+        <div className={centerCellClassName}>
+          <span className={headerBoxClassName("justify-center text-center")}>Současná hodnota</span>
         </div>
 
         <div className={centerCellClassName}>

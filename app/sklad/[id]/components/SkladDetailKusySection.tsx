@@ -1,4 +1,4 @@
-import type { SkladDetailRow, SkladKusRow, SkladPoskozeniRow } from "@/lib/sklad/types";
+import type { SkladDetailRow, SkladKusRow, SkladOdpisovePasmo, SkladPoskozeniRow } from "@/lib/sklad/types";
 import type { UpdateKusPoradiResult } from "../actions/updateKusPoradi";
 import { skladDetailRowGridClassName } from "../helpers/tableLayout";
 import { SkladBulkLabelsButton } from "./SkladBulkLabelsButton";
@@ -8,6 +8,7 @@ type SkladDetailKusySectionProps = {
   row: SkladDetailRow;
   kusy: SkladKusRow[];
   poskozeni: SkladPoskozeniRow[];
+  odpisovaPasma: SkladOdpisovePasmo[];
   kusyError: { message: string } | null;
   addKusAction: (formData: FormData) => Promise<void>;
   deleteKusAction: (formData: FormData) => Promise<void>;
@@ -20,6 +21,7 @@ export function SkladDetailKusySection({
   row,
   kusy,
   poskozeni,
+  odpisovaPasma,
   kusyError,
   addKusAction,
   deleteKusAction,
@@ -61,6 +63,7 @@ export function SkladDetailKusySection({
               kus={kus}
               row={row}
               poskozeni={poskozeni}
+              odpisovaPasma={odpisovaPasma}
               rowGridClassName={rowGridClassName}
               deleteKusAction={deleteKusAction}
               updateKusPoradiAction={updateKusPoradiAction}

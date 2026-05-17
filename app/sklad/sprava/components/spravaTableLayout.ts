@@ -1,6 +1,6 @@
 /** Sdílená mřížka tabulky správy skladu — širší sloupce konfigurace, užší čísla. */
 export const SPRAVA_TABLE_GRID =
-  "grid-cols-[minmax(200px,1.5fr)_minmax(148px,1.05fr)_minmax(148px,1.05fr)_minmax(156px,1.05fr)_minmax(52px,0.42fr)_minmax(52px,0.42fr)_minmax(52px,0.42fr)_minmax(68px,0.52fr)_minmax(68px,0.52fr)_minmax(56px,0.45fr)_minmax(60px,0.48fr)_minmax(68px,0.5fr)_minmax(68px,0.5fr)_minmax(58px,0.46fr)]";
+  "grid-cols-[minmax(200px,1.5fr)_minmax(148px,1.05fr)_minmax(148px,1.05fr)_minmax(156px,1.05fr)_minmax(52px,0.42fr)_minmax(52px,0.42fr)_minmax(52px,0.42fr)_minmax(68px,0.52fr)_minmax(68px,0.52fr)_minmax(56px,0.45fr)_minmax(60px,0.48fr)_minmax(78px,0.58fr)_minmax(58px,0.46fr)]";
 
 /** Vertikální střed buněk; výška řádku = nejvyšší prvek (sjednocené controls h-8). */
 export const SPRAVA_TABLE_ROW_CLASS =

@@ -234,14 +234,19 @@ export function SkladDetailMainRow({
           </div>
 
           <div className={centerCellClassName}>
-            <input
-              form={editFormId}
-              name="fakturacni_cena"
-              defaultValue={row.fakturacni_cena ?? ""}
-              inputMode="decimal"
-              onBlur={scheduleSubmit}
-              className={fieldClassName("text-center")}
-            />
+            <span className={boxClassName("justify-center text-center text-slate-500")}>—</span>
+          </div>
+
+          <div className={centerCellClassName}>
+            <span className={boxClassName("justify-center text-center text-slate-500")}>—</span>
+          </div>
+
+          <div className={centerCellClassName}>
+            <span className={boxClassName("justify-center text-center text-slate-500")}>—</span>
+          </div>
+
+          <div className={centerCellClassName}>
+            <span className={boxClassName("justify-center text-center text-slate-500")}>—</span>
           </div>
 
           <div className={centerCellClassName}>

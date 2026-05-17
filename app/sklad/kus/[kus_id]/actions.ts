@@ -20,6 +20,16 @@ function optionalText(formData: FormData, key: string) {
   return value || null;
 }
 
+function optionalNumber(formData: FormData, key: string, label: string) {
+  const value = optionalText(formData, key);
+  if (value == null) return null;
+  const parsed = Number(value.replace(",", "."));
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${label} musí být číslo 0 nebo vyšší.`);
+  }
+  return parsed;
+}
+
 function getActionConfig(action: ServiceAction): {
   stav: string;
   aktivni?: boolean;
@@ -115,6 +125,38 @@ export async function updateSkladKusServiceStateAction(formData: FormData) {
   revalidatePath(`/sklad/${kus.skladova_polozka_id}`);
   revalidatePath("/sklad/sprava");
   revalidatePath("/sklad/servis");
+}
+
+export async function updateSkladKusAssetValueAction(formData: FormData) {
+  const kusId = requiredText(formData, "kus_id", "ID kusu");
+  const purchaseValue = optionalNumber(formData, "porizovaci_hodnota", "Pořizovací hodnota");
+  const purchaseDate = optionalText(formData, "datum_porizeni");
+  const depreciationBandId = optionalText(formData, "odpisove_pasmo_id");
+  const supabase = await createClient();
+
+  const { data: kus, error } = await supabase
+    .from(SKLAD_TABLE.skladPolozkyKusy)
+    .update({
+      porizovaci_hodnota: purchaseValue,
+      datum_porizeni: purchaseDate,
+      odpisove_pasmo_id: depreciationBandId,
+    })
+    .eq("kus_id", kusId)
+    .select("kus_id, skladova_polozka_id")
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!kus) throw new Error("Kus nebyl nalezen.");
+
+  await insertSkladKusHistorie(supabase, {
+    kusId,
+    typAkce: "servisni_poznamka",
+    poznamka: "Aktualizována interní hodnota kusu a odpisové údaje.",
+  });
+
+  revalidatePath(`/sklad/kus/${kusId}`);
+  revalidatePath(`/sklad/${kus.skladova_polozka_id}`);
+  revalidatePath("/sklad/sprava");
 }
 
 export async function reportSkladKusDamageAction(formData: FormData) {

@@ -35,8 +35,6 @@ type Props = {
   setNewJednotka: (value: string) => void;
   newNaklad: string;
   setNewNaklad: (value: string) => void;
-  newRent: string;
-  setNewRent: (value: string) => void;
   newKategorieOptions: SkladKategorie[];
   newPodkategorieOptions: SkladPodkategorie[];
   onQuickCreateBlok: QuickCreateHandler;
@@ -65,8 +63,6 @@ export function AddItemModal({
   setNewJednotka,
   newNaklad,
   setNewNaklad,
-  newRent,
-  setNewRent,
   newKategorieOptions,
   newPodkategorieOptions,
   onQuickCreateBlok,
@@ -187,24 +183,13 @@ export function AddItemModal({
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div>
           <div>
             <div className="mb-2 text-sm text-slate-300">Cena pro akce</div>
 
             <input
               value={newNaklad}
               onChange={(e) => setNewNaklad(e.target.value)}
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none"
-              inputMode="decimal"
-            />
-          </div>
-
-          <div>
-            <div className="mb-2 text-sm text-slate-300">Rent</div>
-
-            <input
-              value={newRent}
-              onChange={(e) => setNewRent(e.target.value)}
               className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none"
               inputMode="decimal"
             />

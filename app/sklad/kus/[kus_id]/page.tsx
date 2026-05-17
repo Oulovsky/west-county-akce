@@ -2,8 +2,10 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { SKLAD_KUS_SELECT_FIELDS, SKLAD_TABLE } from "@/lib/sklad/constants";
+import { calculateLinearDepreciation } from "@/lib/sklad/depreciation";
 import {
   formatDateTime,
+  formatMoney,
   formatNumber,
   formatSkladKusStav,
   getKusStatus,
@@ -14,6 +16,7 @@ import type {
   SkladKusHistorieRow,
   SkladKusRow,
   SkladKusZakazkaAssignmentRow,
+  SkladOdpisovePasmo,
   SkladPoskozeniRow,
 } from "@/lib/sklad/types";
 import {
@@ -30,6 +33,7 @@ import {
 import { SkladKusQuickActions } from "./SkladKusQuickActions";
 import {
   reportSkladKusDamageAction,
+  updateSkladKusAssetValueAction,
   updateSkladKusServiceStateAction,
 } from "./actions";
 
@@ -116,6 +120,13 @@ function formatDamageSummary(item: SkladPoskozeniRow): string {
   ].filter(Boolean);
 
   return parts.join(" · ");
+}
+
+function formatDateOnly(value?: string | null) {
+  if (!value) return "—";
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("cs-CZ", { dateStyle: "medium" }).format(date);
 }
 
 function getUnifiedKusStateLabel({
@@ -244,6 +255,7 @@ export default async function SkladKusDetailPage({ params }: PageProps) {
     { data: assignmentRaw, error: assignmentError },
     { data: historieRaw, error: historieError },
     { data: poskozeniRaw, error: poskozeniError },
+    { data: odpisovaPasmaRaw, error: odpisovaPasmaError },
   ] = await Promise.all([
     queryAktivniZakazkaKusu(supabase, kus.kus_id),
     querySkladKusHistorie(supabase, kus.kus_id),
@@ -253,10 +265,24 @@ export default async function SkladKusDetailPage({ params }: PageProps) {
       .eq("kus_id", kus.kus_id)
       .is("datum_uzavreni", null)
       .order("datum_nahlaseni", { ascending: false }),
+    supabase
+      .from(SKLAD_TABLE.odpisovaPasma)
+      .select("odpisove_pasmo_id, nazev, pocet_mesicu, aktivni, poradi")
+      .order("aktivni", { ascending: false })
+      .order("poradi", { ascending: true })
+      .order("nazev", { ascending: true }),
   ]);
   const assignment = (assignmentRaw ?? null) as SkladKusZakazkaAssignmentRow | null;
   const historie = (historieRaw ?? []) as unknown as SkladKusHistorieRow[];
   const openPoskozeni = (poskozeniRaw ?? []) as SkladPoskozeniRow[];
+  const odpisovaPasma = (odpisovaPasmaRaw ?? []) as SkladOdpisovePasmo[];
+  const selectedOdpisovePasmo =
+    odpisovaPasma.find((item) => item.odpisove_pasmo_id === kus.odpisove_pasmo_id) ?? null;
+  const depreciation = calculateLinearDepreciation({
+    purchaseValue: kus.porizovaci_hodnota,
+    purchaseDate: kus.datum_porizeni,
+    depreciationMonths: selectedOdpisovePasmo?.pocet_mesicu,
+  });
   const kusStatus = getKusStatus(kus, openPoskozeni);
   const lastAudit = historie[0] ?? null;
   const lastOpenDamage = openPoskozeni[0] ?? null;
@@ -312,6 +338,94 @@ export default async function SkladKusDetailPage({ params }: PageProps) {
             {kus.servisni_poznamka?.trim() || "—"}
           </span>
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+        <div>
+          <h2 className="text-xl font-black tracking-tight text-white">
+            Hodnota kusu a odpisy
+          </h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Interní evidence majetku. Neovlivňuje cenu pro akce ani klientskou fakturaci.
+          </p>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <SummaryRow label="Pořizovací hodnota">
+            {formatMoney(kus.porizovaci_hodnota ?? null)}
+          </SummaryRow>
+          <SummaryRow label="Datum pořízení">
+            {formatDateOnly(kus.datum_porizeni)}
+          </SummaryRow>
+          <SummaryRow label="Odpisové pásmo">
+            {selectedOdpisovePasmo
+              ? `${selectedOdpisovePasmo.nazev} · ${selectedOdpisovePasmo.pocet_mesicu} měsíců`
+              : "—"}
+          </SummaryRow>
+          <SummaryRow label="Současná hodnota">
+            {depreciation.ok ? (
+              <>
+                {formatMoney(depreciation.currentValue)}
+                <span className="block text-xs font-medium text-slate-400">
+                  Zbývá {(depreciation.remainingRatio * 100).toFixed(0)} % odpisové doby.
+                </span>
+              </>
+            ) : (
+              `Nelze spočítat · ${depreciation.reason}`
+            )}
+          </SummaryRow>
+        </div>
+
+        <form action={updateSkladKusAssetValueAction} className="mt-4 grid gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-3 sm:grid-cols-2">
+          <input type="hidden" name="kus_id" value={kus.kus_id} />
+          <label className="block text-sm font-semibold text-slate-200">
+            Pořizovací hodnota / hodnota kusu
+            <input
+              name="porizovaci_hodnota"
+              defaultValue={kus.porizovaci_hodnota ?? ""}
+              inputMode="decimal"
+              className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+            />
+          </label>
+          <label className="block text-sm font-semibold text-slate-200">
+            Datum pořízení
+            <input
+              name="datum_porizeni"
+              type="date"
+              defaultValue={kus.datum_porizeni ?? ""}
+              className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+            />
+          </label>
+          <label className="block text-sm font-semibold text-slate-200">
+            Odpisové pásmo
+            <select
+              name="odpisove_pasmo_id"
+              defaultValue={kus.odpisove_pasmo_id ?? ""}
+              className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+            >
+              <option value="">Bez odpisového pásma</option>
+              {odpisovaPasma.map((pasmo) => (
+                <option key={pasmo.odpisove_pasmo_id} value={pasmo.odpisove_pasmo_id}>
+                  {pasmo.nazev} · {pasmo.pocet_mesicu} měsíců{pasmo.aktivni ? "" : " · neaktivní"}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex items-end">
+            <button
+              type="submit"
+              className="min-h-11 w-full rounded-xl bg-blue-700 px-4 py-2 text-sm font-black text-white transition hover:bg-blue-600"
+            >
+              Uložit hodnotu kusu
+            </button>
+          </div>
+        </form>
+
+        {odpisovaPasmaError ? (
+          <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-100">
+            Odpisová pásma se nepodařilo načíst: {odpisovaPasmaError.message}
+          </div>
+        ) : null}
       </section>
 
       <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">

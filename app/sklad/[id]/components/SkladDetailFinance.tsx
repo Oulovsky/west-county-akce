@@ -13,7 +13,6 @@ export function SkladDetailFinance({ row }: SkladDetailFinanceProps) {
 
       <div className="grid gap-3 text-sm text-slate-200">
         <InfoRow label="Cena pro akce">{formatMoney(row.interni_naklad)}</InfoRow>
-        <InfoRow label="Rent">{formatMoney(row.fakturacni_cena)}</InfoRow>
         <InfoRow label="Vytvořeno">{formatDateTime(row.vytvoreno_dne)}</InfoRow>
         <InfoRow label="Upraveno">{formatDateTime(row.upraveno_dne)}</InfoRow>
       </div>

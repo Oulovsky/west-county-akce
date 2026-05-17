@@ -111,6 +111,13 @@ export default function SkladKonfiguracePage() {
           status="Hotovo"
           href="/sklad/konfigurace/priority-poskozeni"
         />
+
+        <SectionCard
+          title="Odpisová pásma"
+          description="Interní pásma pro výpočet současné hodnoty konkrétních kusů techniky."
+          status="Hotovo"
+          href="/sklad/konfigurace/odpisova-pasma"
+        />
       </div>
     </div>
   );

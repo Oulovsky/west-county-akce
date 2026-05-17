@@ -43,7 +43,7 @@ import {
 type QuickCreateHandler = (name: string) => Promise<{ error?: string } | void>;
 
 /** Které pole zaměřit po přepnutí řádku do režimu úprav (stejné kliknutí). */
-type EditFocusTarget = "nazev" | "pozice" | "kusy" | "naklad" | "rent" | "jednotka";
+type EditFocusTarget = "nazev" | "pozice" | "kusy" | "naklad" | "jednotka";
 
 type Draft = {
   nazev: string;
@@ -51,7 +51,6 @@ type Draft = {
   pozice: string;
   jednotka: string;
   naklad: string;
-  rent: string;
 };
 
 type Props = {
@@ -123,7 +122,6 @@ export function SkladTableRow({
   const poziceInputRef = useRef<HTMLInputElement>(null);
   const kusyInputRef = useRef<HTMLInputElement>(null);
   const nakladInputRef = useRef<HTMLInputElement>(null);
-  const rentInputRef = useRef<HTMLInputElement>(null);
   const jednotkaCellRef = useRef<HTMLDivElement>(null);
 
   function beginEdit(target: EditFocusTarget) {
@@ -143,7 +141,6 @@ export function SkladTableRow({
       pozice: poziceInputRef,
       kusy: kusyInputRef,
       naklad: nakladInputRef,
-      rent: rentInputRef,
       jednotka: null,
     };
     if (target === "jednotka") {
@@ -435,32 +432,6 @@ export function SkladTableRow({
           )}
         </div>
 
-        <div
-          onClick={() => !isEditing && beginEdit("rent")}
-          className="flex min-h-8 items-center justify-center px-1 text-center"
-          style={{ cursor: "pointer" }}
-        >
-          {isEditing ? (
-            <input
-              ref={rentInputRef}
-              value={draft.rent}
-              onChange={(e) =>
-                onDraftChange((prev) => ({
-                  ...prev,
-                  rent: e.target.value,
-                }))
-              }
-              onKeyDown={onKeyDown}
-              style={tableInputStyleSmall}
-              className="min-w-0 max-w-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
-            />
-          ) : (
-            <span style={tableValueBoxRight} className="truncate text-xs">
-              {formatMoney(item.fakturacni_cena)}
-            </span>
-          )}
-        </div>
-
         <div className="flex min-h-8 items-center justify-center px-1">
           <Link
             href={`/sklad/${item.skladova_polozka_id}`}
@@ -483,7 +454,6 @@ export function SkladTableRow({
             pozice: item.pozice,
             jednotka: item.jednotka,
             interni_naklad: item.interni_naklad,
-            fakturacni_cena: item.fakturacni_cena,
           }}
           reloadToken={kusyReloadToken}
         />

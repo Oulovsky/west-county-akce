@@ -12,6 +12,7 @@ import type {
   SkladJednotka,
   SkladKategorie,
   SkladKusRow,
+  SkladOdpisovePasmo,
   SkladPodkategorie,
   SkladPoskozeniRow,
   SkladPrioritaOption,
@@ -75,11 +76,9 @@ export default async function SkladDetailPage({ params }: PageProps) {
     const jednotka = String(formData.get("jednotka") || "ks").trim();
     const kusy = Number(formData.get("celkem_k_dispozici") || 0);
     const akceCenaRaw = String(formData.get("interni_naklad") || "").trim();
-    const rentRaw = String(formData.get("fakturacni_cena") || "").trim();
 
     const pozice = poziceRaw === "" ? null : Number(poziceRaw);
     const akceCena = akceCenaRaw === "" ? null : Number(akceCenaRaw);
-    const rent = rentRaw === "" ? null : Number(rentRaw);
 
     if (!skladovaPolozkaId) throw new Error("Chybí ID skladové položky.");
     if (!nazev) throw new Error("Název je povinný.");
@@ -87,7 +86,14 @@ export default async function SkladDetailPage({ params }: PageProps) {
     if (!Number.isFinite(kusy) || kusy < 0) throw new Error("Celkem musí být číslo 0 nebo vyšší.");
     if (pozice !== null && !Number.isFinite(pozice)) throw new Error("Pozice musí být číslo.");
     if (akceCena !== null && !Number.isFinite(akceCena)) throw new Error("Cena pro akce musí být číslo.");
-    if (rent !== null && !Number.isFinite(rent)) throw new Error("Rent musí být číslo.");
+
+    const { data: existingRow, error: existingError } = await supabase
+      .from("skladove_polozky")
+      .select("fakturacni_cena")
+      .eq("skladova_polozka_id", skladovaPolozkaId)
+      .maybeSingle();
+
+    if (existingError) throw new Error(existingError.message);
 
     const detailRes = await supabase.rpc("update_skladova_polozka_detail", {
       p_id: skladovaPolozkaId,
@@ -95,7 +101,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
       p_kusy: kusy,
       p_jednotka: jednotka,
       p_naklad: akceCena,
-      p_rent: rent,
+      p_rent: existingRow?.fakturacni_cena ?? null,
     });
 
     if (detailRes.error) throw new Error(detailRes.error.message);
@@ -287,10 +293,11 @@ export default async function SkladDetailPage({ params }: PageProps) {
     { data: poskozeniRaw, error: poskozeniError },
     { data: typyRaw, error: typyError },
     { data: priorityRaw, error: priorityError },
+    { data: odpisovaPasmaRaw, error: odpisovaPasmaError },
   ] = await Promise.all([
     supabase
       .from("sklad_polozky_kusy")
-      .select("kus_id, skladova_polozka_id, poradove_cislo, evidencni_cislo, stav, poznamka, aktivni")
+      .select("kus_id, skladova_polozka_id, poradove_cislo, evidencni_cislo, stav, poznamka, aktivni, porizovaci_hodnota, datum_porizeni, odpisove_pasmo_id")
       .eq("skladova_polozka_id", id)
       .order("poradove_cislo", { ascending: true }),
     supabase
@@ -302,12 +309,19 @@ export default async function SkladDetailPage({ params }: PageProps) {
       .order("datum_nahlaseni", { ascending: false }),
     supabase.rpc("get_typy_poskozeni_full"),
     supabase.rpc("get_priority_poskozeni_full"),
+    supabase
+      .from("sklad_odpisova_pasma")
+      .select("odpisove_pasmo_id, nazev, pocet_mesicu, aktivni, poradi")
+      .eq("aktivni", true)
+      .order("poradi", { ascending: true })
+      .order("nazev", { ascending: true }),
   ]);
 
   const kusy = (kusyRaw ?? []) as SkladKusRow[];
   const poskozeni = (poskozeniRaw ?? []) as SkladPoskozeniRow[];
   const typyPoskozeni = (typyRaw ?? []) as SkladTypPoskozeniOption[];
   const priority = (priorityRaw ?? []) as SkladPrioritaOption[];
+  const odpisovaPasma = (odpisovaPasmaRaw ?? []) as SkladOdpisovePasmo[];
 
   const evidovanyPocetKusu = kusy.length;
   const celkemKusu = computeCelkemKusu(evidovanyPocetKusu, row.celkem_k_dispozici);
@@ -331,6 +345,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
         pouzitelneKusy={pouzitelneKusy}
         kusy={kusy}
         poskozeni={poskozeni}
+        odpisovaPasma={odpisovaPasma}
         kusyError={kusyError}
         updateAction={upravitPolozku}
         addKusAction={pridatKus}
@@ -371,6 +386,11 @@ export default async function SkladDetailPage({ params }: PageProps) {
           />
 
           <SkladDetailMetaSection row={row} />
+          {odpisovaPasmaError ? (
+            <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm font-semibold text-amber-100">
+              Odpisová pásma se nepodařilo načíst: {odpisovaPasmaError.message}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

@@ -3,6 +3,7 @@ import type {
   SkladJednotka,
   SkladKategorie,
   SkladKusRow,
+  SkladOdpisovePasmo,
   SkladPodkategorie,
   SkladPoskozeniRow,
 } from "@/lib/sklad/types";
@@ -25,6 +26,7 @@ type SkladDetailItemsTableProps = {
   pouzitelneKusy: number;
   kusy: SkladKusRow[];
   poskozeni: SkladPoskozeniRow[];
+  odpisovaPasma: SkladOdpisovePasmo[];
   kusyError: { message: string } | null;
   updateAction: (formData: FormData) => Promise<void>;
   addKusAction: (formData: FormData) => Promise<void>;
@@ -44,6 +46,7 @@ export function SkladDetailItemsTable({
   pouzitelneKusy,
   kusy,
   poskozeni,
+  odpisovaPasma,
   kusyError,
   updateAction,
   addKusAction,
@@ -79,6 +82,7 @@ export function SkladDetailItemsTable({
             row={row}
             kusy={kusy}
             poskozeni={poskozeni}
+            odpisovaPasma={odpisovaPasma}
             kusyError={kusyError}
             addKusAction={addKusAction}
             deleteKusAction={deleteKusAction}

@@ -141,12 +141,6 @@ export default async function AdminPage() {
             schválení klientem, servis a faktury po splatnosti.
           </p>
           <ReminderRunClient />
-          <Link
-            href="/admin/reminders"
-            className="inline-flex rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-bold text-slate-200 transition hover:bg-slate-800"
-          >
-            Pokročilé
-          </Link>
         </div>
       </AdminSection>
 
