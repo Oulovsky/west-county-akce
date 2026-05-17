@@ -37,6 +37,17 @@ async function loadValidLink(rawToken: string) {
     return { supabase, link: null };
   }
 
+  const { data: zakazka, error: zakazkaError } = await supabase
+    .from("zakazky")
+    .select("zrusena, workflow_stav")
+    .eq("zakazka_id", link.zakazka_id)
+    .maybeSingle();
+
+  if (zakazkaError) throw new Error(zakazkaError.message);
+  if (zakazka?.zrusena || zakazka?.workflow_stav === "zruseno") {
+    return { supabase, link: null };
+  }
+
   return { supabase, link };
 }
 

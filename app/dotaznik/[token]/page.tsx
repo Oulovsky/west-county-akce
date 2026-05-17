@@ -26,6 +26,8 @@ type ZakazkaRow = {
   akce_do: string | null;
   datum_od: string | null;
   datum_do: string | null;
+  zrusena?: boolean | null;
+  workflow_stav?: string | null;
 };
 
 function formatDateRange(data: ZakazkaRow) {
@@ -65,7 +67,7 @@ async function loadValidLink(rawToken: string) {
 
   const { data: zakazkaRaw, error: zakazkaError } = await supabase
     .from("zakazky")
-    .select("zakazka_id, cislo_zakazky, nazev, misto, akce_od, akce_do, datum_od, datum_do")
+    .select("zakazka_id, cislo_zakazky, nazev, misto, akce_od, akce_do, datum_od, datum_do, zrusena, workflow_stav")
     .eq("zakazka_id", link.zakazka_id)
     .single();
 
@@ -73,7 +75,12 @@ async function loadValidLink(rawToken: string) {
     throw new Error(zakazkaError.message);
   }
 
-  return { supabase, link, zakazka: zakazkaRaw as ZakazkaRow };
+  const zakazka = zakazkaRaw as ZakazkaRow;
+  if (zakazka.zrusena || zakazka.workflow_stav === "zruseno") {
+    return { supabase, link: null, zakazka: null };
+  }
+
+  return { supabase, link, zakazka };
 }
 
 function invalidLinkView() {

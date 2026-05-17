@@ -8,7 +8,8 @@ export type ZakazkaWorkflowStatus =
   | "v_realizaci"
   | "dokonceno"
   | "fakturovano"
-  | "archiv";
+  | "archiv"
+  | "zruseno";
 
 export const WORKFLOW_STATUSES: ZakazkaWorkflowStatus[] = [
   "navrh",
@@ -19,6 +20,7 @@ export const WORKFLOW_STATUSES: ZakazkaWorkflowStatus[] = [
   "dokonceno",
   "fakturovano",
   "archiv",
+  "zruseno",
 ];
 
 export function normalizeWorkflowStatus(value?: string | null): ZakazkaWorkflowStatus {
@@ -36,6 +38,7 @@ export function getWorkflowStatusLabel(value?: string | null) {
   if (status === "v_realizaci") return "V realizaci";
   if (status === "dokonceno") return "Dokončeno";
   if (status === "fakturovano") return "Fakturováno";
+  if (status === "zruseno") return "Zrušeno";
   return "Archiv";
 }
 
@@ -48,18 +51,20 @@ export function getWorkflowBadgeClassName(value?: string | null) {
   if (status === "v_realizaci") return "border-cyan-500/40 bg-cyan-500/15 text-cyan-100";
   if (status === "dokonceno") return "border-purple-500/40 bg-purple-500/15 text-purple-100";
   if (status === "fakturovano") return "border-green-500/40 bg-green-500/15 text-green-100";
+  if (status === "zruseno") return "border-red-500/40 bg-red-500/15 text-red-100";
   return "border-zinc-500/40 bg-zinc-500/15 text-zinc-100";
 }
 
 const ALLOWED_WORKFLOW_TRANSITIONS: Record<ZakazkaWorkflowStatus, ZakazkaWorkflowStatus[]> = {
-  navrh: ["cekani_na_schvaleni"],
-  cekani_na_schvaleni: ["schvaleno_klientem"],
-  schvaleno_klientem: ["priprava"],
-  priprava: ["v_realizaci"],
-  v_realizaci: ["dokonceno"],
-  dokonceno: ["fakturovano"],
-  fakturovano: ["archiv"],
+  navrh: ["cekani_na_schvaleni", "zruseno"],
+  cekani_na_schvaleni: ["schvaleno_klientem", "zruseno"],
+  schvaleno_klientem: ["priprava", "zruseno"],
+  priprava: ["v_realizaci", "zruseno"],
+  v_realizaci: ["dokonceno", "zruseno"],
+  dokonceno: ["fakturovano", "zruseno"],
+  fakturovano: ["archiv", "zruseno"],
   archiv: [],
+  zruseno: [],
 };
 
 function canChangeWorkflowStatus(

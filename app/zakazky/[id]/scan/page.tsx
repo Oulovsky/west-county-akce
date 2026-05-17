@@ -34,6 +34,8 @@ type ZakazkaInfo = {
   datum_do: string | null;
   cas_od: string | null;
   cas_do: string | null;
+  zrusena?: boolean | null;
+  workflow_stav?: string | null;
 };
 
 type SkladKusRowForScan = {
@@ -481,6 +483,16 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
     }
 
     const supabase = await createClient();
+    const { data: currentZakazka, error: currentZakazkaError } = await supabase
+      .from(SKLAD_TABLE.zakazky)
+      .select("zrusena, workflow_stav")
+      .eq("zakazka_id", id)
+      .maybeSingle();
+
+    if (currentZakazkaError) return { ok: false, error: currentZakazkaError.message };
+    if (currentZakazka?.zrusena || currentZakazka?.workflow_stav === "zruseno") {
+      return { ok: false, error: "Zakázka byla zrušena. Scan workflow je neaktivní." };
+    }
 
     const { data: kusRaw, error: kusError } = await supabase
       .from(SKLAD_TABLE.skladPolozkyKusy)
@@ -707,6 +719,16 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
     }
 
     const supabase = await createClient();
+    const { data: currentZakazka, error: currentZakazkaError } = await supabase
+      .from(SKLAD_TABLE.zakazky)
+      .select("zrusena, workflow_stav")
+      .eq("zakazka_id", id)
+      .maybeSingle();
+
+    if (currentZakazkaError) return { ok: false, error: currentZakazkaError.message };
+    if (currentZakazka?.zrusena || currentZakazka?.workflow_stav === "zruseno") {
+      return { ok: false, error: "Zakázka byla zrušena. Scan workflow je neaktivní." };
+    }
 
     const { data: kusRaw, error: kusError } = await supabase
       .from(SKLAD_TABLE.skladPolozkyKusy)
@@ -856,7 +878,7 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
 
   const { data: zakazkaRaw, error: zakazkaError } = await supabase
     .from(SKLAD_TABLE.zakazky)
-    .select("zakazka_id, cislo_zakazky, nazev, datum_od, datum_do, cas_od, cas_do")
+    .select("zakazka_id, cislo_zakazky, nazev, datum_od, datum_do, cas_od, cas_do, zrusena, workflow_stav")
     .eq("zakazka_id", id)
     .maybeSingle();
 
@@ -868,6 +890,23 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
 
   if (!zakazka) {
     return <div>Zakázka nebyla nalezena.</div>;
+  }
+
+  if (zakazka.zrusena || zakazka.workflow_stav === "zruseno") {
+    return (
+      <div className="mx-auto w-full max-w-3xl px-4">
+        <PageHeader
+          title="Loading scan"
+          description={`${zakazka.cislo_zakazky ?? "—"} — ${zakazka.nazev ?? "Zakázka"}`}
+        />
+        <Card className="border-red-500/30 bg-red-500/10">
+          <Badge variant="danger">Zrušeno</Badge>
+          <div className="mt-3 text-sm font-semibold text-red-100">
+            Zakázka byla zrušena. Scan workflow je neaktivní.
+          </div>
+        </Card>
+      </div>
+    );
   }
 
   const { data: technikaRaw, error: technikaError } = await supabase

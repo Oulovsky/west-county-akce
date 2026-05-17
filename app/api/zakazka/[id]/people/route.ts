@@ -205,12 +205,15 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
       (row) => row.zakazka_id
     );
     const otherZakazkaIds = [...new Set(otherRows.map((row) => row.zakazka_id))];
-    const otherZakazkyById = new Map<string, { zakazka_id: string; nazev: string | null }>();
+    const otherZakazkyById = new Map<
+      string,
+      { zakazka_id: string; nazev: string | null; zrusena?: boolean | null }
+    >();
 
     if (otherZakazkaIds.length > 0) {
       const { data: otherZakazky, error: otherZakazkyError } = await supabase
         .from("zakazky")
-        .select("zakazka_id, nazev")
+        .select("zakazka_id, nazev, zrusena")
         .in("zakazka_id", otherZakazkaIds);
 
       if (otherZakazkyError) {
@@ -233,10 +236,12 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({
       assignments: assignmentsResult.data ?? [],
       currentZakazka: zakazkaResult.data ?? null,
-      other: otherRows.map((row) => ({
-        ...row,
-        zakazky: otherZakazkyById.get(row.zakazka_id) ?? null,
-      })),
+      other: otherRows
+        .filter((row) => !otherZakazkyById.get(row.zakazka_id)?.zrusena)
+        .map((row) => ({
+          ...row,
+          zakazky: otherZakazkyById.get(row.zakazka_id) ?? null,
+        })),
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
@@ -288,6 +293,13 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       return NextResponse.json(
         { error: "Zakázka nebyla nalezena." },
         { status: 404 }
+      );
+    }
+
+    if (zakazkaResult.data.zrusena || zakazkaResult.data.workflow_stav === "zruseno") {
+      return NextResponse.json(
+        { error: "Lidi na zrušené zakázce už nelze měnit." },
+        { status: 400 }
       );
     }
 
@@ -344,9 +356,30 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: sameUserError.message }, { status: 500 });
     }
 
-    const hasConflict = ((sameUserAssignments ?? []) as AssignmentRow[]).some((row) =>
-      rangesOverlap(finalFrom, finalTo, row.datum_od, row.datum_do)
+    const sameUserRows = (sameUserAssignments ?? []) as AssignmentRow[];
+    const sameUserZakazkaIds = Array.from(
+      new Set(sameUserRows.map((row) => row.zakazka_id).filter(Boolean))
     );
+    const cancelledZakazkaIds = new Set<string>();
+
+    if (sameUserZakazkaIds.length > 0) {
+      const { data: sameUserZakazky, error: sameUserZakazkyError } = await supabase
+        .from("zakazky")
+        .select("zakazka_id, zrusena")
+        .in("zakazka_id", sameUserZakazkaIds);
+
+      if (sameUserZakazkyError) {
+        return NextResponse.json({ error: sameUserZakazkyError.message }, { status: 500 });
+      }
+
+      for (const row of sameUserZakazky ?? []) {
+        if (row.zrusena) cancelledZakazkaIds.add(row.zakazka_id);
+      }
+    }
+
+    const hasConflict = sameUserRows
+      .filter((row) => !cancelledZakazkaIds.has(row.zakazka_id))
+      .some((row) => rangesOverlap(finalFrom, finalTo, row.datum_od, row.datum_do));
 
     if (hasConflict && !overrideReason) {
       return NextResponse.json(

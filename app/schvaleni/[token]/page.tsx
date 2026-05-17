@@ -35,6 +35,8 @@ type ZakazkaRow = {
   datum_do: string | null;
   poznamka: string | null;
   klient_id: string | null;
+  zrusena?: boolean | null;
+  workflow_stav?: string | null;
   fakturacni_firma_id: string | null;
   cena_techniky: number | string | null;
   cena_personalu: number | string | null;
@@ -201,12 +203,13 @@ export default async function PublicApprovalPage({ params }: PageProps) {
 
   const { data: zakazkaRaw, error: zakazkaError } = await supabase
     .from("zakazky")
-    .select("zakazka_id, cislo_zakazky, nazev, misto, akce_od, akce_do, datum_od, datum_do, poznamka, klient_id, fakturacni_firma_id, cena_techniky, cena_personalu, cena_pred_slevou, cilova_cena, sleva_percent, konecna_cena")
+    .select("zakazka_id, cislo_zakazky, nazev, misto, akce_od, akce_do, datum_od, datum_do, poznamka, klient_id, zrusena, workflow_stav, fakturacni_firma_id, cena_techniky, cena_personalu, cena_pred_slevou, cilova_cena, sleva_percent, konecna_cena")
     .eq("zakazka_id", link.zakazka_id)
     .single();
 
   if (zakazkaError) throw new Error(zakazkaError.message);
   const zakazka = zakazkaRaw as ZakazkaRow;
+  if (zakazka.zrusena || zakazka.workflow_stav === "zruseno") return invalidLinkView();
 
   const { data: klientRaw } = zakazka.klient_id
     ? await supabase.from("klienti").select("nazev, ico, dic, ulice, mesto, psc, email, telefon").eq("klient_id", zakazka.klient_id).maybeSingle()

@@ -88,6 +88,7 @@ function isLogisticsPhase(value?: string | null) {
 }
 
 function getLogisticsStatusLabel(value?: string | null) {
+  if (value === "zruseno") return "Zrušeno";
   if (value === "naklada_se") return "Nakládá se";
   if (value === "nalozeno") return "Naloženo";
   if (value === "vykladka") return "Probíhá vykládka";
@@ -161,9 +162,10 @@ type AssignmentWithZakazka = {
 function AssignmentCard({ item }: { item: AssignmentWithZakazka }) {
   const { assignment, zakazka, status } = item;
   const navigationUrl = getNavigationUrl(zakazka);
+  const cancelled = Boolean(zakazka?.zrusena);
 
   return (
-    <Card className="space-y-4">
+    <Card className={["space-y-4", cancelled ? "border-red-500/30 bg-red-500/10 opacity-80" : ""].join(" ")}>
       <div className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 overflow-hidden">
@@ -174,10 +176,18 @@ function AssignmentCard({ item }: { item: AssignmentWithZakazka }) {
               {zakazka?.misto || "Místo není vyplněné"}
             </div>
           </div>
-          <Badge variant={getStatusVariant(status)}>{getStatusLabel(status)}</Badge>
+          <Badge variant={cancelled ? "danger" : getStatusVariant(status)}>
+            {cancelled ? "Zrušeno" : getStatusLabel(status)}
+          </Badge>
         </div>
 
-        {status === "pending" ? (
+        {cancelled ? (
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-100">
+            Zakázka byla zrušena
+          </div>
+        ) : null}
+
+        {status === "pending" && !cancelled ? (
           <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm font-semibold text-blue-100">
             Máte novou zakázku.
           </div>
@@ -255,7 +265,7 @@ function AssignmentCard({ item }: { item: AssignmentWithZakazka }) {
         )}
       </div>
 
-      <ParticipationActions assignmentId={String(assignment.id)} status={status} />
+      {!cancelled ? <ParticipationActions assignmentId={String(assignment.id)} status={status} /> : null}
     </Card>
   );
 }

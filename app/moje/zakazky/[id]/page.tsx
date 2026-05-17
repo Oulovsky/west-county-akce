@@ -33,6 +33,7 @@ type ZakazkaRow = {
   akce_do: string | null;
   datum_od: string | null;
   datum_do: string | null;
+  zrusena?: boolean | null;
   logistika_stav: string | null;
 };
 
@@ -83,6 +84,7 @@ function isLogisticsPhase(value?: string | null) {
 }
 
 function getLogisticsStatusLabel(value?: string | null) {
+  if (value === "zruseno") return "Zrušeno";
   if (value === "naklada_se") return "Nakládá se";
   if (value === "nalozeno") return "Naloženo";
   if (value === "vykladka") return "Probíhá vykládka";
@@ -167,7 +169,7 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
 
   const { data: zakazkaRaw, error: zakazkaError } = await supabase
     .from("zakazky")
-    .select("zakazka_id, cislo_zakazky, nazev, misto, misto_lat, misto_lng, poznamka, akce_od, akce_do, datum_od, datum_do, logistika_stav")
+    .select("zakazka_id, cislo_zakazky, nazev, misto, misto_lat, misto_lng, poznamka, akce_od, akce_do, datum_od, datum_do, zrusena, logistika_stav")
     .eq("zakazka_id", id)
     .maybeSingle();
 
@@ -245,6 +247,15 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
         </div>
       </Card>
 
+      {zakazka.zrusena ? (
+        <Card className="border-red-500/30 bg-red-500/10">
+          <div className="text-sm font-bold text-red-100">Zakázka byla zrušena</div>
+          <div className="mt-1 text-sm text-red-100/80">
+            Tato práce už není aktivní. Detail zůstává dostupný pro historii.
+          </div>
+        </Card>
+      ) : null}
+
       <section className="space-y-3">
         <h2 className="text-xl font-bold text-white">Moje fáze práce</h2>
         {assignments.length === 0 ? (
@@ -294,7 +305,9 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
                     </div>
                   ) : null}
 
-                  <ParticipationActions assignmentId={String(assignment.id)} status={status} />
+                  {!zakazka.zrusena ? (
+                    <ParticipationActions assignmentId={String(assignment.id)} status={status} />
+                  ) : null}
                 </Card>
               );
             })}

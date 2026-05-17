@@ -97,6 +97,22 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: "Přiřazení nebylo nalezeno." }, { status: 404 });
     }
 
+    const { data: currentZakazka, error: currentZakazkaError } = await supabase
+      .from("zakazky")
+      .select("zrusena, workflow_stav")
+      .eq("zakazka_id", currentAssignment.zakazka_id)
+      .maybeSingle();
+
+    if (currentZakazkaError) {
+      return NextResponse.json({ error: currentZakazkaError.message }, { status: 500 });
+    }
+    if (currentZakazka?.zrusena || currentZakazka?.workflow_stav === "zruseno") {
+      return NextResponse.json(
+        { error: "Lidi na zrušené zakázce už nelze měnit." },
+        { status: 400 }
+      );
+    }
+
     const nextFrom = datumOd ?? null;
     const nextTo = datumDo ?? null;
     const { data: sameUserAssignments, error: sameUserError } = await supabase
@@ -109,10 +125,34 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: sameUserError.message }, { status: 500 });
     }
 
-    const hasConflict = ((sameUserAssignments ?? []) as Array<{
+    const sameUserRows = (sameUserAssignments ?? []) as Array<{
+      zakazka_id?: string | null;
       datum_od?: string | null;
       datum_do?: string | null;
-    }>).some((row) => rangesOverlap(nextFrom, nextTo, row.datum_od, row.datum_do));
+    }>;
+    const sameUserZakazkaIds = Array.from(
+      new Set(sameUserRows.map((row) => row.zakazka_id).filter(Boolean) as string[])
+    );
+    const cancelledZakazkaIds = new Set<string>();
+
+    if (sameUserZakazkaIds.length > 0) {
+      const { data: sameUserZakazky, error: sameUserZakazkyError } = await supabase
+        .from("zakazky")
+        .select("zakazka_id, zrusena")
+        .in("zakazka_id", sameUserZakazkaIds);
+
+      if (sameUserZakazkyError) {
+        return NextResponse.json({ error: sameUserZakazkyError.message }, { status: 500 });
+      }
+
+      for (const row of sameUserZakazky ?? []) {
+        if (row.zrusena) cancelledZakazkaIds.add(row.zakazka_id);
+      }
+    }
+
+    const hasConflict = sameUserRows
+      .filter((row) => !row.zakazka_id || !cancelledZakazkaIds.has(row.zakazka_id))
+      .some((row) => rangesOverlap(nextFrom, nextTo, row.datum_od, row.datum_do));
 
     if (hasConflict && !overrideReason) {
       return NextResponse.json(
@@ -226,6 +266,24 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
 
     if (loadError) {
       return NextResponse.json({ error: loadError.message }, { status: 500 });
+    }
+
+    if (assignmentBeforeDelete) {
+      const { data: currentZakazka, error: currentZakazkaError } = await supabase
+        .from("zakazky")
+        .select("zrusena, workflow_stav")
+        .eq("zakazka_id", assignmentBeforeDelete.zakazka_id)
+        .maybeSingle();
+
+      if (currentZakazkaError) {
+        return NextResponse.json({ error: currentZakazkaError.message }, { status: 500 });
+      }
+      if (currentZakazka?.zrusena || currentZakazka?.workflow_stav === "zruseno") {
+        return NextResponse.json(
+          { error: "Lidi na zrušené zakázce už nelze měnit." },
+          { status: 400 }
+        );
+      }
     }
 
     const result = await supabase

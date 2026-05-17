@@ -1,8 +1,13 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
+import { Modal } from "@/components/ui/modal";
+import { Textarea } from "@/components/ui/textarea";
 
 type ZakazkaHeaderCardProps = {
   zakazkaId: string;
@@ -17,15 +22,19 @@ type ZakazkaHeaderCardProps = {
     misto_gps_radius_m?: number | string | null;
     typ_obsluhy?: string | null;
     poznamka?: string | null;
+    zrusena?: boolean | null;
   };
-  cancelAction: () => Promise<void>;
+  hasInvoice?: boolean;
+  cancelAction: (formData: FormData) => Promise<void>;
 };
 
 export function ZakazkaHeaderCard({
   zakazkaId,
   data,
+  hasInvoice = false,
   cancelAction,
 }: ZakazkaHeaderCardProps) {
+  const [cancelOpen, setCancelOpen] = useState(false);
   const lat = String(data.misto_lat ?? "").trim();
   const lng = String(data.misto_lng ?? "").trim();
   const hasGps = Boolean(lat && lng);
@@ -104,14 +113,19 @@ export function ZakazkaHeaderCard({
               Poškození na zakázce
             </Link>
 
-            <form action={cancelAction}>
+            {data.zrusena ? (
+              <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-100">
+                Zakázka je zrušená.
+              </div>
+            ) : (
               <button
-                type="submit"
+                type="button"
+                onClick={() => setCancelOpen(true)}
                 className="w-full rounded-xl border border-red-500/40 px-4 py-3 font-semibold text-red-300 transition hover:bg-red-500/10 hover:text-red-200"
               >
                 Zrušit zakázku
               </button>
-            </form>
+            )}
 
             <div className="text-sm text-slate-400">
               Zakázka se přesune mimo běžný seznam a odpojí se od techniky, lidí a nakládky.
@@ -119,6 +133,61 @@ export function ZakazkaHeaderCard({
           </div>
         </Card>
       </div>
+
+      <Modal open={cancelOpen} onClose={() => setCancelOpen(false)} title="Zrušit zakázku" widthClassName="max-w-xl">
+        <form action={cancelAction} className="space-y-4">
+          <input type="hidden" name="zakazka_id" value={zakazkaId} />
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+            Zrušení je provozní storno. Zakázka zůstane v historii, tokeny klienta se zneplatní,
+            logistika se zastaví a aktivní kusy se uvolní.
+          </div>
+
+          {hasInvoice ? (
+            <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+              <div className="font-bold">Zakázka už má vystavenou fakturu.</div>
+              <div className="mt-1">
+                Zrušení vyžaduje explicitní override s důvodem. Storno faktury ani dobropis se teď neřeší automaticky.
+              </div>
+            </div>
+          ) : null}
+
+          <Field label="Důvod zrušení">
+            <Textarea
+              name="zruseno_duvod"
+              rows={4}
+              required
+              placeholder="Např. klient zrušil akci, počasí, interní rozhodnutí..."
+            />
+          </Field>
+
+          {hasInvoice ? (
+            <Field label="Důvod override vystavené faktury">
+              <Textarea
+                name="invoice_override_reason"
+                rows={3}
+                required
+                placeholder="Proč rušíme zakázku i přes vystavenou fakturu?"
+              />
+            </Field>
+          ) : null}
+
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setCancelOpen(false)}
+              className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-slate-700"
+            >
+              Nechat zakázku aktivní
+            </button>
+            <button
+              type="submit"
+              className="rounded-xl bg-red-700 px-4 py-2 text-sm font-black text-white transition hover:bg-red-600"
+            >
+              Potvrdit zrušení
+            </button>
+          </div>
+        </form>
+      </Modal>
     </Card>
   );
 }

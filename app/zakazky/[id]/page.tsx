@@ -1,5 +1,4 @@
 ﻿import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -13,6 +12,7 @@ import { combineDateAndTime } from "./helpers";
 import { ZakazkaBasicLookCard } from "./components/ZakazkaBasicLookCard";
 import { ZakazkaScheduleCard } from "./components/ZakazkaScheduleCard";
 import { ZakazkaHeaderCard } from "./components/ZakazkaHeaderCard";
+import { cancelZakazkaAction } from "./cancel-action";
 import { HistoryTimelineCard, type TimelineEvent } from "./HistoryTimelineCard";
 import {
   ZakazkaPlaceConnectionCard,
@@ -540,6 +540,7 @@ function normalizeLogisticsStatus(value?: string | null): LogisticsStatus {
 
 function getLogisticsStatusLabel(value?: string | null) {
   const status = normalizeLogisticsStatus(value);
+  if (value === "zruseno") return "Zrušeno";
   if (status === "naklada_se") return "Nakládá se";
   if (status === "nalozeno") return "Naloženo";
   if (status === "vykladka") return "Probíhá vykládka";
@@ -1949,19 +1950,6 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
     revalidatePath("/zakazky");
   }
 
-  async function cancelZakazka() {
-    "use server";
-    const supabase = await createClient();
-
-    const { error } = await supabase.rpc("zrusit_zakazku", { p_zakazka_id: id });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    redirect("/zakazky");
-  }
-
   const { data, error } = await supabase
     .from("zakazky")
     .select("*")
@@ -2787,7 +2775,12 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
 
   return (
     <div className="w-full">
-      <ZakazkaHeaderCard zakazkaId={id} data={headerData} cancelAction={cancelZakazka} />
+      <ZakazkaHeaderCard
+        zakazkaId={id}
+        data={headerData}
+        hasInvoice={Boolean(latestInvoice)}
+        cancelAction={cancelZakazkaAction}
+      />
 
       {(data as { workflow_change_pending?: boolean | null }).workflow_change_pending ? (
         <WorkflowChangePendingWarning

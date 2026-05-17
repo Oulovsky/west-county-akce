@@ -74,7 +74,7 @@ function jeMinula(zakazka: Zakazka, ted: Date) {
 }
 
 function jeZrusena(zakazka: Zakazka) {
-  return Boolean(zakazka.zrusena);
+  return Boolean(zakazka.zrusena) || zakazka.workflow_stav === "zruseno";
 }
 
 function formatDatum(value: string) {
@@ -102,6 +102,7 @@ function formatDatumCas(z: Zakazka) {
 }
 
 function getLogisticsStatusLabel(value?: string | null) {
+  if (value === "zruseno") return "Zrušeno";
   if (value === "naklada_se") return "Nakládá se";
   if (value === "nalozeno") return "Naloženo";
   if (value === "vykladka") return "Probíhá vykládka";
@@ -142,8 +143,14 @@ function ZakazkaCard({
   canDeletePermanently?: boolean;
   smazatTrvaleAction: (formData: FormData) => Promise<void>;
 }) {
+  const cancelled = jeZrusena(zakazka) || zakazka.workflow_stav === "zruseno";
   return (
-    <Card className="transition hover:border-slate-700 hover:bg-[#0b1324]">
+    <Card
+      className={[
+        "transition hover:border-slate-700 hover:bg-[#0b1324]",
+        cancelled ? "border-slate-700 bg-slate-900/50 opacity-75" : "",
+      ].join(" ")}
+    >
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="block flex-1">
           <div className="space-y-3">
@@ -173,8 +180,10 @@ function ZakazkaCard({
                 {formatDatumCas(zakazka)}
               </div>
               {jeZrusena(zakazka) ? (
-                <div className="text-red-300">
-                  <span className="font-semibold text-red-200">Stav:</span> Zrušená
+                <div>
+                  <span className="rounded-md border border-red-500/40 bg-red-500/15 px-2 py-0.5 text-xs font-black text-red-100">
+                    Zrušeno
+                  </span>
                 </div>
               ) : null}
               <div>
@@ -221,7 +230,7 @@ function ZakazkaCard({
           </div>
         </div>
 
-        {canDeletePermanently ? (
+        {canDeletePermanently && !cancelled ? (
           <PermanentDeleteButton zakazka={zakazka} smazatTrvaleAction={smazatTrvaleAction} />
         ) : null}
       </div>
@@ -306,7 +315,7 @@ function Sekce({
             <ZakazkaCard
               key={z.zakazka_id}
               zakazka={z}
-              canDeletePermanently={allowPermanentDelete && jeZrusena(z)}
+              canDeletePermanently={allowPermanentDelete && false}
               smazatTrvaleAction={smazatTrvaleAction}
             />
           ))}

@@ -25,6 +25,7 @@ type Zakazka = {
   datum_do: string;
   cas_od: string | null;
   cas_do: string | null;
+  zrusena?: boolean | null;
 };
 
 type SkladovaPolozka = {
@@ -109,7 +110,7 @@ async function nactiData(zakazkaId: string) {
 
   const { data: vsechnyZakazkyRaw, error: vsechnyZakazkyError } = await supabase
     .from("zakazky")
-    .select("zakazka_id, cislo_zakazky, nazev, datum_od, datum_do, cas_od, cas_do")
+    .select("zakazka_id, cislo_zakazky, nazev, datum_od, datum_do, cas_od, cas_do, zrusena")
     .neq("zakazka_id", zakazkaId);
 
   if (vsechnyZakazkyError) {
@@ -118,7 +119,9 @@ async function nactiData(zakazkaId: string) {
 
   const vsechnyZakazky = (vsechnyZakazkyRaw || []) as Zakazka[];
 
-  const kolidujiciZakazky = vsechnyZakazky.filter((z: Zakazka) => koliduje(zakazka, z));
+  const kolidujiciZakazky = vsechnyZakazky.filter(
+    (z: Zakazka) => !z.zrusena && koliduje(zakazka, z)
+  );
   const kolidujiciIds = kolidujiciZakazky.map((z: Zakazka) => z.zakazka_id);
 
   const { data: skladovePolozkyRaw, error: skladError } = await supabase.rpc(
@@ -269,6 +272,19 @@ async function nactiData(zakazkaId: string) {
   };
 }
 
+async function assertZakazkaNotCancelled(supabase: any, zakazkaId: string) {
+  const { data, error } = await supabase
+    .from("zakazky")
+    .select("zrusena, workflow_stav")
+    .eq("zakazka_id", zakazkaId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (data?.zrusena || data?.workflow_stav === "zruseno") {
+    throw new Error("Technický plán zrušené zakázky už nelze měnit.");
+  }
+}
+
 export default async function TechnikaZakazkyPage({ params }: PageProps) {
   noStore();
 
@@ -321,6 +337,7 @@ export default async function TechnikaZakazkyPage({ params }: PageProps) {
     const zakazkaId = String(formData.get("zakazka_id") || "");
     const skladovaPolozkaId = String(formData.get("skladova_polozka_id") || "");
     const overrideReason = String(formData.get("sklad_conflict_override_reason") ?? "").trim();
+    await assertZakazkaNotCancelled(supabase, zakazkaId);
 
     const { radky } = await nactiData(zakazkaId);
     const radek = radky.find((r: Radek) => r.skladova_polozka_id === skladovaPolozkaId);
@@ -391,6 +408,7 @@ export default async function TechnikaZakazkyPage({ params }: PageProps) {
 
     const zakazkaId = String(formData.get("zakazka_id") || "");
     const skladovaPolozkaId = String(formData.get("skladova_polozka_id") || "");
+    await assertZakazkaNotCancelled(supabase, zakazkaId);
 
     const { radky } = await nactiData(zakazkaId);
     const radek = radky.find((r: Radek) => r.skladova_polozka_id === skladovaPolozkaId);

@@ -25,6 +25,8 @@ type ZakazkaLogisticsRow = {
   vykladka_started_at: string | null;
   vraceno_completed_by: string | null;
   vraceno_completed_at: string | null;
+  zrusena?: boolean | null;
+  workflow_stav?: string | null;
 };
 
 type ZakazkaKusRow = {
@@ -165,12 +167,16 @@ export async function syncZakazkaLogisticsFromScan(
 ) {
   const { data: zakazkaRaw, error: zakazkaError } = await supabase
     .from(SKLAD_TABLE.zakazky)
-    .select("logistika_stav, nakladka_started_by, nakladka_started_at, nakladka_completed_by, nakladka_completed_at, vykladka_started_by, vykladka_started_at, vraceno_completed_by, vraceno_completed_at")
+    .select("logistika_stav, nakladka_started_by, nakladka_started_at, nakladka_completed_by, nakladka_completed_at, vykladka_started_by, vykladka_started_at, vraceno_completed_by, vraceno_completed_at, zrusena, workflow_stav")
     .eq("zakazka_id", zakazkaId)
     .maybeSingle();
 
   if (zakazkaError || !zakazkaRaw) {
     return { ok: false, error: zakazkaError?.message ?? "Zakázka nebyla nalezena." };
+  }
+
+  if (zakazkaRaw.zrusena || zakazkaRaw.workflow_stav === "zruseno") {
+    return { ok: true, status: "zruseno", changed: false };
   }
 
   const { data: assignmentsRaw, error: assignmentsError } = await supabase
