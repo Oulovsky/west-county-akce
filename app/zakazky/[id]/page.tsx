@@ -12,6 +12,7 @@ import { combineDateAndTime } from "./helpers";
 import { ZakazkaBasicLookCard } from "./components/ZakazkaBasicLookCard";
 import { ZakazkaScheduleCard } from "./components/ZakazkaScheduleCard";
 import { ZakazkaHeaderCard } from "./components/ZakazkaHeaderCard";
+import { ZakazkaDopravaCard } from "./components/ZakazkaDopravaCard";
 import { cancelZakazkaAction } from "./cancel-action";
 import { HistoryTimelineCard, type TimelineEvent } from "./HistoryTimelineCard";
 import {
@@ -2863,6 +2864,8 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
       <PlanTechnikyCard items={technikaSummary} />
 
       <LoadingStatusCard groups={loadingStatusGroups} />
+
+      <ZakazkaDopravaCard zakazkaId={id} />
 
       <div className="mt-6">
         <ZakazkaSubnav zakazkaId={id} active="detail" showBackLink />

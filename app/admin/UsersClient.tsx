@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { type KeyboardEvent, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Toast from "@/components/Toast";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
   updateUserBankDetails,
   updateUserEmail,
   updateUserName,
+  updateUserPrivateVehicle,
   updateUserRole,
 } from "./users/actions";
 
@@ -27,6 +28,13 @@ type UserRow = {
   bank_code?: string | null;
   iban?: string | null;
   aktivni?: boolean | null;
+  private_vehicle?: {
+    id: string;
+    nazev: string | null;
+    spz: string | null;
+    kapacita_osob: number | string | null;
+    poznamka: string | null;
+  } | null;
 };
 
 function normalizeCost(value: string | number | null | undefined) {
@@ -65,6 +73,18 @@ function UserEditorRow({
   const [savedBankCode, setSavedBankCode] = useState(user.bank_code ?? "");
   const [iban, setIban] = useState(user.iban ?? "");
   const [savedIban, setSavedIban] = useState(user.iban ?? "");
+  const [privateVehicleName, setPrivateVehicleName] = useState(user.private_vehicle?.nazev ?? "");
+  const [savedPrivateVehicleName, setSavedPrivateVehicleName] = useState(user.private_vehicle?.nazev ?? "");
+  const [privateVehicleSpz, setPrivateVehicleSpz] = useState(user.private_vehicle?.spz ?? "");
+  const [savedPrivateVehicleSpz, setSavedPrivateVehicleSpz] = useState(user.private_vehicle?.spz ?? "");
+  const [privateVehicleCapacity, setPrivateVehicleCapacity] = useState(
+    user.private_vehicle?.kapacita_osob == null ? "" : String(user.private_vehicle.kapacita_osob)
+  );
+  const [savedPrivateVehicleCapacity, setSavedPrivateVehicleCapacity] = useState(
+    user.private_vehicle?.kapacita_osob == null ? "" : String(user.private_vehicle.kapacita_osob)
+  );
+  const [privateVehicleNote, setPrivateVehicleNote] = useState(user.private_vehicle?.poznamka ?? "");
+  const [savedPrivateVehicleNote, setSavedPrivateVehicleNote] = useState(user.private_vehicle?.poznamka ?? "");
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -85,6 +105,16 @@ function UserEditorRow({
     setSavedBankCode(user.bank_code ?? "");
     setIban(user.iban ?? "");
     setSavedIban(user.iban ?? "");
+    setPrivateVehicleName(user.private_vehicle?.nazev ?? "");
+    setSavedPrivateVehicleName(user.private_vehicle?.nazev ?? "");
+    setPrivateVehicleSpz(user.private_vehicle?.spz ?? "");
+    setSavedPrivateVehicleSpz(user.private_vehicle?.spz ?? "");
+    const nextVehicleCapacity =
+      user.private_vehicle?.kapacita_osob == null ? "" : String(user.private_vehicle.kapacita_osob);
+    setPrivateVehicleCapacity(nextVehicleCapacity);
+    setSavedPrivateVehicleCapacity(nextVehicleCapacity);
+    setPrivateVehicleNote(user.private_vehicle?.poznamka ?? "");
+    setSavedPrivateVehicleNote(user.private_vehicle?.poznamka ?? "");
   }, [
     user.role,
     user.jmeno,
@@ -94,6 +124,10 @@ function UserEditorRow({
     user.bank_account_number,
     user.bank_code,
     user.iban,
+    user.private_vehicle?.nazev,
+    user.private_vehicle?.spz,
+    user.private_vehicle?.kapacita_osob,
+    user.private_vehicle?.poznamka,
   ]);
 
   function saveName(nextName = name) {
@@ -207,6 +241,51 @@ function UserEditorRow({
         onToast({ message: result.error || "Odebrání zaměstnance selhalo", type: "error" });
       }
     });
+  }
+
+  function savePrivateVehicle() {
+    const current = {
+      nazev: privateVehicleName.trim(),
+      spz: privateVehicleSpz.trim(),
+      kapacita_osob: privateVehicleCapacity.trim(),
+      poznamka: privateVehicleNote.trim(),
+    };
+    const saved = {
+      nazev: savedPrivateVehicleName.trim(),
+      spz: savedPrivateVehicleSpz.trim(),
+      kapacita_osob: savedPrivateVehicleCapacity.trim(),
+      poznamka: savedPrivateVehicleNote.trim(),
+    };
+
+    if (JSON.stringify(current) === JSON.stringify(saved) || isPending) return;
+
+    startTransition(async () => {
+      const result = await updateUserPrivateVehicle(user.user_id, current);
+      if (result.ok) {
+        setSavedPrivateVehicleName(current.nazev);
+        setSavedPrivateVehicleSpz(current.spz);
+        setSavedPrivateVehicleCapacity(current.kapacita_osob);
+        setSavedPrivateVehicleNote(current.poznamka);
+        onToast({ message: "Soukromé vozidlo uloženo", type: "success" });
+        router.refresh();
+      } else {
+        onToast({ message: result.error || "Uložení soukromého vozidla selhalo", type: "error" });
+      }
+    });
+  }
+
+  function privateVehicleKeyDown(event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) {
+    if (event.key === "Enter" && event.currentTarget.tagName !== "TEXTAREA") {
+      event.preventDefault();
+      event.currentTarget.blur();
+    }
+    if (event.key === "Escape") {
+      setPrivateVehicleName(savedPrivateVehicleName);
+      setPrivateVehicleSpz(savedPrivateVehicleSpz);
+      setPrivateVehicleCapacity(savedPrivateVehicleCapacity);
+      setPrivateVehicleNote(savedPrivateVehicleNote);
+      event.currentTarget.blur();
+    }
   }
 
   return (
@@ -394,6 +473,57 @@ function UserEditorRow({
             disabled={isPending}
           />
         </label>
+      </div>
+
+      <div className="grid gap-3 rounded-xl border border-slate-800 bg-slate-900/40 p-3 xl:col-span-2">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Soukromé vozidlo
+          </div>
+          <div className="mt-1 text-xs text-slate-400">
+            Ukládá se jako soukromé vozidlo navázané na tohoto zaměstnance.
+          </div>
+        </div>
+        <div className="grid gap-3 md:grid-cols-[1fr_10rem_8rem]">
+          <input
+            value={privateVehicleName}
+            onChange={(event) => setPrivateVehicleName(event.target.value)}
+            onBlur={savePrivateVehicle}
+            onKeyDown={privateVehicleKeyDown}
+            placeholder="Název vozidla"
+            className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white disabled:opacity-60"
+            disabled={isPending}
+          />
+          <input
+            value={privateVehicleSpz}
+            onChange={(event) => setPrivateVehicleSpz(event.target.value)}
+            onBlur={savePrivateVehicle}
+            onKeyDown={privateVehicleKeyDown}
+            placeholder="SPZ"
+            className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white disabled:opacity-60"
+            disabled={isPending}
+          />
+          <input
+            value={privateVehicleCapacity}
+            onChange={(event) => setPrivateVehicleCapacity(event.target.value)}
+            onBlur={savePrivateVehicle}
+            onKeyDown={privateVehicleKeyDown}
+            placeholder="Osob"
+            inputMode="numeric"
+            className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white disabled:opacity-60"
+            disabled={isPending}
+          />
+        </div>
+        <textarea
+          value={privateVehicleNote}
+          onChange={(event) => setPrivateVehicleNote(event.target.value)}
+          onBlur={savePrivateVehicle}
+          onKeyDown={privateVehicleKeyDown}
+          placeholder="Poznámka k soukromému vozidlu"
+          rows={2}
+          className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white disabled:opacity-60"
+          disabled={isPending}
+        />
       </div>
 
       <div className="flex flex-col gap-2 text-xs text-slate-500 xl:items-end xl:text-right">

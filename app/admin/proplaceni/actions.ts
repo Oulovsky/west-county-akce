@@ -84,3 +84,130 @@ export async function markAttendancePaidAction(formData: FormData) {
   revalidatePath("/moje");
   revalidatePath(`/zakazky/${attendance.zakazka_id}`);
 }
+
+export async function approveTravelReimbursementAction(formData: FormData) {
+  const travelId = String(formData.get("travel_id") ?? "").trim();
+  if (!travelId) throw new Error("Chybí ID cestovní náhrady.");
+
+  const { supabase, user } = await requirePaymentManager();
+  const approvedAt = new Date().toISOString();
+  const { data: travel, error: travelError } = await supabase
+    .from("cestovni_nahrady")
+    .select("id, zakazka_id, user_id, km, sazba_za_km, castka, status")
+    .eq("id", travelId)
+    .maybeSingle();
+
+  if (travelError) throw new Error(travelError.message);
+  if (!travel) throw new Error("Cestovní náhrada nebyla nalezena.");
+
+  const { error: updateError } = await supabase
+    .from("cestovni_nahrady")
+    .update({
+      status: "schvaleno",
+      approved_by: user.id,
+      approved_at: approvedAt,
+      rejected_reason: null,
+      updated_at: approvedAt,
+    })
+    .eq("id", travelId);
+
+  if (updateError) throw new Error(updateError.message);
+
+  await logZakazkaHistory(supabase, {
+    zakazkaId: travel.zakazka_id,
+    eventType: "travel_reimbursement_approved",
+    actorId: user.id,
+    title: "Cestovní náhrada byla schválena.",
+    detail: formatMoneyCzk(Number(travel.castka ?? 0)),
+    metadata: { travel_id: travelId, target_user_id: travel.user_id },
+  });
+
+  revalidatePath("/admin/proplaceni");
+  revalidatePath("/moje");
+  revalidatePath(`/zakazky/${travel.zakazka_id}`);
+}
+
+export async function rejectTravelReimbursementAction(formData: FormData) {
+  const travelId = String(formData.get("travel_id") ?? "").trim();
+  const reason = String(formData.get("rejected_reason") ?? "").trim();
+  if (!travelId) throw new Error("Chybí ID cestovní náhrady.");
+  if (!reason) throw new Error("Důvod zamítnutí je povinný.");
+
+  const { supabase, user } = await requirePaymentManager();
+  const { data: travel, error: travelError } = await supabase
+    .from("cestovni_nahrady")
+    .select("id, zakazka_id, user_id")
+    .eq("id", travelId)
+    .maybeSingle();
+
+  if (travelError) throw new Error(travelError.message);
+  if (!travel) throw new Error("Cestovní náhrada nebyla nalezena.");
+
+  const { error: updateError } = await supabase
+    .from("cestovni_nahrady")
+    .update({
+      status: "zamitnuto",
+      rejected_reason: reason,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", travelId);
+
+  if (updateError) throw new Error(updateError.message);
+
+  await logZakazkaHistory(supabase, {
+    zakazkaId: travel.zakazka_id,
+    eventType: "travel_reimbursement_rejected",
+    actorId: user.id,
+    title: "Cestovní náhrada byla zamítnuta.",
+    detail: reason,
+    metadata: { travel_id: travelId, target_user_id: travel.user_id },
+  });
+
+  revalidatePath("/admin/proplaceni");
+  revalidatePath("/moje");
+  revalidatePath(`/zakazky/${travel.zakazka_id}`);
+}
+
+export async function markTravelReimbursementPaidAction(formData: FormData) {
+  const travelId = String(formData.get("travel_id") ?? "").trim();
+  if (!travelId) throw new Error("Chybí ID cestovní náhrady.");
+
+  const { supabase, user } = await requirePaymentManager();
+  const { data: travel, error: travelError } = await supabase
+    .from("cestovni_nahrady")
+    .select("id, zakazka_id, user_id, castka, status")
+    .eq("id", travelId)
+    .maybeSingle();
+
+  if (travelError) throw new Error(travelError.message);
+  if (!travel) throw new Error("Cestovní náhrada nebyla nalezena.");
+  if (travel.status !== "schvaleno" && travel.status !== "proplaceno") {
+    throw new Error("Proplatit lze jen schválenou cestovní náhradu.");
+  }
+
+  const paidAt = new Date().toISOString();
+  const { error: updateError } = await supabase
+    .from("cestovni_nahrady")
+    .update({
+      status: "proplaceno",
+      paid_by: user.id,
+      paid_at: paidAt,
+      updated_at: paidAt,
+    })
+    .eq("id", travelId);
+
+  if (updateError) throw new Error(updateError.message);
+
+  await logZakazkaHistory(supabase, {
+    zakazkaId: travel.zakazka_id,
+    eventType: "travel_reimbursement_paid",
+    actorId: user.id,
+    title: "Cestovní náhrada byla označena jako proplacená.",
+    detail: formatMoneyCzk(Number(travel.castka ?? 0)),
+    metadata: { travel_id: travelId, target_user_id: travel.user_id },
+  });
+
+  revalidatePath("/admin/proplaceni");
+  revalidatePath("/moje");
+  revalidatePath(`/zakazky/${travel.zakazka_id}`);
+}

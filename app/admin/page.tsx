@@ -80,7 +80,7 @@ export default async function AdminPage() {
     <div className="p-6 max-w-5xl mx-auto space-y-4 text-slate-200">
       <h1 className="text-3xl font-bold text-white">Admin panel</h1>
 
-      <AdminSection title="Zaměstnanci" defaultOpen>
+      <AdminSection title="Zaměstnanci">
         <UsersClient users={users} />
       </AdminSection>
 
@@ -94,6 +94,20 @@ export default async function AdminPage() {
             className="inline-flex rounded-xl border border-blue-500/40 bg-blue-600/20 px-4 py-3 text-sm font-bold text-blue-100 transition hover:bg-blue-600/30"
           >
             Otevřít proplacení práce
+          </Link>
+        </div>
+      </AdminSection>
+
+      <AdminSection title="Vozidla">
+        <div className="space-y-3">
+          <p className="text-sm text-slate-400">
+            Evidence firemních a soukromých aut pro plán dopravy, kapacity a dostupnost v čase.
+          </p>
+          <Link
+            href="/admin/vozidla"
+            className="inline-flex rounded-xl border border-blue-500/40 bg-blue-600/20 px-4 py-3 text-sm font-bold text-blue-100 transition hover:bg-blue-600/30"
+          >
+            Otevřít vozidla
           </Link>
         </div>
       </AdminSection>

@@ -87,7 +87,28 @@ export async function getUsers() {
     throw new Error(error.message);
   }
 
-  return data ?? [];
+  const users = data ?? [];
+  const userIds = users.map((row) => row.user_id).filter(Boolean);
+
+  if (userIds.length === 0) return users;
+
+  const { data: vehicles, error: vehiclesError } = await supabase
+    .from("vozidla")
+    .select("id, nazev, spz, vlastnik_user_id, kapacita_osob, poznamka, aktivni")
+    .eq("typ", "soukrome")
+    .eq("aktivni", true)
+    .in("vlastnik_user_id", userIds);
+
+  if (vehiclesError) {
+    console.warn("Soukromá vozidla se nepodařilo načíst. Spusťte npx supabase db push.", vehiclesError.message);
+    return users;
+  }
+
+  const vehicleByOwner = new Map((vehicles ?? []).map((vehicle) => [vehicle.vlastnik_user_id, vehicle]));
+  return users.map((row) => ({
+    ...row,
+    private_vehicle: vehicleByOwner.get(row.user_id) ?? null,
+  }));
 }
 
 export async function updateUserRole(
@@ -174,6 +195,77 @@ export async function updateUserBankDetails(
 
     revalidatePath("/admin");
     revalidatePath("/admin/proplaceni");
+    return { ok: true };
+  } catch (error: unknown) {
+    return { ok: false, error: getErrorMessage(error) };
+  }
+}
+
+export async function updateUserPrivateVehicle(
+  targetUserId: string,
+  input: {
+    nazev?: string;
+    spz?: string;
+    kapacita_osob?: string;
+    poznamka?: string;
+  }
+): Promise<ActionResult> {
+  try {
+    const { supabase, error: authError } = await requireAdmin();
+    if (authError) return { ok: false, error: authError };
+
+    const nazev = String(input.nazev ?? "").trim();
+    const spz = String(input.spz ?? "").trim();
+    const poznamka = String(input.poznamka ?? "").trim();
+    const capacityRaw = String(input.kapacita_osob ?? "").trim();
+    const capacity = capacityRaw === "" ? null : Number(capacityRaw);
+
+    if (capacity !== null && (!Number.isFinite(capacity) || capacity < 0)) {
+      return { ok: false, error: "Kapacita osob musí být nezáporné číslo." };
+    }
+
+    const allEmpty = !nazev && !spz && !poznamka && capacity === null;
+    const { data: existing, error: existingError } = await supabase
+      .from("vozidla")
+      .select("id")
+      .eq("typ", "soukrome")
+      .eq("vlastnik_user_id", targetUserId)
+      .eq("aktivni", true)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingError) return { ok: false, error: existingError.message };
+
+    if (allEmpty) {
+      if (existing?.id) {
+        const { error } = await supabase
+          .from("vozidla")
+          .update({ aktivni: false, updated_at: new Date().toISOString() })
+          .eq("id", existing.id);
+        if (error) return { ok: false, error: error.message };
+      }
+      revalidatePath("/admin");
+      return { ok: true };
+    }
+
+    const payload = {
+      nazev: nazev || "Soukromé auto",
+      spz: spz || null,
+      typ: "soukrome",
+      vlastnik_user_id: targetUserId,
+      aktivni: true,
+      kapacita_osob: capacity === null ? null : Math.round(capacity),
+      poznamka: poznamka || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = existing?.id
+      ? await supabase.from("vozidla").update(payload).eq("id", existing.id)
+      : await supabase.from("vozidla").insert(payload);
+
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/admin");
+    revalidatePath("/admin/vozidla");
     return { ok: true };
   } catch (error: unknown) {
     return { ok: false, error: getErrorMessage(error) };

@@ -14,6 +14,14 @@ import {
 } from "@/lib/payments";
 import { ParticipationActions } from "./ParticipationActions";
 import { AttendanceActions } from "./AttendanceActions";
+import { submitTravelReimbursementAction } from "./cestovni-nahrady-actions";
+import {
+  DEFAULT_KM_RATE,
+  formatKm,
+  getTransportTypeLabel,
+  getTravelAmount,
+  getTravelStatusLabel,
+} from "@/lib/transport";
 
 type AssignmentRow = {
   id: string | number;
@@ -65,6 +73,41 @@ type AttendancePaymentRow = {
   payment_status: string | null;
   profiles?: { hodinovy_naklad_akce: number | string | null } | null;
   zakazky?: { cislo_zakazky: string | null; nazev: string | null } | null;
+};
+
+type MyTransportRow = {
+  id: string;
+  zakazka_id: string;
+  vozidlo_id: string | null;
+  typ_dopravy: string;
+  user_id: string | null;
+  odjezd_at: string | null;
+  prijezd_at: string | null;
+  odkud: string | null;
+  kam: string | null;
+  poznamka: string | null;
+};
+
+type VehicleRow = {
+  id: string;
+  nazev: string;
+  spz: string | null;
+  typ: string | null;
+};
+
+type TravelPaymentRow = {
+  id: string;
+  zakazka_id: string;
+  user_id: string;
+  zakazka_doprava_id: string | null;
+  km: number | string;
+  sazba_za_km: number | string;
+  castka: number | string | null;
+  odkud: string | null;
+  kam: string | null;
+  poznamka: string | null;
+  status: string;
+  submitted_at: string | null;
 };
 
 const FILTERS: Array<{ key: FilterMode; label: string }> = [
@@ -364,7 +407,13 @@ function AssignmentSection({
   );
 }
 
-function WorkPaymentsOverview({ rows }: { rows: AttendancePaymentRow[] }) {
+function WorkPaymentsOverview({
+  rows,
+  travelRows,
+}: {
+  rows: AttendancePaymentRow[];
+  travelRows: TravelPaymentRow[];
+}) {
   const items = rows
     .filter((row) => row.checkout_at)
     .map((row) => {
@@ -381,27 +430,41 @@ function WorkPaymentsOverview({ rows }: { rows: AttendancePaymentRow[] }) {
   const paidTotal = items
     .filter((item) => item.row.payment_status === "proplaceno")
     .reduce((sum, item) => sum + item.amount, 0);
+  const travelWaitingTotal = travelRows
+    .filter((row) => row.status === "schvaleno")
+    .reduce((sum, row) => sum + Number(row.castka ?? getTravelAmount(row.km, row.sazba_za_km)), 0);
+  const travelPaidTotal = travelRows
+    .filter((row) => row.status === "proplaceno")
+    .reduce((sum, row) => sum + Number(row.castka ?? getTravelAmount(row.km, row.sazba_za_km)), 0);
 
   return (
     <Card className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-black text-white">Moje odpracované hodiny</h2>
+          <h2 className="text-2xl font-black text-white">Moje proplacení</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Provozní přehled uznané práce a interního proplacení.
+            Provozní přehled uznané práce, cestovních náhrad a interního proplacení.
           </p>
         </div>
         <Badge variant="default">{items.length} záznamů</Badge>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-          <div className="text-xs uppercase tracking-wide text-amber-200/80">Čeká na proplacení</div>
+          <div className="text-xs uppercase tracking-wide text-amber-200/80">Práce čeká</div>
           <div className="mt-1 text-2xl font-black text-amber-100">{formatMoneyCzk(waitingTotal)}</div>
         </div>
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-amber-200/80">Cesty čekají</div>
+          <div className="mt-1 text-2xl font-black text-amber-100">{formatMoneyCzk(travelWaitingTotal)}</div>
+        </div>
         <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
-          <div className="text-xs uppercase tracking-wide text-emerald-200/80">Už proplaceno</div>
-          <div className="mt-1 text-2xl font-black text-emerald-100">{formatMoneyCzk(paidTotal)}</div>
+          <div className="text-xs uppercase tracking-wide text-emerald-200/80">Celkem čeká</div>
+          <div className="mt-1 text-2xl font-black text-emerald-100">{formatMoneyCzk(waitingTotal + travelWaitingTotal)}</div>
+        </div>
+        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-emerald-200/80">Celkem proplaceno</div>
+          <div className="mt-1 text-2xl font-black text-emerald-100">{formatMoneyCzk(paidTotal + travelPaidTotal)}</div>
         </div>
       </div>
 
@@ -451,6 +514,121 @@ function WorkPaymentsOverview({ rows }: { rows: AttendancePaymentRow[] }) {
                     <div className="font-bold text-slate-100">{getPaymentStatusLabel(item.row.payment_status)}</div>
                   </div>
                 </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {travelRows.length > 0 ? (
+        <div className="space-y-2">
+          <h3 className="text-lg font-black text-white">Cestovní náhrady</h3>
+          {travelRows.map((row) => {
+            const amount = Number(row.castka ?? getTravelAmount(row.km, row.sazba_za_km));
+            return (
+              <div key={row.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="font-bold text-white">
+                      {row.odkud || "Odkud ?"} → {row.kam || "Kam ?"}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      {formatKm(row.km)} × {row.sazba_za_km} Kč/km
+                    </div>
+                  </div>
+                  <Badge variant={row.status === "proplaceno" ? "success" : row.status === "zamitnuto" ? "danger" : "warning"}>
+                    {getTravelStatusLabel(row.status)}
+                  </Badge>
+                </div>
+                <div className="mt-2 font-black text-blue-100">{formatMoneyCzk(amount)}</div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+function MyTransportOverview({
+  rows,
+  vehiclesById,
+  zakazkyById,
+}: {
+  rows: MyTransportRow[];
+  vehiclesById: Map<string, VehicleRow>;
+  zakazkyById: Map<string, ZakazkaRow>;
+}) {
+  return (
+    <Card className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-black text-white">Moje doprava</h2>
+          <p className="mt-1 text-sm text-slate-400">Přesuny, auta a soukromé cesty naplánované na zakázkách.</p>
+        </div>
+        <Badge variant="default">{rows.length} záznamů</Badge>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-slate-400">
+          Nemáte naplánovaný žádný dopravní záznam.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {rows.map((row) => {
+            const vehicle = vehiclesById.get(row.vozidlo_id ?? "");
+            const zakazka = zakazkyById.get(row.zakazka_id);
+            return (
+              <div key={row.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="font-black text-white">{getTransportTypeLabel(row.typ_dopravy)}</div>
+                    <div className="mt-1 text-sm text-slate-300">
+                      {[zakazka?.cislo_zakazky, zakazka?.nazev].filter(Boolean).join(" · ") || "Zakázka"}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-400">
+                      {row.odkud || "Odkud ?"} → {row.kam || "Kam ?"}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      {formatDateTime(row.odjezd_at)} - {formatDateTime(row.prijezd_at)}
+                    </div>
+                    {row.poznamka ? <div className="mt-2 text-sm text-slate-300">{row.poznamka}</div> : null}
+                  </div>
+                  <Badge variant={vehicle ? "success" : "warning"}>
+                    {vehicle ? `${vehicle.nazev}${vehicle.spz ? ` · ${vehicle.spz}` : ""}` : "Bez vozidla"}
+                  </Badge>
+                </div>
+
+                <details className="mt-3 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                  <summary className="cursor-pointer text-sm font-bold text-blue-100">Zadat cestovní náhradu</summary>
+                  <form action={submitTravelReimbursementAction} className="mt-3 grid gap-3 md:grid-cols-2">
+                    <input type="hidden" name="zakazka_id" value={row.zakazka_id} />
+                    <input type="hidden" name="zakazka_doprava_id" value={row.id} />
+                    <label className="text-sm text-slate-300">
+                      Km
+                      <input name="km" type="number" min="0" step="0.1" required className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white" />
+                    </label>
+                    <label className="text-sm text-slate-300">
+                      Sazba za km
+                      <input name="sazba_za_km" type="number" min="0" step="0.1" defaultValue={DEFAULT_KM_RATE} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white" />
+                    </label>
+                    <label className="text-sm text-slate-300">
+                      Odkud
+                      <input name="odkud" defaultValue={row.odkud ?? ""} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white" />
+                    </label>
+                    <label className="text-sm text-slate-300">
+                      Kam
+                      <input name="kam" defaultValue={row.kam ?? ""} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white" />
+                    </label>
+                    <label className="text-sm text-slate-300 md:col-span-2">
+                      Poznámka
+                      <textarea name="poznamka" rows={2} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white" />
+                    </label>
+                    <button className="rounded-xl bg-blue-700 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-600">
+                      Odeslat ke schválení
+                    </button>
+                  </form>
+                </details>
               </div>
             );
           })}
@@ -569,6 +747,64 @@ export default async function MojePage({ searchParams }: PageProps) {
     row.profiles = { hodinovy_naklad_akce: ownProfileRaw?.hodinovy_naklad_akce ?? 0 };
   }
 
+  const { data: myTransportsRaw, error: myTransportsError } = await supabase
+    .from("zakazka_doprava")
+    .select("id, zakazka_id, vozidlo_id, typ_dopravy, user_id, odjezd_at, prijezd_at, odkud, kam, poznamka")
+    .eq("user_id", user.id)
+    .order("odjezd_at", { ascending: true, nullsFirst: false });
+
+  if (myTransportsError) {
+    return <div>Chyba načtení dopravy: {myTransportsError.message}</div>;
+  }
+
+  const myTransports = (myTransportsRaw ?? []) as MyTransportRow[];
+  const transportZakazkaIds = [...new Set(myTransports.map((row) => row.zakazka_id).filter(Boolean))];
+  const transportVehicleIds = [...new Set(myTransports.map((row) => row.vozidlo_id).filter(Boolean))] as string[];
+
+  if (transportZakazkaIds.length > 0) {
+    const missingZakazkaIds = transportZakazkaIds.filter((zakazkaId) => !zakazkyById.has(zakazkaId));
+    if (missingZakazkaIds.length > 0) {
+      const { data: transportZakazkyRaw, error: transportZakazkyError } = await supabase
+        .from("zakazky")
+        .select("zakazka_id, cislo_zakazky, nazev, misto, misto_lat, misto_lng, poznamka, akce_od, akce_do, datum_od, datum_do, zrusena, logistika_stav")
+        .in("zakazka_id", missingZakazkaIds);
+
+      if (transportZakazkyError) {
+        return <div>Chyba načtení zakázek dopravy: {transportZakazkyError.message}</div>;
+      }
+
+      for (const zakazka of (transportZakazkyRaw ?? []) as ZakazkaRow[]) {
+        zakazkyById.set(zakazka.zakazka_id, zakazka);
+      }
+    }
+  }
+
+  let vehiclesById = new Map<string, VehicleRow>();
+  if (transportVehicleIds.length > 0) {
+    const { data: vehiclesRaw, error: vehiclesError } = await supabase
+      .from("vozidla")
+      .select("id, nazev, spz, typ")
+      .in("id", transportVehicleIds);
+
+    if (vehiclesError) {
+      return <div>Chyba načtení vozidel: {vehiclesError.message}</div>;
+    }
+
+    vehiclesById = new Map(((vehiclesRaw ?? []) as VehicleRow[]).map((vehicle) => [vehicle.id, vehicle]));
+  }
+
+  const { data: travelPaymentsRaw, error: travelPaymentsError } = await supabase
+    .from("cestovni_nahrady")
+    .select("id, zakazka_id, user_id, zakazka_doprava_id, km, sazba_za_km, castka, odkud, kam, poznamka, status, submitted_at")
+    .eq("user_id", user.id)
+    .order("submitted_at", { ascending: false });
+
+  if (travelPaymentsError) {
+    return <div>Chyba načtení cestovních náhrad: {travelPaymentsError.message}</div>;
+  }
+
+  const travelPayments = (travelPaymentsRaw ?? []) as TravelPaymentRow[];
+
   return (
     <div className="space-y-6">
       <Card className="space-y-3">
@@ -586,7 +822,9 @@ export default async function MojePage({ searchParams }: PageProps) {
 
       <FilterPills activeFilter={activeFilter} />
 
-      <WorkPaymentsOverview rows={attendancePayments} />
+      <WorkPaymentsOverview rows={attendancePayments} travelRows={travelPayments} />
+
+      <MyTransportOverview rows={myTransports} vehiclesById={vehiclesById} zakazkyById={zakazkyById} />
 
       {activeFilter === "all" ? (
         <>
