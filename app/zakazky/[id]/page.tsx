@@ -54,6 +54,7 @@ import { buildInvoiceDataFromRow } from "@/lib/invoice-data";
 import { InvoiceActionsClient } from "./InvoiceActionsClient";
 import { getApprovedMinutes, getPaymentAmount } from "@/lib/payments";
 import { getTravelAmount } from "@/lib/transport";
+import { getTechnikaAvailability } from "@/lib/technika-availability";
 import {
   PlaceTechnicalNotesCard,
   type MistoKonaniRow,
@@ -1748,6 +1749,275 @@ function WorkflowChangePendingWarning({
   );
 }
 
+type RecommendedAction = {
+  title: string;
+  detail: string;
+  href: string;
+  tone: "default" | "warning" | "danger" | "success";
+};
+
+type PreloadChecklistItem = {
+  label: string;
+  status: "ok" | "warning" | "danger";
+  detail: string;
+  href?: string;
+};
+
+function getRecommendedAction({
+  workflowStatus,
+  hasTechnika,
+  questionnaireStatus,
+  questionnaireRisks,
+  hasPrice,
+  approvalStatus,
+  workflowChangePending,
+  peopleCount,
+  declinedPeopleCount,
+  preloadBlockingCount,
+  logisticsStatus,
+  invoice,
+  zakazkaId,
+}: {
+  workflowStatus?: string | null;
+  hasTechnika: boolean;
+  questionnaireStatus: string;
+  questionnaireRisks: number;
+  hasPrice: boolean;
+  approvalStatus?: string | null;
+  workflowChangePending?: boolean | null;
+  peopleCount: number;
+  declinedPeopleCount: number;
+  preloadBlockingCount: number;
+  logisticsStatus?: string | null;
+  invoice: (InvoiceRow & Record<string, unknown>) | null;
+  zakazkaId: string;
+}): RecommendedAction {
+  if (!hasTechnika) {
+    return {
+      title: "Doplnit techniku",
+      detail: "Zakázka nemá plán techniky. Bez něj nejde spolehlivě řešit dostupnost, sklad ani cenu.",
+      href: `/zakazky/${zakazkaId}/technika`,
+      tone: "danger",
+    };
+  }
+
+  if (questionnaireStatus === "Neodesláno") {
+    return {
+      title: "Odeslat dotazník klientovi",
+      detail: "Technické informace od klienta ještě nejsou vyžádané.",
+      href: "#technicke-overeni",
+      tone: "warning",
+    };
+  }
+
+  if (["Email odeslán", "Klient otevřel"].includes(questionnaireStatus)) {
+    return {
+      title: "Čeká se na dotazník",
+      detail: "Klient má odkaz, ale technické odpovědi ještě nejsou odeslané.",
+      href: "#technicke-overeni",
+      tone: "warning",
+    };
+  }
+
+  if (questionnaireRisks > 0 || questionnaireStatus === "Požadován výjezd technika") {
+    return {
+      title: "Vyřešit technická upozornění",
+      detail: "Dotazník obsahuje rizika nebo požadavek na výjezd technika.",
+      href: "#technicke-overeni",
+      tone: "danger",
+    };
+  }
+
+  if (!hasPrice) {
+    return {
+      title: "Doplnit cenu",
+      detail: "Cenová rekapitulace zatím nemá konečnou cenu.",
+      href: "#fakturace",
+      tone: "warning",
+    };
+  }
+
+  if (workflowChangePending) {
+    return {
+      title: "Řešit změny po schválení",
+      detail: "Zakázka byla změněna po klientském schválení. Pošlete změny znovu klientovi nebo je vyřešte interně.",
+      href: "#schvaleni-klienta",
+      tone: "danger",
+    };
+  }
+
+  if (workflowStatus === "navrh" && approvalStatus !== "sent_for_approval") {
+    return {
+      title: "Odeslat ke schválení",
+      detail: "Technika a cena jsou připravené. Další krok je finální potvrzení klientem.",
+      href: "#schvaleni-klienta",
+      tone: "warning",
+    };
+  }
+
+  if (workflowStatus === "cekani_na_schvaleni" || approvalStatus === "sent_for_approval") {
+    return {
+      title: "Čeká se na schválení klientem",
+      detail: "Klient má schvalovací odkaz. Sledujte otevření, schválení nebo odmítnutí.",
+      href: "#schvaleni-klienta",
+      tone: "warning",
+    };
+  }
+
+  if (peopleCount === 0) {
+    return {
+      title: "Doplnit lidi",
+      detail: "Zakázka nemá přiřazené lidi. Bez crew nejde bezpečně připravit realizaci.",
+      href: `/zakazky/${zakazkaId}/people`,
+      tone: "danger",
+    };
+  }
+
+  if (declinedPeopleCount > 0) {
+    return {
+      title: "Vyřešit odmítnuté lidi",
+      detail: "Některá přiřazení byla odmítnuta. Doplňte náhradu nebo upravte plán lidí.",
+      href: `/zakazky/${zakazkaId}/people`,
+      tone: "warning",
+    };
+  }
+
+  if (workflowStatus === "schvaleno_klientem" || workflowStatus === "priprava") {
+    if (preloadBlockingCount > 0) {
+      return {
+        title: "Připravit nakládku",
+        detail: "Před nakládkou jsou položky, které vyžadují dořešení.",
+        href: "#pred-nakladkova-kontrola",
+        tone: "warning",
+      };
+    }
+    return {
+      title: "Zahájit logistiku",
+      detail: "Zakázka vypadá připraveně. Pokračujte do scan/nakládky.",
+      href: `/zakazky/${zakazkaId}/scan`,
+      tone: "success",
+    };
+  }
+
+  if (workflowStatus === "dokonceno" && !invoice) {
+    return {
+      title: "Vystavit fakturu",
+      detail: "Zakázka je dokončená a nemá vystavenou fakturu.",
+      href: "#fakturace",
+      tone: "warning",
+    };
+  }
+
+  if (invoice && invoice.stav !== "stornovano" && invoice.stav !== "odeslano") {
+    return {
+      title: "Odeslat fakturu",
+      detail: "Faktura je vystavená, ale ještě není odeslaná klientovi.",
+      href: "#fakturace",
+      tone: "warning",
+    };
+  }
+
+  if (invoice && invoice.stav !== "stornovano" && invoice.payment_status !== "uhrazeno") {
+    return {
+      title: "Označit fakturu uhrazenou",
+      detail: "Faktura čeká na úhradu nebo potvrzení úhrady.",
+      href: "#fakturace",
+      tone: "warning",
+    };
+  }
+
+  if (workflowStatus === "fakturovano") {
+    return {
+      title: "Archivovat",
+      detail: "Zakázka je fakturovaná. Pokud je uzavřená, můžete ji archivovat.",
+      href: "#fakturace",
+      tone: "success",
+    };
+  }
+
+  return {
+    title: logisticsStatus === "vraceno" ? "Vystavit fakturu" : "Sledovat realizaci",
+    detail: logisticsStatus === "vraceno" ? "Logistika je vrácená, dalším krokem je dokončení a fakturace." : "Zakázka je v běhu. Sledujte logistiku, scan a docházku.",
+    href: logisticsStatus === "vraceno" ? "#fakturace" : `/zakazky/${zakazkaId}/scan`,
+    tone: "default",
+  };
+}
+
+function WorkflowCockpitCard({ action }: { action: RecommendedAction }) {
+  const toneClass =
+    action.tone === "danger"
+      ? "border-red-500/40 bg-red-500/10"
+      : action.tone === "warning"
+        ? "border-amber-500/40 bg-amber-500/10"
+        : action.tone === "success"
+          ? "border-emerald-500/40 bg-emerald-500/10"
+          : "border-blue-500/40 bg-blue-500/10";
+
+  return (
+    <Card className={`mt-6 ${toneClass}`}>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="text-xs font-black uppercase tracking-wide text-slate-400">Další doporučená akce</div>
+          <h2 className="mt-1 text-3xl font-black text-white">{action.title}</h2>
+          <p className="mt-2 max-w-3xl text-sm text-slate-200">{action.detail}</p>
+        </div>
+        <a
+          href={action.href}
+          className="inline-flex w-fit rounded-xl bg-blue-700 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-600"
+        >
+          Otevřít další krok
+        </a>
+      </div>
+    </Card>
+  );
+}
+
+function PreloadChecklistCard({ items }: { items: PreloadChecklistItem[] }) {
+  const hasDanger = items.some((item) => item.status === "danger");
+  const hasWarning = items.some((item) => item.status === "warning");
+  const statusLabel = hasDanger ? "Není připraveno" : hasWarning ? "Vyžaduje kontrolu" : "Připraveno";
+  const statusVariant = hasDanger ? "danger" : hasWarning ? "warning" : "success";
+
+  return (
+    <div id="pred-nakladkova-kontrola">
+      <Card className="mt-6 space-y-4 border-slate-700 bg-[#0b1324]">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-black text-white">Připraveno k nakládce</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Rychlá provozní kontrola před tím, než sklad začne fyzicky nakládat techniku.
+            </p>
+          </div>
+          <Badge variant={statusVariant}>{statusLabel}</Badge>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          {items.map((item) => {
+            const boxClass =
+              item.status === "danger"
+                ? "border-red-500/40 bg-red-500/10"
+                : item.status === "warning"
+                  ? "border-amber-500/40 bg-amber-500/10"
+                  : "border-emerald-500/30 bg-emerald-500/10";
+            const body = (
+              <div className={`rounded-xl border px-4 py-3 ${boxClass}`}>
+                <div className="font-black text-white">{item.label}</div>
+                <div className="mt-1 text-sm text-slate-300">{item.detail}</div>
+              </div>
+            );
+            return item.href ? (
+              <a key={item.label} href={item.href} className="block transition hover:opacity-85">
+                {body}
+              </a>
+            ) : (
+              <div key={item.label}>{body}</div>
+            );
+          })}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 function OperationalSummaryCard({
   plannedPrice,
   discountAmount,
@@ -2998,6 +3268,97 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
   };
   const invoicePreviewData = latestInvoice ? buildInvoiceDataFromRow(latestInvoice as any) : currentInvoiceData;
   const workflowEvents = timelineEvents.filter((event) => event.type === "Workflow");
+  const questionnaireRisks = normalizeQuestionnaireRiskCodes(dotaznik?.rizika).length;
+  const nonDeclinedPeopleCount = assignmentHistory.filter((assignment) => assignment.confirmation_status !== "declined").length;
+  const acceptedPeopleCount = assignmentHistory.filter((assignment) => assignment.confirmation_status === "accepted").length;
+  const pendingPeopleCount = assignmentHistory.filter(
+    (assignment) => assignment.confirmation_status !== "accepted" && assignment.confirmation_status !== "declined"
+  ).length;
+  const availabilityResult = await getTechnikaAvailability({ supabase, zakazkaId: id });
+  const availabilityCollisions = availabilityResult.items.filter((item) => item.hasCollision);
+  const problematicAvailabilityItems = availabilityResult.items.filter(
+    (item) =>
+      item.damagedPieces + item.blockedPieces + item.repairPieces + item.pendingCheckPieces + item.retiredPieces > 0
+  );
+  const approvedWorkflowStates = ["schvaleno_klientem", "priprava", "v_realizaci", "dokonceno", "fakturovano", "archiv"];
+  const isApprovedWorkflow = approvedWorkflowStates.includes(String(data.workflow_stav));
+  const logisticsReady = Boolean(data.odjezd_ze_skladu || data.sraz_na_miste);
+  const preloadItems: PreloadChecklistItem[] = [
+    {
+      label: "Zakázka schválená",
+      status: isApprovedWorkflow ? "ok" : "danger",
+      detail: isApprovedWorkflow ? "Klientské schválení nebo pozdější workflow stav je splněný." : "Zakázka ještě není schválená klientem.",
+      href: "#schvaleni-klienta",
+    },
+    {
+      label: "Změny po schválení",
+      status: data.workflow_change_pending ? "danger" : "ok",
+      detail: data.workflow_change_pending
+        ? data.workflow_change_summary || "Zakázka má změny čekající na nové potvrzení klientem."
+        : "Nejsou evidované neodsouhlasené změny.",
+      href: "#schvaleni-klienta",
+    },
+    {
+      label: "Dostupnost techniky",
+      status: availabilityCollisions.length > 0 ? "warning" : "ok",
+      detail:
+        availabilityCollisions.length > 0
+          ? `${availabilityCollisions.length} položek má kapacitní kolizi. Zkontrolujte plán techniky a override důvody.`
+          : "Kapacitní dostupnost bez kolize podle aktuální serverové kontroly.",
+      href: `/zakazky/${id}/technika`,
+    },
+    {
+      label: "Pokrytí lidí",
+      status: nonDeclinedPeopleCount === 0 ? "danger" : pendingPeopleCount > 0 ? "warning" : "ok",
+      detail:
+        nonDeclinedPeopleCount === 0
+          ? "Nejsou přiřazení lidé."
+          : pendingPeopleCount > 0
+            ? `${acceptedPeopleCount} potvrzeno, ${pendingPeopleCount} čeká na reakci.`
+            : `${acceptedPeopleCount || nonDeclinedPeopleCount} lidí pokryto.`,
+      href: `/zakazky/${id}/people`,
+    },
+    {
+      label: "Odmítnutí lidí",
+      status: declinedAssignmentAlerts.length > 0 ? "warning" : "ok",
+      detail:
+        declinedAssignmentAlerts.length > 0
+          ? `${declinedAssignmentAlerts.length} odmítnutých přiřazení čeká na náhradu nebo rozhodnutí.`
+          : "Bez odmítnutých přiřazení.",
+      href: `/zakazky/${id}/people`,
+    },
+    {
+      label: "Logistika",
+      status: logisticsReady ? "ok" : "warning",
+      detail: logisticsReady ? "Odjezd nebo sraz je vyplněný." : "Doplňte odjezd ze skladu nebo sraz na místě.",
+      href: "#harmonogram",
+    },
+    {
+      label: "Problémové kusy",
+      status: problematicAvailabilityItems.length > 0 ? "warning" : "ok",
+      detail:
+        problematicAvailabilityItems.length > 0
+          ? `${problematicAvailabilityItems.length} položek má poškozené, blokované nebo servisní kusy. Při scanu může být nutný override.`
+          : "Bez problémových kusů v plánu podle aktuální kontroly.",
+      href: `/zakazky/${id}/technika`,
+    },
+  ];
+  const preloadBlockingCount = preloadItems.filter((item) => item.status !== "ok").length;
+  const recommendedAction = getRecommendedAction({
+    workflowStatus: data.workflow_stav,
+    hasTechnika: technikaSummary.length > 0,
+    questionnaireStatus: clientVerificationStatus,
+    questionnaireRisks,
+    hasPrice: currentFinalPrice > 0,
+    approvalStatus: data.client_approval_status,
+    workflowChangePending: data.workflow_change_pending,
+    peopleCount: nonDeclinedPeopleCount,
+    declinedPeopleCount: declinedAssignmentAlerts.length,
+    preloadBlockingCount,
+    logisticsStatus: data.logistika_stav,
+    invoice: latestInvoice,
+    zakazkaId: id,
+  });
 
   return (
     <div className="w-full">
@@ -3007,6 +3368,8 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
         hasInvoice={Boolean(latestInvoice)}
         cancelAction={cancelZakazkaAction}
       />
+
+      <WorkflowCockpitCard action={recommendedAction} />
 
       {(data as { workflow_change_pending?: boolean | null }).workflow_change_pending ? (
         <WorkflowChangePendingWarning
@@ -3021,7 +3384,9 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
         latestEvents={workflowEvents}
       />
 
-      <ZakazkaScheduleCard data={data} action={updateZakazkaSchedule} />
+      <div id="harmonogram">
+        <ZakazkaScheduleCard data={data} action={updateZakazkaSchedule} />
+      </div>
 
       <LogisticsCard zakazkaId={id} data={data as LogisticsData} profilesById={logisticsProfilesById} />
 
@@ -3051,29 +3416,33 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
         showPlaceDetailLink
       />
 
-      <ClientTechnicalVerificationCard
-        zakazkaId={id}
-        mistoId={user ? data.misto_id ?? null : null}
-        statusLabel={clientVerificationStatus}
-        link={clientVerificationLink}
-        dotaznik={dotaznik}
-        photos={dotaznikPhotos}
-        galleryPhotos={dotaznikGalleryPhotos}
-        message={technicalVerificationMessage}
-        hasSavedPlace={Boolean(data.misto_id)}
-      />
+      <div id="technicke-overeni">
+        <ClientTechnicalVerificationCard
+          zakazkaId={id}
+          mistoId={user ? data.misto_id ?? null : null}
+          statusLabel={clientVerificationStatus}
+          link={clientVerificationLink}
+          dotaznik={dotaznik}
+          photos={dotaznikPhotos}
+          galleryPhotos={dotaznikGalleryPhotos}
+          message={technicalVerificationMessage}
+          hasSavedPlace={Boolean(data.misto_id)}
+        />
+      </div>
 
-      <PricingRecapCard
-        zakazkaId={id}
-        pricing={data as PricingData}
-        computedTechPrice={computedTechPrice}
-        computedStaffPrice={computedStaffPrice}
-        staffCostItems={staffCostItems}
-        invoiceBaseData={invoiceBaseData}
-        fakturacniFirmy={fakturacniFirmy}
-        selectedFakturacniFirmaId={effectiveFakturacniFirma?.id ?? data.fakturacni_firma_id ?? null}
-        action={updateZakazkaPricing}
-      />
+      <div id="fakturace">
+        <PricingRecapCard
+          zakazkaId={id}
+          pricing={data as PricingData}
+          computedTechPrice={computedTechPrice}
+          computedStaffPrice={computedStaffPrice}
+          staffCostItems={staffCostItems}
+          invoiceBaseData={invoiceBaseData}
+          fakturacniFirmy={fakturacniFirmy}
+          selectedFakturacniFirmaId={effectiveFakturacniFirma?.id ?? data.fakturacni_firma_id ?? null}
+          action={updateZakazkaPricing}
+        />
+      </div>
 
       <OperationalSummaryCard
         plannedPrice={currentBeforeDiscount}
@@ -3088,17 +3457,21 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
 
       <InvoiceCard zakazkaId={id} invoice={latestInvoice} previewData={invoicePreviewData} />
 
-      <ClientApprovalCard
-        zakazkaId={id}
-        status={data.client_approval_status}
-        link={clientApprovalLink}
-        publicLink={approvalPublicLink}
-        message={approvalMessage}
-      />
+      <div id="schvaleni-klienta">
+        <ClientApprovalCard
+          zakazkaId={id}
+          status={data.client_approval_status}
+          link={clientApprovalLink}
+          publicLink={approvalPublicLink}
+          message={approvalMessage}
+        />
+      </div>
 
       <PlanTechnikyCard items={technikaSummary} />
 
       <LoadingStatusCard groups={loadingStatusGroups} />
+
+      <PreloadChecklistCard items={preloadItems} />
 
       <ZakazkaDopravaCard zakazkaId={id} />
 

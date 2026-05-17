@@ -8,6 +8,7 @@ import {
   type FakturacniFirma,
 } from "@/lib/fakturacni-firmy";
 import { ApprovalDecisionClient } from "./ApprovalDecisionClient";
+import type { ApprovalSnapshotData } from "@/lib/approval-snapshot";
 
 type PageProps = {
   params: Promise<{ token: string }>;
@@ -22,6 +23,7 @@ type LinkRow = {
   approved_at: string | null;
   declined_at: string | null;
   declined_reason: string | null;
+  approval_snapshot?: ApprovalSnapshotData | null;
 };
 
 type ZakazkaRow = {
@@ -178,7 +180,7 @@ export default async function PublicApprovalPage({ params }: PageProps) {
 
   const { data: linkRaw, error: linkError } = await supabase
     .from("zakazka_approval_links")
-    .select("link_id, zakazka_id, revoked_at, opened_at, open_count, approved_at, declined_at, declined_reason")
+    .select("link_id, zakazka_id, revoked_at, opened_at, open_count, approved_at, declined_at, declined_reason, approval_snapshot")
     .eq("token_hash", tokenHash)
     .maybeSingle();
 
@@ -200,6 +202,79 @@ export default async function PublicApprovalPage({ params }: PageProps) {
       open_count: (link.open_count ?? 0) + 1,
     })
     .eq("link_id", link.link_id);
+
+  const snapshot = link.approval_snapshot?.version === 1 ? link.approval_snapshot : null;
+  if (snapshot) {
+    return (
+      <div className="mx-auto max-w-3xl py-6">
+        <div className="rounded-3xl border border-slate-700 bg-[#0b1324] p-5 shadow-xl sm:p-8">
+          <div>
+            <div className="text-sm font-semibold uppercase tracking-wide text-emerald-300">
+              WEST COUNTY
+            </div>
+            <h1 className="mt-2 break-words text-3xl font-black text-white">
+              Schválení finální podoby zakázky
+            </h1>
+            <p className="mt-3 text-sm leading-relaxed text-slate-300">
+              Zobrazená objednávka je snapshot stavu odeslaného ke schválení.
+            </p>
+          </div>
+
+          <div className="mt-5 space-y-3 rounded-2xl border border-slate-700 bg-slate-950 p-4 text-sm text-slate-200">
+            <div><strong>Akce:</strong> {[snapshot.zakazka.cisloZakazky, snapshot.zakazka.nazev].filter(Boolean).join(" · ") || "Zakázka"}</div>
+            <div><strong>Klient:</strong> {snapshot.klient.name ?? "Neuvedeno"}</div>
+            <div><strong>Místo:</strong> {snapshot.zakazka.misto ?? "Místo není vyplněné"}</div>
+            <div><strong>Termín:</strong> {snapshot.zakazka.termin}</div>
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-slate-700 bg-slate-950 p-4">
+            <h2 className="text-lg font-bold text-white">Technický plán</h2>
+            {snapshot.technika.length === 0 ? (
+              <div className="mt-2 text-sm text-slate-400">Technický plán zatím není vyplněný.</div>
+            ) : (
+              <div className="mt-3 divide-y divide-slate-800">
+                {snapshot.technika.map((item) => (
+                  <div key={item.skladova_polozka_id} className="flex items-center justify-between gap-3 py-3 text-sm">
+                    <div className="min-w-0 break-words font-semibold text-slate-100">
+                      {item.nazev}
+                    </div>
+                    <div className="shrink-0 rounded-md border border-slate-700 bg-slate-900 px-2 py-1 font-bold text-slate-200">
+                      {item.mnozstvi}×
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {snapshot.zakazka.poznamka ? (
+            <div className="mt-5 rounded-2xl border border-slate-700 bg-slate-950 p-4">
+              <h2 className="text-lg font-bold text-white">Poznámka</h2>
+              <div className="mt-2 whitespace-pre-wrap break-words text-sm text-slate-200">
+                {snapshot.zakazka.poznamka}
+              </div>
+            </div>
+          ) : null}
+
+          {snapshot.dotaznik.submittedAt ? (
+            <div className="mt-5 rounded-2xl border border-blue-500/30 bg-blue-950/20 p-4 text-sm text-blue-100">
+              Technické informace od klienta jsou doplněné.{" "}
+              {snapshot.dotaznik.pozadovanVyjezdTechnika ? "Klient požádal o výjezd technika. " : ""}
+              {snapshot.dotaznik.rizikaCount > 0 ? `Technická upozornění: ${snapshot.dotaznik.rizikaCount}.` : "Bez technických upozornění."}
+            </div>
+          ) : null}
+
+          <div className="mt-5 overflow-hidden rounded-2xl border border-slate-700 bg-white">
+            <InvoiceDocument data={snapshot.invoiceDocument} />
+          </div>
+
+          <div className="mt-5">
+            <ApprovalDecisionClient token={token} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const { data: zakazkaRaw, error: zakazkaError } = await supabase
     .from("zakazky")

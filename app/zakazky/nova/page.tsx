@@ -1230,6 +1230,16 @@ export default function NovaZakazkaPage() {
       const mistoGpsPresnost = toOptionalNumber(mistoGps.accuracyM);
       let klientId = selectedKlientId || null;
       let mistoId = selectedMistoId || null;
+      let createdMistoId: string | null = null;
+
+      async function cleanupPartialCreate(zakazkaId?: string | null) {
+        if (zakazkaId) {
+          await supabase.from("zakazky").delete().eq("zakazka_id", zakazkaId);
+        }
+        if (createdMistoId) {
+          await supabase.from("mista_konani").delete().eq("misto_id", createdMistoId);
+        }
+      }
 
       if (!mistoId && misto.trim() && mistoLat != null && mistoLng != null) {
         const { data: mistoData, error: mistoError } = await supabase
@@ -1252,6 +1262,7 @@ export default function NovaZakazkaPage() {
         }
 
         mistoId = mistoData.misto_id;
+        createdMistoId = mistoData.misto_id;
       }
 
       const { data, error } = await supabase
@@ -1323,6 +1334,7 @@ export default function NovaZakazkaPage() {
         .single();
 
       if (error) {
+        await cleanupPartialCreate(null);
         showError(error.message);
         setUkladam(false);
         return;
@@ -1367,6 +1379,7 @@ export default function NovaZakazkaPage() {
           .insert(payload);
 
         if (realizaceError) {
+          await cleanupPartialCreate(zakazkaId);
           showError(realizaceError.message);
           setUkladam(false);
           return;
@@ -1385,6 +1398,7 @@ export default function NovaZakazkaPage() {
           .insert(technikaPayload);
 
         if (technikaError) {
+          await cleanupPartialCreate(zakazkaId);
           showError(technikaError.message);
           setUkladam(false);
           return;

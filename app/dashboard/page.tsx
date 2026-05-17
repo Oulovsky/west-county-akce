@@ -83,6 +83,18 @@ function profileName(profile?: ProfileRow | null) {
   return name || profile?.email || "Zaměstnanec";
 }
 
+function getDashboardNextAction(row: ZakazkaRow) {
+  if (row.workflow_change_pending) return "Další krok: znovu schválit změny s klientem";
+  if (row.workflow_stav === "cekani_na_schvaleni" || row.client_approval_status === "sent_for_approval") {
+    return "Další krok: čekat na klienta nebo poslat připomínku";
+  }
+  if (["zpozdeni", "problem", "blokovano"].includes(String(row.logistika_stav ?? ""))) {
+    return "Další krok: otevřít detail a vyřešit logistiku";
+  }
+  if (row.workflow_stav === "dokonceno") return "Další krok: vystavit fakturu";
+  return "Další krok: otevřít cockpit zakázky";
+}
+
 function StatCard({ label, value, tone = "default" }: { label: string; value: string | number; tone?: "default" | "warning" | "danger" | "success" }) {
   const toneClass =
     tone === "danger"
@@ -274,10 +286,10 @@ export default async function DashboardPage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <MiniList title="Zakázky: dnes" empty="Dnes není akce." items={todayEvents.map((row) => ({ label: zakazkaTitle(row), href: `/zakazky/${row.zakazka_id}`, meta: row.logistika_stav ?? undefined }))} />
-        <MiniList title="Zakázky: zítra" empty="Zítra není akce." items={tomorrowEvents.map((row) => ({ label: zakazkaTitle(row), href: `/zakazky/${row.zakazka_id}` }))} />
-        <MiniList title="Čeká klient / změny" empty="Nic nečeká na klienta." items={[...waitingApproval, ...changedAfterApproval].map((row) => ({ label: zakazkaTitle(row), href: `/zakazky/${row.zakazka_id}`, meta: row.workflow_change_pending ? "Změněno po schválení" : "Čeká na schválení" }))} />
-        <MiniList title="Problémy a kolize" empty="Bez výrazných kolizí." items={[...logisticsProblems, ...conflictZakazky].map((row) => ({ label: zakazkaTitle(row), href: `/zakazky/${row.zakazka_id}`, meta: row.logistika_stav ?? "Kolize / override", tone: "warning" }))} />
+        <MiniList title="Zakázky: dnes" empty="Dnes není akce." items={todayEvents.map((row) => ({ label: zakazkaTitle(row), href: `/zakazky/${row.zakazka_id}`, meta: getDashboardNextAction(row) }))} />
+        <MiniList title="Zakázky: zítra" empty="Zítra není akce." items={tomorrowEvents.map((row) => ({ label: zakazkaTitle(row), href: `/zakazky/${row.zakazka_id}`, meta: getDashboardNextAction(row) }))} />
+        <MiniList title="Čeká klient / změny" empty="Nic nečeká na klienta." items={[...waitingApproval, ...changedAfterApproval].map((row) => ({ label: zakazkaTitle(row), href: `/zakazky/${row.zakazka_id}#schvaleni-klienta`, meta: getDashboardNextAction(row), tone: row.workflow_change_pending ? "danger" : "warning" }))} />
+        <MiniList title="Problémy a kolize" empty="Bez výrazných kolizí." items={[...logisticsProblems, ...conflictZakazky].map((row) => ({ label: zakazkaTitle(row), href: `/zakazky/${row.zakazka_id}#pred-nakladkova-kontrola`, meta: getDashboardNextAction(row), tone: "warning" }))} />
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -292,6 +304,7 @@ export default async function DashboardPage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
+        <MiniList title="Faktury čekající na akci" empty="Žádná faktura nečeká." items={unpaidInvoices.slice(0, 8).map((row: any) => ({ label: row.cislo_dokladu ?? "Faktura", href: `/zakazky/${row.zakazka_id}#fakturace`, meta: row.payment_status === "po_splatnosti" ? "Další krok: urgovat a označit úhradu" : "Další krok: zkontrolovat úhradu", tone: "warning" }))} />
         <MiniList title="Sklad: problémové kusy" empty="Bez problémových kusů." items={problemPieces.slice(0, 8).map((row: any) => ({ label: row.skladove_polozky?.nazev ?? row.kus_id, href: `/sklad/kus/${row.kus_id}`, meta: row.stav }))} />
         <MiniList title="Sklad: dlouho v opravě" empty="Nic není dlouho v opravě." items={longRepairPieces.map((row: any) => ({ label: row.skladove_polozky?.nazev ?? row.kus_id, href: `/sklad/kus/${row.kus_id}`, meta: "V opravě déle než 14 dní" }))} />
         <MiniList title="Nejčastější poškození kusů" empty="Zatím bez historie poškození." items={mostDamagedPieces.map(([kusId, count]) => ({ label: kusId, href: `/sklad/kus/${kusId}`, meta: `${count} událostí` }))} />

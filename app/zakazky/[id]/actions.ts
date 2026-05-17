@@ -18,6 +18,7 @@ import {
   createClientApprovalToken,
   hashClientApprovalToken,
 } from "@/lib/client-approval";
+import { buildApprovalSnapshot } from "@/lib/approval-snapshot";
 
 function getZakazkaId(formData: FormData) {
   const zakazkaId = String(formData.get("zakazka_id") ?? "").trim();
@@ -610,6 +611,7 @@ export async function sendClientApprovalAction(formData: FormData) {
   const rawToken = createClientApprovalToken();
   const tokenHash = hashClientApprovalToken(rawToken);
   const publicLink = buildApprovalUrl(getPublicBaseUrl(await headers()), rawToken);
+  const approvalSnapshot = await buildApprovalSnapshot(supabase, zakazkaId);
 
   const { error: revokeError } = await supabase
     .from("zakazka_approval_links")
@@ -629,6 +631,8 @@ export async function sendClientApprovalAction(formData: FormData) {
       token_hash: tokenHash,
       email_to: recipientEmail,
       stav: "vytvoren",
+      approval_snapshot: approvalSnapshot,
+      approval_snapshot_created_at: approvalSnapshot.createdAt,
     })
     .select("link_id")
     .single();

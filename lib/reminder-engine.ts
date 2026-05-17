@@ -162,9 +162,10 @@ export async function runReminderEngine(supabase: any, nowInput = new Date()) {
 
   const { data: overdueInvoices } = await supabase
     .from("zakazka_faktury")
-    .select("id, zakazka_id, cislo_dokladu, splatnost_at, stav")
+    .select("id, zakazka_id, cislo_dokladu, splatnost_at, stav, payment_status")
     .lt("splatnost_at", now.toISOString())
-    .neq("stav", "zaplaceno");
+    .neq("stav", "stornovano")
+    .neq("payment_status", "uhrazeno");
 
   for (const invoice of overdueInvoices ?? []) {
     await createNotificationsForRoles(supabase, ["admin", "sef"], {
