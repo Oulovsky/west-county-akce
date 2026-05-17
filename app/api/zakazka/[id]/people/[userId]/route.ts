@@ -21,6 +21,17 @@ function hasInvalidRange(from?: string | null, to?: string | null) {
   return fromTime >= toTime;
 }
 
+function normalizeStatus(value: unknown) {
+  const text = String(value ?? "").trim();
+  if (text === "pending" || text === "accepted" || text === "declined") return text;
+  return "pending";
+}
+
+function normalizeOptionalText(value: unknown) {
+  const text = String(value ?? "").trim();
+  return text || null;
+}
+
 export async function PATCH(req: NextRequest, { params }: RouteContext) {
   try {
     const session = await requireSession();
@@ -35,6 +46,15 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     const body = await req.json();
     const datumOd = normalizeOptionalDateTime(body.datum_od);
     const datumDo = normalizeOptionalDateTime(body.datum_do);
+    const hasConfirmationStatus = Object.prototype.hasOwnProperty.call(
+      body,
+      "confirmation_status"
+    );
+    const confirmationStatus = hasConfirmationStatus
+      ? normalizeStatus(body.confirmation_status)
+      : null;
+    const declinedReason =
+      confirmationStatus === "declined" ? normalizeOptionalText(body.declined_reason) : null;
 
     if (hasInvalidRange(datumOd, datumDo)) {
       return NextResponse.json(
@@ -48,6 +68,14 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       .update({
         datum_od: datumOd,
         datum_do: datumDo,
+        poznamka: normalizeOptionalText(body.poznamka),
+        ...(hasConfirmationStatus
+          ? {
+              confirmation_status: confirmationStatus,
+              declined_reason: declinedReason,
+              responded_at: new Date().toISOString(),
+            }
+          : {}),
       })
       .eq("id", assignmentId)
       .select("*")

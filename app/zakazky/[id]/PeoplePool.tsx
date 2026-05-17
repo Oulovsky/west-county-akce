@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { Textarea } from "@/components/ui/textarea";
 
 type TypBloku = "sklad" | "stavba" | "akce" | "bourani";
 
@@ -22,6 +23,7 @@ type Assignment = {
   datum_do?: string | null;
   has_conflict?: boolean;
   typ_bloku?: string | null;
+  poznamka?: string | null;
   confirmation_status?: string | null;
   declined_reason?: string | null;
   responded_at?: string | null;
@@ -84,6 +86,9 @@ type ModalState =
       currentFrom: string;
       currentTo: string;
       typBloku: TypBloku;
+      poznamka: string;
+      confirmationStatus: string;
+      declinedReason: string;
     };
 
 type ConflictInfo = {
@@ -403,6 +408,9 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
       currentFrom: toInput(assignment.datum_od),
       currentTo: toInput(assignment.datum_do),
       typBloku: normalizeTypBloku(assignment.typ_bloku),
+      poznamka: assignment.poznamka ?? "",
+      confirmationStatus: normalizeConfirmationStatus(assignment.confirmation_status),
+      declinedReason: assignment.declined_reason ?? "",
     });
   }
 
@@ -428,10 +436,16 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
       };
 
       if (modal.mode === "edit") {
+        const nextStatus = normalizeConfirmationStatus(modal.confirmationStatus);
         const response = await fetch(`/api/zakazka/${zakazkaId}/people/${modal.assignmentId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            ...payload,
+            poznamka: modal.poznamka,
+            confirmation_status: nextStatus,
+            declined_reason: nextStatus === "declined" ? modal.declinedReason : null,
+          }),
         });
 
         if (!response.ok) {
@@ -485,13 +499,17 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
     }
   }
 
-  async function removeAssignment() {
-    if (!modal || modal.mode !== "edit") return;
+  async function removeAssignmentById(assignmentId: string, userName: string, typBloku: TypBloku) {
+    const confirmed = window.confirm(
+      `Odebrat přiřazení člověka ${userName} z fáze ${getTypBlokuLabel(typBloku)}?`
+    );
+
+    if (!confirmed) return;
 
     setSaving(true);
 
     try {
-      const response = await fetch(`/api/zakazka/${zakazkaId}/people/${modal.assignmentId}`, {
+      const response = await fetch(`/api/zakazka/${zakazkaId}/people/${assignmentId}`, {
         method: "DELETE",
       });
 
@@ -506,6 +524,11 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function removeAssignment() {
+    if (!modal || modal.mode !== "edit") return;
+    await removeAssignmentById(modal.assignmentId, modal.userName, modal.typBloku);
   }
 
   const isBezObsluhy = String(current?.typ_obsluhy ?? "").trim() === "bez_obsluhy";
@@ -630,15 +653,13 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
                       );
 
                       return (
-                        <button
+                        <div
                           key={String(assignment.id)}
-                          type="button"
-                          onClick={() => openEdit(assignment)}
                           className={[
-                            "w-full rounded-2xl border px-4 py-3 text-left transition",
+                            "w-full rounded-2xl border px-4 py-3 text-left",
                             conflict || assignment.has_conflict
-                              ? "border-orange-500/40 bg-orange-500/10 hover:bg-orange-500/15"
-                              : "border-slate-800 bg-slate-950/70 hover:bg-slate-900",
+                              ? "border-orange-500/40 bg-orange-500/10"
+                              : "border-slate-800 bg-slate-950/70",
                           ].join(" ")}
                         >
                           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -674,7 +695,39 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
                               Kolize: {conflictText}
                             </div>
                           ) : null}
-                        </button>
+
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openEdit(assignment)}
+                              className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-bold text-slate-100 transition hover:bg-slate-800"
+                            >
+                              Upravit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void removeAssignmentById(
+                                  String(assignment.id),
+                                  userName,
+                                  normalizeTypBloku(assignment.typ_bloku)
+                                )
+                              }
+                              className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-bold text-slate-100 transition hover:bg-slate-800"
+                            >
+                              Odebrat
+                            </button>
+                            {confirmationStatus === "declined" ? (
+                              <button
+                                type="button"
+                                onClick={() => openAdd(block.key)}
+                                className="rounded-lg border border-red-400/40 bg-red-500/15 px-3 py-1.5 text-xs font-bold text-red-100 transition hover:bg-red-500/25"
+                              >
+                                Nahradit
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
@@ -810,6 +863,65 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
                 />
               </Field>
             </div>
+
+            {modal.mode === "edit" ? (
+              <div className="space-y-4">
+                <Field label="Poznámka">
+                  <Textarea
+                    value={modal.poznamka}
+                    onChange={(event) =>
+                      setModal((state) =>
+                        state && state.mode === "edit"
+                          ? { ...state, poznamka: event.target.value }
+                          : state
+                      )
+                    }
+                    rows={3}
+                    placeholder="Interní poznámka k tomuto přiřazení"
+                  />
+                </Field>
+
+                <Field label="Stav potvrzení">
+                  <select
+                    value={modal.confirmationStatus}
+                    onChange={(event) =>
+                      setModal((state) =>
+                        state && state.mode === "edit"
+                          ? {
+                              ...state,
+                              confirmationStatus: event.target.value,
+                              declinedReason:
+                                event.target.value === "declined" ? state.declinedReason : "",
+                            }
+                          : state
+                      )
+                    }
+                    className="mt-2 w-full rounded-xl border border-slate-700 bg-[#0f172a] px-4 py-3 text-base text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+                  >
+                    <option value="pending">Čeká</option>
+                    <option value="accepted">Potvrzeno</option>
+                    <option value="declined">Odmítnuto</option>
+                  </select>
+                </Field>
+
+                {modal.confirmationStatus === "declined" ? (
+                  <Field label="Důvod odmítnutí">
+                    <Textarea
+                      value={modal.declinedReason}
+                      onChange={(event) =>
+                        setModal((state) =>
+                          state && state.mode === "edit"
+                            ? { ...state, declinedReason: event.target.value }
+                            : state
+                        )
+                      }
+                      rows={3}
+                      placeholder="Důvod odmítnutí"
+                    />
+                  </Field>
+                ) : null}
+              </div>
+            ) : null}
 
             {modal.mode === "add" && modalAddConflicts.length > 0 ? (
               <div className="rounded-2xl border border-orange-500/30 bg-orange-500/10 px-4 py-3">

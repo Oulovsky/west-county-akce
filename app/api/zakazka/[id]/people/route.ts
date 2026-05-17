@@ -316,6 +316,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         datum_do: requestedTo ?? defaultRange.datum_do,
         role_na_zakazce: "technik",
         typ_bloku: typBloku,
+        poznamka: null,
         confirmation_status: "pending",
         declined_reason: null,
         responded_at: null,
