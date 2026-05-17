@@ -189,7 +189,7 @@ export function AddItemModal({
 
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <div className="mb-2 text-sm text-slate-300">Interní náklad</div>
+            <div className="mb-2 text-sm text-slate-300">Cena pro akce</div>
 
             <input
               value={newNaklad}

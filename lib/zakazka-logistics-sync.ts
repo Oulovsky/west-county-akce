@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { SKLAD_TABLE } from "@/lib/sklad/constants";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
+import { setZakazkaWorkflowStatus, type ZakazkaWorkflowStatus } from "@/lib/zakazka-workflow";
 
 type LogisticsStatus =
   | "ceka_na_nakladku"
@@ -72,6 +73,13 @@ function getAutomaticHistoryTitle(value: LogisticsStatus) {
   }
 
   return "Zakázka automaticky přepnuta na Čeká na nakládku, protože zatím nemá žádný scan.";
+}
+
+function getWorkflowStatusForLogistics(value: LogisticsStatus): ZakazkaWorkflowStatus | null {
+  if (value === "naklada_se" || value === "nalozeno") return "priprava";
+  if (value === "vykladka") return "v_realizaci";
+  if (value === "vraceno") return "dokonceno";
+  return null;
 }
 
 function getPlannedCount(rows: PlanRow[]) {
@@ -230,6 +238,16 @@ export async function syncZakazkaLogisticsFromScan(
         scanned_count: assignments.length,
       },
     });
+
+    const nextWorkflowStatus = getWorkflowStatusForLogistics(nextStatus);
+    if (nextWorkflowStatus) {
+      await setZakazkaWorkflowStatus(supabase, {
+        zakazkaId,
+        nextStatus: nextWorkflowStatus,
+        actorId: actorId ?? null,
+        source: `scan_logistics_${nextStatus}`,
+      });
+    }
   }
 
   revalidatePath(`/zakazky/${zakazkaId}`);

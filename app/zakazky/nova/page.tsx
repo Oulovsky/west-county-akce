@@ -12,6 +12,11 @@ import { Textarea } from "@/components/ui/textarea";
 import Toast from "@/components/Toast";
 import { GpsLocationFields, type SavedPlaceSuggestion } from "../GpsLocationFields";
 import { KlientSelectWithCreate, type KlientOption } from "../KlientSelectWithCreate";
+import {
+  FakturacniFirmaSelect,
+  getDefaultFakturacniFirmaId,
+} from "@/components/zakazky/FakturacniFirmaSelect";
+import type { FakturacniFirma } from "@/lib/fakturacni-firmy";
 
 type TypObsluhy = "s_obsluhou" | "bez_obsluhy";
 type TechSectionKey = "stage" | "sound" | "lights" | "led" | "kamery";
@@ -424,6 +429,8 @@ export default function NovaZakazkaPage() {
   const [setupyError, setSetupyError] = useState<string | null>(null);
   const [klienti, setKlienti] = useState<Klient[]>([]);
   const [mistaKonani, setMistaKonani] = useState<MistoKonani[]>([]);
+  const [fakturacniFirmy, setFakturacniFirmy] = useState<FakturacniFirma[]>([]);
+  const [selectedFakturacniFirmaId, setSelectedFakturacniFirmaId] = useState("");
   const [klientiMistaError, setKlientiMistaError] = useState<string | null>(null);
   const [skladPolozky, setSkladPolozky] = useState<SkladPolozka[]>([]);
   const [skladBloky, setSkladBloky] = useState<SkladBlok[]>([]);
@@ -550,6 +557,7 @@ export default function NovaZakazkaPage() {
       const [
         { data: klientiData, error: klientiError },
         { data: mistaData, error: mistaError },
+        { data: fakturacniFirmyData, error: fakturacniFirmyError },
       ] = await Promise.all([
         supabase
           .from("klienti")
@@ -561,11 +569,17 @@ export default function NovaZakazkaPage() {
           .select("misto_id, klient_id, nazev, adresa_text, lat, lng, radius_m, aktivni")
           .eq("aktivni", true)
           .order("nazev", { ascending: true }),
+        supabase
+          .from("fakturacni_firmy")
+          .select("*")
+          .eq("aktivni", true)
+          .order("vychozi", { ascending: false })
+          .order("nazev", { ascending: true }),
       ]);
 
       if (cancelled) return;
 
-      const error = klientiError?.message ?? mistaError?.message;
+      const error = klientiError?.message ?? mistaError?.message ?? fakturacniFirmyError?.message;
       if (error) {
         setKlientiMistaError(error);
         return;
@@ -573,6 +587,9 @@ export default function NovaZakazkaPage() {
 
       setKlienti((klientiData ?? []) as Klient[]);
       setMistaKonani((mistaData ?? []) as MistoKonani[]);
+      const firmy = (fakturacniFirmyData ?? []) as FakturacniFirma[];
+      setFakturacniFirmy(firmy);
+      setSelectedFakturacniFirmaId((current) => current || getDefaultFakturacniFirmaId(firmy));
     }
 
     void loadSetupy();
@@ -1290,6 +1307,7 @@ export default function NovaZakazkaPage() {
           stav_zakazky_id: "7a0e168f-216f-40bd-b33e-3f1f517620da",
           nazev,
           klient_id: klientId,
+          fakturacni_firma_id: selectedFakturacniFirmaId || null,
           misto_id: mistoId,
           misto,
           misto_lat: mistoLat,
@@ -1543,6 +1561,22 @@ export default function NovaZakazkaPage() {
                 setSelectedKlientId(klient.klient_id);
               }}
             />
+          </Card>
+
+          <Card className="space-y-4 border-slate-700 bg-[#0b1324]">
+            <div>
+              <div className="text-lg font-semibold text-white">Fakturace</div>
+              <div className="mt-1 text-sm text-slate-400">
+                Vyber firmu, která bude uvedená jako dodavatel na dokladu k zakázce.
+              </div>
+            </div>
+            <Field label="Fakturuje firma">
+              <FakturacniFirmaSelect
+                firmy={fakturacniFirmy}
+                value={selectedFakturacniFirmaId}
+                onChange={setSelectedFakturacniFirmaId}
+              />
+            </Field>
           </Card>
 
           <Field label="Místo">

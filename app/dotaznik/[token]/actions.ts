@@ -244,6 +244,12 @@ export async function submitPublicQuestionnaireAction(formData: FormData) {
     }
   }
 
+  await supabase
+    .from("zakazky")
+    .update({ client_approval_status: "technical_info_received" })
+    .eq("zakazka_id", link.zakazka_id)
+    .neq("client_approval_status", "approved");
+
   revalidatePath(`/zakazky/${link.zakazka_id}`);
   return { ok: true, errorMessage: null };
 }

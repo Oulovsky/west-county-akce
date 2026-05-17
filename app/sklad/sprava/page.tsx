@@ -629,7 +629,7 @@ export default function Page() {
       }
 
       if (parsedNaklad !== null && !Number.isFinite(parsedNaklad)) {
-        alert("Náklad musí být číslo.");
+        alert("Cena pro akce musí být číslo.");
         return;
       }
 
@@ -1022,7 +1022,7 @@ export default function Page() {
     }
 
     if (parsedNaklad !== null && !Number.isFinite(parsedNaklad)) {
-      alert("Náklad musí být číslo.");
+      alert("Cena pro akce musí být číslo.");
       return;
     }
 

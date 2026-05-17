@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { GpsLocationFields, type SavedPlaceSuggestion } from "../../GpsLocationFields";
 import { KlientSelectWithCreate, type KlientOption } from "../../KlientSelectWithCreate";
+import { FakturacniFirmaSelect } from "@/components/zakazky/FakturacniFirmaSelect";
+import type { FakturacniFirma } from "@/lib/fakturacni-firmy";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -96,6 +98,7 @@ export default async function EditZakazkyPage({ params }: PageProps) {
   const [
     { data: klientiRaw, error: klientiError },
     { data: mistaRaw, error: mistaError },
+    { data: fakturacniFirmyRaw, error: fakturacniFirmyError },
   ] = await Promise.all([
     supabase
       .from("klienti")
@@ -107,14 +110,21 @@ export default async function EditZakazkyPage({ params }: PageProps) {
       .select("misto_id, klient_id, nazev, adresa_text, lat, lng, radius_m")
       .eq("aktivni", true)
       .order("nazev", { ascending: true }),
+    supabase
+      .from("fakturacni_firmy")
+      .select("*")
+      .eq("aktivni", true)
+      .order("vychozi", { ascending: false })
+      .order("nazev", { ascending: true }),
   ]);
 
-  if (klientiError || mistaError) {
-    return <div>Chyba: {klientiError?.message ?? mistaError?.message}</div>;
+  if (klientiError || mistaError || fakturacniFirmyError) {
+    return <div>Chyba: {klientiError?.message ?? mistaError?.message ?? fakturacniFirmyError?.message}</div>;
   }
 
   const klienti = (klientiRaw ?? []) as Klient[];
   const mistaKonani = (mistaRaw ?? []) as MistoKonani[];
+  const fakturacniFirmy = (fakturacniFirmyRaw ?? []) as FakturacniFirma[];
 
   async function updateZakazka(formData: FormData) {
     "use server";
@@ -122,6 +132,7 @@ export default async function EditZakazkyPage({ params }: PageProps) {
     const nazev = String(formData.get("nazev") ?? "");
     const misto = String(formData.get("misto") ?? "");
     const klientIdRaw = String(formData.get("klient_id") ?? "").trim();
+    const fakturacniFirmaIdRaw = String(formData.get("fakturacni_firma_id") ?? "").trim();
     const mistoIdRaw = String(formData.get("misto_id") ?? "").trim();
     const mistoKlientIdRaw = String(formData.get("misto_klient_id") ?? "").trim();
     const mistoLat = toOptionalNumber(String(formData.get("misto_lat") ?? ""));
@@ -228,6 +239,7 @@ export default async function EditZakazkyPage({ params }: PageProps) {
       .update({
         nazev,
         klient_id: klientId,
+        fakturacni_firma_id: fakturacniFirmaIdRaw || null,
         misto_id: mistoId,
         misto,
         misto_lat: mistoLat,
@@ -310,7 +322,7 @@ export default async function EditZakazkyPage({ params }: PageProps) {
               <div>
                 <div className="text-lg font-semibold text-white">Klient</div>
                 <div className="mt-1 text-sm text-slate-400">
-                  Základní vazba pro budoucí archiv zakázek. Fakturace se zatím neřeší.
+                  Základní vazba pro archiv zakázek a doklad k zakázce.
                 </div>
               </div>
 
@@ -318,6 +330,21 @@ export default async function EditZakazkyPage({ params }: PageProps) {
                 clients={klienti}
                 defaultSelectedId={data.klient_id}
               />
+            </Card>
+
+            <Card className="space-y-4 border-slate-700 bg-[#0b1324]">
+              <div>
+                <div className="text-lg font-semibold text-white">Fakturace</div>
+                <div className="mt-1 text-sm text-slate-400">
+                  Vyber firmu, která bude uvedená jako dodavatel na dokladu k zakázce.
+                </div>
+              </div>
+              <Field label="Fakturuje firma">
+                <FakturacniFirmaSelect
+                  firmy={fakturacniFirmy}
+                  defaultValue={data.fakturacni_firma_id}
+                />
+              </Field>
             </Card>
 
             <Field label="Místo">

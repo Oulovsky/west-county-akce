@@ -6,11 +6,17 @@ import { redirect } from "next/navigation";
 import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
+import { setZakazkaWorkflowStatus } from "@/lib/zakazka-workflow";
 import {
   buildQuestionnaireUrl,
   createClientQuestionnaireToken,
   hashClientQuestionnaireToken,
 } from "@/lib/client-questionnaire";
+import {
+  buildApprovalUrl,
+  createClientApprovalToken,
+  hashClientApprovalToken,
+} from "@/lib/client-approval";
 
 function getZakazkaId(formData: FormData) {
   const zakazkaId = String(formData.get("zakazka_id") ?? "").trim();
@@ -79,6 +85,10 @@ function getClientQuestionnaireBaseUrl(headersList: Headers) {
   return `${proto}://${host}`;
 }
 
+function getPublicBaseUrl(headersList: Headers) {
+  return getClientQuestionnaireBaseUrl(headersList);
+}
+
 function formatDateRangeForEmail(data: {
   akce_od?: string | null;
   akce_do?: string | null;
@@ -128,6 +138,38 @@ function createQuestionnaireEmailHtml({
         </a>
       </p>
       <p style="font-size:14px;color:#475569">Pokud nechcete vyplňovat technické údaje sami, můžete v dotazníku požádat o výjezd technika před akcí.</p>
+      <p style="font-size:12px;color:#64748b;word-break:break-all">Pokud tlačítko nefunguje, otevřete tento odkaz:<br>${link}</p>
+    </div>
+  `;
+}
+
+function createApprovalEmailHtml({
+  zakazkaNazev,
+  misto,
+  termin,
+  link,
+}: {
+  zakazkaNazev: string;
+  misto: string;
+  termin: string;
+  link: string;
+}) {
+  return `
+    <div style="font-family:Arial,sans-serif;line-height:1.5;color:#0f172a;max-width:640px;margin:0 auto;padding:24px">
+      <h1 style="font-size:24px;margin:0 0 16px">Schválení finální podoby zakázky</h1>
+      <p>Dobrý den,</p>
+      <p>posíláme vám finální podobu zakázky ke kontrole a schválení.</p>
+      <div style="background:#f1f5f9;border-radius:12px;padding:16px;margin:20px 0">
+        <div><strong>Akce:</strong> ${zakazkaNazev}</div>
+        <div><strong>Místo:</strong> ${misto}</div>
+        <div><strong>Termín:</strong> ${termin}</div>
+      </div>
+      <p style="margin:24px 0">
+        <a href="${link}" style="display:inline-block;background:#16a34a;color:#ffffff;text-decoration:none;padding:14px 20px;border-radius:12px;font-weight:700">
+          Otevřít schválení zakázky
+        </a>
+      </p>
+      <p style="font-size:14px;color:#475569">Po otevření odkazu můžete zakázku schválit, nebo odmítnout s komentářem.</p>
       <p style="font-size:12px;color:#64748b;word-break:break-all">Pokud tlačítko nefunguje, otevřete tento odkaz:<br>${link}</p>
     </div>
   `;
@@ -212,6 +254,33 @@ export async function updateZakazkaLogisticsAction(formData: FormData) {
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  if (action === "start_loading" || action === "complete_loading") {
+    await setZakazkaWorkflowStatus(supabase, {
+      zakazkaId,
+      nextStatus: "priprava",
+      actorId: user.id,
+      source: `logistics_${action}`,
+    });
+  }
+
+  if (action === "start_unloading") {
+    await setZakazkaWorkflowStatus(supabase, {
+      zakazkaId,
+      nextStatus: "v_realizaci",
+      actorId: user.id,
+      source: `logistics_${action}`,
+    });
+  }
+
+  if (action === "complete_return") {
+    await setZakazkaWorkflowStatus(supabase, {
+      zakazkaId,
+      nextStatus: "dokonceno",
+      actorId: user.id,
+      source: `logistics_${action}`,
+    });
   }
 
   await logZakazkaHistory(supabase, {
@@ -476,6 +545,175 @@ export async function sendClientQuestionnaireAction(formData: FormData) {
     throw new Error(dotaznikError.message);
   }
 
+  await supabase
+    .from("zakazky")
+    .update({ client_approval_status: "questionnaire_sent" })
+    .eq("zakazka_id", zakazkaId)
+    .neq("client_approval_status", "approved");
+
   revalidatePath(`/zakazky/${zakazkaId}`);
   redirect(`/zakazky/${zakazkaId}?technicke_overeni=sent`);
+}
+
+export async function sendClientApprovalAction(formData: FormData) {
+  const zakazkaId = getZakazkaId(formData);
+  const supabase = await createClient();
+
+  const resendApiKey = process.env.RESEND_API_KEY?.trim();
+  if (!resendApiKey) {
+    redirect(`/zakazky/${zakazkaId}?schvaleni=missing_resend_key`);
+  }
+
+  const { data: zakazka, error: zakazkaError } = await supabase
+    .from("zakazky")
+    .select("zakazka_id, klient_id, nazev, misto, akce_od, akce_do, datum_od, datum_do")
+    .eq("zakazka_id", zakazkaId)
+    .single();
+
+  if (zakazkaError) {
+    throw new Error(zakazkaError.message);
+  }
+
+  let emailTo: string | null = null;
+  if (zakazka.klient_id) {
+    const { data: klient, error: klientError } = await supabase
+      .from("klienti")
+      .select("email")
+      .eq("klient_id", zakazka.klient_id)
+      .maybeSingle();
+
+    if (klientError) {
+      throw new Error(klientError.message);
+    }
+
+    emailTo = klient?.email ?? null;
+  }
+
+  if (!emailTo?.trim()) {
+    redirect(`/zakazky/${zakazkaId}?schvaleni=missing_email`);
+  }
+
+  const recipientEmail = emailTo.trim();
+  const now = new Date().toISOString();
+  const rawToken = createClientApprovalToken();
+  const tokenHash = hashClientApprovalToken(rawToken);
+  const publicLink = buildApprovalUrl(getPublicBaseUrl(await headers()), rawToken);
+
+  const { error: revokeError } = await supabase
+    .from("zakazka_approval_links")
+    .update({ revoked_at: now })
+    .eq("zakazka_id", zakazkaId)
+    .is("revoked_at", null);
+
+  if (revokeError) {
+    throw new Error(revokeError.message);
+  }
+
+  const { data: link, error: linkError } = await supabase
+    .from("zakazka_approval_links")
+    .insert({
+      zakazka_id: zakazkaId,
+      klient_id: zakazka.klient_id,
+      token_hash: tokenHash,
+      email_to: recipientEmail,
+      stav: "vytvoren",
+    })
+    .select("link_id")
+    .single();
+
+  if (linkError) {
+    throw new Error(linkError.message);
+  }
+
+  const resend = new Resend(resendApiKey);
+  const { error: resendError } = await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL?.trim() || "WEST COUNTY <onboarding@resend.dev>",
+    to: recipientEmail,
+    subject: `Schválení zakázky ${zakazka.nazev ?? ""}`.trim(),
+    html: createApprovalEmailHtml({
+      zakazkaNazev: zakazka.nazev ?? "Zakázka",
+      misto: zakazka.misto ?? "Místo není vyplněné",
+      termin: formatDateRangeForEmail(zakazka),
+      link: publicLink,
+    }),
+  });
+
+  if (resendError) {
+    await supabase
+      .from("zakazka_approval_links")
+      .update({ revoked_at: new Date().toISOString(), stav: "email_error" })
+      .eq("link_id", link.link_id);
+    throw new Error(resendError.message);
+  }
+
+  const { error: updateLinkError } = await supabase
+    .from("zakazka_approval_links")
+    .update({ email_sent_at: new Date().toISOString(), stav: "email_odeslan" })
+    .eq("link_id", link.link_id);
+
+  if (updateLinkError) {
+    throw new Error(updateLinkError.message);
+  }
+
+  const { error: updateZakazkaError } = await supabase
+    .from("zakazky")
+    .update({
+      client_approval_status: "sent_for_approval",
+      client_approval_declined_at: null,
+      client_approval_declined_reason: null,
+    })
+    .eq("zakazka_id", zakazkaId);
+
+  if (updateZakazkaError) {
+    throw new Error(updateZakazkaError.message);
+  }
+
+  await setZakazkaWorkflowStatus(supabase, {
+    zakazkaId,
+    nextStatus: "cekani_na_schvaleni",
+    actorId: null,
+    source: "client_approval_sent",
+    metadata: { link_id: link.link_id },
+  });
+
+  await logZakazkaHistory(supabase, {
+    zakazkaId,
+    eventType: "client_approval_sent",
+    actorId: null,
+    title: "Finální zakázka odeslána klientovi ke schválení.",
+    detail: `Odesláno na ${recipientEmail}.`,
+    metadata: { link_id: link.link_id },
+  });
+
+  revalidatePath(`/zakazky/${zakazkaId}`);
+  revalidatePath("/zakazky");
+  redirect(`/zakazky/${zakazkaId}?schvaleni=sent&approval_token=${encodeURIComponent(rawToken)}`);
+}
+
+export async function revokeClientApprovalLinkAction(formData: FormData) {
+  const zakazkaId = getZakazkaId(formData);
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+
+  const { error } = await supabase
+    .from("zakazka_approval_links")
+    .update({ revoked_at: now, stav: "revoked" })
+    .eq("zakazka_id", zakazkaId)
+    .is("revoked_at", null);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  await logZakazkaHistory(supabase, {
+    zakazkaId,
+    eventType: "client_approval_revoked",
+    actorId: null,
+    title: "Odkaz na schválení zakázky byl zneplatněn.",
+    detail: null,
+    metadata: {},
+  });
+
+  revalidatePath(`/zakazky/${zakazkaId}`);
+  redirect(`/zakazky/${zakazkaId}?schvaleni=revoked`);
 }

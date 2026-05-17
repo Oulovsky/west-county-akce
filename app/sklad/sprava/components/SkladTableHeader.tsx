@@ -50,7 +50,7 @@ export function SkladTableHeader({ tableGrid = SPRAVA_TABLE_GRID }: Props) {
         Jednotka
       </span>
       <span className="flex min-h-8 items-center justify-center px-1 text-center">
-        Náklad
+        Cena pro akce
       </span>
       <span className="flex min-h-8 items-center justify-center px-1 text-center">
         Rent

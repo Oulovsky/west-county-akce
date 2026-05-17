@@ -22,9 +22,12 @@ import {
   QuestionnairePhotoGallery,
   type QuestionnairePhotoGalleryItem,
 } from "./QuestionnairePhotoGallery";
+import { PricingInvoicePreview } from "./PricingInvoicePreview";
 import {
   markQuestionnaireInternallyVerifiedAction,
   markQuestionnaireNotNeededAction,
+  revokeClientApprovalLinkAction,
+  sendClientApprovalAction,
   sendClientQuestionnaireAction,
   updateZakazkaLogisticsAction,
 } from "./actions";
@@ -32,6 +35,21 @@ import {
 import { ZakazkaSubnav } from "@/components/zakazky/zakazka-subnav";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { type InvoiceDocumentData, type InvoiceParty } from "@/components/invoice/InvoiceDocument";
+import { FakturacniFirmaSelect } from "@/components/zakazky/FakturacniFirmaSelect";
+import { buildApprovalUrl, getClientApprovalStatusLabel } from "@/lib/client-approval";
+import {
+  fakturacniFirmaToInvoiceParty,
+  getEffectiveFakturacniFirma,
+  type FakturacniFirma,
+} from "@/lib/fakturacni-firmy";
+import { logZakazkaHistory } from "@/lib/zakazka-history";
+import {
+  getWorkflowBadgeClassName,
+  getWorkflowStatusLabel,
+} from "@/lib/zakazka-workflow";
+import { buildInvoiceDataFromRow } from "@/lib/invoice-data";
+import { InvoiceActionsClient } from "./InvoiceActionsClient";
 import {
   PlaceTechnicalNotesCard,
   type MistoKonaniRow,
@@ -42,7 +60,7 @@ import {
 
 type PageProps = {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ technicke_overeni?: string }>;
+  searchParams?: Promise<{ technicke_overeni?: string; schvaleni?: string; approval_token?: string }>;
 };
 
 type TechnikaSummaryRow = {
@@ -66,6 +84,7 @@ type TechnikaSummaryRawRow = {
         sklad_blok_id: string | null;
         kategorie_techniky_id: string | null;
         podkategorie_techniky_id: string | null;
+        interni_naklad: number | string | null;
       }
     | {
         nazev: string | null;
@@ -73,6 +92,7 @@ type TechnikaSummaryRawRow = {
         sklad_blok_id: string | null;
         kategorie_techniky_id: string | null;
         podkategorie_techniky_id: string | null;
+        interni_naklad: number | string | null;
       }[]
     | null;
 };
@@ -160,6 +180,63 @@ type ClientVerificationLinkRow = {
   last_opened_at: string | null;
   open_count: number | null;
   created_at: string | null;
+};
+
+type ClientApprovalLinkRow = {
+  link_id: string;
+  zakazka_id: string;
+  stav: string | null;
+  email_to: string | null;
+  email_sent_at: string | null;
+  opened_at: string | null;
+  approved_at: string | null;
+  declined_at: string | null;
+  declined_reason: string | null;
+  revoked_at: string | null;
+  created_at: string | null;
+};
+
+type PricingData = {
+  cena_techniky?: number | string | null;
+  cena_personalu?: number | string | null;
+  cena_pred_slevou?: number | string | null;
+  cilova_cena?: number | string | null;
+  sleva_percent?: number | string | null;
+  konecna_cena?: number | string | null;
+  pricing_updated_at?: string | null;
+};
+
+type PricingPersonAssignmentRow = {
+  id: string | number;
+  user_id: string;
+  datum_od: string | null;
+  datum_do: string | null;
+  typ_bloku: string | null;
+  confirmation_status: string | null;
+};
+
+type PricingProfileRow = {
+  user_id: string;
+  hodinovy_naklad_akce: number | string | null;
+};
+
+type PricingPersonCostItem = {
+  id: string;
+  userId: string;
+  hours: number;
+  hourlyCost: number;
+  total: number;
+};
+
+type InvoiceClientRow = {
+  nazev: string | null;
+  ico: string | null;
+  dic: string | null;
+  ulice: string | null;
+  mesto: string | null;
+  psc: string | null;
+  email: string | null;
+  telefon: string | null;
 };
 
 type ClientVerificationDotaznikRow = {
@@ -287,8 +364,82 @@ function toCount(value: number | string | null | undefined) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function toOptionalPrice(value: unknown) {
+  const text = String(value ?? "").trim().replace(",", ".");
+  if (!text) return null;
+  const number = Number(text);
+  if (!Number.isFinite(number) || number < 0) {
+    throw new Error("Cena musí být číslo 0 nebo vyšší.");
+  }
+  return number;
+}
+
+function formatMoney(value: number | string | null | undefined) {
+  return new Intl.NumberFormat("cs-CZ", {
+    style: "currency",
+    currency: "CZK",
+    maximumFractionDigits: 0,
+  }).format(toCount(value));
+}
+
+function formatPercent(value: number | string | null | undefined) {
+  return `${new Intl.NumberFormat("cs-CZ", { maximumFractionDigits: 1 }).format(toCount(value))} %`;
+}
+
+function calculateDiscountPercent(beforeDiscount: number, finalPrice: number) {
+  if (beforeDiscount <= 0) return 0;
+  const discount = ((beforeDiscount - finalPrice) / beforeDiscount) * 100;
+  return Number(Math.max(discount, 0).toFixed(2));
+}
+
+function calculateHours(from?: string | null, to?: string | null) {
+  if (!from || !to) return 0;
+  const start = new Date(from).getTime();
+  const end = new Date(to).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+  return Number(((end - start) / (1000 * 60 * 60)).toFixed(2));
+}
+
 function formatCount(value: number) {
   return new Intl.NumberFormat("cs-CZ", { maximumFractionDigits: 2 }).format(value);
+}
+
+function formatZakazkaDateRange(data: {
+  akce_od?: string | null;
+  akce_do?: string | null;
+  datum_od?: string | null;
+  datum_do?: string | null;
+}) {
+  const start = data.akce_od ?? data.datum_od;
+  const end = data.akce_do ?? data.datum_do;
+  if (!start && !end) return "Termín není vyplněný";
+
+  const formatter = new Intl.DateTimeFormat("cs-CZ", {
+    dateStyle: "medium",
+    timeStyle: start?.includes("T") || end?.includes("T") ? "short" : undefined,
+  });
+
+  return [start, end]
+    .filter(Boolean)
+    .map((value) => formatter.format(new Date(value!)))
+    .join(" – ");
+}
+
+function formatClientAddress(client: InvoiceClientRow | null) {
+  return [client?.ulice, [client?.psc, client?.mesto].filter(Boolean).join(" ")]
+    .filter(Boolean)
+    .join(", ");
+}
+
+function buildCustomerInvoiceParty(client: InvoiceClientRow | null): InvoiceParty {
+  return {
+    name: client?.nazev ?? null,
+    ico: client?.ico ?? null,
+    dic: client?.dic ?? null,
+    address: formatClientAddress(client),
+    email: client?.email ?? null,
+    phone: client?.telefon ?? null,
+  };
 }
 
 function getLoadingStatusLabel({
@@ -441,6 +592,8 @@ function getHistoryTargetUserId(value: unknown) {
 }
 
 function getHistoryTypeLabel(value: string) {
+  if (value.startsWith("workflow_")) return "Workflow";
+  if (value.startsWith("invoice_")) return "Fakturace";
   if (value.startsWith("person_")) return "Lidé";
   if (value.startsWith("logistics_")) return "Logistika";
   if (value.startsWith("scan_")) return "Scan";
@@ -1251,6 +1404,234 @@ function ClientTechnicalVerificationCard({
   );
 }
 
+function ClientApprovalCard({
+  zakazkaId,
+  status,
+  link,
+  publicLink,
+  message,
+}: {
+  zakazkaId: string;
+  status?: string | null;
+  link: ClientApprovalLinkRow | null;
+  publicLink: string | null;
+  message: "sent" | "revoked" | "missing_email" | "missing_resend_key" | null;
+}) {
+  const declined = status === "declined";
+
+  return (
+    <Card className="mt-6 space-y-5 border-slate-700 bg-[#0b1324]">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="text-xl font-bold text-white">Schválení klientem</div>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-400">
+            Finální souhlas s podobou zakázky. Není to technický dotazník ani fakturace.
+          </p>
+        </div>
+        <Badge variant={status === "approved" ? "success" : declined ? "danger" : "warning"}>
+          {getClientApprovalStatusLabel(status)}
+        </Badge>
+      </div>
+
+      {message === "sent" ? (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm font-semibold text-emerald-100">
+          Zakázka byla odeslána klientovi ke schválení.
+        </div>
+      ) : null}
+      {message === "revoked" ? (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm font-semibold text-amber-100">
+          Poslední odkaz na schválení byl zneplatněn.
+        </div>
+      ) : null}
+      {message === "missing_email" ? (
+        <div className="rounded-xl border border-red-500/40 bg-red-950/20 px-4 py-3 text-sm text-red-200">
+          Klient nemá vyplněný email.
+        </div>
+      ) : null}
+      {message === "missing_resend_key" ? (
+        <div className="rounded-xl border border-red-500/40 bg-red-950/20 px-4 py-3 text-sm text-red-200">
+          Chybí env proměnná RESEND_API_KEY.
+        </div>
+      ) : null}
+
+      {declined ? (
+        <div className="rounded-xl border border-red-500/40 bg-red-950/20 px-4 py-3 text-sm text-red-100">
+          <div className="font-semibold">Klient odmítl finální podobu zakázky.</div>
+          <div className="mt-1">{link?.declined_reason || "Důvod není vyplněný."}</div>
+        </div>
+      ) : null}
+
+      <div className="grid gap-3 text-sm text-slate-300 md:grid-cols-3">
+        <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Email</div>
+          <div className="mt-1 font-semibold text-white">{link?.email_sent_at ? "Odeslán" : "Neodeslán"}</div>
+          {link?.email_to ? <div className="mt-1 break-words text-xs text-slate-500">{link.email_to}</div> : null}
+        </div>
+        <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Otevření klientem</div>
+          <div className="mt-1 font-semibold text-white">{link?.opened_at ? "Otevřeno" : "Zatím ne"}</div>
+          {link?.opened_at ? (
+            <div className="mt-1 text-xs text-slate-500">{new Date(link.opened_at).toLocaleString("cs-CZ")}</div>
+          ) : null}
+        </div>
+        <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Rozhodnutí</div>
+          <div className="mt-1 font-semibold text-white">
+            {link?.approved_at
+              ? `Schváleno ${new Date(link.approved_at).toLocaleString("cs-CZ")}`
+              : link?.declined_at
+                ? `Odmítnuto ${new Date(link.declined_at).toLocaleString("cs-CZ")}`
+                : "Čeká"}
+          </div>
+        </div>
+      </div>
+
+      {publicLink ? (
+        <div className="rounded-xl border border-blue-500/30 bg-blue-950/20 px-4 py-3 text-sm text-blue-100">
+          <div className="font-semibold">Veřejný link vytvořený při posledním odeslání</div>
+          <div className="mt-1 break-all text-xs text-blue-200">{publicLink}</div>
+        </div>
+      ) : null}
+
+      <div className="flex flex-wrap gap-3">
+        <form action={sendClientApprovalAction}>
+          <input type="hidden" name="zakazka_id" value={zakazkaId} />
+          <button className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-600">
+            Odeslat ke schválení
+          </button>
+        </form>
+        {link && !link.revoked_at && !link.approved_at && !link.declined_at ? (
+          <form action={revokeClientApprovalLinkAction}>
+            <input type="hidden" name="zakazka_id" value={zakazkaId} />
+            <button className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-slate-700">
+              Zneplatnit odkaz
+            </button>
+          </form>
+        ) : null}
+      </div>
+    </Card>
+  );
+}
+
+function PricingRecapCard({
+  zakazkaId,
+  pricing,
+  computedTechPrice,
+  computedStaffPrice,
+  staffCostItems,
+  invoiceBaseData,
+  fakturacniFirmy,
+  selectedFakturacniFirmaId,
+  action,
+}: {
+  zakazkaId: string;
+  pricing: PricingData;
+  computedTechPrice: number;
+  computedStaffPrice: number;
+  staffCostItems: PricingPersonCostItem[];
+  invoiceBaseData: Omit<InvoiceDocumentData, "pricing">;
+  fakturacniFirmy: FakturacniFirma[];
+  selectedFakturacniFirmaId?: string | null;
+  action: (formData: FormData) => Promise<void>;
+}) {
+  const techPrice = computedTechPrice;
+  const staffPrice = computedStaffPrice;
+  const beforeDiscount = techPrice + staffPrice;
+  const finalPrice = toCount(pricing.cilova_cena) || beforeDiscount;
+  const discountPercent = calculateDiscountPercent(beforeDiscount, finalPrice);
+  const totalHours = staffCostItems.reduce((sum, item) => sum + item.hours, 0);
+
+  return (
+    <Card className="mt-6 space-y-5 border-slate-700 bg-[#0b1324]">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="text-xl font-bold text-white">Cenová rekapitulace</div>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-400">
+            Cena techniky vychází ze skladové „Ceny pro akce“. Cena personálu se počítá z hodin
+            přiřazených lidí a jejich interního hodinového nákladu.
+          </p>
+        </div>
+        <Badge variant="default">{formatMoney(finalPrice)}</Badge>
+      </div>
+
+      <div className="grid gap-3 text-sm md:grid-cols-4">
+        <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Cena techniky</div>
+          <div className="mt-1 font-bold text-white">{formatMoney(techPrice)}</div>
+        </div>
+        <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Cena personálu</div>
+          <div className="mt-1 font-bold text-white">{formatMoney(staffPrice)}</div>
+          <div className="mt-1 text-xs text-slate-400">
+            {formatCount(totalHours)} h z Pokrytí práce
+          </div>
+        </div>
+        <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Před slevou</div>
+          <div className="mt-1 font-bold text-white">{formatMoney(beforeDiscount)}</div>
+        </div>
+        <div className="rounded-xl border border-emerald-700 bg-emerald-950/30 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-emerald-300">Po slevě</div>
+          <div className="mt-1 font-bold text-white">{formatMoney(finalPrice)}</div>
+          <div className="mt-1 text-xs text-emerald-200">Sleva {formatPercent(discountPercent)}</div>
+        </div>
+      </div>
+
+      <form action={action} className="grid gap-4 md:grid-cols-3">
+        <input type="hidden" name="zakazka_id" value={zakazkaId} />
+        <input type="hidden" name="cena_techniky" value={computedTechPrice} />
+        <input type="hidden" name="cena_personalu" value={computedStaffPrice} />
+        <label className="block">
+          <span className="text-sm font-semibold text-slate-200">Fakturuje firma</span>
+          <FakturacniFirmaSelect
+            firmy={fakturacniFirmy}
+            defaultValue={selectedFakturacniFirmaId}
+          />
+        </label>
+        <label className="block">
+          <span className="text-sm font-semibold text-slate-200">Cílová cena pro klienta</span>
+          <input
+            name="cilova_cena"
+            type="number"
+            min="0"
+            step="1"
+            defaultValue={toCount(pricing.cilova_cena) || finalPrice || ""}
+            className="mt-2 w-full rounded-xl border border-slate-700 bg-[#0f172a] px-4 py-3 text-base text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+          />
+        </label>
+        <div className="flex items-end">
+          <button className="min-h-12 w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500">
+            Uložit cenu
+          </button>
+        </div>
+      </form>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <PricingInvoicePreview
+          data={{
+            ...invoiceBaseData,
+            pricing: {
+              techPrice,
+              staffPrice,
+              beforeDiscount,
+              discountPercent,
+              discountAmount: Math.max(beforeDiscount - finalPrice, 0),
+              finalPrice,
+            },
+          }}
+        />
+        <span className="text-sm text-slate-400">
+          Stejný obsah je připravený pro tisk i klientské schválení.
+        </span>
+      </div>
+
+      <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm leading-relaxed text-amber-100">
+        Sleva je poskytnuta za předpokladu dodržení podmínek akce ze strany klienta. Pokud tyto podmínky nebudou dodrženy, vyhrazujeme si právo snížit poskytnutou slevu až do plné výše původní ceny. Pokud náklady na zajištění nedodržených podmínek původní cenu překročí, může být rozdíl doúčtován.
+      </div>
+    </Card>
+  );
+}
+
 type RealizaceRow = {
   realizace_id: string;
   zakazka_id: string;
@@ -1268,6 +1649,144 @@ type RealizaceRow = {
   kamery: number | string | null;
   dron: boolean | null;
 };
+
+type InvoiceRow = {
+  id: string;
+  cislo_dokladu: string;
+  stav: string;
+  vystaveno_at: string | null;
+  splatnost_at: string | null;
+  odeslano_at: string | null;
+  email_to: string | null;
+};
+
+function WorkflowCard({
+  status,
+  changedAt,
+  latestEvents,
+}: {
+  status?: string | null;
+  changedAt?: string | null;
+  latestEvents: TimelineEvent[];
+}) {
+  return (
+    <Card className="mt-6 border-slate-700 bg-[#0b1324]">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="text-xl font-bold text-white">Workflow zakázky</div>
+          <p className="mt-1 text-sm text-slate-400">
+            Hlavní stav sjednocuje schválení klientem, logistiku, fakturaci a archivaci.
+          </p>
+        </div>
+        <span
+          className={`rounded-md border px-3 py-1 text-xs font-bold ${getWorkflowBadgeClassName(status)}`}
+        >
+          {getWorkflowStatusLabel(status)}
+        </span>
+      </div>
+      <div className="mt-4 text-sm text-slate-300">
+        Poslední změna:{" "}
+        {changedAt
+          ? new Intl.DateTimeFormat("cs-CZ", { dateStyle: "medium", timeStyle: "short" }).format(
+              new Date(changedAt)
+            )
+          : "Neuvedeno"}
+      </div>
+      {latestEvents.length > 0 ? (
+        <div className="mt-4 space-y-2">
+          {latestEvents.slice(0, 3).map((event) => (
+            <div key={event.id} className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+              <div className="text-sm font-semibold text-white">{event.title}</div>
+              <div className="mt-1 text-xs text-slate-400">
+                {new Intl.DateTimeFormat("cs-CZ", { dateStyle: "medium", timeStyle: "short" }).format(
+                  new Date(event.date)
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+function InvoiceCard({
+  zakazkaId,
+  invoice,
+  previewData,
+}: {
+  zakazkaId: string;
+  invoice: (InvoiceRow & Record<string, unknown>) | null;
+  previewData: InvoiceDocumentData | null;
+}) {
+  const printHref = invoice ? `/zakazky/${zakazkaId}/faktura/${invoice.id}/print` : null;
+  const pdfHref = invoice ? `/zakazky/${zakazkaId}/faktura/${invoice.id}/pdf` : null;
+
+  return (
+    <Card className="mt-6 space-y-4 border-slate-700 bg-[#0b1324]">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="text-xl font-bold text-white">Faktura</div>
+          <p className="mt-1 text-sm text-slate-400">
+            Vystavení uloží snapshot dodavatele, odběratele, zakázky i ceny.
+          </p>
+        </div>
+        <Badge variant="default">{invoice ? invoice.cislo_dokladu : "Neuvedeno"}</Badge>
+      </div>
+
+      {invoice ? (
+        <div className="grid gap-3 text-sm md:grid-cols-4">
+          <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Stav</div>
+            <div className="mt-1 font-bold text-white">
+              {invoice.stav === "odeslano" ? "Odesláno" : invoice.stav === "vystaveno" ? "Vystaveno" : "Návrh"}
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Vystaveno</div>
+            <div className="mt-1 font-bold text-white">
+              {invoice.vystaveno_at
+                ? new Intl.DateTimeFormat("cs-CZ", { dateStyle: "medium" }).format(new Date(invoice.vystaveno_at))
+                : "Neuvedeno"}
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Splatnost</div>
+            <div className="mt-1 font-bold text-white">
+              {invoice.splatnost_at
+                ? new Intl.DateTimeFormat("cs-CZ", { dateStyle: "medium" }).format(new Date(invoice.splatnost_at))
+                : "Neuvedeno"}
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Email</div>
+            <div className="mt-1 font-bold text-white">{invoice.email_to ?? "Neuvedeno"}</div>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">
+          Faktura zatím není vystavená.
+        </div>
+      )}
+
+      <InvoiceActionsClient
+        zakazkaId={zakazkaId}
+        invoiceId={invoice?.id ?? null}
+        printHref={printHref}
+        pdfHref={pdfHref}
+      />
+
+      {previewData ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <PricingInvoicePreview data={previewData} />
+          <span className="text-sm text-slate-400">
+            Náhled používá stejný InvoiceDocument jako klient, tisk a PDF.
+          </span>
+        </div>
+      ) : null}
+    </Card>
+  );
+}
 
 export default async function ZakazkaDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
@@ -1309,6 +1828,58 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
     revalidatePath("/kalendar/lide");
   }
 
+  async function updateZakazkaPricing(formData: FormData) {
+    "use server";
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const zakazkaId = String(formData.get("zakazka_id") ?? "").trim();
+    const fakturacniFirmaId = String(formData.get("fakturacni_firma_id") ?? "").trim() || null;
+    if (!zakazkaId) throw new Error("Chybí ID zakázky.");
+
+    const techPrice = toOptionalPrice(formData.get("cena_techniky")) ?? 0;
+    const staffPrice = toOptionalPrice(formData.get("cena_personalu")) ?? 0;
+    const beforeDiscount = techPrice + staffPrice;
+    const targetPrice = toOptionalPrice(formData.get("cilova_cena"));
+    const finalPrice = targetPrice ?? beforeDiscount;
+    const discountPercent = calculateDiscountPercent(beforeDiscount, finalPrice);
+
+    const { error } = await supabase
+      .from("zakazky")
+      .update({
+        cena_techniky: techPrice,
+        cena_personalu: staffPrice,
+        cena_pred_slevou: beforeDiscount,
+        cilova_cena: targetPrice,
+        sleva_percent: discountPercent,
+        konecna_cena: finalPrice,
+        fakturacni_firma_id: fakturacniFirmaId,
+        pricing_updated_at: new Date().toISOString(),
+      })
+      .eq("zakazka_id", zakazkaId);
+
+    if (error) throw new Error(error.message);
+
+    await logZakazkaHistory(supabase, {
+      zakazkaId,
+      eventType: "pricing_updated",
+      actorId: user?.id ?? null,
+      title: "Cenová rekapitulace zakázky byla upravena.",
+      detail: `Cena před slevou: ${formatMoney(beforeDiscount)}. Konečná cena: ${formatMoney(finalPrice)}. Sleva: ${formatPercent(discountPercent)}.`,
+      metadata: {
+        cena_techniky: techPrice,
+        cena_personalu: staffPrice,
+        cena_pred_slevou: beforeDiscount,
+        cilova_cena: targetPrice,
+        sleva_percent: discountPercent,
+        konecna_cena: finalPrice,
+      },
+    });
+
+    revalidatePath(`/zakazky/${zakazkaId}`);
+  }
+
   async function cancelZakazka() {
     "use server";
     const supabase = await createClient();
@@ -1335,6 +1906,20 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
   if (!data) {
     return <div>Zakázka nenalezena</div>;
   }
+
+  const { data: invoiceRaw, error: invoiceError } = await supabase
+    .from("zakazka_faktury")
+    .select("*")
+    .eq("zakazka_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (invoiceError) {
+    return <div>Chyba faktury: {invoiceError.message}</div>;
+  }
+
+  const latestInvoice = (invoiceRaw ?? null) as (InvoiceRow & Record<string, unknown>) | null;
 
   const logisticsUserIds = [
     ...new Set(
@@ -1789,11 +2374,37 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
       ? resolvedSearchParams.technicke_overeni
       : null;
 
+  const { data: approvalLinkRaw, error: approvalLinkError } = await supabase
+    .from("zakazka_approval_links")
+    .select("link_id, zakazka_id, stav, email_to, email_sent_at, opened_at, approved_at, declined_at, declined_reason, revoked_at, created_at")
+    .eq("zakazka_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (approvalLinkError) {
+    return <div>Chyba schválení klientem: {approvalLinkError.message}</div>;
+  }
+
+  const clientApprovalLink = (approvalLinkRaw ?? null) as ClientApprovalLinkRow | null;
+  const approvalMessage =
+    resolvedSearchParams?.schvaleni === "sent" ||
+    resolvedSearchParams?.schvaleni === "revoked" ||
+    resolvedSearchParams?.schvaleni === "missing_email" ||
+    resolvedSearchParams?.schvaleni === "missing_resend_key"
+      ? resolvedSearchParams.schvaleni
+      : null;
+  const approvalPublicLink =
+    resolvedSearchParams?.approval_token && approvalMessage === "sent"
+      ? buildApprovalUrl(process.env.NEXT_PUBLIC_APP_URL ?? "", resolvedSearchParams.approval_token)
+      : null;
+
   let klientNazev: string | null = null;
+  let invoiceClient: InvoiceClientRow | null = null;
   if (data.klient_id) {
     const { data: klientRaw, error: klientError } = await supabase
       .from("klienti")
-      .select("nazev")
+      .select("nazev, ico, dic, ulice, mesto, psc, email, telefon")
       .eq("klient_id", data.klient_id)
       .maybeSingle();
 
@@ -1801,13 +2412,31 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
       return <div>Chyba: {klientError.message}</div>;
     }
 
-    klientNazev = klientRaw?.nazev ?? null;
+    invoiceClient = (klientRaw ?? null) as InvoiceClientRow | null;
+    klientNazev = invoiceClient?.nazev ?? null;
   }
 
   const headerData = {
     ...data,
     klient_nazev: klientNazev,
   };
+
+  const { data: fakturacniFirmyRaw, error: fakturacniFirmyError } = await supabase
+    .from("fakturacni_firmy")
+    .select("*")
+    .eq("aktivni", true)
+    .order("vychozi", { ascending: false })
+    .order("nazev", { ascending: true });
+
+  if (fakturacniFirmyError) {
+    return <div>Chyba fakturačních firem: {fakturacniFirmyError.message}</div>;
+  }
+
+  const fakturacniFirmy = (fakturacniFirmyRaw ?? []) as FakturacniFirma[];
+  const effectiveFakturacniFirma = getEffectiveFakturacniFirma(
+    fakturacniFirmy,
+    data.fakturacni_firma_id ?? null
+  );
 
   const { data: realizace, error: realizaceError } = await supabase
     .from("zakazka_realizace")
@@ -1821,7 +2450,7 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
   const { data: technikaSummaryRaw, error: technikaSummaryError } = await supabase
     .from("technika_na_zakazce")
     .select(
-      "skladova_polozka_id, mnozstvi, skladove_polozky(nazev, pozice, sklad_blok_id, kategorie_techniky_id, podkategorie_techniky_id)"
+      "skladova_polozka_id, mnozstvi, skladove_polozky(nazev, pozice, sklad_blok_id, kategorie_techniky_id, podkategorie_techniky_id, interni_naklad)"
     )
     .eq("zakazka_id", id);
 
@@ -1912,6 +2541,53 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
       podkategorieNazev: podkategorie?.nazev?.trim() || "—",
     };
   }) as TechnikaSummaryRow[];
+  const computedTechPrice = technikaRows.reduce((sum, row) => {
+    const info = getSkladovaPolozkaInfo(row.skladove_polozky);
+    return sum + toCount(row.mnozstvi) * toCount(info?.interni_naklad);
+  }, 0);
+
+  const { data: pricingAssignmentsRaw, error: pricingAssignmentsError } = await supabase
+    .from("zakazka_lide")
+    .select("id, user_id, datum_od, datum_do, typ_bloku, confirmation_status")
+    .eq("zakazka_id", id);
+
+  if (pricingAssignmentsError) {
+    return <div>Chyba výpočtu ceny personálu: {pricingAssignmentsError.message}</div>;
+  }
+
+  const pricingAssignments = ((pricingAssignmentsRaw ?? []) as PricingPersonAssignmentRow[]).filter(
+    (row) => row.confirmation_status !== "declined"
+  );
+  const pricingUserIds = [...new Set(pricingAssignments.map((row) => row.user_id).filter(Boolean))];
+  const pricingProfilesById = new Map<string, PricingProfileRow>();
+
+  if (pricingUserIds.length > 0) {
+    const { data: pricingProfilesRaw, error: pricingProfilesError } = await supabase
+      .from("profiles")
+      .select("user_id, hodinovy_naklad_akce")
+      .in("user_id", pricingUserIds);
+
+    if (pricingProfilesError) {
+      return <div>Chyba hodinových nákladů lidí: {pricingProfilesError.message}</div>;
+    }
+
+    for (const profile of (pricingProfilesRaw ?? []) as PricingProfileRow[]) {
+      pricingProfilesById.set(profile.user_id, profile);
+    }
+  }
+
+  const staffCostItems = pricingAssignments.map((assignment) => {
+    const hours = calculateHours(assignment.datum_od, assignment.datum_do);
+    const hourlyCost = toCount(pricingProfilesById.get(assignment.user_id)?.hodinovy_naklad_akce);
+    return {
+      id: String(assignment.id),
+      userId: assignment.user_id,
+      hours,
+      hourlyCost,
+      total: hours * hourlyCost,
+    };
+  });
+  const computedStaffPrice = staffCostItems.reduce((sum, item) => sum + item.total, 0);
 
   const planRows = (technikaSummaryRaw ?? []) as LoadingPlanRow[];
 
@@ -2013,10 +2689,42 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
     loadingBloky,
     replacementPolozkaByKus
   );
+  const invoiceBaseData: Omit<InvoiceDocumentData, "pricing"> = {
+    supplier: fakturacniFirmaToInvoiceParty(effectiveFakturacniFirma),
+    customer: buildCustomerInvoiceParty(invoiceClient),
+    order: {
+      orderNumber: data.cislo_zakazky ?? null,
+      title: data.nazev ?? null,
+      place: data.misto ?? null,
+      dateRange: formatZakazkaDateRange(data),
+      note: data.poznamka ?? null,
+    },
+  };
+  const currentBeforeDiscount = computedTechPrice + computedStaffPrice;
+  const currentFinalPrice = toCount((data as PricingData).cilova_cena) || currentBeforeDiscount;
+  const currentInvoiceData: InvoiceDocumentData = {
+    ...invoiceBaseData,
+    pricing: {
+      techPrice: computedTechPrice,
+      staffPrice: computedStaffPrice,
+      beforeDiscount: currentBeforeDiscount,
+      discountPercent: calculateDiscountPercent(currentBeforeDiscount, currentFinalPrice),
+      discountAmount: Math.max(currentBeforeDiscount - currentFinalPrice, 0),
+      finalPrice: currentFinalPrice,
+    },
+  };
+  const invoicePreviewData = latestInvoice ? buildInvoiceDataFromRow(latestInvoice as any) : currentInvoiceData;
+  const workflowEvents = timelineEvents.filter((event) => event.type === "Workflow");
 
   return (
     <div className="w-full">
       <ZakazkaHeaderCard zakazkaId={id} data={headerData} cancelAction={cancelZakazka} />
+
+      <WorkflowCard
+        status={(data as { workflow_stav?: string | null }).workflow_stav}
+        changedAt={(data as { workflow_changed_at?: string | null }).workflow_changed_at}
+        latestEvents={workflowEvents}
+      />
 
       <ZakazkaScheduleCard data={data} action={updateZakazkaSchedule} />
 
@@ -2058,6 +2766,28 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
         galleryPhotos={dotaznikGalleryPhotos}
         message={technicalVerificationMessage}
         hasSavedPlace={Boolean(data.misto_id)}
+      />
+
+      <PricingRecapCard
+        zakazkaId={id}
+        pricing={data as PricingData}
+        computedTechPrice={computedTechPrice}
+        computedStaffPrice={computedStaffPrice}
+        staffCostItems={staffCostItems}
+        invoiceBaseData={invoiceBaseData}
+        fakturacniFirmy={fakturacniFirmy}
+        selectedFakturacniFirmaId={effectiveFakturacniFirma?.id ?? data.fakturacni_firma_id ?? null}
+        action={updateZakazkaPricing}
+      />
+
+      <InvoiceCard zakazkaId={id} invoice={latestInvoice} previewData={invoicePreviewData} />
+
+      <ClientApprovalCard
+        zakazkaId={id}
+        status={data.client_approval_status}
+        link={clientApprovalLink}
+        publicLink={approvalPublicLink}
+        message={approvalMessage}
       />
 
       <PlanTechnikyCard items={technikaSummary} />

@@ -9,6 +9,8 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { PickerInput } from "@/components/ui/picker-input";
+import { getClientApprovalStatusLabel } from "@/lib/client-approval";
+import { getWorkflowBadgeClassName, getWorkflowStatusLabel } from "@/lib/zakazka-workflow";
 
 export type Zakazka = {
   zakazka_id: string;
@@ -22,6 +24,8 @@ export type Zakazka = {
   cas_do: string | null;
   zrusena?: boolean | null;
   logistika_stav?: string | null;
+  client_approval_status?: string | null;
+  workflow_stav?: string | null;
   declined_people_count?: number;
 };
 
@@ -172,9 +176,23 @@ function ZakazkaCard({
                 </div>
               ) : null}
               <div>
+                <span className="font-semibold text-slate-200">Workflow:</span>{" "}
+                <span
+                  className={`rounded-md border px-2 py-0.5 text-xs font-bold ${getWorkflowBadgeClassName(zakazka.workflow_stav)}`}
+                >
+                  {getWorkflowStatusLabel(zakazka.workflow_stav)}
+                </span>
+              </div>
+              <div>
                 <span className="font-semibold text-slate-200">Logistika:</span>{" "}
                 <span className="rounded-md border border-cyan-500/30 bg-cyan-500/15 px-2 py-0.5 text-xs font-bold text-cyan-100">
                   {getLogisticsStatusLabel(zakazka.logistika_stav)}
+                </span>
+              </div>
+              <div>
+                <span className="font-semibold text-slate-200">Schválení:</span>{" "}
+                <span className="rounded-md border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-100">
+                  {getClientApprovalStatusLabel(zakazka.client_approval_status)}
                 </span>
               </div>
               {zakazka.declined_people_count ? (

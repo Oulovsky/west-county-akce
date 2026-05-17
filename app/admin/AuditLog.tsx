@@ -141,12 +141,12 @@ export default function AuditLog({ logs: initialLogs }: { logs: AuditLogItem[] }
       </div>
 
       <div className="space-y-2">
-        {filteredLogs.map((log) => {
+        {filteredLogs.map((log, index) => {
           const style = getActionStyle(log.action);
 
           return (
             <div
-              key={log.id}
+              key={`${log.id}-${log.created_at}-${index}`}
               className={`rounded-xl border p-3 text-sm transition ${style}`}
             >
               <div className="mb-2 flex justify-between gap-4">

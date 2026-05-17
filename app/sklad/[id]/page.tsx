@@ -86,7 +86,7 @@ export default async function SkladDetailPage({ params }: PageProps) {
     if (!jednotka) throw new Error("Jednotka je povinná.");
     if (!Number.isFinite(kusy) || kusy < 0) throw new Error("Celkem musí být číslo 0 nebo vyšší.");
     if (pozice !== null && !Number.isFinite(pozice)) throw new Error("Pozice musí být číslo.");
-    if (akceCena !== null && !Number.isFinite(akceCena)) throw new Error("Akce musí být číslo.");
+    if (akceCena !== null && !Number.isFinite(akceCena)) throw new Error("Cena pro akce musí být číslo.");
     if (rent !== null && !Number.isFinite(rent)) throw new Error("Rent musí být číslo.");
 
     const detailRes = await supabase.rpc("update_skladova_polozka_detail", {

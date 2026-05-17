@@ -44,7 +44,7 @@ export function SkladDetailTableHeader() {
         </div>
 
         <div className={centerCellClassName}>
-          <span className={headerBoxClassName("justify-center text-center")}>Akce</span>
+          <span className={headerBoxClassName("justify-center text-center")}>Cena pro akce</span>
         </div>
 
         <div className={centerCellClassName}>
