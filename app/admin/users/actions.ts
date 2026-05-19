@@ -360,22 +360,6 @@ export async function updateUserEmail(
       return { ok: false, error: profileError.message };
     }
 
-    const { error: whitelistAddError } = await admin
-      .from("povolene_emaily")
-      .upsert({ email: nextEmail });
-
-    if (whitelistAddError) {
-      await admin.from("profiles").update({ email: oldEmail || null }).eq("user_id", targetUserId);
-      if (oldEmail) {
-        await admin.auth.admin.updateUserById(targetUserId, { email: oldEmail, email_confirm: true });
-      }
-      return { ok: false, error: whitelistAddError.message };
-    }
-
-    if (oldEmail && !(await isEmailUsedByOtherActiveProfile(admin, oldEmail, targetUserId))) {
-      await admin.from("povolene_emaily").delete().eq("email", oldEmail);
-    }
-
     revalidatePath("/admin");
     return { ok: true };
   } catch (error: unknown) {
@@ -405,11 +389,6 @@ export async function deactivateEmployee(targetUserId: string): Promise<ActionRe
 
     if (profileError) return { ok: false, error: profileError.message };
 
-    if (email && !(await isEmailUsedByOtherActiveProfile(admin, email, targetUserId))) {
-      const { error: whitelistError } = await admin.from("povolene_emaily").delete().eq("email", email);
-      if (whitelistError) return { ok: false, error: whitelistError.message };
-    }
-
     revalidatePath("/admin");
     revalidatePath("/zakazky");
     return { ok: true };
@@ -435,12 +414,6 @@ export async function createEmployee(formData: FormData): Promise<ActionResult> 
     if (!Number.isFinite(hourlyCost) || hourlyCost < 0) {
       return { ok: false, error: "Hodinový náklad musí být číslo 0 nebo vyšší." };
     }
-
-    const { error: whitelistError } = await supabase.rpc("add_whitelist_email", {
-      email_to_add: email,
-    });
-
-    if (whitelistError) return { ok: false, error: whitelistError.message };
 
     const admin = createAdminClient();
     const password = crypto.randomUUID() + crypto.randomUUID();

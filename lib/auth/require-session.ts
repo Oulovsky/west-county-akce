@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import {
+  isEmployeeLoginAllowed,
+  loadEmployeeProfile,
+} from "@/lib/auth/employee-access";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -20,6 +24,8 @@ export type RequireSessionResult =
 
 export async function requireSession(): Promise<RequireSessionResult> {
   const supabase = await createClient();
+
+  await supabase.auth.getSession();
 
   const {
     data: { user },
@@ -48,13 +54,12 @@ export async function requireSession(): Promise<RequireSessionResult> {
     };
   }
 
-  const { data: allowed, error: allowedError } = await supabase
-    .from("povolene_emaily")
-    .select("email")
-    .eq("email", email)
-    .maybeSingle();
+  const { data: profile, error: profileError } = await loadEmployeeProfile(
+    supabase,
+    user.id
+  );
 
-  if (allowedError) {
+  if (profileError) {
     return {
       ok: false,
       response: NextResponse.json(
@@ -64,7 +69,7 @@ export async function requireSession(): Promise<RequireSessionResult> {
     };
   }
 
-  if (!allowed) {
+  if (!profile || !isEmployeeLoginAllowed(profile)) {
     return {
       ok: false,
       response: NextResponse.json(

@@ -1,6 +1,10 @@
 ﻿"use server";
 
 import { createClient } from "@/lib/supabase/server";
+import {
+  isEmployeeLoginAllowed,
+  loadEmployeeProfile,
+} from "@/lib/auth/employee-access";
 
 type ActionResult = {
   ok: boolean;
@@ -39,6 +43,7 @@ async function requireAdmin() {
   return { supabase, error: null };
 }
 
+/** E-maily se stejným zdrojem pravdy jako přihlášení: tabulka profiles (zaměstnanci). */
 export async function getWhitelist() {
   const supabase = await createClient();
 
@@ -50,66 +55,54 @@ export async function getWhitelist() {
     throw new Error("Unauthorized");
   }
 
-  const { data, error } = await supabase.rpc("get_whitelist");
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("email, role, aktivni")
+    .not("email", "is", null)
+    .order("email", { ascending: true });
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return data ?? [];
+  return (data ?? []).map((row) => ({
+    email: String(row.email ?? "").trim().toLowerCase(),
+    role: row.role,
+    aktivni: row.aktivni,
+  }));
 }
 
-export async function addWhitelistEmail(email: string): Promise<ActionResult> {
+export async function addWhitelistEmail(_email: string): Promise<ActionResult> {
   try {
-    const { supabase, error: authError } = await requireAdmin();
+    const { error: authError } = await requireAdmin();
 
     if (authError) {
       return { ok: false, error: authError };
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
-
-    if (!normalizedEmail) {
-      return { ok: false, error: "Email je povinný" };
-    }
-
-    const { error } = await supabase.rpc("add_whitelist_email", {
-      email_to_add: normalizedEmail,
-    });
-
-    if (error) {
-      return { ok: false, error: error.message };
-    }
-
-    return { ok: true };
+    return {
+      ok: false,
+      error:
+        "Přístup se řídí přes zaměstnance v profiles. Nového člověka přidejte v sekci Zaměstnanci (vytvoří se auth účet i profil).",
+    };
   } catch (error: unknown) {
     return { ok: false, error: getErrorMessage(error) };
   }
 }
 
-export async function deleteWhitelistEmail(email: string): Promise<ActionResult> {
+export async function deleteWhitelistEmail(_email: string): Promise<ActionResult> {
   try {
-    const { supabase, error: authError } = await requireAdmin();
+    const { error: authError } = await requireAdmin();
 
     if (authError) {
       return { ok: false, error: authError };
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
-
-    if (!normalizedEmail) {
-      return { ok: false, error: "Email je povinný" };
-    }
-
-    const { error } = await supabase.rpc("delete_whitelist_email", {
-      email_to_delete: normalizedEmail,
-    });
-
-    if (error) {
-      return { ok: false, error: error.message };
-    }
-
-    return { ok: true };
+    return {
+      ok: false,
+      error:
+        "Odebrání přístupu: použijte deaktivaci zaměstnance v sekci Zaměstnanci (sloupec aktivni / akce deaktivace).",
+    };
   } catch (error: unknown) {
     return { ok: false, error: getErrorMessage(error) };
   }

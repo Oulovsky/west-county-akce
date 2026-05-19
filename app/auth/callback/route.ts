@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { OAUTH_PROFILE_GATE_COOKIE } from "@/lib/auth/employee-access";
 import { NextResponse } from "next/server";
 
 function getSafeNextPath(value: string | null) {
@@ -17,5 +18,15 @@ export async function GET(request: Request) {
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  return NextResponse.redirect(`${origin}${nextPath}`);
+  const res = NextResponse.redirect(`${origin}${nextPath}`);
+  if (code) {
+    res.cookies.set(OAUTH_PROFILE_GATE_COOKIE, "1", {
+      path: "/",
+      maxAge: 120,
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+  }
+  return res;
 }

@@ -1,5 +1,10 @@
 ﻿import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
+import {
+  isEmployeeLoginAllowed,
+  loadEmployeeProfile,
+  OAUTH_PROFILE_GATE_COOKIE,
+} from "@/lib/auth/employee-access";
 
 function isPublicPath(pathname: string) {
   if (pathname === "/login") return true;
@@ -25,7 +30,14 @@ function redirectToLogin(req: NextRequest, params: Record<string, string>) {
     redirectUrl.searchParams.set(key, value);
   }
 
-  return NextResponse.redirect(redirectUrl);
+  const res = NextResponse.redirect(redirectUrl);
+  if (params.error === "not_allowed") {
+    res.cookies.set(OAUTH_PROFILE_GATE_COOKIE, "", {
+      path: "/",
+      maxAge: 0,
+    });
+  }
+  return res;
 }
 
 export async function proxy(req: NextRequest) {
@@ -49,11 +61,37 @@ export async function proxy(req: NextRequest) {
     }
   );
 
-  const {
+  await supabase.auth.getSession();
+
+  let {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!user && session?.user) {
+    user = session.user;
+  }
+
   const pathname = req.nextUrl.pathname;
+  const oauthGate = req.cookies.get(OAUTH_PROFILE_GATE_COOKIE)?.value === "1";
+
+  if (!user && oauthGate && !isPublicPath(pathname)) {
+    await supabase.auth.getSession();
+    const {
+      data: { user: uAfter },
+    } = await supabase.auth.getUser();
+    user = uAfter ?? user;
+    if (!user) {
+      const {
+        data: { session: s2 },
+      } = await supabase.auth.getSession();
+      user = s2?.user ?? null;
+    }
+  }
+
   if (!user && !isPublicPath(pathname)) {
     const nextPath = `${pathname}${req.nextUrl.search}`;
     return redirectToLogin(req, { next: nextPath });
@@ -66,15 +104,32 @@ export async function proxy(req: NextRequest) {
       return redirectToLogin(req, { error: "not_allowed" });
     }
 
-    const { data: allowed, error: allowedError } = await supabase
-      .from("povolene_emaily")
-      .select("email")
-      .eq("email", email)
-      .maybeSingle();
+    let { data: profile } = await loadEmployeeProfile(supabase, user.id);
 
-    if (allowedError || !allowed) {
+    if ((!profile || !isEmployeeLoginAllowed(profile)) && oauthGate) {
+      await supabase.auth.getSession();
+      const {
+        data: { user: refreshedUser },
+      } = await supabase.auth.getUser();
+      if (refreshedUser) {
+        user = refreshedUser;
+      }
+      const reread = await loadEmployeeProfile(supabase, user.id);
+      profile = reread.data;
+      res.cookies.set(OAUTH_PROFILE_GATE_COOKIE, "", {
+        path: "/",
+        maxAge: 0,
+      });
+    }
+
+    if (!profile || !isEmployeeLoginAllowed(profile)) {
       return redirectToLogin(req, { error: "not_allowed" });
     }
+
+    res.cookies.set(OAUTH_PROFILE_GATE_COOKIE, "", {
+      path: "/",
+      maxAge: 0,
+    });
   }
 
   return res;
