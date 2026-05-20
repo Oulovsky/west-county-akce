@@ -5,6 +5,7 @@ import {
   loadEmployeeProfile,
   OAUTH_PROFILE_GATE_COOKIE,
 } from "@/lib/auth/employee-access";
+import { getSafeNextPath } from "@/lib/auth/oauth-redirect";
 
 function isPublicPath(pathname: string) {
   if (pathname === "/login") return true;
@@ -41,6 +42,24 @@ function redirectToLogin(req: NextRequest, params: Record<string, string>) {
 }
 
 export async function proxy(req: NextRequest) {
+  const pathname = req.nextUrl.pathname;
+  const oauthCode = req.nextUrl.searchParams.get("code");
+
+  if (oauthCode && !pathname.startsWith("/auth/callback")) {
+    const callbackUrl = req.nextUrl.clone();
+    callbackUrl.pathname = "/auth/callback";
+    callbackUrl.search = "";
+    callbackUrl.searchParams.set("code", oauthCode);
+    const nextFromQuery = req.nextUrl.searchParams.get("next");
+    const nextFallback =
+      pathname === "/" ? "/zakazky" : `${pathname}${req.nextUrl.search}`;
+    callbackUrl.searchParams.set(
+      "next",
+      getSafeNextPath(nextFromQuery ?? nextFallback)
+    );
+    return NextResponse.redirect(callbackUrl);
+  }
+
   const res = NextResponse.next();
 
   const supabase = createServerClient(
@@ -75,7 +94,6 @@ export async function proxy(req: NextRequest) {
     user = session.user;
   }
 
-  const pathname = req.nextUrl.pathname;
   const oauthGate = req.cookies.get(OAUTH_PROFILE_GATE_COOKIE)?.value === "1";
 
   if (!user && oauthGate && !isPublicPath(pathname)) {
