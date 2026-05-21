@@ -339,6 +339,29 @@ function AssignmentCard({ item }: { item: AssignmentWithZakazka }) {
         ) : null}
       </div>
 
+      {!cancelled && status === "accepted" ? (
+        <div className="grid grid-cols-3 gap-2 lg:hidden">
+          <Link
+            href={`/moje/zakazky/${assignment.zakazka_id}`}
+            className="flex min-h-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-2 text-center text-xs font-black text-white"
+          >
+            Detail
+          </Link>
+          <Link
+            href={`/zakazky/${assignment.zakazka_id}/scan`}
+            className="flex min-h-12 items-center justify-center rounded-xl bg-blue-600 px-2 text-center text-xs font-black text-white"
+          >
+            Scan
+          </Link>
+          <Link
+            href={`/dochazka?zakazka=${encodeURIComponent(assignment.zakazka_id)}`}
+            className="flex min-h-12 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-950/30 px-2 text-center text-xs font-black text-emerald-100"
+          >
+            Práce
+          </Link>
+        </div>
+      ) : null}
+
       <div className="grid gap-3">
         <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
           <div className="text-xs uppercase tracking-wide text-slate-500">Datum a čas práce</div>
@@ -381,7 +404,7 @@ function AssignmentCard({ item }: { item: AssignmentWithZakazka }) {
         </div>
       ) : null}
 
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="hidden gap-2 lg:grid lg:grid-cols-2">
         <Link
           href={`/moje/zakazky/${assignment.zakazka_id}`}
           className="inline-flex min-h-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-5 py-3 text-sm font-bold text-slate-100 transition hover:bg-slate-700"
@@ -887,8 +910,13 @@ export default async function MojePage({ searchParams }: PageProps) {
   const travelPayments = (travelPaymentsRaw ?? []) as TravelPaymentRow[];
 
   return (
-    <div className="space-y-6">
-      <Card className="space-y-3">
+    <div className="mx-auto max-w-lg space-y-4 lg:max-w-none lg:space-y-6">
+      <div className="lg:hidden">
+        <h1 className="text-2xl font-black text-white">Moje zakázky</h1>
+        <p className="mt-1 text-sm text-slate-400">{assignments.length} přiřazení</p>
+      </div>
+
+      <Card className="hidden space-y-3 lg:block">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-white">Moje zakázky</h1>
@@ -905,9 +933,13 @@ export default async function MojePage({ searchParams }: PageProps) {
 
       <FilterPills activeFilter={activeFilter} />
 
-      <WorkPaymentsOverview rows={attendancePayments} travelRows={travelPayments} />
+      <div className="hidden lg:block">
+        <WorkPaymentsOverview rows={attendancePayments} travelRows={travelPayments} />
+      </div>
 
-      <MyTransportOverview rows={myTransports} vehiclesById={vehiclesById} zakazkyById={zakazkyById} />
+      <div className="hidden lg:block">
+        <MyTransportOverview rows={myTransports} vehiclesById={vehiclesById} zakazkyById={zakazkyById} />
+      </div>
 
       {activeFilter === "all" ? (
         <>

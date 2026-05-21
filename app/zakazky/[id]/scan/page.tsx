@@ -14,6 +14,7 @@ import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { syncZakazkaLogisticsFromScan } from "@/lib/zakazka-logistics-sync";
 import { getTechnikaAvailability } from "@/lib/technika-availability";
 import { createNotificationsForRoles } from "@/lib/notifications";
+import { RememberActiveZakazka } from "@/components/mobile/RememberActiveZakazka";
 import {
   ZakazkaLoadingScanClient,
   type LoadingOkruh,
@@ -1085,11 +1086,18 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4">
-      <PageHeader
-        title="Loading scan"
-        description={`${zakazka.cislo_zakazky ?? "—"} — ${zakazka.nazev ?? "Zakázka"}`}
+    <div className="mobile-scan-page mx-auto w-full max-w-lg px-0 lg:max-w-3xl lg:px-4">
+      <RememberActiveZakazka
+        zakazkaId={id}
+        cislo={zakazka.cislo_zakazky}
+        nazev={zakazka.nazev}
       />
+      <div className="hidden lg:block">
+        <PageHeader
+          title="Loading scan"
+          description={`${zakazka.cislo_zakazky ?? "—"} — ${zakazka.nazev ?? "Zakázka"}`}
+        />
+      </div>
 
       <Card className="mb-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -1102,27 +1110,36 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
                 {perms.nakladkaEditace ? "Scan povolen" : "Jen čtení"}
               </Badge>
             </div>
-            <div className="text-2xl font-black text-white">
+            <div className="text-xl font-black text-white lg:text-2xl">
               {zakazka.nazev ?? "Zakázka"}
             </div>
             <div className="text-sm text-slate-400">{formatZakazkaDate(zakazka)}</div>
-            <div className="text-sm text-slate-400">
+            <p className="hidden text-sm text-slate-400 lg:block">
               Zakázka plánuje množství v technice; konkrétní kus vznikne až tady scanem.
-            </div>
+            </p>
+            <Link
+              href={`/moje/zakazky/${id}`}
+              className="inline-flex text-sm font-semibold text-blue-200 hover:text-blue-100 lg:hidden"
+            >
+              ← Moje zakázka
+            </Link>
           </div>
 
-          <ZakazkaSubnav zakazkaId={id} active="nakladka" />
+          <div className="hidden lg:flex">
+            <ZakazkaSubnav zakazkaId={id} active="nakladka" />
+          </div>
         </div>
       </Card>
 
       <ZakazkaLoadingScanClient
         initialLoadingOkruhy={initialOkruhy}
         initialUnloadingOkruhy={initialUnloadingOkruhy}
+        openScanOnMobile
         processLoadingScanAction={scanLoadKus}
         processUnloadingScanAction={scanUnloadKus}
       />
 
-      <div className="mt-5">
+      <div className="mt-5 hidden lg:block">
         <Link
           href={`/zakazky/${id}/scan`}
           className="inline-flex rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"

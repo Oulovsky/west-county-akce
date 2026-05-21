@@ -88,11 +88,11 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
   ];
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 p-6 text-slate-200">
+    <div className="mx-auto max-w-lg space-y-4 text-slate-200 lg:max-w-5xl lg:space-y-5 lg:p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-white">Notifikace</h1>
-          <p className="mt-2 text-sm text-slate-400">
+          <h1 className="text-2xl font-black text-white lg:text-3xl">Upozornění</h1>
+          <p className="mt-2 hidden text-sm text-slate-400 lg:block">
             Interní provozní upozornění. Ne push provider, jen přehled věcí, které vyžadují pozornost.
           </p>
         </div>

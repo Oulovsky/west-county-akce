@@ -2,6 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { MobileFieldLayout } from "@/components/mobile/MobileFieldLayout";
+import { RememberActiveZakazka } from "@/components/mobile/RememberActiveZakazka";
+import { getDochazkaPath, getZakazkaScanPath } from "@/lib/mobile/routes";
 import { createClient } from "@/lib/supabase/server";
 import { ParticipationActions } from "../../ParticipationActions";
 import { AttendanceActions } from "../../AttendanceActions";
@@ -232,10 +235,48 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
   const navigationUrl = getNavigationUrl(zakazka);
 
   return (
-    <div className="space-y-5">
+    <MobileFieldLayout className="space-y-5">
+      <RememberActiveZakazka
+        zakazkaId={id}
+        cislo={zakazka.cislo_zakazky}
+        nazev={zakazka.nazev}
+      />
       <Link href="/moje" className="inline-flex text-sm font-semibold text-blue-200 hover:text-blue-100">
-        ← Zpět na moje zakázky
+        ← Moje zakázky
       </Link>
+
+      {!zakazka.zrusena ? (
+        <div className="grid gap-2 lg:hidden">
+          <Link
+            href={getZakazkaScanPath(id)}
+            className="flex min-h-14 items-center justify-center rounded-2xl bg-blue-600 px-4 text-base font-black text-white transition active:scale-[0.99] hover:bg-blue-500"
+          >
+            Otevřít scan
+          </Link>
+          <div className="grid grid-cols-2 gap-2">
+            <Link
+              href={getDochazkaPath(id)}
+              className="flex min-h-12 items-center justify-center rounded-2xl border border-emerald-500/40 bg-emerald-950/30 px-3 text-sm font-black text-emerald-100"
+            >
+              Začít práci
+            </Link>
+            {navigationUrl ? (
+              <a
+                href={navigationUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex min-h-12 items-center justify-center rounded-2xl border border-slate-700 bg-slate-900 px-3 text-sm font-black text-slate-100"
+              >
+                Navigovat
+              </a>
+            ) : (
+              <span className="flex min-h-12 items-center justify-center rounded-2xl border border-slate-800 bg-slate-950 px-3 text-sm font-semibold text-slate-500">
+                Bez GPS
+              </span>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       <Card className="space-y-4">
         <div>
@@ -375,6 +416,6 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
           </div>
         )}
       </Card>
-    </div>
+    </MobileFieldLayout>
   );
 }

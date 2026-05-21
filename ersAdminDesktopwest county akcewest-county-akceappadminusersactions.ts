@@ -1,0 +1,185 @@
+warning: in the working copy of 'app/admin/UsersClient.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/admin/users/actions.ts', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/app/admin/UsersClient.tsx b/app/admin/UsersClient.tsx[m
+[1mindex 83b0ff7..614cf9b 100644[m
+[1m--- a/app/admin/UsersClient.tsx[m
+[1m+++ b/app/admin/UsersClient.tsx[m
+[36m@@ -48,12 +48,20 @@[m [mfunction getFullName(user: UserRow) {[m
+   return [user.jmeno, user.prijmeni].filter(Boolean).join(" ").trim();[m
+ }[m
+ [m
+[32m+[m[32mfunction formatHourlyCostForInput(value: string | number | null | undefined) {[m
+[32m+[m[32m  if (value == null || value === "") return "";[m
+[32m+[m[32m  const number = Number(value);[m
+[32m+[m[32m  return Number.isFinite(number) ? String(number) : String(value);[m
+[32m+[m[32m}[m
+[32m+[m
+ function UserEditorRow({[m
+   user,[m
+   onToast,[m
+[32m+[m[32m  onHourlyCostSaved,[m
+ }: {[m
+   user: UserRow;[m
+   onToast: (toast: { message: string; type: "success" | "error" }) => void;[m
+[32m+[m[32m  onHourlyCostSaved: (userId: string, value: number) => void;[m
+ }) {[m
+   const [role, setRole] = useState(user.role);[m
+   const [savedRole, setSavedRole] = useState(user.role);[m
+[36m@@ -62,10 +70,10 @@[m [mfunction UserEditorRow({[m
+   const [email, setEmail] = useState(user.email);[m
+   const [savedEmail, setSavedEmail] = useState(user.email);[m
+   const [hourlyCost, setHourlyCost] = useState([m
+[31m-    user.hodinovy_naklad_akce == null ? "" : String(user.hodinovy_naklad_akce)[m
+[32m+[m[32m    formatHourlyCostForInput(user.hodinovy_naklad_akce)[m
+   );[m
+   const [savedHourlyCost, setSavedHourlyCost] = useState([m
+[31m-    user.hodinovy_naklad_akce == null ? "" : String(user.hodinovy_naklad_akce)[m
+[32m+[m[32m    formatHourlyCostForInput(user.hodinovy_naklad_akce)[m
+   );[m
+   const [bankAccountNumber, setBankAccountNumber] = useState(user.bank_account_number ?? "");[m
+   const [savedBankAccountNumber, setSavedBankAccountNumber] = useState(user.bank_account_number ?? "");[m
+[36m@@ -96,7 +104,7 @@[m [mfunction UserEditorRow({[m
+     setSavedName(nextName);[m
+     setEmail(user.email);[m
+     setSavedEmail(user.email);[m
+[31m-    const nextCost = user.hodinovy_naklad_akce == null ? "" : String(user.hodinovy_naklad_akce);[m
+[32m+[m[32m    const nextCost = formatHourlyCostForInput(user.hodinovy_naklad_akce);[m
+     setHourlyCost(nextCost);[m
+     setSavedHourlyCost(nextCost);[m
+     setBankAccountNumber(user.bank_account_number ?? "");[m
+[36m@@ -194,12 +202,20 @@[m [mfunction UserEditorRow({[m
+     if (current === saved || isPending) return;[m
+ [m
+     startTransition(async () => {[m
+[31m-      const result = await updateUserActionCost(user.user_id, nextCost);[m
+[32m+[m[32m      const result = await updateUserActionCost(user.user_id, current);[m
+       if (result.ok) {[m
+[31m-        setSavedHourlyCost(nextCost);[m
+[32m+[m[32m        const persisted = formatHourlyCostForInput([m
+[32m+[m[32m          result.hodinovy_naklad_akce ?? current[m
+[32m+[m[32m        );[m
+[32m+[m[32m        setHourlyCost(persisted);[m
+[32m+[m[32m        setSavedHourlyCost(persisted);[m
+[32m+[m[32m        if (result.hodinovy_naklad_akce != null) {[m
+[32m+[m[32m          onHourlyCostSaved(user.user_id, result.hodinovy_naklad_akce);[m
+[32m+[m[32m        }[m
+         onToast({ message: "Hodinová mzda uložena", type: "success" });[m
+         router.refresh();[m
+       } else {[m
+[32m+[m[32m        setHourlyCost(savedHourlyCost);[m
+         onToast({ message: result.error || "Uložení hodinové mzdy selhalo", type: "error" });[m
+       }[m
+     });[m
+[36m@@ -584,11 +600,25 @@[m [mfunction UserEditorRow({[m
+   );[m
+ }[m
+ [m
+[31m-export default function UsersClient({ users }: { users: UserRow[] }) {[m
+[32m+[m[32mexport default function UsersClient({ users: initialUsers }: { users: UserRow[] }) {[m
+[32m+[m[32m  const [users, setUsers] = useState(initialUsers);[m
+   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);[m
+   const [addOpen, setAddOpen] = useState(false);[m
+   const [isCreating, startCreateTransition] = useTransition();[m
+   const router = useRouter();[m
+[32m+[m
+[32m+[m[32m  useEffect(() => {[m
+[32m+[m[32m    setUsers(initialUsers);[m
+[32m+[m[32m  }, [initialUsers]);[m
+[32m+[m
+[32m+[m[32m  function handleHourlyCostSaved(userId: string, value: number) {[m
+[32m+[m[32m    setUsers((current) =>[m
+[32m+[m[32m      current.map((row) =>[m
+[32m+[m[32m        row.user_id === userId ? { ...row, hodinovy_naklad_akce: value } : row[m
+[32m+[m[32m      )[m
+[32m+[m[32m    );[m
+[32m+[m[32m  }[m
+[32m+[m
+   const activeUsers = users.filter((user) => user.aktivni !== false);[m
+   const inactiveUsers = users.filter((user) => user.aktivni === false);[m
+ [m
+[36m@@ -621,7 +651,12 @@[m [mexport default function UsersClient({ users }: { users: UserRow[] }) {[m
+       ) : null}[m
+ [m
+       {activeUsers.map((user) => ([m
+[31m-        <UserEditorRow key={user.user_id} user={user} onToast={setToast} />[m
+[32m+[m[32m        <UserEditorRow[m
+[32m+[m[32m          key={user.user_id}[m
+[32m+[m[32m          user={user}[m
+[32m+[m[32m          onToast={setToast}[m
+[32m+[m[32m          onHourlyCostSaved={handleHourlyCostSaved}[m
+[32m+[m[32m        />[m
+       ))}[m
+ [m
+       {inactiveUsers.length > 0 ? ([m
+[36m@@ -631,7 +666,12 @@[m [mexport default function UsersClient({ users }: { users: UserRow[] }) {[m
+           </summary>[m
+           <div className="space-y-3 border-t border-slate-800 p-3">[m
+             {inactiveUsers.map((user) => ([m
+[31m-              <UserEditorRow key={user.user_id} user={user} onToast={setToast} />[m
+[32m+[m[32m              <UserEditorRow[m
+[32m+[m[32m                key={user.user_id}[m
+[32m+[m[32m                user={user}[m
+[32m+[m[32m                onToast={setToast}[m
+[32m+[m[32m                onHourlyCostSaved={handleHourlyCostSaved}[m
+[32m+[m[32m              />[m
+             ))}[m
+           </div>[m
+         </details>[m
+[1mdiff --git a/app/admin/users/actions.ts b/app/admin/users/actions.ts[m
+[1mindex cc764b1..086ab73 100644[m
+[1m--- a/app/admin/users/actions.ts[m
+[1m+++ b/app/admin/users/actions.ts[m
+[36m@@ -9,6 +9,7 @@[m [mtype ActionResult = {[m
+   ok: boolean;[m
+   error?: string;[m
+   warning?: string;[m
+[32m+[m[32m  hodinovy_naklad_akce?: number;[m
+ };[m
+ [m
+ const allowedRoles = ["admin", "sef", "skladnik", "zamestnanec"];[m
+[36m@@ -111,7 +112,7 @@[m [mexport async function updateUserActionCost([m
+   hourlyCost: string[m
+ ): Promise<ActionResult> {[m
+   try {[m
+[31m-    const { supabase, error: authError } = await requireAdmin();[m
+[32m+[m[32m    const { error: authError } = await requireAdmin();[m
+     if (authError) return { ok: false, error: authError };[m
+ [m
+     const normalized = hourlyCost.trim().replace(",", ".");[m
+[36m@@ -121,17 +122,33 @@[m [mexport async function updateUserActionCost([m
+       return { ok: false, error: "Hodinový náklad musí být číslo 0 nebo vyšší." };[m
+     }[m
+ [m
+[31m-    const { error } = await supabase[m
+[32m+[m[32m    const admin = createAdminClient();[m
+[32m+[m[32m    const { data, error } = await admin[m
+       .from("profiles")[m
+       .update({ hodinovy_naklad_akce: parsed })[m
+[31m-      .eq("user_id", targetUserId);[m
+[32m+[m[32m      .eq("user_id", targetUserId)[m
+[32m+[m[32m      .select("hodinovy_naklad_akce")[m
+[32m+[m[32m      .maybeSingle();[m
+ [m
+     if (error) {[m
+       return { ok: false, error: error.message };[m
+     }[m
+ [m
+[32m+[m[32m    if (!data) {[m
+[32m+[m[32m      return {[m
+[32m+[m[32m        ok: false,[m
+[32m+[m[32m        error: "Profil zaměstnance nebyl nalezen nebo se hodnota neuložila.",[m
+[32m+[m[32m      };[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    const savedValue = Number(data.hodinovy_naklad_akce ?? parsed);[m
+[32m+[m[32m    if (!Number.isFinite(savedValue)) {[m
+[32m+[m[32m      return { ok: false, error: "Uložená hodinová mzda není platné číslo." };[m
+[32m+[m[32m    }[m
+[32m+[m
+     revalidatePath("/admin");[m
+[31m-    return { ok: true };[m
+[32m+[m[32m    revalidatePath("/admin/proplaceni");[m
+[32m+[m[32m    return { ok: true, hodinovy_naklad_akce: savedValue };[m
+   } catch (error: unknown) {[m
+     return { ok: false, error: getErrorMessage(error) };[m
+   }[m

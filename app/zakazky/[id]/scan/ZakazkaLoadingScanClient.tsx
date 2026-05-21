@@ -117,6 +117,7 @@ type ChecklistOkruh = LoadingOkruh | UnloadingOkruh;
 type Props = {
   initialLoadingOkruhy: LoadingOkruh[];
   initialUnloadingOkruhy: UnloadingOkruh[];
+  openScanOnMobile?: boolean;
   processLoadingScanAction: (
     input: string,
     expectedSkladovaPolozkaId: string,
@@ -163,6 +164,7 @@ function isLoadingItem(item: ChecklistItem): item is LoadingChecklistItem {
 export function ZakazkaLoadingScanClient({
   initialLoadingOkruhy,
   initialUnloadingOkruhy,
+  openScanOnMobile = false,
   processLoadingScanAction,
   processUnloadingScanAction,
 }: Props) {
@@ -186,6 +188,13 @@ export function ZakazkaLoadingScanClient({
   const resumeTimerRef = useRef<number | null>(null);
   const processingRef = useRef(false);
   const successCanAutoResumeRef = useRef(false);
+
+  useEffect(() => {
+    if (!openScanOnMobile) return;
+    const media = window.matchMedia("(max-width: 1023px)");
+    if (!media.matches) return;
+    setViewMode("scan");
+  }, [openScanOnMobile]);
 
   const currentOkruhy: ChecklistOkruh[] =
     workflowMode === "loading" ? loadingOkruhy : unloadingOkruhy;
