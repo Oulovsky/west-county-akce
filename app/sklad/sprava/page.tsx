@@ -157,16 +157,22 @@ export default function Page() {
         polozkyPodkategorieRes,
       ] = await querySpravaKatalog(supabase);
 
-      if (itemsRes.error && process.env.NODE_ENV === "development") {
-        console.error("[sklad/sprava] položky:", itemsRes.error.message);
+      if (itemsRes.error) {
+        alert(itemsRes.error.message);
+        if (!options?.silent) setLoading(false);
+        return;
       }
 
       const podkategorieCatalog = (podkategorieRes.data ??
         []) as SkladPodkategorie[];
 
-      const { data: pozRows } = await supabase
+      const { data: pozRows, error: pozErr } = await supabase
         .from(SKLAD_TABLE.skladovePolozky)
         .select("skladova_polozka_id, pozice");
+
+      if (pozErr && !options?.silent) {
+        alert(pozErr.message);
+      }
 
       const pozMap = new Map<string, string | number | null>(
         (pozRows ?? []).map(
@@ -177,7 +183,7 @@ export default function Page() {
         )
       );
 
-      const rawItems = ((itemsRes.error ? [] : itemsRes.data ?? []) as SkladPolozkaRow[]).map(
+      const rawItems = ((itemsRes.data ?? []) as SkladPolozkaRow[]).map(
         (item) => ({
           ...item,
           pozice:
@@ -198,8 +204,8 @@ export default function Page() {
         .from(SKLAD_TABLE.skladPolozkyKusy)
         .select("skladova_polozka_id, stav, aktivni");
 
-      if (kusyError && process.env.NODE_ENV === "development") {
-        console.error("[sklad/sprava] stavy kusů:", kusyError.message);
+      if (kusyError && !options?.silent) {
+        alert(`Stavy kusů se nepodařilo načíst: ${kusyError.message}`);
       }
 
       const kusStatusCounts = new Map<
@@ -288,8 +294,21 @@ export default function Page() {
             ? toNumber(item.na_zakazkach_fyzicky)
             : fyzickyNaZakazkachMap.get(id) ?? 0;
 
-        const blok =
-          blokujiciErr || !blokujiciMap ? 0 : (blokujiciMap.get(id) ?? 0);
+        if (naZakazkachErr || blokujiciErr || !blokujiciMap) {
+          return {
+            ...item,
+            na_akcich: naZakazkach,
+            na_zakazkach_fyzicky: fyzickyNaZakazkach,
+            kusy_skladem: kusStatusCounts.get(id)?.skladem ?? 0,
+            kusy_poskozene: kusStatusCounts.get(id)?.poskozene ?? 0,
+            kusy_blokovane_servis: kusStatusCounts.get(id)?.problemove ?? 0,
+            availability_future_collision: futureAvailability?.collision ?? false,
+            availability_future_planned: futureAvailability?.planned ?? null,
+            availability_usable: futureAvailability?.usable ?? null,
+          };
+        }
+
+        const blok = blokujiciMap.get(id) ?? 0;
 
         return {
           ...item,

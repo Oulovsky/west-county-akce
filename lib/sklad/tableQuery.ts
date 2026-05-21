@@ -16,23 +16,6 @@ export function isMissingSkladResourceError(message: string | undefined): boolea
   );
 }
 
-/** PostgREST / Postgres — chybějící sloupec v SELECT. */
-export function isMissingColumnError(
-  message: string | undefined,
-  columnHint?: string
-): boolean {
-  if (!message) return false;
-  const lower = message.toLowerCase();
-  const looksLikeColumn =
-    lower.includes("column") ||
-    lower.includes("schema cache") ||
-    (lower.includes("does not exist") && !isMissingSkladResourceError(message));
-
-  if (!looksLikeColumn) return false;
-  if (!columnHint) return true;
-  return lower.includes(columnHint.toLowerCase());
-}
-
 export function logSkladQueryFallback(label: string, error: PostgrestError): void {
   if (process.env.NODE_ENV === "development") {
     console.error(`[sklad] ${label}:`, error.message);
