@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { requireAppAdminOrSef } from "@/lib/auth/admin-access-server";
 import { createClient } from "@/lib/supabase/server";
 function getString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -20,26 +21,11 @@ function getNullableNumber(formData: FormData, key: string) {
 }
 
 async function requireVehicleManager() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) throw new Error("Pro správu vozidel musíte být přihlášeni.");
-
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (profileError) throw new Error(profileError.message);
-  if (!profile || (profile.role !== "admin" && profile.role !== "sef")) {
+  try {
+    return await requireAppAdminOrSef();
+  } catch {
     throw new Error("Nemáte oprávnění spravovat vozidla.");
   }
-
-  return { supabase, user };
 }
 
 function vehiclePayload(formData: FormData) {

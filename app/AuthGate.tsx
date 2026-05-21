@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { checkSystemAdminEmail } from "@/lib/auth/admin-access";
 import {
   isEmployeeLoginAllowed,
   loadEmployeeProfile,
@@ -74,7 +75,14 @@ export default function AuthGate({
         session.user.id
       );
 
-      if (!profile || !isEmployeeLoginAllowed(profile)) {
+      const systemAdminCheck = await checkSystemAdminEmail(supabase, email);
+      const loginAllowed =
+        profile &&
+        isEmployeeLoginAllowed(profile, {
+          isSystemAdminEmail: systemAdminCheck.isSystemAdmin,
+        });
+
+      if (!loginAllowed) {
         await supabase.auth.signOut();
         if (!mounted) return;
         setStatus("unauthorized");

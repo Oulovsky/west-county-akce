@@ -174,7 +174,12 @@ function UserEditorRow({
       if (result.ok) {
         setEmail(current);
         setSavedEmail(current);
-        onToast({ message: "Email uložen", type: "success" });
+        onToast({
+          message: result.warning
+            ? `Email uložen. ${result.warning}`
+            : "Email uložen",
+          type: "success",
+        });
         router.refresh();
       } else {
         setEmail(savedEmail);

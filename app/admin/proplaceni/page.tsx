@@ -14,6 +14,7 @@ import {
 } from "@/lib/payments";
 import { getAttendancePhaseLabel } from "@/lib/zakazka-attendance";
 import { formatKm, getTravelAmount, getTravelStatusLabel } from "@/lib/transport";
+import { verifyAppAdminOrSefPage } from "@/lib/auth/admin-access-server";
 import { createClient } from "@/lib/supabase/server";
 import {
   approveTravelReimbursementAction,
@@ -129,18 +130,9 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
     return <div className="p-6 text-red-300">Unauthorized</div>;
   }
 
-  const { data: currentProfile, error: currentProfileError } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (currentProfileError) {
-    return <div className="p-6 text-red-300">{currentProfileError.message}</div>;
-  }
-
-  if (!currentProfile || (currentProfile.role !== "admin" && currentProfile.role !== "sef")) {
-    return <div className="p-6 text-red-300">Forbidden</div>;
+  const access = await verifyAppAdminOrSefPage(supabase);
+  if (!access.ok) {
+    return <div className="p-6 text-red-300">{access.message}</div>;
   }
 
   let query = supabase

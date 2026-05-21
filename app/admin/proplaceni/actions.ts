@@ -3,30 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { getPaymentAmount, getApprovedMinutes, formatMoneyCzk } from "@/lib/payments";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
+import { requireAppAdminOrSef } from "@/lib/auth/admin-access-server";
 import { createClient } from "@/lib/supabase/server";
 import { createNotification } from "@/lib/notifications";
 
 async function requirePaymentManager() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) throw new Error("Pro proplacení musíte být přihlášeni.");
-
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (profileError) throw new Error(profileError.message);
-  if (!profile || (profile.role !== "admin" && profile.role !== "sef")) {
+  try {
+    return await requireAppAdminOrSef();
+  } catch {
     throw new Error("Nemáte oprávnění označit práci jako proplacenou.");
   }
-
-  return { supabase, user };
 }
 
 export async function markAttendancePaidAction(formData: FormData) {

@@ -1,3 +1,4 @@
+import { assertAppAdminWithClient } from "@/lib/auth/admin-access-server";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -55,6 +56,14 @@ export async function GET(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) return new Response("Unauthorized", { status: 401 });
+
+  try {
+    await assertAppAdminWithClient(supabase);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Forbidden";
+    const status = message === "Unauthorized" ? 401 : 403;
+    return new Response(message, { status });
+  }
 
   const url = new URL(request.url);
   const invoiceId = url.searchParams.get("invoice_id");

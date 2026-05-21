@@ -1,10 +1,7 @@
 ﻿"use server";
 
+import { requireAppAdmin } from "@/lib/auth/admin-access-server";
 import { createClient } from "@/lib/supabase/server";
-import {
-  isEmployeeLoginAllowed,
-  loadEmployeeProfile,
-} from "@/lib/auth/employee-access";
 
 type ActionResult = {
   ok: boolean;
@@ -16,31 +13,11 @@ function getErrorMessage(error: unknown) {
 }
 
 async function requireAdmin() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { supabase, error: "Unauthorized" };
+  const result = await requireAppAdmin();
+  if (!result.ok) {
+    return { supabase: result.supabase, error: result.error };
   }
-
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
-  if (profileError) {
-    return { supabase, error: profileError.message };
-  }
-
-  if (!profile || profile.role !== "admin") {
-    return { supabase, error: "Forbidden" };
-  }
-
-  return { supabase, error: null };
+  return { supabase: result.supabase, error: null };
 }
 
 /** E-maily se stejným zdrojem pravdy jako přihlášení: tabulka profiles (zaměstnanci). */

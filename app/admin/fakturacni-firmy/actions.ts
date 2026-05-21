@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { assertAppAdmin } from "@/lib/auth/admin-access-server";
 import { createClient } from "@/lib/supabase/server";
 import type { FakturacniFirma } from "@/lib/fakturacni-firmy";
 
@@ -24,25 +25,7 @@ function numberOrDefault(value: FormDataEntryValue | null, fallback: number) {
 }
 
 async function requireAdmin() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("Unauthorized");
-  }
-
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
-  if (error) throw new Error(error.message);
-  if (!profile || profile.role !== "admin") throw new Error("Forbidden");
-
-  return supabase;
+  return assertAppAdmin();
 }
 
 export async function getFakturacniFirmy() {

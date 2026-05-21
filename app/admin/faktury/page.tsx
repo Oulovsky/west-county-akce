@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { verifyAppAdminPage } from "@/lib/auth/admin-access-server";
 import { createClient } from "@/lib/supabase/server";
 import { formatMoneyCzk } from "@/lib/payments";
 import { sendAccountingExportToAccountantAction } from "./actions";
@@ -87,6 +88,10 @@ export default async function AdminInvoicesPage({ searchParams }: PageProps) {
   const doValue = resolvedSearchParams?.do ?? "";
   const accountantMessage = resolvedSearchParams?.ucetni ?? "";
   const supabase = await createClient();
+  const access = await verifyAppAdminPage(supabase);
+  if (!access.ok) {
+    return <div className="p-6 text-red-300">{access.message}</div>;
+  }
 
   let query = supabase
     .from("zakazka_faktury")

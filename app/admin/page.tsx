@@ -1,5 +1,6 @@
 ﻿import type React from "react";
 import Link from "next/link";
+import { verifyAppAdminPage } from "@/lib/auth/admin-access-server";
 import { createClient } from "@/lib/supabase/server";
 import { getUsers } from "./users/actions";
 import { getAdminAuditLog } from "./audit/actions";
@@ -51,26 +52,12 @@ export default async function AdminPage() {
     );
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
-  if (profileError) {
+  const access = await verifyAppAdminPage(supabase);
+  if (!access.ok) {
     return (
       <div className="p-6">
         <h1 className="text-3xl font-bold text-white">Admin</h1>
-        <p className="mt-4 text-red-400">{profileError.message}</p>
-      </div>
-    );
-  }
-
-  if (!profile || profile.role !== "admin") {
-    return (
-      <div className="p-6">
-        <h1 className="text-3xl font-bold text-white">Admin</h1>
-        <p className="mt-4 text-red-400">Forbidden</p>
+        <p className="mt-4 text-red-400">{access.message}</p>
       </div>
     );
   }

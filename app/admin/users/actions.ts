@@ -1,12 +1,14 @@
 ﻿"use server";
 
 import { revalidatePath } from "next/cache";
+import { requireAppAdmin } from "@/lib/auth/admin-access-server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type ActionResult = {
   ok: boolean;
   error?: string;
+  warning?: string;
 };
 
 const allowedRoles = ["admin", "sef", "skladnik", "zamestnanec"];
@@ -24,57 +26,20 @@ function splitEmployeeName(fullName: string) {
 }
 
 async function requireAdmin() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { supabase, error: "Unauthorized" };
+  const result = await requireAppAdmin();
+  if (!result.ok) {
+    return { supabase: result.supabase, error: result.error };
   }
-
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
-  if (profileError) {
-    return { supabase, error: profileError.message };
-  }
-
-  if (!profile || profile.role !== "admin") {
-    return { supabase, error: "Forbidden" };
-  }
-
-  return { supabase, error: null };
+  return { supabase: result.supabase, error: null };
 }
 
 export async function getUsers() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("Unauthorized");
+  const result = await requireAppAdmin();
+  if (!result.ok) {
+    throw new Error(result.error);
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
-  if (profileError) {
-    throw new Error(profileError.message);
-  }
-
-  if (!profile || profile.role !== "admin") {
-    throw new Error("Forbidden");
-  }
+  const { supabase } = result;
 
   const { data, error } = await supabase
     .from("profiles")
@@ -299,6 +264,40 @@ export async function updateUserName(
   }
 }
 
+function isAuthUserNotFound(message: string | undefined): boolean {
+  if (!message) return false;
+  return message.toLowerCase().includes("user not found");
+}
+
+async function findAuthUserIdByEmail(
+  admin: ReturnType<typeof createAdminClient>,
+  email: string
+): Promise<string | null> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return null;
+
+  const perPage = 200;
+  let page = 1;
+
+  while (page <= 50) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
+    if (error) {
+      throw new Error(`Vyhledání v přihlášení selhalo: ${error.message}`);
+    }
+
+    const users = data.users ?? [];
+    const match = users.find(
+      (user) => user.email?.trim().toLowerCase() === normalized
+    );
+    if (match?.id) return match.id;
+
+    if (users.length < perPage) break;
+    page += 1;
+  }
+
+  return null;
+}
+
 async function isEmailUsedByOtherActiveProfile(
   admin: ReturnType<typeof createAdminClient>,
   email: string,
@@ -330,37 +329,106 @@ export async function updateUserEmail(
     const admin = createAdminClient();
     const { data: currentProfile, error: currentError } = await admin
       .from("profiles")
-      .select("email")
+      .select("user_id, email")
       .eq("user_id", targetUserId)
       .maybeSingle();
 
-    if (currentError) return { ok: false, error: currentError.message };
+    if (currentError) {
+      return {
+        ok: false,
+        error: `Profil zaměstnance se nepodařilo načíst: ${currentError.message}`,
+      };
+    }
 
-    const oldEmail = String(currentProfile?.email ?? "").trim().toLowerCase();
+    if (!currentProfile) {
+      return { ok: false, error: "Profil zaměstnance v databázi nebyl nalezen." };
+    }
+
+    const profileUserId = currentProfile.user_id;
+    const oldEmail = String(currentProfile.email ?? "").trim().toLowerCase();
+
     if (oldEmail === nextEmail) return { ok: true };
 
-    const authUpdate = await admin.auth.admin.updateUserById(targetUserId, {
-      email: nextEmail,
-      email_confirm: true,
-    });
+    const updateAuthEmail = (authUserId: string) =>
+      admin.auth.admin.updateUserById(authUserId, {
+        email: nextEmail,
+        email_confirm: true,
+      });
+
+    let authUserId = profileUserId;
+    let authUpdate = await updateAuthEmail(authUserId);
+
+    if (authUpdate.error && isAuthUserNotFound(authUpdate.error.message)) {
+      if (!oldEmail) {
+        return {
+          ok: false,
+          error:
+            "Uživatel v přihlášení (auth) nebyl nalezen podle ID profilu a profil nemá uložený původní email pro dohledání.",
+        };
+      }
+
+      const authUserIdByEmail = await findAuthUserIdByEmail(admin, oldEmail);
+
+      if (!authUserIdByEmail) {
+        const { error: profileOnlyError } = await admin
+          .from("profiles")
+          .update({ email: nextEmail })
+          .eq("user_id", profileUserId);
+
+        if (profileOnlyError) {
+          return {
+            ok: false,
+            error: `Email v profilu se nepodařilo uložit: ${profileOnlyError.message}`,
+          };
+        }
+
+        revalidatePath("/admin");
+        return {
+          ok: true,
+          warning:
+            "Email byl uložen jen v profilu. V přihlášení (auth) nebyl nalezen uživatel s původním emailem — přihlášení může zůstat na starém účtu.",
+        };
+      }
+
+      authUserId = authUserIdByEmail;
+      authUpdate = await updateAuthEmail(authUserId);
+    }
 
     if (authUpdate.error) {
-      return { ok: false, error: `Email v auth se nepodařilo změnit: ${authUpdate.error.message}` };
+      return {
+        ok: false,
+        error: `Email v přihlášení se nepodařilo změnit: ${authUpdate.error.message}`,
+      };
     }
 
     const { error: profileError } = await admin
       .from("profiles")
       .update({ email: nextEmail })
-      .eq("user_id", targetUserId);
+      .eq("user_id", profileUserId);
 
     if (profileError) {
       if (oldEmail) {
-        await admin.auth.admin.updateUserById(targetUserId, { email: oldEmail, email_confirm: true });
+        await admin.auth.admin.updateUserById(authUserId, {
+          email: oldEmail,
+          email_confirm: true,
+        });
       }
-      return { ok: false, error: profileError.message };
+      return {
+        ok: false,
+        error: `Email v profilu se nepodařilo uložit: ${profileError.message}`,
+      };
     }
 
     revalidatePath("/admin");
+
+    if (authUserId !== profileUserId) {
+      return {
+        ok: true,
+        warning:
+          "Email v přihlášení byl změněn pod jiným auth ID než má profil (user_id). Přihlášení a profil mohou být rozdělené — ověřte účet v Supabase Auth.",
+      };
+    }
+
     return { ok: true };
   } catch (error: unknown) {
     return { ok: false, error: getErrorMessage(error) };

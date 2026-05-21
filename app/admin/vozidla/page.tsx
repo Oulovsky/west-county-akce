@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { verifyAppAdminOrSefPage } from "@/lib/auth/admin-access-server";
 import { createClient } from "@/lib/supabase/server";
 import { createVehicleAction, deactivateVehicleAction, updateVehicleAction } from "./actions";
 
@@ -54,6 +55,11 @@ export default async function VehiclesAdminPage() {
   } = await supabase.auth.getUser();
 
   if (!user) return <div className="p-6 text-red-300">Unauthorized</div>;
+
+  const access = await verifyAppAdminOrSefPage(supabase);
+  if (!access.ok) {
+    return <div className="p-6 text-red-300">{access.message}</div>;
+  }
 
   const { data: vehiclesRaw, error: vehiclesError } = await supabase
     .from("vozidla")

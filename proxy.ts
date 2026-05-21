@@ -1,5 +1,6 @@
 ﻿import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
+import { checkSystemAdminEmail } from "@/lib/auth/admin-access";
 import {
   isEmployeeLoginAllowed,
   loadEmployeeProfile,
@@ -124,7 +125,13 @@ export async function proxy(req: NextRequest) {
 
     let { data: profile } = await loadEmployeeProfile(supabase, user.id);
 
-    if ((!profile || !isEmployeeLoginAllowed(profile)) && oauthGate) {
+    const oauthLoginAllowed =
+      profile &&
+      isEmployeeLoginAllowed(profile, {
+        isSystemAdminEmail: false,
+      });
+
+    if ((!profile || !oauthLoginAllowed) && oauthGate) {
       await supabase.auth.getSession();
       const {
         data: { user: refreshedUser },
@@ -140,7 +147,14 @@ export async function proxy(req: NextRequest) {
       });
     }
 
-    if (!profile || !isEmployeeLoginAllowed(profile)) {
+    const systemAdminCheck = await checkSystemAdminEmail(supabase, email);
+    const loginAllowed =
+      profile &&
+      isEmployeeLoginAllowed(profile, {
+        isSystemAdminEmail: systemAdminCheck.isSystemAdmin,
+      });
+
+    if (!loginAllowed) {
       return redirectToLogin(req, { error: "not_allowed" });
     }
 

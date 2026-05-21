@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { Resend } from "resend";
+import { assertAppAdminWithClient } from "@/lib/auth/admin-access-server";
 import { createClient } from "@/lib/supabase/server";
 
 type InvoiceExportRow = {
@@ -101,19 +102,7 @@ function buildCsv(rows: InvoiceExportRow[]) {
 }
 
 async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Unauthorized");
-
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
-  if (error) throw new Error(error.message);
-  if (!profile || profile.role !== "admin") throw new Error("Forbidden");
+  await assertAppAdminWithClient(supabase);
 }
 
 export async function sendAccountingExportToAccountantAction(formData: FormData) {

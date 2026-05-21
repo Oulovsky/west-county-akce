@@ -26,9 +26,11 @@ export async function loadEmployeeProfile(
 }
 
 export function isEmployeeLoginAllowed(
-  profile: EmployeeProfileRow | null | undefined
+  profile: EmployeeProfileRow | null | undefined,
+  options?: { isSystemAdminEmail?: boolean }
 ): boolean {
   if (!profile) return false;
   if (profile.role === "admin") return true;
+  if (options?.isSystemAdminEmail) return true;
   return profile.aktivni !== false;
 }

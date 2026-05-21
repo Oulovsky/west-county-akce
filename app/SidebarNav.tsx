@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { resolveAppAdminAccess } from "@/lib/auth/admin-access";
 import { supabase } from "@/lib/supabase";
 
 function NavLink({
@@ -48,15 +49,27 @@ export default function SidebarNav() {
   const router = useRouter();
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showAdmin, setShowAdmin] = useState(false);
 
   useEffect(() => {
     let active = true;
 
-    async function loadUnreadCount() {
+    async function loadNavAccess() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setShowAdmin(false);
+        return;
+      }
+
+      const isAdmin = await resolveAppAdminAccess(
+        supabase,
+        user.id,
+        user.email
+      );
+      if (!active) return;
+      setShowAdmin(isAdmin);
 
       const { count, error } = await supabase
         .from("notifikace")
@@ -69,8 +82,8 @@ export default function SidebarNav() {
       setUnreadCount(count ?? 0);
     }
 
-    void loadUnreadCount();
-    const interval = window.setInterval(() => void loadUnreadCount(), 60000);
+    void loadNavAccess();
+    const interval = window.setInterval(() => void loadNavAccess(), 60000);
     return () => {
       active = false;
       window.clearInterval(interval);
@@ -116,9 +129,11 @@ export default function SidebarNav() {
         Setupy
       </NavLink>
 
-      <NavLink href="/admin" danger>
-        Admin
-      </NavLink>
+      {showAdmin ? (
+        <NavLink href="/admin" danger>
+          Admin
+        </NavLink>
+      ) : null}
 
       <Link
         href="/notifikace"
