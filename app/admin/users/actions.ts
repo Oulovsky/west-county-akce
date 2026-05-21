@@ -9,6 +9,7 @@ type ActionResult = {
   ok: boolean;
   error?: string;
   warning?: string;
+  hodinovy_naklad_akce?: number;
 };
 
 const allowedRoles = ["admin", "sef", "skladnik", "zamestnanec"];
@@ -111,7 +112,7 @@ export async function updateUserActionCost(
   hourlyCost: string
 ): Promise<ActionResult> {
   try {
-    const { supabase, error: authError } = await requireAdmin();
+    const { error: authError } = await requireAdmin();
     if (authError) return { ok: false, error: authError };
 
     const normalized = hourlyCost.trim().replace(",", ".");
@@ -121,17 +122,33 @@ export async function updateUserActionCost(
       return { ok: false, error: "Hodinový náklad musí být číslo 0 nebo vyšší." };
     }
 
-    const { error } = await supabase
+    const admin = createAdminClient();
+    const { data, error } = await admin
       .from("profiles")
       .update({ hodinovy_naklad_akce: parsed })
-      .eq("user_id", targetUserId);
+      .eq("user_id", targetUserId)
+      .select("hodinovy_naklad_akce")
+      .maybeSingle();
 
     if (error) {
       return { ok: false, error: error.message };
     }
 
+    if (!data) {
+      return {
+        ok: false,
+        error: "Profil zaměstnance nebyl nalezen nebo se hodnota neuložila.",
+      };
+    }
+
+    const savedValue = Number(data.hodinovy_naklad_akce ?? parsed);
+    if (!Number.isFinite(savedValue)) {
+      return { ok: false, error: "Uložená hodinová mzda není platné číslo." };
+    }
+
     revalidatePath("/admin");
-    return { ok: true };
+    revalidatePath("/admin/proplaceni");
+    return { ok: true, hodinovy_naklad_akce: savedValue };
   } catch (error: unknown) {
     return { ok: false, error: getErrorMessage(error) };
   }

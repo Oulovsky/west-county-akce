@@ -48,12 +48,20 @@ function getFullName(user: UserRow) {
   return [user.jmeno, user.prijmeni].filter(Boolean).join(" ").trim();
 }
 
+function formatHourlyCostForInput(value: string | number | null | undefined) {
+  if (value == null || value === "") return "";
+  const number = Number(value);
+  return Number.isFinite(number) ? String(number) : String(value);
+}
+
 function UserEditorRow({
   user,
   onToast,
+  onHourlyCostSaved,
 }: {
   user: UserRow;
   onToast: (toast: { message: string; type: "success" | "error" }) => void;
+  onHourlyCostSaved: (userId: string, value: number) => void;
 }) {
   const [role, setRole] = useState(user.role);
   const [savedRole, setSavedRole] = useState(user.role);
@@ -62,10 +70,10 @@ function UserEditorRow({
   const [email, setEmail] = useState(user.email);
   const [savedEmail, setSavedEmail] = useState(user.email);
   const [hourlyCost, setHourlyCost] = useState(
-    user.hodinovy_naklad_akce == null ? "" : String(user.hodinovy_naklad_akce)
+    formatHourlyCostForInput(user.hodinovy_naklad_akce)
   );
   const [savedHourlyCost, setSavedHourlyCost] = useState(
-    user.hodinovy_naklad_akce == null ? "" : String(user.hodinovy_naklad_akce)
+    formatHourlyCostForInput(user.hodinovy_naklad_akce)
   );
   const [bankAccountNumber, setBankAccountNumber] = useState(user.bank_account_number ?? "");
   const [savedBankAccountNumber, setSavedBankAccountNumber] = useState(user.bank_account_number ?? "");
@@ -96,7 +104,7 @@ function UserEditorRow({
     setSavedName(nextName);
     setEmail(user.email);
     setSavedEmail(user.email);
-    const nextCost = user.hodinovy_naklad_akce == null ? "" : String(user.hodinovy_naklad_akce);
+    const nextCost = formatHourlyCostForInput(user.hodinovy_naklad_akce);
     setHourlyCost(nextCost);
     setSavedHourlyCost(nextCost);
     setBankAccountNumber(user.bank_account_number ?? "");
@@ -194,12 +202,20 @@ function UserEditorRow({
     if (current === saved || isPending) return;
 
     startTransition(async () => {
-      const result = await updateUserActionCost(user.user_id, nextCost);
+      const result = await updateUserActionCost(user.user_id, current);
       if (result.ok) {
-        setSavedHourlyCost(nextCost);
+        const persisted = formatHourlyCostForInput(
+          result.hodinovy_naklad_akce ?? current
+        );
+        setHourlyCost(persisted);
+        setSavedHourlyCost(persisted);
+        if (result.hodinovy_naklad_akce != null) {
+          onHourlyCostSaved(user.user_id, result.hodinovy_naklad_akce);
+        }
         onToast({ message: "Hodinová mzda uložena", type: "success" });
         router.refresh();
       } else {
+        setHourlyCost(savedHourlyCost);
         onToast({ message: result.error || "Uložení hodinové mzdy selhalo", type: "error" });
       }
     });
@@ -584,11 +600,25 @@ function UserEditorRow({
   );
 }
 
-export default function UsersClient({ users }: { users: UserRow[] }) {
+export default function UsersClient({ users: initialUsers }: { users: UserRow[] }) {
+  const [users, setUsers] = useState(initialUsers);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [isCreating, startCreateTransition] = useTransition();
   const router = useRouter();
+
+  useEffect(() => {
+    setUsers(initialUsers);
+  }, [initialUsers]);
+
+  function handleHourlyCostSaved(userId: string, value: number) {
+    setUsers((current) =>
+      current.map((row) =>
+        row.user_id === userId ? { ...row, hodinovy_naklad_akce: value } : row
+      )
+    );
+  }
+
   const activeUsers = users.filter((user) => user.aktivni !== false);
   const inactiveUsers = users.filter((user) => user.aktivni === false);
 
@@ -621,7 +651,12 @@ export default function UsersClient({ users }: { users: UserRow[] }) {
       ) : null}
 
       {activeUsers.map((user) => (
-        <UserEditorRow key={user.user_id} user={user} onToast={setToast} />
+        <UserEditorRow
+          key={user.user_id}
+          user={user}
+          onToast={setToast}
+          onHourlyCostSaved={handleHourlyCostSaved}
+        />
       ))}
 
       {inactiveUsers.length > 0 ? (
@@ -631,7 +666,12 @@ export default function UsersClient({ users }: { users: UserRow[] }) {
           </summary>
           <div className="space-y-3 border-t border-slate-800 p-3">
             {inactiveUsers.map((user) => (
-              <UserEditorRow key={user.user_id} user={user} onToast={setToast} />
+              <UserEditorRow
+                key={user.user_id}
+                user={user}
+                onToast={setToast}
+                onHourlyCostSaved={handleHourlyCostSaved}
+              />
             ))}
           </div>
         </details>
