@@ -19,7 +19,6 @@ import type {
   SkladOdpisovePasmo,
   SkladPoskozeniRow,
 } from "@/lib/sklad/types";
-import { querySkladovaPolozkaDetail } from "@/lib/sklad/queries";
 import {
   formatSkladKusHistorieTypAkce,
   formatSkladKusHistorieZakazka,
@@ -221,9 +220,11 @@ export default async function SkladKusDetailPage({ params }: PageProps) {
     );
   }
 
-  const { data: detailRaw, error: detailError } = await querySkladovaPolozkaDetail(
-    supabase,
-    kus.skladova_polozka_id
+  const { data: detailRaw, error: detailError } = await supabase.rpc(
+    "get_skladova_polozka_detail",
+    {
+      p_skladova_polozka_id: kus.skladova_polozka_id,
+    }
   );
 
   if (detailError) {
