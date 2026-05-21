@@ -14,13 +14,19 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient();
-    await supabase.auth.exchangeCodeForSession(code);
+
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (error) {
+      console.error("OAuth exchange error:", error);
+    }
   }
 
   const destination = new URL(nextPath, baseUrl);
   destination.search = "";
 
   const res = NextResponse.redirect(destination);
+
   if (code) {
     res.cookies.set(OAUTH_PROFILE_GATE_COOKIE, "1", {
       path: "/",
@@ -30,5 +36,6 @@ export async function GET(request: Request) {
       secure: process.env.NODE_ENV === "production",
     });
   }
+
   return res;
 }

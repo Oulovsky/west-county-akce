@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -16,6 +16,7 @@ export default function LoginPage() {
     typeof window !== "undefined"
       ? new URLSearchParams(window.location.search).get("error")
       : null;
+
   const visibleError =
     error ||
     (queryError === "not_allowed"
@@ -32,6 +33,7 @@ export default function LoginPage() {
     setError("");
 
     const baseUrl = getAppBaseUrlClient();
+
     if (!baseUrl) {
       setGoogleLoading(false);
       setError("Chybí adresa aplikace (NEXT_PUBLIC_APP_URL nebo origin).");
@@ -81,9 +83,7 @@ export default function LoginPage() {
           Přihlášení do systému probíhá přes Google účet.
         </div>
 
-        {visibleError && (
-          <div style={{ color: "#f87171" }}>{visibleError}</div>
-        )}
+        {visibleError && <div style={{ color: "#f87171" }}>{visibleError}</div>}
 
         <button
           type="button"
