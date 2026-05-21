@@ -2,166 +2,22 @@
  * Sdílené read-only dotazy skladu.
  * Zápisy / server actions zůstávají u stránek, dokud nebude sjednocená mutační vrstva.
  */
-import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   SKLAD_KUS_SELECT_FIELDS,
   SKLAD_POSKOZENI_SELECT_FIELDS,
   SKLAD_RPC,
   SKLAD_TABLE,
 } from "@/lib/sklad/constants";
-import { toNumber } from "@/lib/sklad/helpers";
-import type { SkladPolozkaRow } from "@/lib/sklad/types";
 
 export type SkladSupabaseClient = SupabaseClient;
-
-const SKLADOVE_POLOZKY_LIST_SELECT_BASE = `
-  skladova_polozka_id,
-  nazev,
-  pozice,
-  sklad_blok_id,
-  kategorie_techniky_id,
-  podkategorie_techniky_id,
-  jednotka_id,
-  interni_naklad,
-  fakturacni_cena,
-  aktivni,
-  kategorie_techniky ( nazev ),
-  jednotky_skladu ( nazev ),
-  sklad_bloky ( nazev ),
-  podkategorie_techniky ( nazev ),
-  sklad_polozky_kusy ( count )
-` as const;
-
-const SKLADOVE_POLOZKY_LIST_SELECT = `
-  skladova_polozka_id,
-  nazev,
-  pozice,
-  sklad_blok_id,
-  kategorie_techniky_id,
-  podkategorie_techniky_id,
-  jednotka_id,
-  interni_naklad,
-  fakturacni_cena,
-  aktivni,
-  celkem,
-  kategorie_techniky ( nazev ),
-  jednotky_skladu ( nazev ),
-  sklad_bloky ( nazev ),
-  podkategorie_techniky ( nazev ),
-  sklad_polozky_kusy ( count )
-` as const;
-
-function isMissingCelkemColumnError(message: string | undefined): boolean {
-  if (!message) return false;
-  const lower = message.toLowerCase();
-  return lower.includes("celkem") && (lower.includes("column") || lower.includes("schema"));
-}
-
-type SkladovePolozkyRelationNazev =
-  | { nazev: string | null }
-  | { nazev: string | null }[]
-  | null;
-
-type SkladovePolozkyListRawRow = {
-  skladova_polozka_id: string;
-  nazev: string;
-  pozice?: number | string | null;
-  sklad_blok_id: string | null;
-  kategorie_techniky_id: string | null;
-  podkategorie_techniky_id: string | null;
-  jednotka_id: string | null;
-  interni_naklad: number | string | null;
-  fakturacni_cena: number | string | null;
-  aktivni?: boolean | null;
-  celkem?: number | string | null;
-  kategorie_techniky?: SkladovePolozkyRelationNazev;
-  jednotky_skladu?: SkladovePolozkyRelationNazev;
-  sklad_bloky?: SkladovePolozkyRelationNazev;
-  podkategorie_techniky?: SkladovePolozkyRelationNazev;
-  sklad_polozky_kusy?: { count: number | string }[] | { count: number | string } | null;
-};
-
-function relationNazev(
-  relation: SkladovePolozkyRelationNazev | undefined
-): string | null {
-  if (!relation) return null;
-  const row = Array.isArray(relation) ? relation[0] : relation;
-  const nazev = row?.nazev;
-  return typeof nazev === "string" && nazev.trim() ? nazev : null;
-}
-
-function kusyCountFromRow(row: SkladovePolozkyListRawRow): number {
-  const rel = row.sklad_polozky_kusy;
-  if (!rel) return 0;
-  if (Array.isArray(rel)) {
-    return toNumber(rel[0]?.count);
-  }
-  return toNumber(rel.count);
-}
-
-function mapSkladovePolozkyListRow(row: SkladovePolozkyListRawRow): SkladPolozkaRow {
-  const celkem = toNumber(row.celkem);
-  const kusyCount = kusyCountFromRow(row);
-  const celkemKDispozici = celkem > 0 ? celkem : kusyCount;
-
-  return {
-    skladova_polozka_id: row.skladova_polozka_id,
-    nazev: row.nazev,
-    kategorie_techniky_id: row.kategorie_techniky_id,
-    kategorie_nazev: relationNazev(row.kategorie_techniky),
-    podkategorie_techniky_id: row.podkategorie_techniky_id,
-    podkategorie_nazev: relationNazev(row.podkategorie_techniky),
-    celkem_k_dispozici: celkemKDispozici,
-    jednotka: relationNazev(row.jednotky_skladu),
-    interni_naklad:
-      row.interni_naklad == null ? null : toNumber(row.interni_naklad),
-    fakturacni_cena:
-      row.fakturacni_cena == null ? null : toNumber(row.fakturacni_cena),
-    sklad_blok_id: row.sklad_blok_id,
-    blok_nazev: relationNazev(row.sklad_bloky),
-    na_sklade: celkemKDispozici,
-    na_akcich: 0,
-    poskozene: 0,
-    pozice: row.pozice ?? null,
-  };
-}
 
 export function querySkladBloky(client: SkladSupabaseClient) {
   return client.rpc(SKLAD_RPC.getSkladBloky);
 }
 
-export type SkladovePolozkyQueryResult = {
-  data: SkladPolozkaRow[] | null;
-  error: PostgrestError | null;
-};
-
-/** Přehled položek skladu (tabulka skladove_polozky + joiny). */
-export async function querySkladovePolozky(
-  client: SkladSupabaseClient
-): Promise<SkladovePolozkyQueryResult> {
-  const withCelkem = await client
-    .from(SKLAD_TABLE.skladovePolozky)
-    .select(SKLADOVE_POLOZKY_LIST_SELECT)
-    .order("nazev", { ascending: true });
-
-  const result =
-    withCelkem.error && isMissingCelkemColumnError(withCelkem.error.message)
-      ? await client
-          .from(SKLAD_TABLE.skladovePolozky)
-          .select(SKLADOVE_POLOZKY_LIST_SELECT_BASE)
-          .order("nazev", { ascending: true })
-      : withCelkem;
-
-  if (result.error) {
-    return { data: null, error: result.error };
-  }
-
-  return {
-    data: ((result.data ?? []) as SkladovePolozkyListRawRow[]).map(
-      mapSkladovePolozkyListRow
-    ),
-    error: null,
-  };
+export function querySkladovePolozky(client: SkladSupabaseClient) {
+  return client.rpc(SKLAD_RPC.getSkladovePolozky);
 }
 
 export function querySkladBlokDetail(
@@ -233,7 +89,7 @@ export function querySkladPolozkyKusyForPolozka(
     .order("poradove_cislo", { ascending: true });
 }
 
-/** Podkategorie přiřazené položkám (záloha pro enrichSpravaPolozkyWithPodkategorie). */
+/** Podkategorie přiřazené položkám — get_skladove_polozky je nevrací. */
 export function querySkladovePolozkyPodkategorie(client: SkladSupabaseClient) {
   return client
     .from(SKLAD_TABLE.skladovePolozky)

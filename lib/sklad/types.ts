@@ -140,7 +140,7 @@ export type SkladPoskozeniRow = {
   duvod_odblokovani?: string | null;
 };
 
-/** Řádek v tabulce správy skladu (dotaz skladove_polozky + joiny). */
+/** Řádek v tabulce správy skladu (RPC get_skladove_polozky). */
 export type SkladPolozkaRow = {
   skladova_polozka_id: string;
   nazev: string;
