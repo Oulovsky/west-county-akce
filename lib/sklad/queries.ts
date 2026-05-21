@@ -10,13 +10,7 @@ import {
   SKLAD_TABLE,
 } from "@/lib/sklad/constants";
 import { toNumber } from "@/lib/sklad/helpers";
-import type {
-  SkladBlok,
-  SkladJednotka,
-  SkladKategorie,
-  SkladPodkategorie,
-  SkladPolozkaRow,
-} from "@/lib/sklad/types";
+import type { SkladPolozkaRow } from "@/lib/sklad/types";
 
 export type SkladSupabaseClient = SupabaseClient;
 
@@ -65,6 +59,10 @@ type SkladovePolozkyTableRow = {
   fakturacni_cena: number | string | null;
   aktivni?: boolean | null;
   celkem?: number | string | null;
+};
+
+type SkladCatalogNazevRow = {
+  nazev: string | null;
 };
 
 type SkladovePolozkyLookups = {
@@ -176,9 +174,13 @@ export async function querySkladovePolozky(
     kusyRes,
   ] = await Promise.all([
     fetchSkladovePolozkyTable(client),
-    queryKategorieTechnikyFull(client),
-    queryPodkategorieTechnikyFull(client),
-    queryJednotkySkladuFull(client),
+    client
+      .from(SKLAD_TABLE.kategorieTechniky)
+      .select("kategorie_techniky_id, nazev"),
+    client
+      .from(SKLAD_TABLE.podkategorieTechniky)
+      .select("podkategorie_techniky_id, nazev"),
+    client.from(SKLAD_TABLE.jednotkySkladu).select("jednotka_id, nazev"),
     client.from(SKLAD_TABLE.skladBloky).select("sklad_blok_id, nazev"),
     client
       .from(SKLAD_TABLE.skladPolozkyKusy)
@@ -187,6 +189,7 @@ export async function querySkladovePolozky(
 
   const firstError =
     polozkyRes.error ??
+    kategorieRes.error ??
     podkategorieRes.error ??
     jednotkyRes.error ??
     blokyRes.error ??
@@ -199,11 +202,17 @@ export async function querySkladovePolozky(
 
   const polozky = (polozkyRes.data ?? []) as SkladovePolozkyTableRow[];
 
-  const kategorieRows = (kategorieRes.data ?? []) as SkladKategorie[];
-  const podkategorieRows = (podkategorieRes.data ?? []) as SkladPodkategorie[];
-  const jednotkyRows = (jednotkyRes.data ?? []) as SkladJednotka[];
+  const kategorieRows = (kategorieRes.data ?? []) as Array<
+    SkladCatalogNazevRow & { kategorie_techniky_id: string }
+  >;
+  const podkategorieRows = (podkategorieRes.data ?? []) as Array<
+    SkladCatalogNazevRow & { podkategorie_techniky_id: string }
+  >;
+  const jednotkyRows = (jednotkyRes.data ?? []) as Array<
+    SkladCatalogNazevRow & { jednotka_id: string }
+  >;
   const blokyRows = (blokyRes.data ?? []) as Array<
-    Pick<SkladBlok, "sklad_blok_id" | "nazev">
+    SkladCatalogNazevRow & { sklad_blok_id: string }
   >;
 
   const lookups: SkladovePolozkyLookups = {
