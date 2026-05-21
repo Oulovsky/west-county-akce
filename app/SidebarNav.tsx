@@ -140,7 +140,7 @@ export default function SidebarNav() {
         className="relative rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 transition hover:bg-blue-600/10 hover:text-blue-100"
         title="Notifikace"
       >
-        Zvonek
+        Upozornění
         {unreadCount > 0 ? (
           <span className="absolute -right-2 -top-2 min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-center text-[11px] font-black text-white">
             {unreadCount > 99 ? "99+" : unreadCount}
