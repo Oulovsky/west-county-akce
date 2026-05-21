@@ -14,7 +14,7 @@ import type { SkladPolozkaRow } from "@/lib/sklad/types";
 
 export type SkladSupabaseClient = SupabaseClient;
 
-const SKLADOVE_POLOZKY_LIST_SELECT_BASE = `
+const SKLADOVE_POLOZKY_COLUMNS = `
   skladova_polozka_id,
   nazev,
   pozice,
@@ -25,14 +25,10 @@ const SKLADOVE_POLOZKY_LIST_SELECT_BASE = `
   interni_naklad,
   fakturacni_cena,
   aktivni,
-  kategorie_techniky ( nazev ),
-  jednotky_skladu ( nazev ),
-  sklad_bloky ( nazev ),
-  podkategorie_techniky ( nazev ),
-  sklad_polozky_kusy ( count )
+  celkem
 ` as const;
 
-const SKLADOVE_POLOZKY_LIST_SELECT = `
+const SKLADOVE_POLOZKY_COLUMNS_BASE = `
   skladova_polozka_id,
   nazev,
   pozice,
@@ -42,13 +38,7 @@ const SKLADOVE_POLOZKY_LIST_SELECT = `
   jednotka_id,
   interni_naklad,
   fakturacni_cena,
-  aktivni,
-  celkem,
-  kategorie_techniky ( nazev ),
-  jednotky_skladu ( nazev ),
-  sklad_bloky ( nazev ),
-  podkategorie_techniky ( nazev ),
-  sklad_polozky_kusy ( count )
+  aktivni
 ` as const;
 
 function isMissingCelkemColumnError(message: string | undefined): boolean {
@@ -57,12 +47,7 @@ function isMissingCelkemColumnError(message: string | undefined): boolean {
   return lower.includes("celkem") && (lower.includes("column") || lower.includes("schema"));
 }
 
-type SkladovePolozkyRelationNazev =
-  | { nazev: string | null }
-  | { nazev: string | null }[]
-  | null;
-
-type SkladovePolozkyListRawRow = {
+type SkladovePolozkyTableRow = {
   skladova_polozka_id: string;
   nazev: string;
   pozice?: number | string | null;
@@ -74,56 +59,97 @@ type SkladovePolozkyListRawRow = {
   fakturacni_cena: number | string | null;
   aktivni?: boolean | null;
   celkem?: number | string | null;
-  kategorie_techniky?: SkladovePolozkyRelationNazev;
-  jednotky_skladu?: SkladovePolozkyRelationNazev;
-  sklad_bloky?: SkladovePolozkyRelationNazev;
-  podkategorie_techniky?: SkladovePolozkyRelationNazev;
-  sklad_polozky_kusy?: { count: number | string }[] | { count: number | string } | null;
 };
 
-function relationNazev(
-  relation: SkladovePolozkyRelationNazev | undefined
-): string | null {
-  if (!relation) return null;
-  const row = Array.isArray(relation) ? relation[0] : relation;
-  const nazev = row?.nazev;
-  return typeof nazev === "string" && nazev.trim() ? nazev : null;
-}
+type SkladCatalogNazevRow = {
+  nazev: string | null;
+};
 
-function kusyCountFromRow(row: SkladovePolozkyListRawRow): number {
-  const rel = row.sklad_polozky_kusy;
-  if (!rel) return 0;
-  if (Array.isArray(rel)) {
-    return toNumber(rel[0]?.count);
+type SkladovePolozkyLookups = {
+  kategorieNazev: Map<string, string>;
+  podkategorieNazev: Map<string, string>;
+  jednotkaNazev: Map<string, string>;
+  blokNazev: Map<string, string>;
+  kusyCountByPolozkaId: Map<string, number>;
+};
+
+function buildNazevMap(
+  rows: Array<{ id: string; nazev: string | null }>
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const row of rows) {
+    const nazev = row.nazev?.trim();
+    if (nazev) {
+      map.set(row.id, nazev);
+    }
   }
-  return toNumber(rel.count);
+  return map;
 }
 
-function mapSkladovePolozkyListRow(row: SkladovePolozkyListRawRow): SkladPolozkaRow {
+function buildKusyCountByPolozkaId(
+  rows: Array<{ skladova_polozka_id: string }>
+): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    const id = row.skladova_polozka_id;
+    if (!id) continue;
+    map.set(id, (map.get(id) ?? 0) + 1);
+  }
+  return map;
+}
+
+function lookupNazev(map: Map<string, string>, id: string | null): string | null {
+  if (!id) return null;
+  return map.get(id) ?? null;
+}
+
+function mapSkladovePolozkyListRow(
+  row: SkladovePolozkyTableRow,
+  lookups: SkladovePolozkyLookups
+): SkladPolozkaRow {
   const celkem = toNumber(row.celkem);
-  const kusyCount = kusyCountFromRow(row);
+  const kusyCount = lookups.kusyCountByPolozkaId.get(row.skladova_polozka_id) ?? 0;
   const celkemKDispozici = celkem > 0 ? celkem : kusyCount;
 
   return {
     skladova_polozka_id: row.skladova_polozka_id,
     nazev: row.nazev,
     kategorie_techniky_id: row.kategorie_techniky_id,
-    kategorie_nazev: relationNazev(row.kategorie_techniky),
+    kategorie_nazev: lookupNazev(lookups.kategorieNazev, row.kategorie_techniky_id),
     podkategorie_techniky_id: row.podkategorie_techniky_id,
-    podkategorie_nazev: relationNazev(row.podkategorie_techniky),
+    podkategorie_nazev: lookupNazev(
+      lookups.podkategorieNazev,
+      row.podkategorie_techniky_id
+    ),
     celkem_k_dispozici: celkemKDispozici,
-    jednotka: relationNazev(row.jednotky_skladu),
+    jednotka: lookupNazev(lookups.jednotkaNazev, row.jednotka_id),
     interni_naklad:
       row.interni_naklad == null ? null : toNumber(row.interni_naklad),
     fakturacni_cena:
       row.fakturacni_cena == null ? null : toNumber(row.fakturacni_cena),
     sklad_blok_id: row.sklad_blok_id,
-    blok_nazev: relationNazev(row.sklad_bloky),
+    blok_nazev: lookupNazev(lookups.blokNazev, row.sklad_blok_id),
     na_sklade: celkemKDispozici,
     na_akcich: 0,
     poskozene: 0,
     pozice: row.pozice ?? null,
   };
+}
+
+async function fetchSkladovePolozkyTable(client: SkladSupabaseClient) {
+  const withCelkem = await client
+    .from(SKLAD_TABLE.skladovePolozky)
+    .select(SKLADOVE_POLOZKY_COLUMNS)
+    .order("nazev", { ascending: true });
+
+  if (withCelkem.error && isMissingCelkemColumnError(withCelkem.error.message)) {
+    return client
+      .from(SKLAD_TABLE.skladovePolozky)
+      .select(SKLADOVE_POLOZKY_COLUMNS_BASE)
+      .order("nazev", { ascending: true });
+  }
+
+  return withCelkem;
 }
 
 export function querySkladBloky(client: SkladSupabaseClient) {
@@ -135,31 +161,92 @@ export type SkladovePolozkyQueryResult = {
   error: PostgrestError | null;
 };
 
-/** Přehled položek skladu (tabulka skladove_polozky + joiny). */
+/** Přehled položek skladu (samostatné dotazy + spojení v TS). */
 export async function querySkladovePolozky(
   client: SkladSupabaseClient
 ): Promise<SkladovePolozkyQueryResult> {
-  const withCelkem = await client
-    .from(SKLAD_TABLE.skladovePolozky)
-    .select(SKLADOVE_POLOZKY_LIST_SELECT)
-    .order("nazev", { ascending: true });
+  const [
+    polozkyRes,
+    kategorieRes,
+    podkategorieRes,
+    jednotkyRes,
+    blokyRes,
+    kusyRes,
+  ] = await Promise.all([
+    fetchSkladovePolozkyTable(client),
+    client
+      .from(SKLAD_TABLE.kategorieTechniky)
+      .select("kategorie_techniky_id, nazev"),
+    client
+      .from(SKLAD_TABLE.podkategorieTechniky)
+      .select("podkategorie_techniky_id, nazev"),
+    client.from(SKLAD_TABLE.jednotkySkladu).select("jednotka_id, nazev"),
+    client.from(SKLAD_TABLE.skladBloky).select("sklad_blok_id, nazev"),
+    client
+      .from(SKLAD_TABLE.skladPolozkyKusy)
+      .select("skladova_polozka_id"),
+  ]);
 
-  const result =
-    withCelkem.error && isMissingCelkemColumnError(withCelkem.error.message)
-      ? await client
-          .from(SKLAD_TABLE.skladovePolozky)
-          .select(SKLADOVE_POLOZKY_LIST_SELECT_BASE)
-          .order("nazev", { ascending: true })
-      : withCelkem;
+  const firstError =
+    polozkyRes.error ??
+    kategorieRes.error ??
+    podkategorieRes.error ??
+    jednotkyRes.error ??
+    blokyRes.error ??
+    kusyRes.error ??
+    null;
 
-  if (result.error) {
-    return { data: null, error: result.error };
+  if (firstError) {
+    return { data: null, error: firstError };
   }
 
-  return {
-    data: ((result.data ?? []) as SkladovePolozkyListRawRow[]).map(
-      mapSkladovePolozkyListRow
+  const polozky = (polozkyRes.data ?? []) as SkladovePolozkyTableRow[];
+
+  const kategorieRows = (kategorieRes.data ?? []) as Array<
+    SkladCatalogNazevRow & { kategorie_techniky_id: string }
+  >;
+  const podkategorieRows = (podkategorieRes.data ?? []) as Array<
+    SkladCatalogNazevRow & { podkategorie_techniky_id: string }
+  >;
+  const jednotkyRows = (jednotkyRes.data ?? []) as Array<
+    SkladCatalogNazevRow & { jednotka_id: string }
+  >;
+  const blokyRows = (blokyRes.data ?? []) as Array<
+    SkladCatalogNazevRow & { sklad_blok_id: string }
+  >;
+
+  const lookups: SkladovePolozkyLookups = {
+    kategorieNazev: buildNazevMap(
+      kategorieRows.map((row) => ({
+        id: row.kategorie_techniky_id,
+        nazev: row.nazev,
+      }))
     ),
+    podkategorieNazev: buildNazevMap(
+      podkategorieRows.map((row) => ({
+        id: row.podkategorie_techniky_id,
+        nazev: row.nazev,
+      }))
+    ),
+    jednotkaNazev: buildNazevMap(
+      jednotkyRows.map((row) => ({
+        id: row.jednotka_id,
+        nazev: row.nazev,
+      }))
+    ),
+    blokNazev: buildNazevMap(
+      blokyRows.map((row) => ({
+        id: row.sklad_blok_id,
+        nazev: row.nazev,
+      }))
+    ),
+    kusyCountByPolozkaId: buildKusyCountByPolozkaId(
+      (kusyRes.data ?? []) as Array<{ skladova_polozka_id: string }>
+    ),
+  };
+
+  return {
+    data: polozky.map((row) => mapSkladovePolozkyListRow(row, lookups)),
     error: null,
   };
 }
