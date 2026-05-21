@@ -7,6 +7,11 @@ import { SKLAD_TABLE } from "@/lib/sklad/constants";
 import { toNumber } from "@/lib/sklad/helpers";
 import type { SkladSupabaseClient } from "@/lib/sklad/queries";
 import {
+  isMissingSkladResourceError,
+  logSkladQueryFallback,
+  runSkladTableQuery,
+} from "@/lib/sklad/tableQuery";
+import {
   zakazkaPocitaSeDoSkladovychRezervaci,
   type ZakazkaRezervaceProSklad,
 } from "@/lib/sklad/zakazkyRezervaceFilter";
@@ -45,15 +50,19 @@ export async function querySpravaNaZakazkachCountsByPolozka(
   map: Map<string, number> | null;
   error: { message: string } | null;
 }> {
-  const { data: techRaw, error: techError } = await client
-    .from(SKLAD_TABLE.technikaNaZakazce)
-    .select("skladova_polozka_id, zakazka_id, mnozstvi");
+  const techRes = await runSkladTableQuery<TechnikaRow>(
+    SKLAD_TABLE.technikaNaZakazce,
+    () =>
+      client
+        .from(SKLAD_TABLE.technikaNaZakazce)
+        .select("skladova_polozka_id, zakazka_id, mnozstvi")
+  );
 
-  if (techError) {
-    return { map: null, error: techError };
+  if (techRes.error) {
+    return { map: null, error: techRes.error };
   }
 
-  const tech = (techRaw ?? []) as TechnikaRow[];
+  const tech = techRes.data;
   if (tech.length === 0) {
     return { map: new Map(), error: null };
   }
@@ -73,6 +82,10 @@ export async function querySpravaNaZakazkachCountsByPolozka(
       .in("zakazka_id", part);
 
     if (zErr) {
+      if (isMissingSkladResourceError(zErr.message)) {
+        logSkladQueryFallback(SKLAD_TABLE.zakazky, zErr);
+        return { map: new Map(), error: null };
+      }
       return { map: null, error: zErr };
     }
 
@@ -107,15 +120,16 @@ export async function querySpravaFyzickyNaZakazkachCountsByPolozka(
   map: Map<string, number> | null;
   error: { message: string } | null;
 }> {
-  const { data: assignmentsRaw, error: assignmentsError } = await client
-    .from(SKLAD_TABLE.zakazkaKusy)
-    .select("kus_id, stav");
+  const assignmentsRes = await runSkladTableQuery<ZakazkaKusRow>(
+    SKLAD_TABLE.zakazkaKusy,
+    () => client.from(SKLAD_TABLE.zakazkaKusy).select("kus_id, stav")
+  );
 
-  if (assignmentsError) {
-    return { map: null, error: assignmentsError };
+  if (assignmentsRes.error) {
+    return { map: null, error: assignmentsRes.error };
   }
 
-  const assignments = ((assignmentsRaw ?? []) as ZakazkaKusRow[]).filter(
+  const assignments = assignmentsRes.data.filter(
     (row) => row.stav?.trim() !== "vraceno"
   );
   const kusIds = [
@@ -133,6 +147,10 @@ export async function querySpravaFyzickyNaZakazkachCountsByPolozka(
       .in("kus_id", part);
 
     if (kusError) {
+      if (isMissingSkladResourceError(kusError.message)) {
+        logSkladQueryFallback(SKLAD_TABLE.skladPolozkyKusy, kusError);
+        return { map: new Map(), error: null };
+      }
       return { map: null, error: kusError };
     }
 

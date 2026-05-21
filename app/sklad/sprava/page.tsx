@@ -135,26 +135,6 @@ export default function Page() {
         querySkladBloky(supabase),
       ]);
 
-    if (kategorieRes.error) {
-      alert(kategorieRes.error.message);
-      return false;
-    }
-
-    if (podkategorieRes.error) {
-      alert(podkategorieRes.error.message);
-      return false;
-    }
-
-    if (jednotkyRes.error) {
-      alert(jednotkyRes.error.message);
-      return false;
-    }
-
-    if (blokyRes.error) {
-      alert(blokyRes.error.message);
-      return false;
-    }
-
     setKategorie((kategorieRes.data ?? []) as SkladKategorie[]);
     setPodkategorie((podkategorieRes.data ?? []) as SkladPodkategorie[]);
     setJednotky((jednotkyRes.data ?? []) as SkladJednotka[]);
@@ -179,36 +159,6 @@ export default function Page() {
 
       if (itemsRes.error) {
         alert(itemsRes.error.message);
-        if (!options?.silent) setLoading(false);
-        return;
-      }
-
-      if (kategorieRes.error) {
-        alert(kategorieRes.error.message);
-        if (!options?.silent) setLoading(false);
-        return;
-      }
-
-      if (podkategorieRes.error) {
-        alert(podkategorieRes.error.message);
-        if (!options?.silent) setLoading(false);
-        return;
-      }
-
-      if (jednotkyRes.error) {
-        alert(jednotkyRes.error.message);
-        if (!options?.silent) setLoading(false);
-        return;
-      }
-
-      if (blokyRes.error) {
-        alert(blokyRes.error.message);
-        if (!options?.silent) setLoading(false);
-        return;
-      }
-
-      if (polozkyPodkategorieRes.error) {
-        alert(polozkyPodkategorieRes.error.message);
         if (!options?.silent) setLoading(false);
         return;
       }
@@ -374,24 +324,6 @@ export default function Page() {
         };
       });
 
-      if (
-        !options?.silent &&
-        (naZakazkachErr || fyzickyNaZakazkachErr || blokujiciErr)
-      ) {
-        const parts: string[] = [];
-        if (naZakazkachErr) {
-          parts.push(`Plán zakázek: ${naZakazkachErr.message}`);
-        }
-        if (fyzickyNaZakazkachErr) {
-          parts.push(`Fyzické kusy na zakázkách: ${fyzickyNaZakazkachErr.message}`);
-        }
-        if (blokujiciErr) {
-          parts.push(`Blokující poškození: ${blokujiciErr.message}`);
-        }
-        alert(
-          `${parts.join(" ")}\n\nSloupce „Plánováno na zakázkách“, „Fyzicky na zakázkách“ a „Skladem“ zůstávají u části dat ze serveru.`
-        );
-      }
       setItems(mergedItems);
       setKategorie((kategorieRes.data ?? []) as SkladKategorie[]);
       setPodkategorie(podkategorieCatalog);
