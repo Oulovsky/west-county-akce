@@ -6,16 +6,26 @@ import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import {
   SKLAD_KUS_SELECT_FIELDS,
   SKLAD_POSKOZENI_SELECT_FIELDS,
-  SKLAD_RPC,
   SKLAD_TABLE,
 } from "@/lib/sklad/constants";
 import { toNumber } from "@/lib/sklad/helpers";
+import {
+  isMissingSkladResourceError,
+  logSkladQueryFallback,
+  runSkladTableQuery,
+} from "@/lib/sklad/tableQuery";
 import type {
   SkladBlok,
+  SkladDetailRow,
   SkladJednotka,
   SkladKategorie,
+  SkladOkruhRow,
   SkladPodkategorie,
   SkladPolozkaRow,
+  SkladPoskozeniListRow,
+  SkladPrioritaOption,
+  SkladStatistikaRow,
+  SkladTypPoskozeniOption,
 } from "@/lib/sklad/types";
 
 export type SkladSupabaseClient = SupabaseClient;
@@ -154,8 +164,251 @@ async function fetchSkladovePolozkyTable(client: SkladSupabaseClient) {
   return withCelkem;
 }
 
-export function querySkladBloky(client: SkladSupabaseClient) {
-  return client.rpc(SKLAD_RPC.getSkladBloky);
+type CatalogNazevMaps = {
+  kategorieNazev: Map<string, string>;
+  podkategorieNazev: Map<string, string>;
+  jednotkaNazev: Map<string, string>;
+  blokNazev: Map<string, string>;
+  kategoriePoradi: Map<string, number>;
+  podkategoriePoradi: Map<string, number>;
+};
+
+async function loadCatalogNazevMaps(
+  client: SkladSupabaseClient
+): Promise<CatalogNazevMaps> {
+  const [kategorieRes, podkategorieRes, jednotkyRes, blokyRes] = await Promise.all([
+    queryKategorieTechnikyFull(client),
+    queryPodkategorieTechnikyFull(client),
+    queryJednotkySkladuFull(client),
+    querySkladBloky(client),
+  ]);
+
+  const kategorieRows = (kategorieRes.data ?? []) as SkladKategorie[];
+  const podkategorieRows = (podkategorieRes.data ?? []) as SkladPodkategorie[];
+
+  return {
+    kategorieNazev: buildNazevMap(
+      kategorieRows.map((row) => ({
+        id: row.kategorie_techniky_id,
+        nazev: row.nazev,
+      }))
+    ),
+    podkategorieNazev: buildNazevMap(
+      podkategorieRows.map((row) => ({
+        id: row.podkategorie_techniky_id,
+        nazev: row.nazev,
+      }))
+    ),
+    jednotkaNazev: buildNazevMap(
+      ((jednotkyRes.data ?? []) as SkladJednotka[]).map((row) => ({
+        id: row.jednotka_id,
+        nazev: row.nazev,
+      }))
+    ),
+    blokNazev: buildNazevMap(
+      ((blokyRes.data ?? []) as SkladBlok[]).map((row) => ({
+        id: row.sklad_blok_id,
+        nazev: row.nazev,
+      }))
+    ),
+    kategoriePoradi: new Map(
+      kategorieRows
+        .filter((row) => row.poradi != null)
+        .map((row) => [row.kategorie_techniky_id, Number(row.poradi)])
+    ),
+    podkategoriePoradi: new Map(
+      podkategorieRows
+        .filter((row) => row.poradi != null)
+        .map((row) => [row.podkategorie_techniky_id, Number(row.poradi)])
+    ),
+  };
+}
+
+/** Okruhy skladu — tabulka sklad_bloky (+ volitelné součty položek/kusů). */
+export async function querySkladBloky(client: SkladSupabaseClient) {
+  const blokyRes = await runSkladTableQuery<SkladBlok>(
+    SKLAD_TABLE.skladBloky,
+    () =>
+      client
+        .from(SKLAD_TABLE.skladBloky)
+        .select("sklad_blok_id, nazev, poradi")
+        .order("poradi", { ascending: true })
+        .order("nazev", { ascending: true })
+  );
+
+  if (blokyRes.error || blokyRes.data.length === 0) {
+    return blokyRes;
+  }
+
+  const [polozkyRes, kusyRes] = await Promise.all([
+    runSkladTableQuery<{ sklad_blok_id: string | null; skladova_polozka_id: string }>(
+      `${SKLAD_TABLE.skladovePolozky} (blok counts)`,
+      () =>
+        client
+          .from(SKLAD_TABLE.skladovePolozky)
+          .select("skladova_polozka_id, sklad_blok_id")
+    ),
+    runSkladTableQuery<{ skladova_polozka_id: string }>(
+      `${SKLAD_TABLE.skladPolozkyKusy} (blok counts)`,
+      () =>
+        client.from(SKLAD_TABLE.skladPolozkyKusy).select("skladova_polozka_id")
+    ),
+  ]);
+
+  if (polozkyRes.error) {
+    return { data: blokyRes.data, error: polozkyRes.error };
+  }
+
+  const polozkyByBlok = new Map<string, string[]>();
+  for (const row of polozkyRes.data) {
+    if (!row.sklad_blok_id) continue;
+    const list = polozkyByBlok.get(row.sklad_blok_id) ?? [];
+    list.push(row.skladova_polozka_id);
+    polozkyByBlok.set(row.sklad_blok_id, list);
+  }
+
+  const kusyByPolozka = buildKusyCountByPolozkaId(kusyRes.data);
+
+  const enriched = blokyRes.data.map((blok) => {
+    const polozkaIds = polozkyByBlok.get(blok.sklad_blok_id) ?? [];
+    const kusuCelkem = polozkaIds.reduce(
+      (sum, polozkaId) => sum + (kusyByPolozka.get(polozkaId) ?? 0),
+      0
+    );
+
+    return {
+      ...blok,
+      poradi: blok.poradi == null ? undefined : Number(blok.poradi),
+      pocet_polozek: polozkaIds.length,
+      kusu_celkem: kusuCelkem,
+    };
+  });
+
+  return { data: enriched, error: null };
+}
+
+/** Kategorie techniky — tabulka + názvy okruhů v TS. */
+export async function queryKategorieTechnikyFull(client: SkladSupabaseClient) {
+  const [kategorieRes, blokyRes] = await Promise.all([
+    runSkladTableQuery<
+      Pick<
+        SkladKategorie,
+        "kategorie_techniky_id" | "nazev" | "poradi" | "sklad_blok_id" | "aktivni"
+      >
+    >(SKLAD_TABLE.kategorieTechniky, () =>
+      client
+        .from(SKLAD_TABLE.kategorieTechniky)
+        .select("kategorie_techniky_id, nazev, poradi, sklad_blok_id, aktivni")
+        .order("poradi", { ascending: true })
+        .order("nazev", { ascending: true })
+    ),
+    runSkladTableQuery<Pick<SkladBlok, "sklad_blok_id" | "nazev">>(
+      `${SKLAD_TABLE.skladBloky} (kategorie lookup)`,
+      () =>
+        client.from(SKLAD_TABLE.skladBloky).select("sklad_blok_id, nazev")
+    ),
+  ]);
+
+  if (kategorieRes.error) {
+    return kategorieRes;
+  }
+
+  const blokNazev = buildNazevMap(
+    blokyRes.data.map((row) => ({ id: row.sklad_blok_id, nazev: row.nazev }))
+  );
+
+  return {
+    data: kategorieRes.data.map((row) => ({
+      ...row,
+      blok_nazev: row.sklad_blok_id
+        ? (blokNazev.get(row.sklad_blok_id) ?? null)
+        : null,
+    })),
+    error: null,
+  };
+}
+
+/** Podkategorie — tabulka + názvy kategorií v TS. */
+export async function queryPodkategorieTechnikyFull(client: SkladSupabaseClient) {
+  const [podkategorieRes, kategorieRes] = await Promise.all([
+    runSkladTableQuery<
+      Pick<
+        SkladPodkategorie,
+        "podkategorie_techniky_id" | "kategorie_techniky_id" | "nazev" | "poradi"
+      >
+    >(SKLAD_TABLE.podkategorieTechniky, () =>
+      client
+        .from(SKLAD_TABLE.podkategorieTechniky)
+        .select(
+          "podkategorie_techniky_id, kategorie_techniky_id, nazev, poradi"
+        )
+        .order("poradi", { ascending: true })
+        .order("nazev", { ascending: true })
+    ),
+    runSkladTableQuery<Pick<SkladKategorie, "kategorie_techniky_id" | "nazev">>(
+      `${SKLAD_TABLE.kategorieTechniky} (podkategorie lookup)`,
+      () =>
+        client
+          .from(SKLAD_TABLE.kategorieTechniky)
+          .select("kategorie_techniky_id, nazev")
+    ),
+  ]);
+
+  if (podkategorieRes.error) {
+    return podkategorieRes;
+  }
+
+  const kategorieNazev = buildNazevMap(
+    kategorieRes.data.map((row) => ({
+      id: row.kategorie_techniky_id,
+      nazev: row.nazev,
+    }))
+  );
+
+  return {
+    data: podkategorieRes.data.map((row) => ({
+      ...row,
+      kategorie_nazev: kategorieNazev.get(row.kategorie_techniky_id) ?? null,
+    })),
+    error: null,
+  };
+}
+
+/** Jednotky skladu. */
+export async function queryJednotkySkladuFull(client: SkladSupabaseClient) {
+  return runSkladTableQuery<SkladJednotka>(SKLAD_TABLE.jednotkySkladu, () =>
+    client
+      .from(SKLAD_TABLE.jednotkySkladu)
+      .select("jednotka_id, nazev, poradi")
+      .order("poradi", { ascending: true, nullsFirst: false })
+      .order("nazev", { ascending: true })
+  );
+}
+
+/** Typy poškození. */
+export async function queryTypyPoskozeniFull(client: SkladSupabaseClient) {
+  return runSkladTableQuery<SkladTypPoskozeniOption>(
+    SKLAD_TABLE.typyPoskozeni,
+    () =>
+      client
+        .from(SKLAD_TABLE.typyPoskozeni)
+        .select("typ_id, nazev, poradi")
+        .order("poradi", { ascending: true })
+        .order("nazev", { ascending: true })
+  );
+}
+
+/** Priority poškození. */
+export async function queryPriorityPoskozeniFull(client: SkladSupabaseClient) {
+  return runSkladTableQuery<SkladPrioritaOption>(
+    SKLAD_TABLE.priorityPoskozeni,
+    () =>
+      client
+        .from(SKLAD_TABLE.priorityPoskozeni)
+        .select("priorita_id, nazev, poradi")
+        .order("poradi", { ascending: true })
+        .order("nazev", { ascending: true })
+  );
 }
 
 export type SkladovePolozkyQueryResult = {
@@ -179,19 +432,23 @@ export async function querySkladovePolozky(
     queryKategorieTechnikyFull(client),
     queryPodkategorieTechnikyFull(client),
     queryJednotkySkladuFull(client),
-    client.from(SKLAD_TABLE.skladBloky).select("sklad_blok_id, nazev"),
+    runSkladTableQuery<Pick<SkladBlok, "sklad_blok_id" | "nazev">>(
+      SKLAD_TABLE.skladBloky,
+      () => client.from(SKLAD_TABLE.skladBloky).select("sklad_blok_id, nazev")
+    ),
     client
       .from(SKLAD_TABLE.skladPolozkyKusy)
       .select("skladova_polozka_id"),
   ]);
 
-  const firstError =
-    polozkyRes.error ??
-    podkategorieRes.error ??
-    jednotkyRes.error ??
-    blokyRes.error ??
-    kusyRes.error ??
-    null;
+  const catalogRows = {
+    kategorie: (kategorieRes.data ?? []) as SkladKategorie[],
+    podkategorie: (podkategorieRes.data ?? []) as SkladPodkategorie[],
+    jednotky: (jednotkyRes.data ?? []) as SkladJednotka[],
+    bloky: blokyRes.data,
+  };
+
+  const firstError = polozkyRes.error ?? kusyRes.error ?? null;
 
   if (firstError) {
     return { data: null, error: firstError };
@@ -199,12 +456,10 @@ export async function querySkladovePolozky(
 
   const polozky = (polozkyRes.data ?? []) as SkladovePolozkyTableRow[];
 
-  const kategorieRows = (kategorieRes.data ?? []) as SkladKategorie[];
-  const podkategorieRows = (podkategorieRes.data ?? []) as SkladPodkategorie[];
-  const jednotkyRows = (jednotkyRes.data ?? []) as SkladJednotka[];
-  const blokyRows = (blokyRes.data ?? []) as Array<
-    Pick<SkladBlok, "sklad_blok_id" | "nazev">
-  >;
+  const kategorieRows = catalogRows.kategorie;
+  const podkategorieRows = catalogRows.podkategorie;
+  const jednotkyRows = catalogRows.jednotky;
+  const blokyRows = catalogRows.bloky;
 
   const lookups: SkladovePolozkyLookups = {
     kategorieNazev: buildNazevMap(
@@ -242,37 +497,380 @@ export async function querySkladovePolozky(
   };
 }
 
-export function querySkladBlokDetail(
+type SkladBlokPolozkaRow = {
+  skladova_polozka_id: string;
+  nazev: string;
+  sklad_blok_id: string | null;
+  kategorie_techniky_id: string | null;
+  podkategorie_techniky_id: string | null;
+  jednotka_id: string | null;
+  aktivni: boolean | null;
+  poznamka: string | null;
+  celkem?: number | string | null;
+};
+
+/** Položky v okruhu — tabulky + mapování názvů v TS (bez RPC). */
+export async function querySkladBlokDetail(
   client: SkladSupabaseClient,
   skladBlokId: string
 ) {
-  return client.rpc(SKLAD_RPC.getSkladBlokDetail, {
-    p_sklad_blok_id: skladBlokId,
+  const blokRes = await runSkladTableQuery<Pick<SkladBlok, "sklad_blok_id" | "nazev">>(
+    SKLAD_TABLE.skladBloky,
+    () =>
+      client
+        .from(SKLAD_TABLE.skladBloky)
+        .select("sklad_blok_id, nazev")
+        .eq("sklad_blok_id", skladBlokId)
+        .limit(1)
+  );
+
+  if (blokRes.error) {
+    return blokRes;
+  }
+
+  const blok = blokRes.data[0];
+  if (!blok) {
+    return { data: [] as SkladOkruhRow[], error: null };
+  }
+
+  const polozkyWithCelkem = await client
+    .from(SKLAD_TABLE.skladovePolozky)
+    .select(
+      "skladova_polozka_id, nazev, sklad_blok_id, kategorie_techniky_id, podkategorie_techniky_id, jednotka_id, aktivni, poznamka, celkem"
+    )
+    .eq("sklad_blok_id", skladBlokId)
+    .order("nazev", { ascending: true });
+
+  const polozkyQuery =
+    polozkyWithCelkem.error &&
+    isMissingCelkemColumnError(polozkyWithCelkem.error.message)
+      ? await client
+          .from(SKLAD_TABLE.skladovePolozky)
+          .select(
+            "skladova_polozka_id, nazev, sklad_blok_id, kategorie_techniky_id, podkategorie_techniky_id, jednotka_id, aktivni, poznamka"
+          )
+          .eq("sklad_blok_id", skladBlokId)
+          .order("nazev", { ascending: true })
+      : polozkyWithCelkem;
+
+  if (polozkyQuery.error) {
+    if (isMissingSkladResourceError(polozkyQuery.error.message)) {
+      logSkladQueryFallback(SKLAD_TABLE.skladovePolozky, polozkyQuery.error);
+      return { data: [] as SkladOkruhRow[], error: null };
+    }
+    return { data: [] as SkladOkruhRow[], error: polozkyQuery.error };
+  }
+
+  const polozky = (polozkyQuery.data ?? []) as SkladBlokPolozkaRow[];
+  const maps = await loadCatalogNazevMaps(client);
+
+  const polozkaIds = polozky.map((row) => row.skladova_polozka_id);
+  const kusyRes =
+    polozkaIds.length === 0
+      ? { data: [] as Array<{ skladova_polozka_id: string }>, error: null }
+      : await runSkladTableQuery<{ skladova_polozka_id: string }>(
+          `${SKLAD_TABLE.skladPolozkyKusy} (okruh detail)`,
+          () =>
+            client
+              .from(SKLAD_TABLE.skladPolozkyKusy)
+              .select("skladova_polozka_id")
+              .in("skladova_polozka_id", polozkaIds)
+        );
+
+  const kusyByPolozka = buildKusyCountByPolozkaId(kusyRes.data);
+
+  const rows: SkladOkruhRow[] = polozky.map((row) => {
+    const celkem = toNumber(row.celkem);
+    const kusyCount = kusyByPolozka.get(row.skladova_polozka_id) ?? 0;
+    const celkemKDispozici = celkem > 0 ? celkem : kusyCount;
+
+    return {
+      sklad_blok_id: skladBlokId,
+      blok_nazev: blok.nazev,
+      skladova_polozka_id: row.skladova_polozka_id,
+      nazev: row.nazev,
+      jednotka: lookupNazev(maps.jednotkaNazev, row.jednotka_id),
+      celkem_k_dispozici: celkemKDispozici,
+      aktivni: row.aktivni,
+      poznamka: row.poznamka,
+      na_sklade: celkemKDispozici,
+      na_akcich: 0,
+      poskozene: 0,
+      kategorie_techniky_id: row.kategorie_techniky_id,
+      kategorie_nazev: lookupNazev(maps.kategorieNazev, row.kategorie_techniky_id),
+      kategorie_poradi: row.kategorie_techniky_id
+        ? (maps.kategoriePoradi.get(row.kategorie_techniky_id) ?? null)
+        : null,
+      podkategorie_techniky_id: row.podkategorie_techniky_id,
+      podkategorie_nazev: lookupNazev(
+        maps.podkategorieNazev,
+        row.podkategorie_techniky_id
+      ),
+      podkategorie_poradi: row.podkategorie_techniky_id
+        ? (maps.podkategoriePoradi.get(row.podkategorie_techniky_id) ?? null)
+        : null,
+    };
   });
+
+  return { data: rows, error: null };
 }
 
-export function queryKategorieTechnikyFull(client: SkladSupabaseClient) {
-  return client.rpc(SKLAD_RPC.getKategorieTechnikyFull);
+/** Detail skladové položky — tabulka + číselníky v TS. */
+export async function querySkladovaPolozkaDetail(
+  client: SkladSupabaseClient,
+  skladovaPolozkaId: string
+) {
+  let polozkaRes = await client
+    .from(SKLAD_TABLE.skladovePolozky)
+    .select(
+      "skladova_polozka_id, nazev, pozice, sklad_blok_id, kategorie_techniky_id, podkategorie_techniky_id, jednotka_id, interni_naklad, fakturacni_cena, aktivni, poznamka, created_at, updated_at, celkem"
+    )
+    .eq("skladova_polozka_id", skladovaPolozkaId)
+    .maybeSingle();
+
+  if (polozkaRes.error && isMissingCelkemColumnError(polozkaRes.error.message)) {
+    polozkaRes = await client
+      .from(SKLAD_TABLE.skladovePolozky)
+      .select(
+        "skladova_polozka_id, nazev, pozice, sklad_blok_id, kategorie_techniky_id, podkategorie_techniky_id, jednotka_id, interni_naklad, fakturacni_cena, aktivni, poznamka, created_at, updated_at"
+      )
+      .eq("skladova_polozka_id", skladovaPolozkaId)
+      .maybeSingle();
+  }
+
+  if (polozkaRes.error) {
+    return { data: null as SkladDetailRow[] | null, error: polozkaRes.error };
+  }
+
+  if (!polozkaRes.data) {
+    return { data: [] as SkladDetailRow[], error: null };
+  }
+
+  const row = polozkaRes.data as SkladovePolozkyTableRow & {
+    poznamka: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+
+  const maps = await loadCatalogNazevMaps(client);
+
+  const kusyRes = await runSkladTableQuery<{ skladova_polozka_id: string }>(
+    `${SKLAD_TABLE.skladPolozkyKusy} (detail)`,
+    () =>
+      client
+        .from(SKLAD_TABLE.skladPolozkyKusy)
+        .select("skladova_polozka_id")
+        .eq("skladova_polozka_id", skladovaPolozkaId)
+  );
+
+  const celkem = toNumber(row.celkem);
+  const kusyCount = kusyRes.data.length;
+  const celkemKDispozici = celkem > 0 ? celkem : kusyCount;
+
+  const detail: SkladDetailRow = {
+    skladova_polozka_id: row.skladova_polozka_id,
+    nazev: row.nazev,
+    kategorie_techniky_id: row.kategorie_techniky_id,
+    kategorie_nazev: lookupNazev(maps.kategorieNazev, row.kategorie_techniky_id),
+    podkategorie_techniky_id: row.podkategorie_techniky_id,
+    podkategorie_nazev: lookupNazev(
+      maps.podkategorieNazev,
+      row.podkategorie_techniky_id
+    ),
+    pozice: row.pozice ?? null,
+    jednotka: lookupNazev(maps.jednotkaNazev, row.jednotka_id) ?? "",
+    celkem_k_dispozici: celkemKDispozici,
+    interni_naklad:
+      row.interni_naklad == null ? null : toNumber(row.interni_naklad),
+    fakturacni_cena:
+      row.fakturacni_cena == null ? null : toNumber(row.fakturacni_cena),
+    aktivni: row.aktivni ?? true,
+    poznamka: row.poznamka ?? null,
+    vytvoreno_dne: row.created_at,
+    upraveno_dne: row.updated_at,
+  };
+
+  return { data: [detail], error: null };
 }
 
-export function queryPodkategorieTechnikyFull(client: SkladSupabaseClient) {
-  return client.rpc(SKLAD_RPC.getPodkategorieTechnikyFull);
+/** Centrální přehled poškození — tabulky + názvy položek v TS. */
+export async function queryPoskozeniFull(client: SkladSupabaseClient) {
+  const hlaseniRes = await runSkladTableQuery<{
+    poskozeni_id: string;
+    skladova_polozka_id: string;
+    kus_id: string | null;
+    pocet_kusu: number;
+    typ_poskozeni: string | null;
+    priorita: string | null;
+    blokuje_pouziti: boolean;
+    datum_nahlaseni: string;
+    datum_uzavreni: string | null;
+  }>(SKLAD_TABLE.hlaseniPoskozeni, () =>
+    client
+      .from(SKLAD_TABLE.hlaseniPoskozeni)
+      .select(
+        "poskozeni_id, skladova_polozka_id, kus_id, pocet_kusu, typ_poskozeni, priorita, blokuje_pouziti, datum_nahlaseni, datum_uzavreni"
+      )
+      .order("datum_nahlaseni", { ascending: false })
+  );
+
+  if (hlaseniRes.error) {
+    return hlaseniRes;
+  }
+
+  const polozkaIds = Array.from(
+    new Set(hlaseniRes.data.map((row) => row.skladova_polozka_id).filter(Boolean))
+  );
+
+  if (polozkaIds.length === 0) {
+    return { data: [] as SkladPoskozeniListRow[], error: null };
+  }
+
+  const polozkyRes = await runSkladTableQuery<{
+    skladova_polozka_id: string;
+    nazev: string;
+  }>(`${SKLAD_TABLE.skladovePolozky} (poskozeni)`, () =>
+    client
+      .from(SKLAD_TABLE.skladovePolozky)
+      .select("skladova_polozka_id, nazev")
+      .in("skladova_polozka_id", polozkaIds)
+  );
+
+  if (polozkyRes.error) {
+    return { data: [] as SkladPoskozeniListRow[], error: polozkyRes.error };
+  }
+
+  const nazevByPolozkaId = new Map(
+    polozkyRes.data.map((row) => [row.skladova_polozka_id, row.nazev])
+  );
+
+  return {
+    data: hlaseniRes.data.map((row) => ({
+      poskozeni_id: row.poskozeni_id,
+      skladova_polozka_id: row.skladova_polozka_id,
+      kus_id: row.kus_id,
+      nazev: nazevByPolozkaId.get(row.skladova_polozka_id) ?? "—",
+      pocet_kusu: Number(row.pocet_kusu ?? 0),
+      typ_poskozeni: row.typ_poskozeni,
+      priorita: row.priorita,
+      blokuje_pouziti: row.blokuje_pouziti,
+      datum_nahlaseni: row.datum_nahlaseni,
+      datum_uzavreni: row.datum_uzavreni,
+    })),
+    error: null,
+  };
 }
 
-export function queryJednotkySkladuFull(client: SkladSupabaseClient) {
-  return client.rpc(SKLAD_RPC.getJednotkySkladuFull);
-}
+/** Statistika poškození — agregace z tabulek v TS. */
+export async function queryStatistikaPoskozeni(client: SkladSupabaseClient) {
+  const [polozkyRes, hlaseniRes, kusyRes, jednotkyRes] = await Promise.all([
+    runSkladTableQuery<{
+      skladova_polozka_id: string;
+      nazev: string;
+      jednotka_id: string | null;
+      celkem?: number | string | null;
+    }>(SKLAD_TABLE.skladovePolozky, async () => {
+      const withCelkem = await client
+        .from(SKLAD_TABLE.skladovePolozky)
+        .select("skladova_polozka_id, nazev, jednotka_id, celkem")
+        .order("nazev", { ascending: true });
 
-export function queryTypyPoskozeniFull(client: SkladSupabaseClient) {
-  return client.rpc(SKLAD_RPC.getTypyPoskozeniFull);
-}
+      if (withCelkem.error && isMissingCelkemColumnError(withCelkem.error.message)) {
+        return client
+          .from(SKLAD_TABLE.skladovePolozky)
+          .select("skladova_polozka_id, nazev, jednotka_id")
+          .order("nazev", { ascending: true });
+      }
 
-export function queryPriorityPoskozeniFull(client: SkladSupabaseClient) {
-  return client.rpc(SKLAD_RPC.getPriorityPoskozeniFull);
-}
+      return withCelkem;
+    }),
+    runSkladTableQuery<{
+      skladova_polozka_id: string;
+      pocet_kusu: number | string;
+      blokuje_pouziti: boolean;
+      datum_uzavreni: string | null;
+    }>(SKLAD_TABLE.hlaseniPoskozeni, () =>
+      client
+        .from(SKLAD_TABLE.hlaseniPoskozeni)
+        .select("skladova_polozka_id, pocet_kusu, blokuje_pouziti, datum_uzavreni")
+    ),
+    runSkladTableQuery<{ skladova_polozka_id: string; stav: string }>(
+      SKLAD_TABLE.skladPolozkyKusy,
+      () =>
+        client.from(SKLAD_TABLE.skladPolozkyKusy).select("skladova_polozka_id, stav")
+    ),
+    queryJednotkySkladuFull(client),
+  ]);
 
-export function queryStatistikaPoskozeni(client: SkladSupabaseClient) {
-  return client.rpc(SKLAD_RPC.getStatistikaPoskozeni);
+  const firstError =
+    polozkyRes.error ?? hlaseniRes.error ?? kusyRes.error ?? jednotkyRes.error ?? null;
+
+  if (firstError) {
+    return { data: null as SkladStatistikaRow[] | null, error: firstError };
+  }
+
+  const jednotkaNazev = buildNazevMap(
+    ((jednotkyRes.data ?? []) as SkladJednotka[]).map((row) => ({
+      id: row.jednotka_id,
+      nazev: row.nazev,
+    }))
+  );
+
+  const kusyByPolozka = buildKusyCountByPolozkaId(
+    kusyRes.data.map((row) => ({ skladova_polozka_id: row.skladova_polozka_id }))
+  );
+
+  const blokovaneByPolozka = new Map<string, number>();
+  for (const kus of kusyRes.data) {
+    if (kus.stav !== "blokovano" && kus.stav !== "poskozeno") continue;
+    blokovaneByPolozka.set(
+      kus.skladova_polozka_id,
+      (blokovaneByPolozka.get(kus.skladova_polozka_id) ?? 0) + 1
+    );
+  }
+
+  const hlaseniStats = new Map<
+    string,
+    { otevrena: number; celkem: number; blokujiciKusy: number }
+  >();
+
+  for (const row of hlaseniRes.data) {
+    const id = row.skladova_polozka_id;
+    const current = hlaseniStats.get(id) ?? {
+      otevrena: 0,
+      celkem: 0,
+      blokujiciKusy: 0,
+    };
+    current.celkem += 1;
+    if (!row.datum_uzavreni) {
+      current.otevrena += 1;
+      if (row.blokuje_pouziti) {
+        current.blokujiciKusy += Number(row.pocet_kusu ?? 0);
+      }
+    }
+    hlaseniStats.set(id, current);
+  }
+
+  const rows: SkladStatistikaRow[] = polozkyRes.data.map((row) => {
+    const celkem = toNumber(row.celkem);
+    const kusyCount = kusyByPolozka.get(row.skladova_polozka_id) ?? 0;
+    const stats = hlaseniStats.get(row.skladova_polozka_id);
+
+    return {
+      skladova_polozka_id: row.skladova_polozka_id,
+      nazev: row.nazev,
+      jednotka: lookupNazev(jednotkaNazev, row.jednotka_id),
+      celkem_k_dispozici: celkem > 0 ? celkem : kusyCount,
+      blokovane_kusy: Math.max(
+        blokovaneByPolozka.get(row.skladova_polozka_id) ?? 0,
+        stats?.blokujiciKusy ?? 0
+      ),
+      otevrena_hlaseni: stats?.otevrena ?? 0,
+      celkem_hlaseni: stats?.celkem ?? 0,
+    };
+  });
+
+  return { data: rows, error: null };
 }
 
 /** Otevřená hlášení pro dashboard. */

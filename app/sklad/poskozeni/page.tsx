@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { Modal } from "@/components/ui/modal";
 import { SKLAD_EMPTY_LABEL_EM, SKLAD_TABLE } from "@/lib/sklad/constants";
+import { queryPoskozeniFull } from "@/lib/sklad/queries";
 import {
   formatDateTime,
   getPoskozeniListKusLabel,
@@ -87,7 +88,7 @@ export default function Page() {
   async function load() {
     setLoading(true);
 
-    const { data, error } = await supabase.rpc("get_poskozeni_full");
+    const { data, error } = await queryPoskozeniFull(supabase);
 
     setLoading(false);
 

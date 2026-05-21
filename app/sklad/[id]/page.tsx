@@ -7,6 +7,15 @@ import {
   sumBlokujiciPoskozeneKusy,
   toNumber,
 } from "@/lib/sklad/helpers";
+import {
+  queryJednotkySkladuFull,
+  queryKategorieTechnikyFull,
+  queryPodkategorieTechnikyFull,
+  queryPriorityPoskozeniFull,
+  querySkladovaPolozkaDetail,
+  queryTypyPoskozeniFull,
+} from "@/lib/sklad/queries";
+import { SKLAD_TABLE } from "@/lib/sklad/constants";
 import type {
   SkladDetailRow,
   SkladJednotka,
@@ -19,7 +28,6 @@ import type {
   SkladTypPoskozeniOption,
 } from "@/lib/sklad/types";
 import {
-  SkladDetailConfigError,
   SkladDetailLoadError,
   SkladDetailNotFound,
 } from "./components/SkladDetailAlerts";
@@ -252,30 +260,18 @@ export default async function SkladDetailPage({ params }: PageProps) {
 
   const [
     { data, error },
-    { data: kategorieRaw, error: kategorieError },
-    { data: podkategorieRaw, error: podkategorieError },
-    { data: jednotkyRaw, error: jednotkyError },
+    { data: kategorieRaw },
+    { data: podkategorieRaw },
+    { data: jednotkyRaw },
   ] = await Promise.all([
-    supabase.rpc("get_skladova_polozka_detail", {
-      p_skladova_polozka_id: id,
-    }),
-    supabase.rpc("get_kategorie_techniky_full"),
-    supabase.rpc("get_podkategorie_techniky_full"),
-    supabase.rpc("get_jednotky_skladu_full"),
+    querySkladovaPolozkaDetail(supabase, id),
+    queryKategorieTechnikyFull(supabase),
+    queryPodkategorieTechnikyFull(supabase),
+    queryJednotkySkladuFull(supabase),
   ]);
 
   if (error) {
     return <SkladDetailLoadError message={error.message} />;
-  }
-
-  if (kategorieError || podkategorieError || jednotkyError) {
-    return (
-      <SkladDetailConfigError
-        messages={[kategorieError?.message, podkategorieError?.message, jednotkyError?.message].filter(
-          Boolean
-        ) as string[]}
-      />
-    );
   }
 
   const row = ((data ?? [])[0] ?? null) as SkladDetailRow | null;
@@ -296,21 +292,21 @@ export default async function SkladDetailPage({ params }: PageProps) {
     { data: odpisovaPasmaRaw, error: odpisovaPasmaError },
   ] = await Promise.all([
     supabase
-      .from("sklad_polozky_kusy")
+      .from(SKLAD_TABLE.skladPolozkyKusy)
       .select("kus_id, skladova_polozka_id, poradove_cislo, evidencni_cislo, stav, poznamka, aktivni, porizovaci_hodnota, datum_porizeni, odpisove_pasmo_id")
       .eq("skladova_polozka_id", id)
       .order("poradove_cislo", { ascending: true }),
     supabase
-      .from("hlaseni_poskozeni")
+      .from(SKLAD_TABLE.hlaseniPoskozeni)
       .select(
         "poskozeni_id, skladova_polozka_id, kus_id, zakazka_id, pocet_kusu, popis, typ_poskozeni, priorita, blokuje_pouziti, stav_reseni, datum_nahlaseni, datum_uzavreni"
       )
       .eq("skladova_polozka_id", id)
       .order("datum_nahlaseni", { ascending: false }),
-    supabase.rpc("get_typy_poskozeni_full"),
-    supabase.rpc("get_priority_poskozeni_full"),
+    queryTypyPoskozeniFull(supabase),
+    queryPriorityPoskozeniFull(supabase),
     supabase
-      .from("sklad_odpisova_pasma")
+      .from(SKLAD_TABLE.odpisovaPasma)
       .select("odpisove_pasmo_id, nazev, pocet_mesicu, aktivni, poradi")
       .eq("aktivni", true)
       .order("poradi", { ascending: true })
