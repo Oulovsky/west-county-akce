@@ -1,5 +1,9 @@
 import { getApprovedMinutes, getMeasuredMinutes, getPaymentAmount } from "@/lib/payments";
-import type { TravelReimbursementItem } from "@/lib/admin/travel-payout-display";
+import {
+  sumTravelItemsByStatus,
+  type TravelReimbursementItem,
+} from "@/lib/admin/travel-payout-display";
+import { normalizeTravelStatus } from "@/lib/transport";
 import {
   normalizeAttendancePhase,
   type AttendancePhase,
@@ -34,6 +38,46 @@ export type WorkPhaseSummary = {
   intervalCount: number;
   hasData: boolean;
 };
+
+/** Souhrnná karta cest vedle pracovních fází (částka schváleno = vstup do QR). */
+export type TravelPayoutPhaseCard = {
+  label: string;
+  approvedAmount: number;
+  pendingApprovalAmount: number;
+  pendingApprovalCount: number;
+  rejectedAmount: number;
+  rejectedCount: number;
+  paidAmount: number;
+  paidCount: number;
+  itemCount: number;
+  hasData: boolean;
+};
+
+export function buildTravelPayoutPhaseCard(items: TravelReimbursementItem[]): TravelPayoutPhaseCard {
+  let pendingApprovalCount = 0;
+  let rejectedCount = 0;
+  let paidCount = 0;
+
+  for (const item of items) {
+    const status = normalizeTravelStatus(item.row.status);
+    if (status === "ceka_na_schvaleni") pendingApprovalCount += 1;
+    if (status === "zamitnuto") rejectedCount += 1;
+    if (status === "proplaceno") paidCount += 1;
+  }
+
+  return {
+    label: "Cestovní náhrady",
+    approvedAmount: sumTravelItemsByStatus(items, "schvaleno"),
+    pendingApprovalAmount: sumTravelItemsByStatus(items, "ceka_na_schvaleni"),
+    pendingApprovalCount,
+    rejectedAmount: sumTravelItemsByStatus(items, "zamitnuto"),
+    rejectedCount,
+    paidAmount: sumTravelItemsByStatus(items, "proplaceno"),
+    paidCount,
+    itemCount: items.length,
+    hasData: items.length > 0,
+  };
+}
 
 export function buildWorkPhaseSummaries(
   rows: WorkIntervalLike[],
@@ -108,6 +152,7 @@ export type WorkEmployeePayoutGroup = {
   hasOverride: boolean;
   correctionNote: string | null;
   phaseSummaries: WorkPhaseSummary[];
+  travelPhaseCard: TravelPayoutPhaseCard;
   payout: {
     account: { label: string; qrAccount: string } | null;
     message: string;
@@ -186,6 +231,7 @@ export function buildWorkZakazkaPayoutTree(
       hasOverride: group.hasOverride,
       correctionNote: group.correctionNote ?? null,
       phaseSummaries: buildWorkPhaseSummaries(group.groupItems, group.hourlyRate),
+      travelPhaseCard: buildTravelPayoutPhaseCard(group.travelItems),
       payout: {
         account: group.account,
         message: group.message,

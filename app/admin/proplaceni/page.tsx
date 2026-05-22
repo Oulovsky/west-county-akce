@@ -605,19 +605,71 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
                             </div>
                           </div>
                         ))}
+
+                        {(() => {
+                          const travel = employee.travelPhaseCard;
+                          const hasApproved = travel.approvedAmount > 0;
+                          return (
+                            <div
+                              className={[
+                                "rounded-xl border px-3 py-3 text-sm",
+                                travel.hasData
+                                  ? "border-slate-700 bg-slate-900/80"
+                                  : "border-slate-800/60 bg-slate-950/40 text-slate-500",
+                              ].join(" ")}
+                            >
+                              <div
+                                className={[
+                                  "font-bold",
+                                  travel.hasData ? "text-slate-100" : "text-slate-500",
+                                ].join(" ")}
+                              >
+                                {travel.label}
+                                {travel.itemCount > 0 ? (
+                                  <span className="ml-2 text-xs font-normal text-slate-500">
+                                    ({travel.itemCount}×)
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="mt-2 space-y-2 text-xs">
+                                <div>
+                                  <div className="uppercase tracking-wide text-slate-500">
+                                    K proplacení (schváleno)
+                                  </div>
+                                  <div
+                                    className={
+                                      hasApproved ? "font-semibold text-blue-100" : "text-slate-500"
+                                    }
+                                  >
+                                    {formatMoneyCzk(travel.approvedAmount)}
+                                  </div>
+                                </div>
+                                {travel.pendingApprovalCount > 0 ? (
+                                  <div className="text-amber-200/90">
+                                    Čeká na schválení: {travel.pendingApprovalCount}× ·{" "}
+                                    {formatMoneyCzk(travel.pendingApprovalAmount)}
+                                  </div>
+                                ) : null}
+                                {travel.rejectedCount > 0 ? (
+                                  <div className="text-red-200/80">
+                                    Zamítnuto: {travel.rejectedCount}× ·{" "}
+                                    {formatMoneyCzk(travel.rejectedAmount)} (mimo QR)
+                                  </div>
+                                ) : null}
+                                {travel.paidCount > 0 ? (
+                                  <div className="text-emerald-200/80">
+                                    Proplaceno: {travel.paidCount}× · {formatMoneyCzk(travel.paidAmount)}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {employee.travelItems.length > 0 ? (
                         <div className="space-y-2">
-                          <h4 className="text-sm font-black text-slate-300">Cestovní náhrady</h4>
-                          {employee.travelPendingApprovalTotal > 0 ? (
-                            <p className="text-xs text-slate-500">
-                              Čeká na schválení: {formatMoneyCzk(employee.travelPendingApprovalTotal)}
-                              {employee.travelPaidTotal > 0
-                                ? ` · Již proplaceno: ${formatMoneyCzk(employee.travelPaidTotal)}`
-                                : null}
-                            </p>
-                          ) : null}
+                          <h4 className="text-sm font-black text-slate-300">Detail cestovních náhrad</h4>
                           {employee.travelItems.map((item) => {
                             const status = normalizeTravelStatus(item.row.status);
                             return (
