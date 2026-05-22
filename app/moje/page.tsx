@@ -16,9 +16,12 @@ import { submitTravelReimbursementAction } from "./cestovni-nahrady-actions";
 import {
   DEFAULT_KM_RATE,
   formatKm,
+  getEmployeeTravelStatusLabel,
   getTransportTypeLabel,
-  getTravelAmount,
-  getTravelStatusLabel,
+  getTravelRowAmount,
+  getTravelStatusBadgeVariant,
+  normalizeTravelStatus,
+  type TravelReimbursementStatus,
 } from "@/lib/transport";
 import {
   getNotificationPriorityClass,
@@ -110,7 +113,20 @@ type TravelPaymentRow = {
   poznamka: string | null;
   status: string;
   submitted_at: string | null;
+  paid_at: string | null;
+  rejected_reason: string | null;
+  zakazky?: { cislo_zakazky: string | null; nazev: string | null } | null;
 };
+
+function getTravelZakazkaTitle(row: TravelPaymentRow) {
+  return [row.zakazky?.cislo_zakazky, row.zakazky?.nazev].filter(Boolean).join(" · ") || "Zakázka";
+}
+
+function sumTravelAmount(rows: TravelPaymentRow[], status: TravelReimbursementStatus) {
+  return rows
+    .filter((row) => normalizeTravelStatus(row.status) === status)
+    .reduce((sum, row) => sum + getTravelRowAmount(row), 0);
+}
 
 type MyNotificationRow = {
   id: string;
@@ -507,12 +523,9 @@ function WorkPaymentsOverview({
   const paidTotal = workSummaries
     .filter((summary) => summary.status === "paid")
     .reduce((sum, summary) => sum + summary.finalAmountCzk, 0);
-  const travelWaitingTotal = travelRows
-    .filter((row) => row.status === "schvaleno")
-    .reduce((sum, row) => sum + Number(row.castka ?? getTravelAmount(row.km, row.sazba_za_km)), 0);
-  const travelPaidTotal = travelRows
-    .filter((row) => row.status === "proplaceno")
-    .reduce((sum, row) => sum + Number(row.castka ?? getTravelAmount(row.km, row.sazba_za_km)), 0);
+  const travelPendingApprovalTotal = sumTravelAmount(travelRows, "ceka_na_schvaleni");
+  const travelApprovedTotal = sumTravelAmount(travelRows, "schvaleno");
+  const travelPaidTotal = sumTravelAmount(travelRows, "proplaceno");
 
   return (
     <Card className="space-y-4">
@@ -520,28 +533,45 @@ function WorkPaymentsOverview({
         <div>
           <h2 className="text-2xl font-black text-white">Moje proplacení</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Souhrn práce po zakázkách — vypočtená částka, případná korekce šéfem a stav proplacení.
+            Souhrn práce a cestovních náhrad — stavy schválení, korekce šéfem u práce a částky k proplacení.
           </p>
         </div>
-        <Badge variant="default">{workSummaries.length} zakázek</Badge>
+        <Badge variant="default">
+          {workSummaries.length} zakázek · {travelRows.length} cest
+        </Badge>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-          <div className="text-xs uppercase tracking-wide text-amber-200/80">Práce čeká</div>
-          <div className="mt-1 text-2xl font-black text-amber-100">{formatMoneyCzk(waitingTotal)}</div>
+      <div className="space-y-3">
+        <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Práce</div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+            <div className="text-xs uppercase tracking-wide text-amber-200/80">Čeká na proplacení</div>
+            <div className="mt-1 text-2xl font-black text-amber-100">{formatMoneyCzk(waitingTotal)}</div>
+          </div>
+          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+            <div className="text-xs uppercase tracking-wide text-emerald-200/80">Proplaceno</div>
+            <div className="mt-1 text-2xl font-black text-emerald-100">{formatMoneyCzk(paidTotal)}</div>
+          </div>
         </div>
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-          <div className="text-xs uppercase tracking-wide text-amber-200/80">Cesty čekají</div>
-          <div className="mt-1 text-2xl font-black text-amber-100">{formatMoneyCzk(travelWaitingTotal)}</div>
-        </div>
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
-          <div className="text-xs uppercase tracking-wide text-emerald-200/80">Celkem čeká</div>
-          <div className="mt-1 text-2xl font-black text-emerald-100">{formatMoneyCzk(waitingTotal + travelWaitingTotal)}</div>
-        </div>
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
-          <div className="text-xs uppercase tracking-wide text-emerald-200/80">Celkem proplaceno</div>
-          <div className="mt-1 text-2xl font-black text-emerald-100">{formatMoneyCzk(paidTotal + travelPaidTotal)}</div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Cestovní náhrady</div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-slate-600/40 bg-slate-900/60 px-4 py-3">
+            <div className="text-xs uppercase tracking-wide text-slate-300">Čeká na schválení</div>
+            <div className="mt-1 text-2xl font-black text-slate-100">
+              {formatMoneyCzk(travelPendingApprovalTotal)}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+            <div className="text-xs uppercase tracking-wide text-amber-200/80">Schváleno k proplacení</div>
+            <div className="mt-1 text-2xl font-black text-amber-100">{formatMoneyCzk(travelApprovedTotal)}</div>
+          </div>
+          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+            <div className="text-xs uppercase tracking-wide text-emerald-200/80">Proplaceno</div>
+            <div className="mt-1 text-2xl font-black text-emerald-100">{formatMoneyCzk(travelPaidTotal)}</div>
+          </div>
         </div>
       </div>
 
@@ -615,30 +645,61 @@ function WorkPaymentsOverview({
 
       {travelRows.length > 0 ? (
         <div className="space-y-2">
-          <h3 className="text-lg font-black text-white">Cestovní náhrady</h3>
+          <h3 className="text-lg font-black text-white">Přehled cest</h3>
           {travelRows.map((row) => {
-            const amount = Number(row.castka ?? getTravelAmount(row.km, row.sazba_za_km));
+            const amount = getTravelRowAmount(row);
+            const status = normalizeTravelStatus(row.status);
             return (
               <div key={row.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <div className="font-bold text-white">
+                    <div className="font-bold text-white">{getTravelZakazkaTitle(row)}</div>
+                    <div className="mt-1 text-sm text-slate-300">
                       {row.odkud || "Odkud ?"} → {row.kam || "Kam ?"}
                     </div>
-                    <div className="mt-1 text-xs text-slate-400">
-                      {formatKm(row.km)} × {row.sazba_za_km} Kč/km
+                    <div className="mt-1 text-xs text-slate-500">
+                      Podáno {formatDateTime(row.submitted_at)}
+                      {row.paid_at ? ` · Proplaceno ${formatDateTime(row.paid_at)}` : null}
                     </div>
                   </div>
-                  <Badge variant={row.status === "proplaceno" ? "success" : row.status === "zamitnuto" ? "danger" : "warning"}>
-                    {getTravelStatusLabel(row.status)}
+                  <Badge variant={getTravelStatusBadgeVariant(row.status)}>
+                    {getEmployeeTravelStatusLabel(row.status)}
                   </Badge>
                 </div>
-                <div className="mt-2 font-black text-blue-100">{formatMoneyCzk(amount)}</div>
+
+                <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+                  <div className="flex flex-wrap justify-between gap-2 sm:block">
+                    <span className="text-slate-400">Km</span>
+                    <span className="font-bold text-slate-100">{formatKm(row.km)}</span>
+                  </div>
+                  <div className="flex flex-wrap justify-between gap-2 sm:block">
+                    <span className="text-slate-400">Sazba</span>
+                    <span className="font-bold text-slate-100">{row.sazba_za_km} Kč/km</span>
+                  </div>
+                  <div className="flex flex-wrap justify-between gap-2 sm:block">
+                    <span className="text-slate-400">Částka</span>
+                    <span className="font-black text-blue-100">{formatMoneyCzk(amount)}</span>
+                  </div>
+                </div>
+
+                {row.poznamka ? (
+                  <div className="mt-2 text-sm text-slate-400">Poznámka: {row.poznamka}</div>
+                ) : null}
+
+                {status === "zamitnuto" && row.rejected_reason ? (
+                  <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-100">
+                    Důvod zamítnutí: {row.rejected_reason}
+                  </div>
+                ) : null}
               </div>
             );
           })}
         </div>
-      ) : null}
+      ) : (
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-slate-400">
+          Zatím nemáte žádnou cestovní náhradu.
+        </div>
+      )}
     </Card>
   );
 }
@@ -913,7 +974,9 @@ export default async function MojePage({ searchParams }: PageProps) {
 
   const { data: travelPaymentsRaw, error: travelPaymentsError } = await supabase
     .from("cestovni_nahrady")
-    .select("id, zakazka_id, user_id, zakazka_doprava_id, km, sazba_za_km, castka, odkud, kam, poznamka, status, submitted_at")
+    .select(
+      "id, zakazka_id, user_id, zakazka_doprava_id, km, sazba_za_km, castka, odkud, kam, poznamka, status, submitted_at, paid_at, rejected_reason, zakazky(cislo_zakazky, nazev)"
+    )
     .eq("user_id", user.id)
     .order("submitted_at", { ascending: false });
 
@@ -921,7 +984,14 @@ export default async function MojePage({ searchParams }: PageProps) {
     return <div>Chyba načtení cestovních náhrad: {travelPaymentsError.message}</div>;
   }
 
-  const travelPayments = (travelPaymentsRaw ?? []) as TravelPaymentRow[];
+  const travelPayments = ((travelPaymentsRaw ?? []) as Array<
+    Omit<TravelPaymentRow, "zakazky"> & {
+      zakazky?: TravelPaymentRow["zakazky"] | TravelPaymentRow["zakazky"][];
+    }
+  >).map((row) => ({
+    ...row,
+    zakazky: Array.isArray(row.zakazky) ? (row.zakazky[0] ?? null) : (row.zakazky ?? null),
+  })) as TravelPaymentRow[];
 
   return (
     <div className="mx-auto max-w-lg space-y-4 lg:max-w-none lg:space-y-6">
@@ -947,9 +1017,7 @@ export default async function MojePage({ searchParams }: PageProps) {
 
       <FilterPills activeFilter={activeFilter} />
 
-      <div className="hidden lg:block">
-        <WorkPaymentsOverview workSummaries={workPayoutSummaries} travelRows={travelPayments} />
-      </div>
+      <WorkPaymentsOverview workSummaries={workPayoutSummaries} travelRows={travelPayments} />
 
       <div className="hidden lg:block">
         <MyTransportOverview rows={myTransports} vehiclesById={vehiclesById} zakazkyById={zakazkyById} />

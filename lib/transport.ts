@@ -41,6 +41,31 @@ export function getTravelStatusLabel(value?: string | null) {
   return "Čeká na schválení";
 }
 
+/** Popisky stavu pro zaměstnance na /moje (oddělené od admin štítků). */
+export function getEmployeeTravelStatusLabel(value?: string | null) {
+  const normalized = normalizeTravelStatus(value);
+  if (normalized === "schvaleno") return "Schváleno k proplacení";
+  if (normalized === "zamitnuto") return "Zamítnuto";
+  if (normalized === "proplaceno") return "Proplaceno";
+  return "Čeká na schválení";
+}
+
+export function getTravelStatusBadgeVariant(
+  value?: string | null
+): "success" | "danger" | "warning" | "default" {
+  const normalized = normalizeTravelStatus(value);
+  if (normalized === "proplaceno") return "success";
+  if (normalized === "zamitnuto") return "danger";
+  if (normalized === "schvaleno") return "warning";
+  return "default";
+}
+
+export function getTravelRowAmount(
+  row: { km: number | string; sazba_za_km: number | string; castka?: number | string | null }
+) {
+  return Number(row.castka ?? getTravelAmount(row.km, row.sazba_za_km));
+}
+
 export function getTravelAmount(km: number | string | null | undefined, rate: number | string | null | undefined) {
   const parsedKm = Number(km ?? 0);
   const parsedRate = Number(rate ?? 0);
