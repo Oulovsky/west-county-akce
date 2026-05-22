@@ -156,6 +156,8 @@ export type WorkEmployeePayoutGroup = {
   /** Práce čekající + schválené cesty (před korekcí). */
   calculatedCombinedTotal: number;
   finalPayoutAmount: number;
+  /** Uložená korekce z DB (null = bez override). */
+  overrideAmountCzk: number | null;
   hasOverride: boolean;
   correctionNote: string | null;
   phaseSummaries: WorkPhaseSummary[];
@@ -197,6 +199,7 @@ export function buildWorkZakazkaPayoutTree(
     travelItems: TravelReimbursementItem[];
     calculatedCombinedTotal: number;
     finalPayoutAmount: number;
+    overrideAmountCzk: number | null;
     hasOverride: boolean;
     correctionNote?: string | null;
     account: WorkEmployeePayoutGroup["payout"]["account"];
@@ -235,6 +238,7 @@ export function buildWorkZakazkaPayoutTree(
       travelItems: group.travelItems,
       calculatedCombinedTotal: group.calculatedCombinedTotal,
       finalPayoutAmount: group.finalPayoutAmount,
+      overrideAmountCzk: group.overrideAmountCzk,
       hasOverride: group.hasOverride,
       correctionNote: group.correctionNote ?? null,
       phaseSummaries: buildWorkPhaseSummaries(group.groupItems, group.hourlyRate),

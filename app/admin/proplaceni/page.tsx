@@ -268,6 +268,7 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
         travelPaidTotal,
         calculatedCombinedTotal,
         finalPayoutAmount,
+        overrideAmountCzk: overrideAmount,
         hasOverride: overrideAmount !== null,
         correctionNote: overrideRow?.correction_note ?? null,
         account,
@@ -316,6 +317,7 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
       travelItems: group.travelItems,
       calculatedCombinedTotal: group.calculatedCombinedTotal,
       finalPayoutAmount: group.finalPayoutAmount,
+      overrideAmountCzk: group.overrideAmountCzk,
       hasOverride: group.hasOverride,
       correctionNote: group.correctionNote,
       account: group.account,
@@ -332,7 +334,7 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
   ];
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 p-6 text-slate-200">
+    <div className="mx-auto w-full max-w-7xl space-y-5 p-4 text-slate-200 sm:p-5 lg:px-6 2xl:max-w-[1600px] 2xl:px-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Link href="/admin" className="text-sm font-semibold text-blue-200 hover:text-blue-100">
@@ -491,7 +493,7 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
                                   Korekce šéfem
                                 </div>
                                 <div className="font-bold text-amber-100">
-                                  {formatMoneyCzk(employee.finalPayoutAmount)}
+                                  {formatMoneyCzk(employee.overrideAmountCzk ?? employee.finalPayoutAmount)}
                                 </div>
                                 {employee.correctionNote ? (
                                   <p className="mt-1 text-xs text-slate-400">{employee.correctionNote}</p>
@@ -508,7 +510,11 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
                             </div>
                           </div>
 
-                          <form action={saveWorkPayoutOverrideAction} className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-3">
+                          <form
+                            key={`payout-override-${employee.key}-${employee.overrideAmountCzk ?? "none"}-${employee.correctionNote ?? ""}`}
+                            action={saveWorkPayoutOverrideAction}
+                            className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-3"
+                          >
                             <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
                               Korekce celkové částky
                             </div>
@@ -520,7 +526,11 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
                                   type="number"
                                   min="0"
                                   step="0.01"
-                                  defaultValue={employee.hasOverride ? employee.finalPayoutAmount : ""}
+                                  defaultValue={
+                                    employee.overrideAmountCzk != null
+                                      ? String(employee.overrideAmountCzk)
+                                      : ""
+                                  }
                                   placeholder={String(employee.calculatedCombinedTotal)}
                                   className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
                                 />
@@ -593,7 +603,7 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
                         </div>
                       ) : null}
 
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="grid w-full grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
                         {employee.phaseSummaries.map((phase) => (
                           <div
                             key={phase.phase}
