@@ -195,6 +195,11 @@ function getPhaseSortIndex(value?: string | null) {
   return 2;
 }
 
+const PHASE_GRID_CARD_CLASS =
+  "flex h-full flex-col space-y-3 rounded-2xl border border-slate-800 bg-slate-950/80 p-4";
+
+const WORK_PHASES_GRID_CLASS = "grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3";
+
 function getPhaseAccentClass(value?: string | null) {
   const raw = String(value ?? "").trim().toLowerCase();
   if (raw === "sklad" || raw === "nakladka" || raw === "nakládka") {
@@ -368,12 +373,7 @@ function WorkPhaseCard({ item }: { item: AssignmentWithZakazka }) {
   const phaseLabel = getPhaseLabel(assignment.typ_bloku);
 
   return (
-    <div
-      className={[
-        "space-y-3 rounded-2xl border border-slate-800 bg-slate-950/80 p-4",
-        cancelled ? "opacity-80" : "",
-      ].join(" ")}
-    >
+    <div className={[PHASE_GRID_CARD_CLASS, cancelled ? "opacity-80" : ""].join(" ")}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div
           className={[
@@ -530,34 +530,41 @@ function ZakazkaGroupCard({
       ) : null}
 
       <div className="space-y-3">
-        <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Pracovní úseky</div>
-        {items.map((item) => (
-          <WorkPhaseCard key={String(item.assignment.id)} item={item} />
-        ))}
-      </div>
-
-      {showTransport ? (
-        <div className="space-y-3 border-t border-slate-800 pt-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div
-              className={[
-                "inline-flex rounded-xl border px-4 py-2 text-lg font-black tracking-tight",
-                "border-violet-400/70 bg-violet-500/15 text-violet-50",
-              ].join(" ")}
-            >
-              Přeprava
+        <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Pracovní úseky a přeprava</div>
+        <div className={WORK_PHASES_GRID_CLASS}>
+          {items.map((item) => (
+            <WorkPhaseCard key={String(item.assignment.id)} item={item} />
+          ))}
+          {showTransport ? (
+            <div className={PHASE_GRID_CARD_CLASS}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div
+                  className={[
+                    "inline-flex rounded-xl border px-4 py-2 text-lg font-black tracking-tight",
+                    "border-violet-400/70 bg-violet-500/15 text-violet-50",
+                  ].join(" ")}
+                >
+                  Přeprava
+                </div>
+                <Badge variant="default">Samoregistrace</Badge>
+              </div>
+              <p className="text-xs font-semibold text-slate-400">
+                Bez přiřazení od šéfa · firemní nebo vlastní vozidlo
+              </p>
+              <div className="flex flex-1 flex-col">
+                <TransportAttendanceActions
+                  zakazkaId={zakazkaId}
+                  active={Boolean(transport?.active)}
+                  activeTransportMode={transport?.mode ?? null}
+                  companyVehicles={transportVehicles.companyVehicles}
+                  privateVehicles={transportVehicles.privateVehicles}
+                  embedded
+                />
+              </div>
             </div>
-            <span className="text-xs font-semibold text-slate-400">Samoregistrace · bez přiřazení od šéfa</span>
-          </div>
-          <TransportAttendanceActions
-            zakazkaId={zakazkaId}
-            active={Boolean(transport?.active)}
-            activeTransportMode={transport?.mode ?? null}
-            companyVehicles={transportVehicles.companyVehicles}
-            privateVehicles={transportVehicles.privateVehicles}
-          />
+          ) : null}
         </div>
-      ) : null}
+      </div>
     </Card>
   );
 }
@@ -619,7 +626,7 @@ function AssignmentSection({
           <div className="text-sm text-slate-400">{emptyText}</div>
         </Card>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="flex w-full flex-col gap-4">
           {groups.map((group) => (
             <ZakazkaGroupCard
               key={group.zakazkaId}
@@ -1165,7 +1172,7 @@ export default async function MojePage({ searchParams }: PageProps) {
   })) as TravelPaymentRow[];
 
   return (
-    <div className="mx-auto max-w-lg space-y-4 lg:max-w-none lg:space-y-6">
+    <div className="mx-auto w-full max-w-lg space-y-4 px-1 sm:px-0 lg:max-w-7xl lg:space-y-6 lg:px-4 2xl:max-w-[1600px] 2xl:px-6">
       <div className="lg:hidden">
         <h1 className="text-2xl font-black text-white">Moje zakázky</h1>
         <p className="mt-1 text-sm text-slate-400">{assignments.length} přiřazení</p>

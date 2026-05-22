@@ -27,6 +27,8 @@ type TransportAttendanceActionsProps = {
   companyVehicles: TransportVehicleOption[];
   privateVehicles: TransportVehicleOption[];
   disabled?: boolean;
+  /** Bez vlastního rámečku — pro vložení do grid karty na /moje */
+  embedded?: boolean;
 };
 
 async function readGps(): Promise<{ gps: GpsInput; warning: string | null }> {
@@ -71,6 +73,7 @@ export function TransportAttendanceActions({
   companyVehicles,
   privateVehicles,
   disabled = false,
+  embedded = false,
 }: TransportAttendanceActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -175,12 +178,18 @@ export function TransportAttendanceActions({
     startTransport(reason);
   }
 
+  const panelClassName = embedded
+    ? "flex flex-1 flex-col"
+    : "rounded-2xl border border-slate-800 bg-slate-950/70 p-3";
+
   return (
     <>
       {toast ? <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} /> : null}
 
-      <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-        <div className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Přeprava</div>
+      <div className={panelClassName}>
+        {!embedded ? (
+          <div className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Přeprava</div>
+        ) : null}
 
         {!active ? (
           <div className="mb-3 space-y-3">
