@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
-import { buildWorkPayoutOverrideKey, type WorkPayoutOverrideRow } from "@/lib/admin/work-payout-override";
+import { loadEmployeeOwnPayoutOverrides } from "@/lib/admin/payout-overrides-server";
 import { formatMoneyCzk } from "@/lib/payments";
 import {
   buildEmployeeWorkPayoutSummaries,
@@ -579,7 +579,7 @@ function WorkPaymentsOverview({
                   </span>
                 </div>
 
-                {summary.hasOverride && summary.correctionDeltaCzk !== null ? (
+                {summary.hasOverride ? (
                   <>
                     <div className="flex flex-wrap justify-between gap-2">
                       <span className="text-slate-400">Korekce šéfem</span>
@@ -852,23 +852,10 @@ export default async function MojePage({ searchParams }: PageProps) {
   }
 
   const hourlyRate = toNumber(ownProfileRaw?.hodinovy_naklad_akce);
-  const attendanceZakazkaIds = [...new Set(attendancePayments.map((row) => row.zakazka_id))];
-  const overridesByKey = new Map<string, WorkPayoutOverrideRow>();
+  const { overridesByKey, error: overridesError } = await loadEmployeeOwnPayoutOverrides(user.id);
 
-  if (attendanceZakazkaIds.length > 0) {
-    const { data: overridesRaw, error: overridesError } = await supabase
-      .from("dochazka_payout_overrides")
-      .select("zakazka_id, user_id, override_amount_czk, correction_note, updated_by, updated_at")
-      .eq("user_id", user.id)
-      .in("zakazka_id", attendanceZakazkaIds);
-
-    if (overridesError) {
-      return <div>Chyba načtení korekcí proplacení: {overridesError.message}</div>;
-    }
-
-    for (const row of (overridesRaw ?? []) as WorkPayoutOverrideRow[]) {
-      overridesByKey.set(buildWorkPayoutOverrideKey(row.zakazka_id, row.user_id), row);
-    }
+  if (overridesError) {
+    return <div>Chyba načtení korekcí proplacení: {overridesError}</div>;
   }
 
   const workPayoutSummaries = buildEmployeeWorkPayoutSummaries({

@@ -38,3 +38,30 @@ export async function loadPayoutOverridesByKeys(
 export function getPayoutOverridesAdminClient() {
   return createAdminClient();
 }
+
+/** Vlastní korekce zaměstnance — service role, vždy jen řádky daného user_id (obchází RLS read). */
+export async function loadEmployeeOwnPayoutOverrides(userId: string): Promise<{
+  overridesByKey: Map<string, WorkPayoutOverrideRow>;
+  error: string | null;
+}> {
+  const overridesByKey = new Map<string, WorkPayoutOverrideRow>();
+  if (!userId) {
+    return { overridesByKey, error: null };
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("dochazka_payout_overrides")
+    .select("zakazka_id, user_id, override_amount_czk, correction_note, updated_by, updated_at")
+    .eq("user_id", userId);
+
+  if (error) {
+    return { overridesByKey, error: error.message };
+  }
+
+  for (const row of (data ?? []) as WorkPayoutOverrideRow[]) {
+    overridesByKey.set(buildWorkPayoutOverrideKey(row.zakazka_id, row.user_id), row);
+  }
+
+  return { overridesByKey, error: null };
+}

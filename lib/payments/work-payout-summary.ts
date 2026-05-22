@@ -119,8 +119,8 @@ export function buildEmployeeWorkPayoutSummaries({
       finalAmountCzk = calculatedPaid;
     }
 
-    const correctionDeltaCzk =
-      status === "waiting" && hasOverride ? finalAmountCzk - calculatedAmountCzk : null;
+    const appliesOverride = status === "waiting" && hasOverride;
+    const correctionDeltaCzk = appliesOverride ? finalAmountCzk - calculatedAmountCzk : null;
 
     summaries.push({
       zakazkaId,
@@ -128,8 +128,8 @@ export function buildEmployeeWorkPayoutSummaries({
       calculatedAmountCzk,
       finalAmountCzk,
       correctionDeltaCzk,
-      correctionNote: hasOverride ? overrideRow?.correction_note ?? null : null,
-      hasOverride: status === "waiting" && hasOverride,
+      correctionNote: appliesOverride ? overrideRow?.correction_note ?? null : null,
+      hasOverride: appliesOverride,
       status,
       statusLabel: getEmployeeWorkPayoutStatusLabel(status),
     });
