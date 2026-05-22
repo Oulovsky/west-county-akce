@@ -125,7 +125,7 @@ export function shouldShowMobileZakazkaWorkflowBar(
 ) {
   if (!zakazkaId || !activeTab) return false;
   if (pathname === MOBILE_SCAN_PICKER_PATH) return false;
-  return true;
+  return activeTab === "detail";
 }
 
 export function getMojeZakazkaDetailPath(zakazkaId: string) {

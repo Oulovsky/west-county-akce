@@ -1,17 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { MobileFieldLayout } from "@/components/mobile/MobileFieldLayout";
 import { rememberActiveZakazka } from "@/components/mobile/useActiveZakazkaId";
 import { Card } from "@/components/ui/card";
-import {
-  getDochazkaPath,
-  getMojeZakazkaDetailPath,
-  getZakazkaScanPath,
-  isZakazkaId,
-} from "@/lib/mobile/routes";
+import { getDochazkaPath, isZakazkaId } from "@/lib/mobile/routes";
 
 type ZakazkaOption = {
   zakazkaId: string;
@@ -64,32 +58,6 @@ export function DochazkaPlaceholderClient({
 
   return (
     <MobileFieldLayout>
-      <div className="grid gap-2 lg:hidden">
-        {selectedZakazkaId ? (
-          <>
-            <Link
-              href={getZakazkaScanPath(selectedZakazkaId)}
-              className="flex min-h-14 items-center justify-center rounded-2xl bg-blue-600 text-lg font-black text-white active:scale-[0.99]"
-            >
-              Scan
-            </Link>
-            <Link
-              href={getMojeZakazkaDetailPath(selectedZakazkaId)}
-              className="flex min-h-12 items-center justify-center rounded-2xl border border-slate-700 bg-slate-900 text-sm font-black text-slate-100"
-            >
-              Zakázka
-            </Link>
-          </>
-        ) : (
-          <Link
-            href="/moje"
-            className="flex min-h-12 items-center justify-center rounded-2xl border border-slate-700 bg-slate-900 text-sm font-black text-slate-100"
-          >
-            Vybrat zakázku
-          </Link>
-        )}
-      </div>
-
       <label className="block space-y-2">
         <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Zakázka</span>
         <select
@@ -117,7 +85,7 @@ export function DochazkaPlaceholderClient({
           disabled={!selectedZakazkaId || workState === "active"}
           className="min-h-[3.5rem] rounded-2xl bg-emerald-600 text-lg font-black text-white disabled:opacity-50"
         >
-          Začít práci
+          Zahájit práci
         </button>
         <button
           type="button"

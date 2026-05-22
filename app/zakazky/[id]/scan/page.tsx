@@ -1099,7 +1099,7 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
         />
       </div>
 
-      <Card className="mb-5">
+      <Card className="mb-5 hidden lg:block">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">

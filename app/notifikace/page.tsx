@@ -103,13 +103,13 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
         </form>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      <div className="flex max-w-full flex-wrap gap-2">
         {filters.map((item) => (
           <Link
             key={item.key}
             href={item.href}
             className={[
-              "whitespace-nowrap rounded-full border px-4 py-2 text-sm font-bold transition",
+              "rounded-full border px-4 py-2 text-sm font-bold transition",
               filter === item.key
                 ? "border-blue-400 bg-blue-600 text-white"
                 : "border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800",

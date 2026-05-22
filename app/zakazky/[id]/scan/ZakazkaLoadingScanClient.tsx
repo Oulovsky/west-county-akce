@@ -161,6 +161,23 @@ function isLoadingItem(item: ChecklistItem): item is LoadingChecklistItem {
   return "plan" in item;
 }
 
+function findFirstScanTarget(okruhy: ChecklistOkruh[]): { okruhId: string; itemId: string } | null {
+  for (const okruh of okruhy) {
+    const nextItem = okruh.items.find((item) => item.remaining > 0);
+    if (nextItem) {
+      return { okruhId: okruh.okruhId, itemId: nextItem.skladovaPolozkaId };
+    }
+  }
+
+  const firstOkruh = okruhy[0];
+  const firstItem = firstOkruh?.items[0];
+  if (firstOkruh && firstItem) {
+    return { okruhId: firstOkruh.okruhId, itemId: firstItem.skladovaPolozkaId };
+  }
+
+  return null;
+}
+
 export function ZakazkaLoadingScanClient({
   initialLoadingOkruhy,
   initialUnloadingOkruhy,
@@ -191,10 +208,17 @@ export function ZakazkaLoadingScanClient({
 
   useEffect(() => {
     if (!openScanOnMobile) return;
-    const media = window.matchMedia("(max-width: 1023px)");
-    if (!media.matches) return;
+    if (typeof window === "undefined") return;
+    if (!window.matchMedia("(max-width: 1023px)").matches) return;
+
+    const target = findFirstScanTarget(initialLoadingOkruhy);
+    if (!target) return;
+
+    setWorkflowMode("loading");
+    setSelectedOkruhId(target.okruhId);
+    setSelectedItemId(target.itemId);
     setViewMode("scan");
-  }, [openScanOnMobile]);
+  }, [openScanOnMobile, initialLoadingOkruhy]);
 
   const currentOkruhy: ChecklistOkruh[] =
     workflowMode === "loading" ? loadingOkruhy : unloadingOkruhy;
@@ -243,14 +267,30 @@ export function ZakazkaLoadingScanClient({
     stopCamera();
     processingRef.current = false;
     setWorkflowMode(nextWorkflowMode);
-    setViewMode("okruhy");
-    setSelectedOkruhId(null);
-    setSelectedItemId(null);
     setReserveMode(false);
     setResult(null);
     setValue("");
     setScanMessage("Kamera není spuštěná.");
     setCameraStatus("idle");
+
+    const okruhy = nextWorkflowMode === "loading" ? loadingOkruhy : unloadingOkruhy;
+    if (
+      openScanOnMobile &&
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 1023px)").matches
+    ) {
+      const target = findFirstScanTarget(okruhy);
+      if (target) {
+        setSelectedOkruhId(target.okruhId);
+        setSelectedItemId(target.itemId);
+        setViewMode("scan");
+        return;
+      }
+    }
+
+    setViewMode("okruhy");
+    setSelectedOkruhId(null);
+    setSelectedItemId(null);
   }
 
   function updateLoadingCounts(
@@ -537,6 +577,24 @@ export function ZakazkaLoadingScanClient({
   }, [scanFrame, stopCamera]);
 
   useEffect(() => {
+    if (!openScanOnMobile) return;
+    if (typeof window === "undefined") return;
+    if (!window.matchMedia("(max-width: 1023px)").matches) return;
+    if (viewMode !== "scan" || !selectedItem) return;
+    if (cameraStatus === "scanning" || cameraStatus === "starting") return;
+    if (isLoadingItem(selectedItem) && selectedItem.remaining <= 0 && !reserveMode) return;
+
+    void startCamera();
+  }, [
+    openScanOnMobile,
+    viewMode,
+    selectedItem,
+    cameraStatus,
+    reserveMode,
+    startCamera,
+  ]);
+
+  useEffect(() => {
     return () => stopCamera();
   }, [stopCamera]);
 
@@ -587,7 +645,7 @@ export function ZakazkaLoadingScanClient({
               "rounded-xl px-4 py-3 text-sm font-black transition",
               workflowMode === mode
                 ? "bg-blue-600 text-white shadow-lg shadow-blue-950/40"
-                : "text-slate-400 hover:bg-slate-900 hover:text-white",
+                : "bg-transparent text-slate-500 hover:bg-slate-800/80 hover:text-slate-300",
             ].join(" ")}
           >
             {mode === "loading" ? "Nakládka" : "Vykládka"}
@@ -603,7 +661,12 @@ export function ZakazkaLoadingScanClient({
       ) : null}
 
       {currentOkruhy.length > 0 && viewMode !== "okruhy" ? (
-        <div className="flex flex-wrap gap-2">
+        <div
+          className={[
+            "flex flex-wrap gap-2",
+            openScanOnMobile ? "hidden lg:flex" : "",
+          ].join(" ")}
+        >
           <button
             type="button"
             onClick={() => resetNavigation()}
@@ -630,7 +693,7 @@ export function ZakazkaLoadingScanClient({
       ) : null}
 
       {currentOkruhy.length > 0 && viewMode === "okruhy" ? (
-        <section className="space-y-3">
+        <section className={openScanOnMobile ? "hidden space-y-3 lg:block" : "space-y-3"}>
           <div>
             <h2 className="text-2xl font-black text-white">
               {workflowMode === "loading" ? "Okruhy nakládky" : "Okruhy vykládky"}
@@ -712,7 +775,7 @@ export function ZakazkaLoadingScanClient({
       ) : null}
 
       {viewMode === "polozky" && selectedOkruh ? (
-        <section className="space-y-3">
+        <section className={openScanOnMobile ? "hidden space-y-3 lg:block" : "space-y-3"}>
           <div>
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               {workflowMode === "loading" ? "Checklist nakládky" : "Checklist vykládky"}
@@ -775,20 +838,42 @@ export function ZakazkaLoadingScanClient({
 
       {viewMode === "scan" && selectedItem ? (
         <>
-          <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+          <section
+            className={[
+              "rounded-2xl border border-slate-800 bg-slate-900/70",
+              openScanOnMobile ? "p-3 lg:p-5" : "p-5",
+            ].join(" ")}
+          >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <div
+                  className={[
+                    "text-xs font-semibold uppercase tracking-wide text-slate-500",
+                    openScanOnMobile ? "hidden lg:block" : "",
+                  ].join(" ")}
+                >
                   {workflowMode === "loading" ? "Scan nakládky" : "Scan vykládky"}
                 </div>
-                <h2 className="mt-1 text-2xl font-black text-white">{selectedItem.nazev}</h2>
-                <p className="mt-1 text-sm text-slate-400">
+                <h2
+                  className={[
+                    "font-black text-white",
+                    openScanOnMobile ? "text-xl lg:mt-1 lg:text-2xl" : "mt-1 text-2xl",
+                  ].join(" ")}
+                >
+                  {selectedItem.nazev}
+                </h2>
+                <p
+                  className={[
+                    "mt-1 text-sm text-slate-400",
+                    openScanOnMobile ? "hidden lg:block" : "",
+                  ].join(" ")}
+                >
                   {workflowMode === "loading"
                     ? "Přijímá jen kusy této skladové položky."
                     : "Vrací jen kusy této položky, které jsou naložené na této zakázce."}
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className={openScanOnMobile ? "hidden gap-2 lg:flex" : "flex gap-2"}>
                 {cameraStatus === "scanning" ? (
                   <button
                     type="button"
@@ -821,6 +906,21 @@ export function ZakazkaLoadingScanClient({
                 </button>
               </div>
             </div>
+
+            {openScanOnMobile && cameraStatus === "scanning" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  stopCamera();
+                  processingRef.current = false;
+                  setCameraStatus("idle");
+                  setScanMessage("Kamera zastavená.");
+                }}
+                className="mb-3 w-full rounded-xl border border-slate-600 bg-slate-800 px-4 py-3 text-sm font-bold text-white transition hover:bg-slate-700 lg:hidden"
+              >
+                Zastavit kameru
+              </button>
+            ) : null}
 
             {isLoadingItem(selectedItem) && selectedItem.remaining <= 0 && !reserveMode ? (
               <div className="mt-4 rounded-2xl border border-emerald-700 bg-emerald-950/70 p-4">
@@ -867,7 +967,12 @@ export function ZakazkaLoadingScanClient({
               </div>
             ) : null}
 
-            <div className="mt-4 rounded-2xl border-2 border-blue-500 bg-blue-950/70 p-5 shadow-2xl shadow-blue-950/40">
+            <div
+              className={[
+                "mt-4 rounded-2xl border-2 border-blue-500 bg-blue-950/70 p-5 shadow-2xl shadow-blue-950/40",
+                openScanOnMobile ? "hidden lg:block" : "",
+              ].join(" ")}
+            >
               <div className="text-sm font-black uppercase tracking-wide text-blue-200">
                 Aktuální úkol
               </div>
@@ -907,7 +1012,12 @@ export function ZakazkaLoadingScanClient({
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+            <div
+              className={[
+                "mt-4 grid grid-cols-2 gap-2 text-center sm:grid-cols-4",
+                openScanOnMobile ? "hidden lg:grid" : "",
+              ].join(" ")}
+            >
               {isLoadingItem(selectedItem) ? (
                 <>
                   <CountBox label="Plán" value={selectedItem.plan} />
@@ -923,7 +1033,12 @@ export function ZakazkaLoadingScanClient({
               )}
             </div>
 
-            <div className="mt-2 rounded-xl border border-emerald-700 bg-emerald-950 p-3 text-center">
+            <div
+              className={[
+                "mt-2 rounded-xl border border-emerald-700 bg-emerald-950 p-3 text-center",
+                openScanOnMobile ? "hidden lg:block" : "",
+              ].join(" ")}
+            >
               <div className="text-xs text-emerald-300">Pozice</div>
               <div className="text-3xl font-black text-white">
                 {positionText(selectedItem.pozice).replace("Pozice ", "")}
@@ -943,14 +1058,21 @@ export function ZakazkaLoadingScanClient({
               />
               {cameraStatus !== "scanning" && cameraStatus !== "starting" ? (
                 <div className="flex min-h-64 items-center justify-center px-6 py-10 text-center text-sm text-slate-500">
-                  Kamera zatím neběží. Spusť scan, nebo použij ruční vstup.
+                  {openScanOnMobile
+                    ? "Spouštím kameru…"
+                    : "Kamera zatím neběží. Spusť scan, nebo použij ruční vstup."}
                 </div>
               ) : null}
             </div>
 
             <canvas ref={canvasRef} className="hidden" aria-hidden />
 
-            <div className="mt-3 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300">
+            <div
+              className={[
+                "mt-3 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300",
+                openScanOnMobile ? "hidden lg:block" : "",
+              ].join(" ")}
+            >
               {scanMessage}
             </div>
 
@@ -963,7 +1085,10 @@ export function ZakazkaLoadingScanClient({
 
           <form
             onSubmit={handleSubmit}
-            className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5"
+            className={[
+              "rounded-2xl border border-slate-800 bg-slate-900/70 p-5",
+              openScanOnMobile ? "hidden lg:block" : "",
+            ].join(" ")}
           >
             <label htmlFor="movement-scan-input" className="block text-sm font-semibold text-white">
               Ruční fallback: URL štítku nebo kus_id
