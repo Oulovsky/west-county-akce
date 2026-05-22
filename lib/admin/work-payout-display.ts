@@ -9,7 +9,13 @@ import {
   type AttendancePhase,
 } from "@/lib/zakazka-attendance";
 
-export const WORK_PAYOUT_PHASE_ORDER: AttendancePhase[] = ["nakladka", "stavba", "provoz", "bourani"];
+export const WORK_PAYOUT_PHASE_ORDER: AttendancePhase[] = [
+  "nakladka",
+  "stavba",
+  "provoz",
+  "bourani",
+  "preprava",
+];
 
 export function buildWorkPayoutGroupKey(zakazkaId: string, userId: string) {
   return `${zakazkaId}:${userId}`;
@@ -20,6 +26,7 @@ export const WORK_PAYOUT_PHASE_LABEL: Record<AttendancePhase, string> = {
   stavba: "Stavění",
   provoz: "Provoz akce",
   bourani: "Bourání",
+  preprava: "Přeprava",
 };
 
 export type WorkIntervalLike = {

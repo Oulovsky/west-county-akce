@@ -1,4 +1,6 @@
-export type AttendancePhase = "nakladka" | "stavba" | "provoz" | "bourani";
+export type AttendancePhase = "nakladka" | "stavba" | "provoz" | "bourani" | "preprava";
+
+export type TransportVehicleMode = "firemni" | "vlastni";
 
 export type AttendanceGpsInput = {
   lat?: number | null;
@@ -6,8 +8,20 @@ export type AttendanceGpsInput = {
   accuracy?: number | null;
 };
 
+export function isPrepravaTypBloku(value?: string | null) {
+  return String(value ?? "").trim().toLowerCase() === "preprava";
+}
+
+export function normalizeTransportVehicleMode(value?: string | null): TransportVehicleMode | null {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (raw === "firemni" || raw === "firemni_auto") return "firemni";
+  if (raw === "vlastni" || raw === "soukrome" || raw === "soukrome_auto") return "vlastni";
+  return null;
+}
+
 export function normalizeAttendancePhase(value?: string | null): AttendancePhase {
   const raw = String(value ?? "").trim().toLowerCase();
+  if (raw === "preprava" || raw === "prejezd" || raw === "přejezd") return "preprava";
   if (raw === "sklad" || raw === "nakladka" || raw === "nakládka") return "nakladka";
   if (raw === "stavba") return "stavba";
   if (raw === "bourani" || raw === "bourání") return "bourani";
@@ -19,6 +33,7 @@ export function getAttendancePhaseLabel(value?: string | null) {
   if (phase === "nakladka") return "Nakládka";
   if (phase === "stavba") return "Stavba";
   if (phase === "bourani") return "Bourání";
+  if (phase === "preprava") return "Přeprava";
   return "Provoz";
 }
 

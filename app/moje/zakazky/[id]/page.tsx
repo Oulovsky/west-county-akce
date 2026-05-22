@@ -6,8 +6,11 @@ import { MobileFieldLayout } from "@/components/mobile/MobileFieldLayout";
 import { RememberActiveZakazka } from "@/components/mobile/RememberActiveZakazka";
 import { getDochazkaPath, getZakazkaScanPath } from "@/lib/mobile/routes";
 import { createClient } from "@/lib/supabase/server";
+import { splitTransportVehiclesForUser } from "@/lib/transport-attendance";
+import { isPrepravaTypBloku, normalizeTransportVehicleMode } from "@/lib/zakazka-attendance";
 import { ParticipationActions } from "../../ParticipationActions";
 import { AttendanceActions } from "../../AttendanceActions";
+import { TransportAttendanceActions } from "../../TransportAttendanceActions";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -80,6 +83,7 @@ function getPhaseLabel(value?: string | null) {
   if (raw === "sklad" || raw === "nakladka" || raw === "nakládka") return "Nakládka";
   if (raw === "stavba") return "Stavba";
   if (raw === "bourani" || raw === "bourání") return "Bourání";
+  if (raw === "preprava" || raw === "prejezd" || raw === "přejezd") return "Přeprava";
   return "Provoz akce";
 }
 
@@ -206,7 +210,8 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
       .select("id, assignment_id")
       .eq("user_id", user.id)
       .is("checkout_at", null)
-      .in("assignment_id", assignmentIds);
+      .in("assignment_id", assignmentIds)
+      .neq("typ_faze", "preprava");
 
     if (activeAttendanceError) {
       return <div>Chyba načtení docházky: {activeAttendanceError.message}</div>;
@@ -220,6 +225,49 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
       assignment.active_attendance_id = activeByAssignment.get(String(assignment.id)) ?? null;
     }
   }
+
+  const { data: openTransportRaw, error: openTransportError } = await supabase
+    .from("dochazka_zakazky")
+    .select("transport_vehicle_mode")
+    .eq("user_id", user.id)
+    .eq("zakazka_id", id)
+    .eq("typ_faze", "preprava")
+    .is("checkout_at", null)
+    .maybeSingle();
+
+  if (openTransportError) {
+    return <div>Chyba načtení přepravy: {openTransportError.message}</div>;
+  }
+
+  const activeTransport = Boolean(openTransportRaw);
+  const activeTransportMode = normalizeTransportVehicleMode(openTransportRaw?.transport_vehicle_mode);
+  const workAssignments = assignments.filter(
+    (assignment) => !isPrepravaTypBloku(assignment.typ_bloku)
+  );
+  const hasAcceptedWork = workAssignments.some(
+    (assignment) => normalizeStatus(assignment.confirmation_status) === "accepted"
+  );
+
+  const { data: attendanceVehiclesRaw, error: attendanceVehiclesError } = await supabase
+    .from("vozidla")
+    .select("id, nazev, spz, typ, vlastnik_user_id")
+    .eq("aktivni", true)
+    .order("nazev");
+
+  if (attendanceVehiclesError) {
+    return <div>Chyba načtení vozidel: {attendanceVehiclesError.message}</div>;
+  }
+
+  const transportVehicles = splitTransportVehiclesForUser(
+    (attendanceVehiclesRaw ?? []) as Array<{
+      id: string;
+      nazev: string;
+      spz?: string | null;
+      typ: string;
+      vlastnik_user_id?: string | null;
+    }>,
+    user.id
+  );
 
   const { data: technikaRaw, error: technikaError } = await supabase
     .from("technika_na_zakazce")
@@ -323,15 +371,15 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
 
       <section className="space-y-3">
         <h2 className="text-xl font-bold text-white">Moje fáze práce</h2>
-        {assignments.length === 0 ? (
+        {workAssignments.length === 0 ? (
           <Card>
             <div className="text-sm text-slate-400">
-              K této zakázce nemáte přiřazenou žádnou fázi.
+              K této zakázce nemáte přiřazenou žádnou fázi práce.
             </div>
           </Card>
         ) : (
           <div className="grid gap-3">
-            {assignments.map((assignment) => {
+            {workAssignments.map((assignment) => {
               const status = normalizeStatus(assignment.confirmation_status);
 
               return (
@@ -386,6 +434,22 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
           </div>
         )}
       </section>
+
+      {!zakazka.zrusena && hasAcceptedWork ? (
+        <section className="space-y-3">
+          <h2 className="text-xl font-bold text-white">Přeprava</h2>
+          <p className="text-sm text-slate-400">
+            Přeprava je dostupná automaticky u zakázky. Není potřeba zvláštní přiřazení od šéfa.
+          </p>
+          <TransportAttendanceActions
+            zakazkaId={id}
+            active={activeTransport}
+            activeTransportMode={activeTransportMode}
+            companyVehicles={transportVehicles.companyVehicles}
+            privateVehicles={transportVehicles.privateVehicles}
+          />
+        </section>
+      ) : null}
 
       {zakazka.poznamka ? (
         <Card className="space-y-2">

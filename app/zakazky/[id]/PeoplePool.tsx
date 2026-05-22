@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import Toast from "@/components/Toast";
+import { isPrepravaTypBloku } from "@/lib/zakazka-attendance";
 import { updateAttendanceManualAction } from "./dochazka-actions";
 
 type TypBloku = "sklad" | "stavba" | "akce" | "bourani";
@@ -644,13 +645,21 @@ export default function PeoplePool({ zakazkaId }: { zakazkaId: string }) {
   const isBezObsluhy = String(current?.typ_obsluhy ?? "").trim() === "bez_obsluhy";
 
   const assignmentsByBlock = useMemo(() => {
+    const workAssignments = assignments.filter(
+      (assignment) => !isPrepravaTypBloku(assignment.typ_bloku)
+    );
+
     return {
-      sklad: assignments.filter((assignment) => normalizeTypBloku(assignment.typ_bloku) === "sklad"),
-      stavba: assignments.filter(
+      sklad: workAssignments.filter(
+        (assignment) => normalizeTypBloku(assignment.typ_bloku) === "sklad"
+      ),
+      stavba: workAssignments.filter(
         (assignment) => normalizeTypBloku(assignment.typ_bloku) === "stavba"
       ),
-      akce: assignments.filter((assignment) => normalizeTypBloku(assignment.typ_bloku) === "akce"),
-      bourani: assignments.filter(
+      akce: workAssignments.filter(
+        (assignment) => normalizeTypBloku(assignment.typ_bloku) === "akce"
+      ),
+      bourani: workAssignments.filter(
         (assignment) => normalizeTypBloku(assignment.typ_bloku) === "bourani"
       ),
     };
