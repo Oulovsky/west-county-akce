@@ -131,7 +131,7 @@ export function InvoiceDocument({ data }: { data: InvoiceDocumentData }) {
   const isCancelled = meta?.status === "stornovano" || meta?.paymentStatus === "stornovano";
 
   return (
-    <article className="invoice-document mx-auto max-w-4xl bg-white p-6 text-slate-950 shadow-xl print:shadow-none sm:p-8">
+    <article className="invoice-document page-shell w-full bg-white p-6 text-slate-950 shadow-xl print:shadow-none sm:p-8">
       {isCancelled ? (
         <div className="mb-4 rounded-2xl border border-red-300 bg-red-50 px-5 py-3 text-sm font-black uppercase tracking-wide text-red-700">
           Stornovaný doklad

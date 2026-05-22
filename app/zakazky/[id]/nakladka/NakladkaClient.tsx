@@ -323,7 +323,7 @@ export default function NakladkaClient({
           </div>
 
           {compareMode === "manual" ? (
-            <div className="max-w-xl">
+            <div className="w-full min-w-0">
               <label className="mb-2 block text-sm font-medium text-slate-300">
                 Porovnávací zakázka
               </label>

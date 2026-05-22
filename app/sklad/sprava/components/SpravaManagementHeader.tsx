@@ -16,7 +16,7 @@ export function SpravaManagementHeader({ onAddClick }: Props) {
   return (
     <header className="rounded-2xl border border-blue-900/40 bg-gradient-to-br from-slate-900/90 via-slate-950 to-slate-950 p-6 shadow-[0_8px_32px_rgba(0,0,0,0.25)]">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-        <div className="max-w-2xl space-y-2">
+        <div className="w-full min-w-0 space-y-2">
           <p className="text-xs font-semibold uppercase tracking-widest text-blue-400/90">
             Hlavní pracovní prostor
           </p>

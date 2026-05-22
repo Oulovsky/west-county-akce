@@ -60,7 +60,7 @@ export default function MobileBottomNav() {
       className="mobile-bottom-nav fixed inset-x-0 bottom-0 z-40 border-t border-slate-800 bg-slate-950/95 backdrop-blur-md lg:hidden"
       aria-label="Mobilní navigace"
     >
-      <div className="mx-auto grid max-w-lg grid-cols-5 gap-1 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
+      <div className="grid w-full max-w-full grid-cols-5 gap-1 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
         {MOBILE_NAV_ITEMS.map((item) => {
           const href =
             item.id === "scan"

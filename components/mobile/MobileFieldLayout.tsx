@@ -6,7 +6,7 @@ export function MobileFieldLayout({
   className?: string;
 }) {
   return (
-    <div className={`mx-auto w-full max-w-lg space-y-4 pb-2 lg:max-w-none ${className}`.trim()}>
+    <div className={`page-shell w-full space-y-4 pb-2 ${className}`.trim()}>
       {children}
     </div>
   );

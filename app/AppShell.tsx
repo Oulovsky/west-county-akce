@@ -29,7 +29,7 @@ function MobileAppLayout({
   return (
     <div className="min-h-screen bg-slate-950">
       <div className="hidden border-b border-slate-800 bg-slate-900/95 lg:block">
-        <div className="mx-auto flex w-full max-w-[1920px] items-center justify-between px-4 py-4 sm:px-6 xl:px-8 2xl:px-10">
+        <div className="flex w-full min-w-0 items-center justify-between px-4 py-4 sm:px-6 lg:px-8 2xl:px-10">
           <div className="text-sm font-semibold tracking-wide text-white">WEST COUNTY</div>
           <SidebarNav />
         </div>
@@ -38,7 +38,7 @@ function MobileAppLayout({
       <MobileTopBar />
       <main
         className={[
-          "mobile-main mx-auto w-full max-w-[1920px] px-4 py-4 sm:px-6 lg:px-8 lg:py-5 xl:px-8 2xl:px-10",
+          "mobile-main page-shell w-full px-4 py-4 sm:px-6 lg:px-8 lg:py-5 xl:px-10 2xl:px-12",
           hasWorkflowBar ? "mobile-main--workflow" : "",
         ]
           .filter(Boolean)

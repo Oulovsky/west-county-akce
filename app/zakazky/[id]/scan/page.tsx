@@ -453,7 +453,7 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
 
   if (!perms.nakladkaCteni) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-4">
+      <div className="page-shell w-full">
         <Card className="border-red-900/50 bg-red-950/30">
           <div className="flex items-center gap-3">
             <Badge variant="danger">Bez oprávnění</Badge>
@@ -1003,7 +1003,7 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
 
   if (zakazka.zrusena || zakazka.workflow_stav === "zruseno") {
     return (
-      <div className="mx-auto w-full max-w-3xl px-4">
+      <div className="page-shell w-full">
         <PageHeader
           title="Loading scan"
           description={`${zakazka.cislo_zakazky ?? "—"} — ${zakazka.nazev ?? "Zakázka"}`}
@@ -1086,7 +1086,7 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
   }
 
   return (
-    <div className="mobile-scan-page mx-auto w-full max-w-lg px-0 lg:max-w-3xl lg:px-4">
+    <div className="mobile-scan-page page-shell w-full">
       <RememberActiveZakazka
         zakazkaId={id}
         cislo={zakazka.cislo_zakazky}

@@ -57,7 +57,7 @@ export default async function TemplatesPage() {
   const templates = (data ?? []) as TemplateRow[];
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4">
+    <div className="page-shell w-full">
       <PageHeader
         title="Sestavy"
         description="Legacy správa starých sestav. Nový zakázkový workflow používá Setupy skladu."

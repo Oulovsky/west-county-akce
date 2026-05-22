@@ -4,7 +4,7 @@ import { ReminderRunClient } from "./ReminderRunClient";
 
 export default function AdminRemindersPage() {
   return (
-    <div className="mx-auto max-w-4xl space-y-5 p-6 text-slate-200">
+    <div className="page-shell w-full space-y-5 text-slate-200">
       <div>
         <Link href="/admin" className="text-sm font-semibold text-blue-200 hover:text-blue-100">
           ← Zpět do adminu

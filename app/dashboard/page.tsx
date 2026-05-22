@@ -270,7 +270,7 @@ export default async function DashboardPage() {
   const travelTotal = travel.reduce((sum: number, row: any) => sum + toNumber(row.castka ?? getTravelAmount(row.km, row.sazba_za_km)), 0);
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-6 text-slate-200">
+    <div className="page-shell w-full space-y-6 text-slate-200">
       <div>
         <h1 className="text-3xl font-black text-white">Provozní dashboard</h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-400">

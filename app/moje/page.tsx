@@ -1172,7 +1172,7 @@ export default async function MojePage({ searchParams }: PageProps) {
   })) as TravelPaymentRow[];
 
   return (
-    <div className="mx-auto w-full max-w-lg space-y-4 px-1 sm:px-0 lg:max-w-7xl lg:space-y-6 lg:px-4 2xl:max-w-[1600px] 2xl:px-6">
+    <div className="page-shell w-full space-y-4 lg:space-y-6">
       <div className="lg:hidden">
         <h1 className="text-2xl font-black text-white">Moje zakázky</h1>
         <p className="mt-1 text-sm text-slate-400">{assignments.length} přiřazení</p>

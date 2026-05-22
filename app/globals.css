@@ -29,6 +29,13 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+@layer components {
+  .page-shell {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
 @media (max-width: 1023px) {
   .mobile-main {
     padding-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 1rem);

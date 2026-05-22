@@ -88,7 +88,7 @@ export default async function SkladOdpisovaPasmaPage() {
   const bands = (data ?? []) as SkladOdpisovePasmo[];
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 py-7 text-slate-200">
+    <div className="page-shell w-full space-y-6 py-2 text-slate-200">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white">Odpisová pásma</h1>

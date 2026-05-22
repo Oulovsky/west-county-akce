@@ -255,7 +255,7 @@ export default async function SkladSetupDetailPage({ params }: PageProps) {
   const setup = (setupRaw ?? null) as SetupRow | null;
   if (!setup) {
     return (
-      <div className="mx-auto w-full max-w-5xl px-4">
+      <div className="page-shell w-full">
         <Card>
           <h1 className="text-xl font-black text-white">Setup nenalezen</h1>
           <Link
@@ -315,7 +315,7 @@ export default async function SkladSetupDetailPage({ params }: PageProps) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4">
+    <div className="page-shell w-full">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <Link href="/sklad/setupy" className="text-sm font-semibold text-slate-400 hover:text-white">

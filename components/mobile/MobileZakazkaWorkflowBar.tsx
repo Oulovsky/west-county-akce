@@ -62,7 +62,7 @@ export function MobileZakazkaWorkflowBar() {
       className="mobile-workflow-bar fixed inset-x-0 z-[45] border-t border-slate-800 bg-slate-950/95 px-3 py-2 backdrop-blur-md lg:hidden"
       style={{ bottom: "calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom, 0px))" }}
     >
-      <div className="mx-auto grid max-w-lg grid-cols-3 gap-2">
+      <div className="grid w-full max-w-full grid-cols-3 gap-2">
         {tabs.map((tab) => (
           <WorkflowButton
             key={tab.key}

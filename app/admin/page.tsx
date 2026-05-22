@@ -68,7 +68,7 @@ export default async function AdminPage() {
   const auditLogs = await getAdminAuditLog();
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-4 text-slate-200">
+    <div className="page-shell w-full space-y-4 text-slate-200">
       <h1 className="text-3xl font-bold text-white">Admin panel</h1>
 
       <AdminSection title="Zaměstnanci">

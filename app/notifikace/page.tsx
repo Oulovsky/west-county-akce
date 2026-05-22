@@ -72,7 +72,7 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
   const { data, error } = await query;
   if (error) {
     return (
-      <div className="mx-auto max-w-5xl p-6 text-red-300">
+      <div className="page-shell w-full text-red-300">
         Notifikace se nepodařilo načíst. Pokud tabulka neexistuje, spusťte migrace přes `npx supabase db push`.
         <div className="mt-2 text-sm">{error.message}</div>
       </div>
@@ -88,7 +88,7 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
   ];
 
   return (
-    <div className="mx-auto max-w-lg space-y-4 text-slate-200 lg:max-w-5xl lg:space-y-5 lg:p-6">
+    <div className="page-shell w-full space-y-4 text-slate-200 lg:space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-white lg:text-3xl">Upozornění</h1>

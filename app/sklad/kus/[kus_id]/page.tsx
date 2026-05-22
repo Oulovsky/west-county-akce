@@ -293,7 +293,7 @@ export default async function SkladKusDetailPage({ params }: PageProps) {
   const unifiedState = getUnifiedKusStateLabel({ kus, assignment, openDamage: openPoskozeni });
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-4 px-1 sm:px-0">
+    <div className="page-shell flex w-full flex-col gap-4">
       <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-xl">
         <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           Detail naskenovaného kusu

@@ -115,7 +115,7 @@ export default async function AdminInvoicesPage({ searchParams }: PageProps) {
   const vat = rows.reduce((sum, row) => sum + toNumber(row.dph_castka), 0);
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5 p-6 text-slate-200">
+    <div className="page-shell w-full space-y-5 text-slate-200">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-white">Faktury / podklady pro účetní</h1>

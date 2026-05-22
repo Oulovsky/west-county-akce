@@ -404,7 +404,7 @@ export default async function MistoDetailPage({ params }: PageProps) {
   const misto = (mistoRaw ?? null) as MistoKonaniRow | null;
   if (!misto) {
     return (
-      <div className="mx-auto max-w-4xl">
+      <div className="page-shell w-full">
         <Card>
           <h1 className="text-2xl font-black text-white">Místo konání nenalezeno</h1>
           <p className="mt-2 text-sm text-slate-400">Požadované místo neexistuje nebo k němu nemáte přístup.</p>

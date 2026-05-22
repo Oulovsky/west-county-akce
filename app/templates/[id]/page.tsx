@@ -262,7 +262,7 @@ export default async function TemplateDetailPage({ params }: PageProps) {
   );
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4">
+    <div className="page-shell w-full">
       <PageHeader
         title={`Sestava – ${template.name}`}
         description="Legacy detail staré sestavy. Nový zakázkový workflow používá Setupy skladu."

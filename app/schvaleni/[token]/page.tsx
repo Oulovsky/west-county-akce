@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { InvoiceDocument } from "@/components/invoice/InvoiceDocument";
 import { ApprovalDecisionClient } from "./ApprovalDecisionClient";
 import type { ApprovalSnapshotData } from "@/lib/approval-snapshot";
+import { PAGE_STANDALONE_CLASS } from "@/lib/layout/page-shell";
 
 type PageProps = {
   params: Promise<{ token: string }>;
@@ -23,7 +24,7 @@ type LinkRow = {
 
 function invalidLinkView() {
   return (
-    <div className="mx-auto max-w-2xl py-16">
+    <div className={`${PAGE_STANDALONE_CLASS} py-16`}>
       <div className="rounded-3xl border border-red-500/40 bg-red-950/20 p-6 text-red-100">
         <h1 className="text-2xl font-bold">Neplatný nebo zneplatněný odkaz.</h1>
         <p className="mt-2 text-sm text-red-200">
@@ -36,7 +37,7 @@ function invalidLinkView() {
 
 function legacyLinkWithoutSnapshotView() {
   return (
-    <div className="mx-auto max-w-2xl py-16">
+    <div className={`${PAGE_STANDALONE_CLASS} py-16`}>
       <div className="rounded-3xl border border-amber-500/40 bg-amber-950/20 p-6 text-amber-100">
         <h1 className="text-2xl font-bold">Odkaz je potřeba vystavit znovu.</h1>
         <p className="mt-2 text-sm text-amber-200">
@@ -50,7 +51,7 @@ function legacyLinkWithoutSnapshotView() {
 
 function finalView({ approved, reason }: { approved: boolean; reason?: string | null }) {
   return (
-    <div className="mx-auto max-w-2xl py-16">
+    <div className={`${PAGE_STANDALONE_CLASS} py-16`}>
       <div
         className={[
           "rounded-3xl border p-6",
@@ -103,7 +104,7 @@ export default async function PublicApprovalPage({ params }: PageProps) {
   const snapshot = link.approval_snapshot?.version === 1 ? link.approval_snapshot : null;
   if (snapshot) {
     return (
-      <div className="mx-auto max-w-3xl py-6">
+      <div className={`${PAGE_STANDALONE_CLASS} py-6`}>
         <div className="rounded-3xl border border-slate-700 bg-[#0b1324] p-5 shadow-xl sm:p-8">
           <div>
             <div className="text-sm font-semibold uppercase tracking-wide text-emerald-300">

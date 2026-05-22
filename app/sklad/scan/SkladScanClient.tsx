@@ -181,7 +181,7 @@ export function SkladScanClient() {
   }
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-5 px-1 sm:px-0">
+    <div className="page-shell flex w-full flex-col gap-5">
       <section className="rounded-2xl border border-blue-900/50 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-950 p-5 shadow-xl">
         <p className="text-xs font-semibold uppercase tracking-widest text-blue-400">
           Interní QR workflow

@@ -334,7 +334,7 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-5 p-4 text-slate-200 sm:p-5 lg:px-6 2xl:max-w-[1600px] 2xl:px-8">
+    <div className="page-shell w-full space-y-5 text-slate-200">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Link href="/admin" className="text-sm font-semibold text-blue-200 hover:text-blue-100">

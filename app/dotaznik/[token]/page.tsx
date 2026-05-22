@@ -2,6 +2,7 @@ import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { hashClientQuestionnaireToken } from "@/lib/client-questionnaire";
 import { DotaznikFormClient } from "./DotaznikFormClient";
+import { PAGE_STANDALONE_CLASS } from "@/lib/layout/page-shell";
 
 type PageProps = {
   params: Promise<{ token: string }>;
@@ -85,7 +86,7 @@ async function loadValidLink(rawToken: string) {
 
 function invalidLinkView() {
   return (
-    <div className="mx-auto max-w-2xl py-16">
+    <div className={`${PAGE_STANDALONE_CLASS} py-16`}>
       <div className="rounded-3xl border border-red-500/40 bg-red-950/20 p-6 text-red-100">
         <h1 className="text-2xl font-bold">Neplatný nebo zneplatněný odkaz.</h1>
         <p className="mt-2 text-sm text-red-200">
@@ -98,7 +99,7 @@ function invalidLinkView() {
 
 function thankYouView() {
   return (
-    <div className="mx-auto max-w-2xl py-16">
+    <div className={`${PAGE_STANDALONE_CLASS} py-16`}>
       <div className="rounded-3xl border border-emerald-500/40 bg-emerald-950/20 p-6 text-emerald-100">
         <h1 className="text-2xl font-bold">Děkujeme, odpovědi byly odeslány.</h1>
         <p className="mt-2 text-sm text-emerald-200">
@@ -176,7 +177,7 @@ export default async function PublicDotaznikPage({ params, searchParams }: PageP
   const errorMessage = getErrorMessage(resolvedSearchParams?.error);
 
   return (
-    <div className="mx-auto max-w-3xl py-6">
+    <div className={`${PAGE_STANDALONE_CLASS} py-6`}>
       <div className="rounded-3xl border border-slate-700 bg-[#0b1324] p-5 shadow-xl sm:p-8">
         <div>
           <div className="text-sm font-semibold uppercase tracking-wide text-blue-300">WEST COUNTY</div>

@@ -111,7 +111,7 @@ export default async function SkladServisPage({ searchParams }: PageProps) {
   ];
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 p-4 text-slate-200 sm:p-6">
+    <div className="page-shell w-full space-y-5 text-slate-200">
       <div>
         <Link href="/sklad/sprava" className="text-sm font-semibold text-blue-200 hover:text-blue-100">
           ← Zpět do správy skladu

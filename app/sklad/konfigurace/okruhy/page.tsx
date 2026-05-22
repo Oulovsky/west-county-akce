@@ -240,7 +240,7 @@ export default function SkladOkruhyKonfiguracePage() {
   return (
     <div className="w-full py-7">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div className="max-w-2xl space-y-2">
+        <div className="w-full min-w-0 space-y-2">
           <h1 className="text-3xl font-bold text-white">Okruhy skladu</h1>
           <p className="text-sm leading-relaxed text-slate-400">
             Členění skladu používané pro filtrování a přiřazení položek ve správě

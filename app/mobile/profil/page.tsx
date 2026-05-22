@@ -47,7 +47,7 @@ export default async function MobileProfilePage() {
   const displayName = fullName || profile?.email || user.email || "Uživatel";
 
   return (
-    <div className="mx-auto max-w-lg space-y-4 pb-4 lg:max-w-none">
+    <div className="page-shell w-full space-y-4 pb-4">
       <Card className="space-y-2 p-4">
         <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
           Přihlášený uživatel

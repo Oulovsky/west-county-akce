@@ -131,7 +131,7 @@ export default async function SkladSetupyPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4">
+    <div className="page-shell w-full">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
