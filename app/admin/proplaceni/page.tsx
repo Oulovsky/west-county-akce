@@ -14,12 +14,8 @@ import {
 import { formatKm, getTravelAmount, getTravelStatusLabel } from "@/lib/transport";
 import { buildWorkZakazkaPayoutTree } from "@/lib/admin/work-payout-display";
 import { loadPayoutEmployeeProfiles, type PayoutEmployeeProfile } from "@/lib/admin/payout-profiles";
-import {
-  buildWorkPayoutOverrideKey,
-  resolveFinalPayoutAmount,
-  toOverrideAmountNumber,
-  type WorkPayoutOverrideRow,
-} from "@/lib/admin/work-payout-override";
+import { loadPayoutOverridesByKeys } from "@/lib/admin/payout-overrides-server";
+import { resolveFinalPayoutAmount, toOverrideAmountNumber } from "@/lib/admin/work-payout-override";
 import { getMissingBankAccountMessage, getPaymentAccount } from "@/lib/bank-account";
 import { verifyAppAdminOrSefPage } from "@/lib/auth/admin-access-server";
 import { createClient } from "@/lib/supabase/server";
@@ -230,22 +226,13 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
   ];
 
   const zakazkaIdsForOverrides = [...new Set(items.map((item) => item.row.zakazka_id))];
-  const overridesByKey = new Map<string, WorkPayoutOverrideRow>();
+  const { overridesByKey, error: overridesError } = await loadPayoutOverridesByKeys(
+    zakazkaIdsForOverrides,
+    userIds
+  );
 
-  if (zakazkaIdsForOverrides.length > 0 && userIds.length > 0) {
-    const { data: overridesRaw, error: overridesError } = await supabase
-      .from("dochazka_payout_overrides")
-      .select("zakazka_id, user_id, override_amount_czk, correction_note, updated_by, updated_at")
-      .in("zakazka_id", zakazkaIdsForOverrides)
-      .in("user_id", userIds);
-
-    if (overridesError) {
-      return <div className="p-6 text-red-300">{overridesError.message}</div>;
-    }
-
-    for (const row of (overridesRaw ?? []) as WorkPayoutOverrideRow[]) {
-      overridesByKey.set(buildWorkPayoutOverrideKey(row.zakazka_id, row.user_id), row);
-    }
+  if (overridesError) {
+    return <div className="p-6 text-red-300">{overridesError}</div>;
   }
 
   const workPayoutGroups = await Promise.all(

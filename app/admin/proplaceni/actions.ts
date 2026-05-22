@@ -6,6 +6,7 @@ import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { requireAppAdminOrSef } from "@/lib/auth/admin-access-server";
 import { createClient } from "@/lib/supabase/server";
 import { createNotification } from "@/lib/notifications";
+import { getPayoutOverridesAdminClient } from "@/lib/admin/payout-overrides-server";
 import { parseOverrideAmountCzk } from "@/lib/admin/work-payout-override";
 
 async function requirePaymentManager() {
@@ -115,7 +116,8 @@ export async function markZakazkaEmployeeWorkPaidAction(formData: FormData) {
     totalAmount += getPaymentAmount(approvedMinutes, hourlyRate);
   }
 
-  const { data: payoutOverride } = await supabase
+  const admin = getPayoutOverridesAdminClient();
+  const { data: payoutOverride } = await admin
     .from("dochazka_payout_overrides")
     .select("override_amount_czk")
     .eq("zakazka_id", zakazkaId)
@@ -169,11 +171,12 @@ export async function saveWorkPayoutOverrideAction(formData: FormData) {
     throw new Error("Chybí zakázka nebo zaměstnanec.");
   }
 
-  const { supabase, user } = await requirePaymentManager();
+  const { user } = await requirePaymentManager();
+  const admin = getPayoutOverridesAdminClient();
   const overrideAmount = parseOverrideAmountCzk(amountRaw);
 
   if (overrideAmount === null) {
-    const { error } = await supabase
+    const { error } = await admin
       .from("dochazka_payout_overrides")
       .delete()
       .eq("zakazka_id", zakazkaId)
@@ -182,7 +185,7 @@ export async function saveWorkPayoutOverrideAction(formData: FormData) {
     if (error) throw new Error(error.message);
   } else {
     const updatedAt = new Date().toISOString();
-    const { error } = await supabase.from("dochazka_payout_overrides").upsert(
+    const { error } = await admin.from("dochazka_payout_overrides").upsert(
       {
         zakazka_id: zakazkaId,
         user_id: employeeUserId,
@@ -207,8 +210,9 @@ export async function clearWorkPayoutOverrideAction(formData: FormData) {
     throw new Error("Chybí zakázka nebo zaměstnanec.");
   }
 
-  const { supabase } = await requirePaymentManager();
-  const { error } = await supabase
+  await requirePaymentManager();
+  const admin = getPayoutOverridesAdminClient();
+  const { error } = await admin
     .from("dochazka_payout_overrides")
     .delete()
     .eq("zakazka_id", zakazkaId)
