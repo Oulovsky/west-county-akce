@@ -10,12 +10,17 @@ Datum auditu: 2026-05-20
 | Kód v repu | **ANO** — `app/templates/page.tsx`, `app/templates/[id]/page.tsx` čtou/zapisují tabulky |
 | Baseline `20260401000000` | **NE** — tabulky v baseline chybí |
 
-**TODO (před odstraněním legacy routes):**
-- [ ] Na produkci ověřit: `SELECT to_regclass('public.templates'), to_regclass('public.template_items');`
-- [ ] Pokud tabulky existují: doplnit historickou migraci do repa NEBO označit routes read-only (už je banner)
-- [ ] Pokud tabulky neexistují: `/templates` je broken — **nemaž** routes bez rozhodnutí produktu
+**Produkce ověřena (2026-05-20, `supabase db query --linked`, projekt `west-county-akce-prod`):**
+- `public.templates` — **neexistuje** (`to_regclass` = null)
+- `public.template_items` — **neexistuje**
+- Aktivní náhrada: `setupy` + `setup_polozky` (v migracích `20260516152000`)
 
-**Riziko:** Nové prostředí z čistých migrací = `/templates` spadne na DB chybě.
+**Řešení v kódu (varianta B):**
+- `/templates` → `redirect("/sklad/setupy")` (`app/templates/page.tsx`)
+- `/templates/[id]` → `redirect("/sklad/setupy")` (`app/templates/[id]/page.tsx`)
+- Migrace `templates` / `template_items` **nevytvářet** (varianta D zamítnuta)
+
+**Riziko po redirectu:** nízké — žádná produkční data, routes nejsou v menu.
 
 ## 2. Migrace přepravy (`preprava`)
 
@@ -37,4 +42,4 @@ V `migration list` se objevuje `20260514154051` (local + remote), ale **soubor n
 
 ## 4. Ověření tabulek templates na produkci
 
-SQL dotaz nebyl spuštěn (lokální Postgres neběží; remote query vyžaduje ruční check v Supabase SQL editoru).
+Hotovo — viz sekce 1 výše. `information_schema` neobsahuje `templates` ani `template_items`.
