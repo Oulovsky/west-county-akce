@@ -1,10 +1,15 @@
 import { getApprovedMinutes, getMeasuredMinutes, getPaymentAmount } from "@/lib/payments";
+import type { TravelReimbursementItem } from "@/lib/admin/travel-payout-display";
 import {
   normalizeAttendancePhase,
   type AttendancePhase,
 } from "@/lib/zakazka-attendance";
 
 export const WORK_PAYOUT_PHASE_ORDER: AttendancePhase[] = ["nakladka", "stavba", "provoz", "bourani"];
+
+export function buildWorkPayoutGroupKey(zakazkaId: string, userId: string) {
+  return `${zakazkaId}:${userId}`;
+}
 
 export const WORK_PAYOUT_PHASE_LABEL: Record<AttendancePhase, string> = {
   nakladka: "Nakládka",
@@ -91,7 +96,14 @@ export type WorkEmployeePayoutGroup = {
   userId: string;
   zakazkaTitle: string;
   profile: WorkPayoutProfile | null;
-  calculatedWaitingTotal: number;
+  /** Částka za čekající práci (bez cest). */
+  calculatedWorkWaitingTotal: number;
+  travelApprovedForPaymentTotal: number;
+  travelPendingApprovalTotal: number;
+  travelPaidTotal: number;
+  travelItems: TravelReimbursementItem[];
+  /** Práce čekající + schválené cesty (před korekcí). */
+  calculatedCombinedTotal: number;
   finalPayoutAmount: number;
   hasOverride: boolean;
   correctionNote: string | null;
@@ -102,6 +114,13 @@ export type WorkEmployeePayoutGroup = {
     qrDataUrl: string | null;
   };
 };
+
+export function employeeHasPayablePayout(group: Pick<
+  WorkEmployeePayoutGroup,
+  "calculatedWorkWaitingTotal" | "travelApprovedForPaymentTotal"
+>) {
+  return group.calculatedWorkWaitingTotal > 0 || group.travelApprovedForPaymentTotal > 0;
+}
 
 export type WorkZakazkaPayoutTree = {
   zakazkaId: string;
@@ -119,7 +138,12 @@ export function buildWorkZakazkaPayoutTree(
     profile: WorkEmployeePayoutGroup["profile"];
     groupItems: WorkIntervalLike[];
     hourlyRate: number;
-    calculatedWaitingTotal: number;
+    calculatedWorkWaitingTotal: number;
+    travelApprovedForPaymentTotal: number;
+    travelPendingApprovalTotal: number;
+    travelPaidTotal: number;
+    travelItems: TravelReimbursementItem[];
+    calculatedCombinedTotal: number;
     finalPayoutAmount: number;
     hasOverride: boolean;
     correctionNote?: string | null;
@@ -143,7 +167,7 @@ export function buildWorkZakazkaPayoutTree(
       byZakazka.set(group.zakazkaId, zakazka);
     }
 
-    if (group.calculatedWaitingTotal > 0) {
+    if (employeeHasPayablePayout(group)) {
       zakazka.waitingTotal += group.finalPayoutAmount;
     }
     zakazka.employees.push({
@@ -152,7 +176,12 @@ export function buildWorkZakazkaPayoutTree(
       userId: group.userId,
       zakazkaTitle: group.zakazkaTitle,
       profile: group.profile,
-      calculatedWaitingTotal: group.calculatedWaitingTotal,
+      calculatedWorkWaitingTotal: group.calculatedWorkWaitingTotal,
+      travelApprovedForPaymentTotal: group.travelApprovedForPaymentTotal,
+      travelPendingApprovalTotal: group.travelPendingApprovalTotal,
+      travelPaidTotal: group.travelPaidTotal,
+      travelItems: group.travelItems,
+      calculatedCombinedTotal: group.calculatedCombinedTotal,
       finalPayoutAmount: group.finalPayoutAmount,
       hasOverride: group.hasOverride,
       correctionNote: group.correctionNote ?? null,

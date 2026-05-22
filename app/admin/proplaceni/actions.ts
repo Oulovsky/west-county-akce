@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { getPaymentAmount, getApprovedMinutes, formatMoneyCzk } from "@/lib/payments";
+import { getTravelRowAmount } from "@/lib/transport";
+import { resolveFinalPayoutAmount, toOverrideAmountNumber } from "@/lib/admin/work-payout-override";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { requireAppAdminOrSef } from "@/lib/auth/admin-access-server";
 import { createClient } from "@/lib/supabase/server";
@@ -93,8 +95,19 @@ export async function markZakazkaEmployeeWorkPaidAction(formData: FormData) {
 
   if (attendanceError) throw new Error(attendanceError.message);
 
-  const pendingRows = attendanceRows ?? [];
-  if (pendingRows.length === 0) {
+  const pendingAttendanceRows = attendanceRows ?? [];
+
+  const { data: travelRows, error: travelError } = await supabase
+    .from("cestovni_nahrady")
+    .select("id, km, sazba_za_km, castka, status")
+    .eq("zakazka_id", zakazkaId)
+    .eq("user_id", employeeUserId)
+    .eq("status", "schvaleno");
+
+  if (travelError) throw new Error(travelError.message);
+
+  const pendingTravelRows = travelRows ?? [];
+  if (pendingAttendanceRows.length === 0 && pendingTravelRows.length === 0) {
     throw new Error("Pro tohoto zaměstnance na zakázce není co proplatit.");
   }
 
@@ -108,13 +121,15 @@ export async function markZakazkaEmployeeWorkPaidAction(formData: FormData) {
 
   const hourlyRate = Number(employee?.hodinovy_naklad_akce ?? 0);
   const paidAt = new Date().toISOString();
-  const attendanceIds = pendingRows.map((row) => row.id);
-  let totalAmount = 0;
+  let workAmount = 0;
 
-  for (const row of pendingRows) {
+  for (const row of pendingAttendanceRows) {
     const approvedMinutes = getApprovedMinutes(row);
-    totalAmount += getPaymentAmount(approvedMinutes, hourlyRate);
+    workAmount += getPaymentAmount(approvedMinutes, hourlyRate);
   }
+
+  const travelAmount = pendingTravelRows.reduce((sum, row) => sum + getTravelRowAmount(row), 0);
+  const calculatedCombined = workAmount + travelAmount;
 
   const admin = getPayoutOverridesAdminClient();
   const { data: payoutOverride } = await admin
@@ -124,37 +139,76 @@ export async function markZakazkaEmployeeWorkPaidAction(formData: FormData) {
     .eq("user_id", employeeUserId)
     .maybeSingle();
 
-  const loggedAmount =
-    payoutOverride?.override_amount_czk != null
-      ? Number(payoutOverride.override_amount_czk)
-      : totalAmount;
+  const loggedAmount = resolveFinalPayoutAmount(
+    calculatedCombined,
+    toOverrideAmountNumber(payoutOverride?.override_amount_czk)
+  );
 
-  const { error: updateError } = await supabase
-    .from("dochazka_zakazky")
-    .update({
-      payment_status: "proplaceno",
-      paid_at: paidAt,
-      paid_by: user.id,
-      updated_at: paidAt,
-    })
-    .in("id", attendanceIds);
+  if (pendingAttendanceRows.length > 0) {
+    const attendanceIds = pendingAttendanceRows.map((row) => row.id);
+    const { error: updateError } = await supabase
+      .from("dochazka_zakazky")
+      .update({
+        payment_status: "proplaceno",
+        paid_at: paidAt,
+        paid_by: user.id,
+        updated_at: paidAt,
+      })
+      .in("id", attendanceIds);
 
-  if (updateError) throw new Error(updateError.message);
+    if (updateError) throw new Error(updateError.message);
+  }
+
+  if (pendingTravelRows.length > 0) {
+    const travelIds = pendingTravelRows.map((row) => row.id);
+    const { error: travelUpdateError } = await supabase
+      .from("cestovni_nahrady")
+      .update({
+        status: "proplaceno",
+        paid_by: user.id,
+        paid_at: paidAt,
+        updated_at: paidAt,
+      })
+      .in("id", travelIds);
+
+    if (travelUpdateError) throw new Error(travelUpdateError.message);
+  }
+
+  const detailParts = [
+    pendingAttendanceRows.length > 0 ? `${pendingAttendanceRows.length} intervalů práce` : null,
+    pendingTravelRows.length > 0 ? `${pendingTravelRows.length} cest` : null,
+  ].filter(Boolean);
 
   await logZakazkaHistory(supabase, {
     zakazkaId,
     eventType: "attendance_paid",
     actorId: user.id,
-    title: "Práce zaměstnance na zakázce byla označena jako proplacená.",
-    detail: `${pendingRows.length} intervalů · ${formatMoneyCzk(loggedAmount)}`,
+    title: "Proplacení zaměstnance na zakázce (práce a cesty).",
+    detail: `${detailParts.join(" · ")} · ${formatMoneyCzk(loggedAmount)}`,
     metadata: {
       target_user_id: employeeUserId,
-      attendance_ids: attendanceIds,
+      attendance_ids: pendingAttendanceRows.map((row) => row.id),
+      travel_ids: pendingTravelRows.map((row) => row.id),
       amount_czk: loggedAmount,
-      calculated_amount_czk: totalAmount,
+      calculated_work_czk: workAmount,
+      calculated_travel_czk: travelAmount,
+      calculated_combined_czk: calculatedCombined,
       override_amount_czk: payoutOverride?.override_amount_czk ?? null,
     },
   });
+
+  for (const travel of pendingTravelRows) {
+    await createNotification(supabase, {
+      userId: employeeUserId,
+      type: "travel_reimbursement_paid",
+      priority: "info",
+      title: "Cestovní náhrada byla proplacena",
+      message: formatMoneyCzk(getTravelRowAmount(travel)),
+      relatedZakazkaId: zakazkaId,
+      actionUrl: "/moje",
+      dedupeKey: `travel-paid:${travel.id}`,
+    });
+  }
 
   revalidatePath("/admin/proplaceni");
   revalidatePath("/moje");
