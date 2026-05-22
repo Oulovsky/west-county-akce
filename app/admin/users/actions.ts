@@ -560,7 +560,6 @@ export async function createEmployee(formData: FormData): Promise<ActionResult> 
           prijmeni,
           hodinovy_naklad_akce: hourlyCost,
           aktivni: true,
-          updated_at: new Date().toISOString(),
         },
         { onConflict: "user_id" }
       )
