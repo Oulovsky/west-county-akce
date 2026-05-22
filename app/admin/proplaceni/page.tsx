@@ -10,7 +10,6 @@ import {
   getPaymentAmount,
   getPaymentStatusLabel,
   normalizePaymentStatus,
-  type PaymentStatus,
 } from "@/lib/payments";
 import { getAttendancePhaseLabel } from "@/lib/zakazka-attendance";
 import { formatKm, getTravelAmount, getTravelStatusLabel } from "@/lib/transport";
@@ -20,8 +19,8 @@ import { verifyAppAdminOrSefPage } from "@/lib/auth/admin-access-server";
 import { createClient } from "@/lib/supabase/server";
 import {
   approveTravelReimbursementAction,
-  markAttendancePaidAction,
   markTravelReimbursementPaidAction,
+  markZakazkaEmployeeWorkPaidAction,
   rejectTravelReimbursementAction,
 } from "./actions";
 
@@ -85,6 +84,10 @@ function getProfileName(profile?: PayoutEmployeeProfile | null, fallback?: strin
 
 function getZakazkaTitle(row: AttendanceRow) {
   return [row.zakazky?.cislo_zakazky, row.zakazky?.nazev].filter(Boolean).join(" · ") || "Zakázka";
+}
+
+function buildWorkPayoutGroupKey(zakazkaId: string, userId: string) {
+  return `${zakazkaId}:${userId}`;
 }
 
 async function buildQrDataUrl({
@@ -176,23 +179,15 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
     return <div className="p-6 text-red-300">{profilesError}</div>;
   }
 
-  const items = await Promise.all(
-    rows.map(async (row) => {
-      const profile = profilesById.get(row.user_id) ?? null;
-      const approvedMinutes = getApprovedMinutes(row);
-      const measuredMinutes = getMeasuredMinutes(row.checkin_at, row.checkout_at);
-      const hourlyRate = Number(profile?.hodinovy_naklad_akce ?? 0);
-      const amount = getPaymentAmount(approvedMinutes, hourlyRate);
-      const account = getPaymentAccount(profile);
-      const message = `WEST COUNTY práce ${getZakazkaTitle(row)}`;
-      const qrDataUrl =
-        normalizePaymentStatus(row.payment_status) === "ceka_na_proplaceni" && account
-          ? await buildQrDataUrl({ account: account.qrAccount, amount, message })
-          : null;
+  const items = rows.map((row) => {
+    const profile = profilesById.get(row.user_id) ?? null;
+    const approvedMinutes = getApprovedMinutes(row);
+    const measuredMinutes = getMeasuredMinutes(row.checkin_at, row.checkout_at);
+    const hourlyRate = Number(profile?.hodinovy_naklad_akce ?? 0);
+    const amount = getPaymentAmount(approvedMinutes, hourlyRate);
 
-      return { row, profile, approvedMinutes, measuredMinutes, hourlyRate, amount, account, message, qrDataUrl };
-    })
-  );
+    return { row, profile, approvedMinutes, measuredMinutes, hourlyRate, amount };
+  });
 
   const waitingTotal = items
     .filter((item) => normalizePaymentStatus(item.row.payment_status) === "ceka_na_proplaceni")
@@ -219,29 +214,41 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
   const travelPaidTotal = travelItems
     .filter((item) => item.row.status === "proplaceno")
     .reduce((sum, item) => sum + item.amount, 0);
-  const payoutUserIds = [
-    ...new Set([
-      ...items
-        .filter((item) => normalizePaymentStatus(item.row.payment_status) === "ceka_na_proplaceni")
-        .map((item) => item.row.user_id),
-      ...travelItems.filter((item) => item.row.status === "schvaleno").map((item) => item.row.user_id),
-    ]),
+  const workGroupKeys = [
+    ...new Set(items.map((item) => buildWorkPayoutGroupKey(item.row.zakazka_id, item.row.user_id))),
   ];
-  const combinedPayouts = await Promise.all(
-    payoutUserIds.map(async (userId) => {
+  const workPayoutGroups = await Promise.all(
+    workGroupKeys.map(async (groupKey) => {
+      const [zakazkaId, userId] = groupKey.split(":");
+      const groupItems = items.filter(
+        (item) => item.row.zakazka_id === zakazkaId && item.row.user_id === userId
+      );
       const profile = profilesById.get(userId) ?? null;
-      const workAmount = items
-        .filter((item) => item.row.user_id === userId && normalizePaymentStatus(item.row.payment_status) === "ceka_na_proplaceni")
-        .reduce((sum, item) => sum + item.amount, 0);
-      const travelAmount = travelItems
-        .filter((item) => item.row.user_id === userId && item.row.status === "schvaleno")
-        .reduce((sum, item) => sum + item.amount, 0);
-      const total = workAmount + travelAmount;
+      const zakazkaTitle = groupItems[0] ? getZakazkaTitle(groupItems[0].row) : "Zakázka";
+      const waitingItems = groupItems.filter(
+        (item) => normalizePaymentStatus(item.row.payment_status) === "ceka_na_proplaceni"
+      );
+      const waitingTotal = waitingItems.reduce((sum, item) => sum + item.amount, 0);
       const account = getPaymentAccount(profile);
-      const message = "WEST COUNTY práce a cesty";
+      const message = `WEST COUNTY práce ${zakazkaTitle}`;
       const qrDataUrl =
-        total > 0 && account ? await buildQrDataUrl({ account: account.qrAccount, amount: total, message }) : null;
-      return { userId, profile, workAmount, travelAmount, total, account, message, qrDataUrl };
+        waitingTotal > 0 && account
+          ? await buildQrDataUrl({ account: account.qrAccount, amount: waitingTotal, message })
+          : null;
+
+      return {
+        key: groupKey,
+        zakazkaId,
+        userId,
+        profile,
+        zakazkaTitle,
+        groupItems,
+        waitingItems,
+        waitingTotal,
+        account,
+        message,
+        qrDataUrl,
+      };
     })
   );
 
@@ -302,120 +309,63 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
         ))}
       </div>
 
-      {combinedPayouts.length > 0 ? (
-        <Card className="space-y-3 border-blue-500/30 bg-blue-500/10">
-          <h2 className="text-xl font-black text-white">QR součet podle zaměstnance</h2>
-          <p className="text-sm text-blue-100/80">
-            Součet čekající práce a schválených cestovních náhrad pro jednu platbu zaměstnanci.
-          </p>
-          <div className="grid gap-3 md:grid-cols-2">
-            {combinedPayouts.map((payout) => (
-              <div key={payout.userId} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
-                <div className="font-black text-white">{getProfileName(payout.profile, payout.userId)}</div>
-                <div className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Práce</div>
-                    <div className="font-bold text-slate-100">{formatMoneyCzk(payout.workAmount)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Cesty</div>
-                    <div className="font-bold text-slate-100">{formatMoneyCzk(payout.travelAmount)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Celkem</div>
-                    <div className="font-black text-blue-100">{formatMoneyCzk(payout.total)}</div>
-                  </div>
-                </div>
-                {payout.qrDataUrl ? (
-                  <details className="mt-3">
-                    <summary className="cursor-pointer text-sm font-bold text-blue-100">Zobrazit QR součet</summary>
-                    <img src={payout.qrDataUrl} alt="QR souhrnná platba" className="mt-3 rounded-xl bg-white p-2" />
-                  </details>
-                ) : (
-                  <div className="mt-3 text-sm font-bold text-red-100">
-                    {getMissingBankAccountMessage(payout.profile) ?? "Zaměstnanec nemá vyplněné číslo účtu."}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </Card>
-      ) : null}
-
       <h2 className="text-2xl font-black text-white">Práce</h2>
 
-      {items.length === 0 ? (
+      {workPayoutGroups.length === 0 ? (
         <Card>
           <div className="text-sm text-slate-400">Žádné pracovní záznamy pro tento filtr.</div>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {items.map((item) => {
-            const status = normalizePaymentStatus(item.row.payment_status);
-            return (
-              <Card key={item.row.id} className="space-y-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="text-lg font-black text-white">
-                      {getProfileName(item.profile, item.row.user_id)}
-                    </div>
-                    <div className="mt-1 text-sm font-semibold text-slate-300">{getZakazkaTitle(item.row)}</div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      {formatDate(item.row.checkin_at)} · {getAttendancePhaseLabel(item.row.typ_faze)}
-                    </div>
+        <div className="space-y-4">
+          {workPayoutGroups.map((group) => (
+            <Card key={group.key} className="space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 pb-4">
+                <div>
+                  <div className="text-lg font-black text-white">
+                    {getProfileName(group.profile, group.userId)}
                   </div>
-                  <Badge variant={status === "proplaceno" ? "success" : "warning"}>
-                    {getPaymentStatusLabel(status)}
-                  </Badge>
+                  <div className="mt-1 text-sm font-semibold text-slate-300">{group.zakazkaTitle}</div>
                 </div>
-
-                <div className="grid gap-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Schváleno</div>
-                    <div className="font-bold text-emerald-100">{formatHours(item.approvedMinutes)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Naměřeno</div>
-                    <div className="font-bold text-slate-100">{formatHours(item.measuredMinutes)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Sazba</div>
-                    <div className="font-bold text-slate-100">{formatMoneyCzk(item.hourlyRate)} / h</div>
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Částka</div>
-                    <div className="font-black text-blue-100">{formatMoneyCzk(item.amount)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Účet</div>
-                    <div className="font-bold text-slate-100">{item.account?.label ?? "Není vyplněn"}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Stav</div>
-                    <div className="font-bold text-slate-100">{getPaymentStatusLabel(status)}</div>
-                  </div>
+                <div className="text-right">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">K proplacení</div>
+                  <div className="text-2xl font-black text-blue-100">{formatMoneyCzk(group.waitingTotal)}</div>
                 </div>
+              </div>
 
-                {status === "ceka_na_proplaceni" ? (
+              {group.waitingTotal > 0 ? (
+                <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 px-4 py-4 space-y-3">
+                  <p className="text-sm text-blue-100/90">
+                    QR pro platbu a označení jako proplaceno se vztahují k celé částce zaměstnance na zakázce.
+                  </p>
+                  <div className="grid gap-3 text-sm sm:grid-cols-2">
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-slate-500">Účet</div>
+                      <div className="font-bold text-slate-100">{group.account?.label ?? "Není vyplněn"}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-slate-500">Čekající intervaly</div>
+                      <div className="font-bold text-slate-100">{group.waitingItems.length}</div>
+                    </div>
+                  </div>
                   <div className="flex flex-wrap items-start gap-3">
-                    {item.qrDataUrl ? (
+                    {group.qrDataUrl ? (
                       <details className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
                         <summary className="cursor-pointer text-sm font-bold text-blue-100">
                           Zobrazit QR platbu
                         </summary>
                         <div className="mt-3 space-y-2">
-                          <img src={item.qrDataUrl} alt="QR platba" className="rounded-xl bg-white p-2" />
-                          <div className="text-xs text-slate-400">{item.message}</div>
+                          <img src={group.qrDataUrl} alt="QR platba za zakázku" className="rounded-xl bg-white p-2" />
+                          <div className="text-xs text-slate-400">{group.message}</div>
                         </div>
                       </details>
                     ) : (
                       <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-100">
-                        {getMissingBankAccountMessage(item.profile) ?? "Zaměstnanec nemá vyplněné číslo účtu."}
+                        {getMissingBankAccountMessage(group.profile) ?? "Zaměstnanec nemá vyplněné číslo účtu."}
                       </div>
                     )}
-
-                    <form action={markAttendancePaidAction}>
-                      <input type="hidden" name="attendance_id" value={item.row.id} />
+                    <form action={markZakazkaEmployeeWorkPaidAction}>
+                      <input type="hidden" name="zakazka_id" value={group.zakazkaId} />
+                      <input type="hidden" name="user_id" value={group.userId} />
                       <button
                         type="submit"
                         className="rounded-xl bg-emerald-700 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-600"
@@ -424,14 +374,53 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
                       </button>
                     </form>
                   </div>
-                ) : item.row.paid_at ? (
-                  <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-                    Proplaceno {formatDate(item.row.paid_at)}
-                  </div>
-                ) : null}
-              </Card>
-            );
-          })}
+                </div>
+              ) : null}
+
+              <div className="space-y-2">
+                <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Intervaly</h3>
+                {group.groupItems.map((item) => {
+                  const status = normalizePaymentStatus(item.row.payment_status);
+                  return (
+                    <div
+                      key={item.row.id}
+                      className="rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3 space-y-3"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="text-sm font-semibold text-slate-200">
+                          {formatDate(item.row.checkin_at)} · {getAttendancePhaseLabel(item.row.typ_faze)}
+                        </div>
+                        <Badge variant={status === "proplaceno" ? "success" : "warning"}>
+                          {getPaymentStatusLabel(status)}
+                        </Badge>
+                      </div>
+                      <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-slate-500">Schváleno</div>
+                          <div className="font-bold text-emerald-100">{formatHours(item.approvedMinutes)}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-slate-500">Naměřeno</div>
+                          <div className="font-bold text-slate-100">{formatHours(item.measuredMinutes)}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-slate-500">Sazba</div>
+                          <div className="font-bold text-slate-100">{formatMoneyCzk(item.hourlyRate)} / h</div>
+                        </div>
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-slate-500">Částka</div>
+                          <div className="font-black text-blue-100">{formatMoneyCzk(item.amount)}</div>
+                        </div>
+                      </div>
+                      {item.row.paid_at ? (
+                        <div className="text-xs text-emerald-200">Proplaceno {formatDate(item.row.paid_at)}</div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          ))}
         </div>
       )}
 

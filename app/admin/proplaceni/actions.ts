@@ -72,6 +72,78 @@ export async function markAttendancePaidAction(formData: FormData) {
   revalidatePath(`/zakazky/${attendance.zakazka_id}`);
 }
 
+export async function markZakazkaEmployeeWorkPaidAction(formData: FormData) {
+  const zakazkaId = String(formData.get("zakazka_id") ?? "").trim();
+  const employeeUserId = String(formData.get("user_id") ?? "").trim();
+  if (!zakazkaId || !employeeUserId) {
+    throw new Error("Chybí zakázka nebo zaměstnanec.");
+  }
+
+  const { supabase, user } = await requirePaymentManager();
+
+  const { data: attendanceRows, error: attendanceError } = await supabase
+    .from("dochazka_zakazky")
+    .select("id, zakazka_id, user_id, checkout_at, approved_duration_minutes, payment_status")
+    .eq("zakazka_id", zakazkaId)
+    .eq("user_id", employeeUserId)
+    .eq("payment_status", "ceka_na_proplaceni")
+    .not("checkout_at", "is", null);
+
+  if (attendanceError) throw new Error(attendanceError.message);
+
+  const pendingRows = attendanceRows ?? [];
+  if (pendingRows.length === 0) {
+    throw new Error("Pro tohoto zaměstnance na zakázce není co proplatit.");
+  }
+
+  const { data: employee, error: employeeError } = await supabase
+    .from("profiles")
+    .select("hodinovy_naklad_akce")
+    .eq("user_id", employeeUserId)
+    .maybeSingle();
+
+  if (employeeError) throw new Error(employeeError.message);
+
+  const hourlyRate = Number(employee?.hodinovy_naklad_akce ?? 0);
+  const paidAt = new Date().toISOString();
+  const attendanceIds = pendingRows.map((row) => row.id);
+  let totalAmount = 0;
+
+  for (const row of pendingRows) {
+    const approvedMinutes = getApprovedMinutes(row);
+    totalAmount += getPaymentAmount(approvedMinutes, hourlyRate);
+  }
+
+  const { error: updateError } = await supabase
+    .from("dochazka_zakazky")
+    .update({
+      payment_status: "proplaceno",
+      paid_at: paidAt,
+      paid_by: user.id,
+      updated_at: paidAt,
+    })
+    .in("id", attendanceIds);
+
+  if (updateError) throw new Error(updateError.message);
+
+  await logZakazkaHistory(supabase, {
+    zakazkaId,
+    eventType: "attendance_paid",
+    actorId: user.id,
+    title: "Práce zaměstnance na zakázce byla označena jako proplacená.",
+    detail: `${pendingRows.length} intervalů · ${formatMoneyCzk(totalAmount)}`,
+    metadata: {
+      target_user_id: employeeUserId,
+      attendance_ids: attendanceIds,
+      amount_czk: totalAmount,
+    },
+  });
+
+  revalidatePath("/admin/proplaceni");
+  revalidatePath("/moje");
+  revalidatePath(`/zakazky/${zakazkaId}`);
+}
+
 export async function approveTravelReimbursementAction(formData: FormData) {
   const travelId = String(formData.get("travel_id") ?? "").trim();
   if (!travelId) throw new Error("Chybí ID cestovní náhrady.");
