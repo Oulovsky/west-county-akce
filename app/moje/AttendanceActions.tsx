@@ -60,6 +60,9 @@ export function AttendanceActions({ assignmentId, active, disabled = false }: At
   const [isPending, startTransition] = useTransition();
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [overrideReason, setOverrideReason] = useState("");
+  const [dopravaRezim, setDopravaRezim] = useState<"firemni" | "soukrome" | "spolujizda" | "bez_nahrady">(
+    "firemni"
+  );
   const [lastGps, setLastGps] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -69,7 +72,7 @@ export function AttendanceActions({ assignmentId, active, disabled = false }: At
     setToast({ message: warning && type === "success" ? `${message} ${warning}.` : message, type });
   }
 
-  function startWork(reason?: string) {
+  function startWork(reason?: string, mode: "work" | "prejezd" = "work") {
     if (isPending || disabled || active) return;
     setError(null);
     startTransition(async () => {
@@ -78,6 +81,8 @@ export function AttendanceActions({ assignmentId, active, disabled = false }: At
         assignmentId,
         gps,
         overrideReason: reason ?? null,
+        mode,
+        dopravaRezim: mode === "prejezd" ? dopravaRezim : null,
       });
 
       if (!result.ok) {
@@ -92,7 +97,11 @@ export function AttendanceActions({ assignmentId, active, disabled = false }: At
       setOverrideOpen(false);
       setOverrideReason("");
       router.refresh();
-      showResult("Práce byla zahájena.", "success", result.warning ?? warning);
+      showResult(
+        mode === "prejezd" ? "Přejezd byl zahájen." : "Práce byla zahájena.",
+        "success",
+        result.warning ?? warning
+      );
     });
   }
 
@@ -161,6 +170,53 @@ export function AttendanceActions({ assignmentId, active, disabled = false }: At
             {error}
           </div>
         ) : null}
+      </div>
+
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+        <div className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">
+          Přejezd (pracovní čas / mzda)
+        </div>
+        <label className="mb-3 block text-xs text-slate-400">
+          Režim dopravy
+          <select
+            value={dopravaRezim}
+            onChange={(event) =>
+              setDopravaRezim(
+                event.target.value as "firemni" | "soukrome" | "spolujizda" | "bez_nahrady"
+              )
+            }
+            disabled={active || disabled}
+            className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"
+          >
+            <option value="firemni">Firemní vozidlo</option>
+            <option value="soukrome">Soukromé vozidlo</option>
+            <option value="spolujizda">Spolujízda</option>
+            <option value="bez_nahrady">Bez náhrady</option>
+          </select>
+        </label>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Button
+            type="button"
+            onClick={() => startWork(undefined, "prejezd")}
+            disabled={isPending || disabled || active}
+            className="min-h-12 text-sm font-black"
+          >
+            Zahájit přejezd
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={stopWork}
+            disabled={isPending || disabled || !active}
+            className="min-h-12 text-sm font-black"
+          >
+            Ukončit přejezd
+          </Button>
+        </div>
+        <p className="mt-2 text-xs text-slate-500">
+          Čas přejezdu se počítá jako mzda. U soukromého vozidla můžete navíc zadat palivovou náhradu
+          v sekci cestovních náhrad na zakázce.
+        </p>
       </div>
 
       <Modal

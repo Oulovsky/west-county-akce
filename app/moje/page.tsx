@@ -4,23 +4,28 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
 import { getAttendancePhaseLabel } from "@/lib/zakazka-attendance";
+import { getApprovalStatusLabel, normalizeApprovalStatus } from "@/lib/approval";
 import {
   formatHours,
   formatMoneyCzk,
   getApprovedMinutes,
+  getClaimedMinutes,
   getMeasuredMinutes,
-  getPaymentAmount,
   getPaymentStatusLabel,
+  getWorkApprovedAmount,
+  getWorkClaimedAmount,
 } from "@/lib/payments";
 import { ParticipationActions } from "./ParticipationActions";
 import { AttendanceActions } from "./AttendanceActions";
 import { submitTravelReimbursementAction } from "./cestovni-nahrady-actions";
 import {
-  DEFAULT_KM_RATE,
   formatKm,
+  getAttendanceDopravaRezimLabel,
   getTransportTypeLabel,
-  getTravelAmount,
-  getTravelStatusLabel,
+  getTravelApprovedAmount,
+  getTravelClaimedAmount,
+  getTravelClaimedKm,
+  getTravelDopravaRezimLabel,
 } from "@/lib/transport";
 import {
   getNotificationPriorityClass,
@@ -71,10 +76,16 @@ type AttendancePaymentRow = {
   assignment_id: string | null;
   user_id: string;
   typ_faze: string | null;
+  doprava_rezim?: string | null;
   checkin_at: string | null;
   checkout_at: string | null;
+  claimed_duration_minutes?: number | string | null;
+  claimed_amount_czk?: number | string | null;
   approved_duration_minutes: number | string | null;
+  approved_amount_czk?: number | string | null;
+  approval_status?: string | null;
   payment_status: string | null;
+  correction_note?: string | null;
   profiles?: { hodinovy_naklad_akce: number | string | null } | null;
   zakazky?: { cislo_zakazky: string | null; nazev: string | null } | null;
 };
@@ -104,13 +115,22 @@ type TravelPaymentRow = {
   zakazka_id: string;
   user_id: string;
   zakazka_doprava_id: string | null;
+  doprava_rezim?: string | null;
   km: number | string;
+  claimed_km?: number | string | null;
   sazba_za_km: number | string;
-  castka: number | string | null;
+  spotreba_l_100km?: number | string | null;
+  cena_paliva_kc_l?: number | string | null;
+  claimed_amount_czk?: number | string | null;
+  approved_km?: number | string | null;
+  approved_amount_czk?: number | string | null;
   odkud: string | null;
   kam: string | null;
   poznamka: string | null;
-  status: string;
+  approval_status?: string | null;
+  payment_status?: string | null;
+  correction_note?: string | null;
+  status?: string;
   submitted_at: string | null;
 };
 
@@ -507,24 +527,48 @@ function WorkPaymentsOverview({
     .filter((row) => row.checkout_at)
     .map((row) => {
       const measuredMinutes = getMeasuredMinutes(row.checkin_at, row.checkout_at);
-      const approvedMinutes = getApprovedMinutes(row);
+      const claimedMinutes = getClaimedMinutes(row);
+      const approvedMinutes =
+        normalizeApprovalStatus(row.approval_status) === "schvaleno"
+          ? getApprovedMinutes(row)
+          : null;
       const hourlyRate = toNumber(row.profiles?.hodinovy_naklad_akce);
-      const amount = getPaymentAmount(approvedMinutes, hourlyRate);
-      return { row, measuredMinutes, approvedMinutes, hourlyRate, amount };
+      const claimedAmount = getWorkClaimedAmount({ ...row, hourlyRate });
+      const approvedAmount =
+        normalizeApprovalStatus(row.approval_status) === "schvaleno"
+          ? getWorkApprovedAmount({ ...row, hourlyRate })
+          : null;
+      return {
+        row,
+        measuredMinutes,
+        claimedMinutes,
+        approvedMinutes,
+        hourlyRate,
+        claimedAmount,
+        approvedAmount,
+      };
     });
 
   const waitingTotal = items
-    .filter((item) => item.row.payment_status !== "proplaceno")
-    .reduce((sum, item) => sum + item.amount, 0);
+    .filter(
+      (item) =>
+        normalizeApprovalStatus(item.row.approval_status) === "schvaleno" &&
+        item.row.payment_status !== "proplaceno"
+    )
+    .reduce((sum, item) => sum + (item.approvedAmount ?? 0), 0);
   const paidTotal = items
     .filter((item) => item.row.payment_status === "proplaceno")
-    .reduce((sum, item) => sum + item.amount, 0);
+    .reduce((sum, item) => sum + (item.approvedAmount ?? item.claimedAmount), 0);
   const travelWaitingTotal = travelRows
-    .filter((row) => row.status === "schvaleno")
-    .reduce((sum, row) => sum + Number(row.castka ?? getTravelAmount(row.km, row.sazba_za_km)), 0);
+    .filter(
+      (row) =>
+        normalizeApprovalStatus(row.approval_status) === "schvaleno" &&
+        row.payment_status !== "proplaceno"
+    )
+    .reduce((sum, row) => sum + getTravelApprovedAmount(row), 0);
   const travelPaidTotal = travelRows
-    .filter((row) => row.status === "proplaceno")
-    .reduce((sum, row) => sum + Number(row.castka ?? getTravelAmount(row.km, row.sazba_za_km)), 0);
+    .filter((row) => row.payment_status === "proplaceno")
+    .reduce((sum, row) => sum + getTravelApprovedAmount(row), 0);
 
   return (
     <Card className="space-y-4">
@@ -568,41 +612,58 @@ function WorkPaymentsOverview({
               .filter(Boolean)
               .join(" · ") || "Zakázka";
             const paid = item.row.payment_status === "proplaceno";
+            const approval = normalizeApprovalStatus(item.row.approval_status);
             return (
               <div key={item.row.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="font-bold text-white">{title}</div>
                     <div className="mt-1 text-xs text-slate-400">
-                      {getAttendancePhaseLabel(item.row.typ_faze)} · {formatDateTime(item.row.checkin_at)}
+                      {getAttendancePhaseLabel(item.row.typ_faze)}
+                      {item.row.typ_faze === "prejezd" && item.row.doprava_rezim
+                        ? ` · ${getAttendanceDopravaRezimLabel(item.row.doprava_rezim)}`
+                        : ""}{" "}
+                      · {formatDateTime(item.row.checkin_at)}
                     </div>
                   </div>
-                  <Badge variant={paid ? "success" : "warning"}>
-                    {getPaymentStatusLabel(item.row.payment_status)}
+                  <Badge
+                    variant={
+                      approval === "schvaleno" ? "success" : approval === "zamitneto" ? "danger" : "warning"
+                    }
+                  >
+                    {getApprovalStatusLabel(approval)}
+                    {paid ? " · Proplaceno" : ""}
                   </Badge>
                 </div>
-                <div className="mt-3 grid gap-2 text-sm sm:grid-cols-5">
+                <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
                   <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Naměřeno</div>
-                    <div className="font-bold text-slate-100">{formatHours(item.measuredMinutes)}</div>
+                    <div className="text-xs uppercase tracking-wide text-slate-500">Nárok čas</div>
+                    <div className="font-bold text-slate-100">{formatHours(item.claimedMinutes)}</div>
                   </div>
                   <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Schváleno</div>
-                    <div className="font-bold text-emerald-100">{formatHours(item.approvedMinutes)}</div>
+                    <div className="text-xs uppercase tracking-wide text-slate-500">Uznáno čas</div>
+                    <div className="font-bold text-emerald-100">
+                      {item.approvedMinutes != null ? formatHours(item.approvedMinutes) : "—"}
+                    </div>
                   </div>
                   <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Sazba</div>
-                    <div className="font-bold text-slate-100">{formatMoneyCzk(item.hourlyRate)} / h</div>
+                    <div className="text-xs uppercase tracking-wide text-slate-500">Nárok Kč</div>
+                    <div className="font-bold text-slate-100">{formatMoneyCzk(item.claimedAmount)}</div>
                   </div>
                   <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Částka</div>
-                    <div className="font-black text-blue-100">{formatMoneyCzk(item.amount)}</div>
+                    <div className="text-xs uppercase tracking-wide text-slate-500">Uznáno Kč</div>
+                    <div className="font-black text-blue-100">
+                      {item.approvedAmount != null ? formatMoneyCzk(item.approvedAmount) : "—"}
+                    </div>
                   </div>
                   <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Stav</div>
+                    <div className="text-xs uppercase tracking-wide text-slate-500">Proplacení</div>
                     <div className="font-bold text-slate-100">{getPaymentStatusLabel(item.row.payment_status)}</div>
                   </div>
                 </div>
+                {item.row.correction_note ? (
+                  <div className="mt-2 text-sm text-slate-400">Poznámka šéfa: {item.row.correction_note}</div>
+                ) : null}
               </div>
             );
           })}
@@ -613,23 +674,59 @@ function WorkPaymentsOverview({
         <div className="space-y-2">
           <h3 className="text-lg font-black text-white">Cestovní náhrady</h3>
           {travelRows.map((row) => {
-            const amount = Number(row.castka ?? getTravelAmount(row.km, row.sazba_za_km));
+            const approval = normalizeApprovalStatus(row.approval_status);
+            const claimedKm = getTravelClaimedKm(row);
+            const claimedAmount = getTravelClaimedAmount(row);
+            const approvedAmount =
+              approval === "schvaleno" ? getTravelApprovedAmount(row) : null;
             return (
               <div key={row.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="font-bold text-white">
-                      {row.odkud || "Odkud ?"} → {row.kam || "Kam ?"}
+                      {getTravelDopravaRezimLabel(row.doprava_rezim)} · {row.odkud || "Odkud ?"} →{" "}
+                      {row.kam || "Kam ?"}
                     </div>
-                    <div className="mt-1 text-xs text-slate-400">
-                      {formatKm(row.km)} × {row.sazba_za_km} Kč/km
-                    </div>
+                    <div className="mt-1 text-xs text-slate-400">Nárok {formatKm(claimedKm)}</div>
                   </div>
-                  <Badge variant={row.status === "proplaceno" ? "success" : row.status === "zamitnuto" ? "danger" : "warning"}>
-                    {getTravelStatusLabel(row.status)}
+                  <Badge
+                    variant={
+                      approval === "schvaleno"
+                        ? "success"
+                        : approval === "zamitneto"
+                          ? "danger"
+                          : "warning"
+                    }
+                  >
+                    {getApprovalStatusLabel(approval)}
+                    {row.payment_status === "proplaceno" ? " · Proplaceno" : ""}
                   </Badge>
                 </div>
-                <div className="mt-2 font-black text-blue-100">{formatMoneyCzk(amount)}</div>
+                <div className="mt-3 grid gap-2 text-sm sm:grid-cols-4">
+                  <div>
+                    <div className="text-xs text-slate-500">Nárok km</div>
+                    <div className="font-bold">{formatKm(claimedKm)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">Uznáno km</div>
+                    <div className="font-bold text-emerald-100">
+                      {approval === "schvaleno" ? formatKm(row.approved_km ?? claimedKm) : "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">Nárok Kč</div>
+                    <div className="font-bold">{formatMoneyCzk(claimedAmount)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">Uznáno Kč</div>
+                    <div className="font-black text-blue-100">
+                      {approvedAmount != null ? formatMoneyCzk(approvedAmount) : "—"}
+                    </div>
+                  </div>
+                </div>
+                {row.correction_note ? (
+                  <div className="mt-2 text-sm text-slate-400">Poznámka šéfa: {row.correction_note}</div>
+                ) : null}
               </div>
             );
           })}
@@ -693,27 +790,81 @@ function MyTransportOverview({
                   <form action={submitTravelReimbursementAction} className="mt-3 grid gap-3 md:grid-cols-2">
                     <input type="hidden" name="zakazka_id" value={row.zakazka_id} />
                     <input type="hidden" name="zakazka_doprava_id" value={row.id} />
-                    <label className="text-sm text-slate-300">
-                      Km
-                      <input name="km" type="number" min="0" step="0.1" required className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white" />
+                    <input type="hidden" name="sazba_za_km" value="0" />
+                    <label className="text-sm text-slate-300 md:col-span-2">
+                      Režim náhrady
+                      <select
+                        name="doprava_rezim"
+                        defaultValue="soukrome_auto"
+                        className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                      >
+                        <option value="firemni_auto">Firemní vozidlo (bez Kč náhrady)</option>
+                        <option value="soukrome_auto">Soukromé vozidlo (palivo)</option>
+                        <option value="spolujizda">Spolujízda</option>
+                        <option value="bez_nahrady">Bez náhrady</option>
+                      </select>
                     </label>
                     <label className="text-sm text-slate-300">
-                      Sazba za km
-                      <input name="sazba_za_km" type="number" min="0" step="0.1" defaultValue={DEFAULT_KM_RATE} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white" />
+                      Km
+                      <input
+                        name="km"
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                      />
+                    </label>
+                    <label className="text-sm text-slate-300">
+                      Spotřeba (l/100 km)
+                      <input
+                        name="spotreba_l_100km"
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        placeholder="např. 7"
+                        className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                      />
+                    </label>
+                    <label className="text-sm text-slate-300">
+                      Cena paliva (Kč/l)
+                      <input
+                        name="cena_paliva_kc_l"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="např. 38"
+                        className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                      />
                     </label>
                     <label className="text-sm text-slate-300">
                       Odkud
-                      <input name="odkud" defaultValue={row.odkud ?? ""} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white" />
+                      <input
+                        name="odkud"
+                        defaultValue={row.odkud ?? ""}
+                        className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                      />
                     </label>
                     <label className="text-sm text-slate-300">
                       Kam
-                      <input name="kam" defaultValue={row.kam ?? ""} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white" />
+                      <input
+                        name="kam"
+                        defaultValue={row.kam ?? ""}
+                        className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                      />
                     </label>
                     <label className="text-sm text-slate-300 md:col-span-2">
                       Poznámka
-                      <textarea name="poznamka" rows={2} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white" />
+                      <textarea
+                        name="poznamka"
+                        rows={2}
+                        className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                      />
                     </label>
-                    <button className="rounded-xl bg-blue-700 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-600">
+                    <p className="text-xs text-slate-500 md:col-span-2">
+                      Náhrada za soukromé auto: (km / 100) × spotřeba × cena paliva. Čas přejezdu
+                      evidujte zvlášť jako přejezd (mzda).
+                    </p>
+                    <button className="rounded-xl bg-blue-700 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-600 md:col-span-2 md:max-w-xs">
                       Odeslat ke schválení
                     </button>
                   </form>
@@ -819,7 +970,9 @@ export default async function MojePage({ searchParams }: PageProps) {
 
   const { data: attendancePaymentsRaw, error: attendancePaymentsError } = await supabase
     .from("dochazka_zakazky")
-    .select("id, zakazka_id, assignment_id, user_id, typ_faze, checkin_at, checkout_at, approved_duration_minutes, payment_status, zakazky(cislo_zakazky, nazev)")
+    .select(
+      "id, zakazka_id, assignment_id, user_id, typ_faze, doprava_rezim, checkin_at, checkout_at, claimed_duration_minutes, claimed_amount_czk, approved_duration_minutes, approved_amount_czk, approval_status, payment_status, correction_note, zakazky(cislo_zakazky, nazev)"
+    )
     .eq("user_id", user.id)
     .not("checkout_at", "is", null)
     .order("checkin_at", { ascending: false })
@@ -899,7 +1052,9 @@ export default async function MojePage({ searchParams }: PageProps) {
 
   const { data: travelPaymentsRaw, error: travelPaymentsError } = await supabase
     .from("cestovni_nahrady")
-    .select("id, zakazka_id, user_id, zakazka_doprava_id, km, sazba_za_km, castka, odkud, kam, poznamka, status, submitted_at")
+    .select(
+      "id, zakazka_id, user_id, zakazka_doprava_id, doprava_rezim, km, claimed_km, sazba_za_km, spotreba_l_100km, cena_paliva_kc_l, claimed_amount_czk, approved_km, approved_amount_czk, approval_status, payment_status, correction_note, odkud, kam, poznamka, submitted_at"
+    )
     .eq("user_id", user.id)
     .order("submitted_at", { ascending: false });
 

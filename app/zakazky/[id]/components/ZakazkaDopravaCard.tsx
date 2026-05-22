@@ -5,13 +5,13 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/server";
+import { getApprovalStatusLabel, normalizeApprovalStatus } from "@/lib/approval";
 import {
   DEFAULT_KM_RATE,
   formatDateTime,
   formatKm,
   getTransportTypeLabel,
-  getTravelAmount,
-  getTravelStatusLabel,
+  getTravelClaimedAmount,
   getVehicleTypeLabel,
 } from "@/lib/transport";
 import { formatMoneyCzk } from "@/lib/payments";
@@ -53,8 +53,9 @@ type TravelRow = {
   user_id: string;
   km: number | string;
   sazba_za_km: number | string;
-  castka: number | string | null;
-  status: string;
+  claimed_amount_czk?: number | string | null;
+  approval_status?: string | null;
+  status?: string | null;
 };
 
 function profileLabel(profile?: ProfileRow | null) {
@@ -184,7 +185,10 @@ export async function ZakazkaDopravaCard({ zakazkaId }: { zakazkaId: string }) {
       supabase.from("vozidla").select("id, nazev, spz, typ, vlastnik_user_id, aktivni").eq("aktivni", true).order("nazev"),
       supabase.from("profiles").select("user_id, email, jmeno, prijmeni").order("prijmeni"),
       supabase.from("zakazka_doprava").select("*").eq("zakazka_id", zakazkaId).order("odjezd_at"),
-      supabase.from("cestovni_nahrady").select("id, zakazka_doprava_id, user_id, km, sazba_za_km, castka, status").eq("zakazka_id", zakazkaId),
+      supabase
+        .from("cestovni_nahrady")
+        .select("id, zakazka_doprava_id, user_id, km, sazba_za_km, claimed_amount_czk, approval_status, status")
+        .eq("zakazka_id", zakazkaId),
     ]);
 
   const vehicles = (vehiclesRaw ?? []) as VehicleRow[];
@@ -261,9 +265,9 @@ export async function ZakazkaDopravaCard({ zakazkaId }: { zakazkaId: string }) {
                   <div className="mt-4 grid gap-2">
                     {travel.map((item) => (
                       <div key={item.id} className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-50">
-                        Cestovní náhrada: {formatKm(item.km)} × {item.sazba_za_km} Kč/km ={" "}
-                        {formatMoneyCzk(Number(item.castka ?? getTravelAmount(item.km, item.sazba_za_km)))} ·{" "}
-                        {getTravelStatusLabel(item.status)}
+                        Cestovní náhrada: {formatKm(item.km)} · nárok{" "}
+                        {formatMoneyCzk(getTravelClaimedAmount(item))} ·{" "}
+                        {getApprovalStatusLabel(normalizeApprovalStatus(item.approval_status ?? item.status))}
                       </div>
                     ))}
                   </div>

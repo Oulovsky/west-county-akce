@@ -1,4 +1,4 @@
-export type AttendancePhase = "nakladka" | "stavba" | "provoz" | "bourani";
+export type AttendancePhase = "nakladka" | "stavba" | "provoz" | "bourani" | "prejezd";
 
 export type AttendanceGpsInput = {
   lat?: number | null;
@@ -8,6 +8,7 @@ export type AttendanceGpsInput = {
 
 export function normalizeAttendancePhase(value?: string | null): AttendancePhase {
   const raw = String(value ?? "").trim().toLowerCase();
+  if (raw === "prejezd" || raw === "přejezd") return "prejezd";
   if (raw === "sklad" || raw === "nakladka" || raw === "nakládka") return "nakladka";
   if (raw === "stavba") return "stavba";
   if (raw === "bourani" || raw === "bourání") return "bourani";
@@ -19,6 +20,7 @@ export function getAttendancePhaseLabel(value?: string | null) {
   if (phase === "nakladka") return "Nakládka";
   if (phase === "stavba") return "Stavba";
   if (phase === "bourani") return "Bourání";
+  if (phase === "prejezd") return "Přejezd";
   return "Provoz";
 }
 

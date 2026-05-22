@@ -64,16 +64,32 @@ export async function updateAttendanceManualAction(formData: FormData) {
 
   const now = new Date().toISOString();
   const approvedMinutes = getAttendanceMinutes(checkinAt, checkoutAt);
+  const { data: employee, error: employeeError } = await supabase
+    .from("profiles")
+    .select("hodinovy_naklad_akce")
+    .eq("user_id", current.user_id)
+    .maybeSingle();
+
+  if (employeeError) throw new Error(employeeError.message);
+
+  const hourlyRate = Number(employee?.hodinovy_naklad_akce ?? 0);
+  const claimedAmount = Math.round((approvedMinutes / 60) * hourlyRate);
+
   const { error: updateError } = await supabase
     .from("dochazka_zakazky")
     .update({
       checkin_at: checkinAt,
       checkout_at: checkoutAt,
+      claimed_duration_minutes: approvedMinutes,
+      claimed_amount_czk: claimedAmount,
       approved_duration_minutes: approvedMinutes,
+      approved_amount_czk: claimedAmount,
+      approval_status: "schvaleno",
       manual_override: true,
       override_reason: reason,
       approved_by: user.id,
       approved_at: now,
+      payment_status: "ceka_na_proplaceni",
       updated_at: now,
     })
     .eq("id", attendanceId);
@@ -100,5 +116,6 @@ export async function updateAttendanceManualAction(formData: FormData) {
 
   revalidatePath(`/zakazky/${current.zakazka_id}`);
   revalidatePath("/moje");
+  revalidatePath("/admin/proplaceni");
   revalidatePath(`/moje/zakazky/${current.zakazka_id}`);
 }
