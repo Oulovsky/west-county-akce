@@ -11,8 +11,8 @@ import {
   getPaymentStatusLabel,
   normalizePaymentStatus,
 } from "@/lib/payments";
-import { getAttendancePhaseLabel } from "@/lib/zakazka-attendance";
 import { formatKm, getTravelAmount, getTravelStatusLabel } from "@/lib/transport";
+import { buildWorkZakazkaPayoutTree } from "@/lib/admin/work-payout-display";
 import { loadPayoutEmployeeProfiles, type PayoutEmployeeProfile } from "@/lib/admin/payout-profiles";
 import { getMissingBankAccountMessage, getPaymentAccount } from "@/lib/bank-account";
 import { verifyAppAdminOrSefPage } from "@/lib/auth/admin-access-server";
@@ -77,7 +77,10 @@ function formatDate(value?: string | null) {
   return date.toLocaleDateString("cs-CZ", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-function getProfileName(profile?: PayoutEmployeeProfile | null, fallback?: string | null) {
+function getProfileName(
+  profile?: Pick<PayoutEmployeeProfile, "jmeno" | "prijmeni" | "email"> | null,
+  fallback?: string | null
+) {
   const name = [profile?.jmeno, profile?.prijmeni].filter(Boolean).join(" ").trim();
   return name || profile?.email || fallback || "Zaměstnanec";
 }
@@ -252,6 +255,23 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
     })
   );
 
+  const workZakazkaTree = buildWorkZakazkaPayoutTree(
+    workPayoutGroups.map((group) => ({
+      key: group.key,
+      zakazkaId: group.zakazkaId,
+      userId: group.userId,
+      zakazkaTitle: group.zakazkaTitle,
+      profile: group.profile,
+      groupItems: group.groupItems.map((item) => item.row),
+      hourlyRate: Number(group.profile?.hodinovy_naklad_akce ?? 0),
+      waitingTotal: group.waitingTotal,
+      account: group.account,
+      message: group.message,
+      qrDataUrl: group.qrDataUrl,
+    })),
+    (profile, userId) => getProfileName(profile, userId)
+  );
+
   const filters: Array<{ key: FilterMode; label: string; href: string }> = [
     { key: "ceka_na_proplaceni", label: "Čeká na proplacení", href: "/admin/proplaceni" },
     { key: "proplaceno", label: "Proplaceno", href: "/admin/proplaceni?stav=proplaceno" },
@@ -311,115 +331,158 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
 
       <h2 className="text-2xl font-black text-white">Práce</h2>
 
-      {workPayoutGroups.length === 0 ? (
+      {workZakazkaTree.length === 0 ? (
         <Card>
           <div className="text-sm text-slate-400">Žádné pracovní záznamy pro tento filtr.</div>
         </Card>
       ) : (
-        <div className="space-y-4">
-          {workPayoutGroups.map((group) => (
-            <Card key={group.key} className="space-y-4">
-              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 pb-4">
-                <div>
-                  <div className="text-lg font-black text-white">
-                    {getProfileName(group.profile, group.userId)}
-                  </div>
-                  <div className="mt-1 text-sm font-semibold text-slate-300">{group.zakazkaTitle}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs uppercase tracking-wide text-slate-500">K proplacení</div>
-                  <div className="text-2xl font-black text-blue-100">{formatMoneyCzk(group.waitingTotal)}</div>
-                </div>
-              </div>
-
-              {group.waitingTotal > 0 ? (
-                <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 px-4 py-4 space-y-3">
-                  <p className="text-sm text-blue-100/90">
-                    QR pro platbu a označení jako proplaceno se vztahují k celé částce zaměstnance na zakázce.
-                  </p>
-                  <div className="grid gap-3 text-sm sm:grid-cols-2">
-                    <div>
-                      <div className="text-xs uppercase tracking-wide text-slate-500">Účet</div>
-                      <div className="font-bold text-slate-100">{group.account?.label ?? "Není vyplněn"}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs uppercase tracking-wide text-slate-500">Čekající intervaly</div>
-                      <div className="font-bold text-slate-100">{group.waitingItems.length}</div>
+        <div className="space-y-3">
+          {workZakazkaTree.map((zakazka) => (
+            <details
+              key={zakazka.zakazkaId}
+              className="group rounded-2xl border border-slate-800 bg-slate-900/60"
+            >
+              <summary className="cursor-pointer list-none px-4 py-4 marker:content-none [&::-webkit-details-marker]:hidden">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-lg font-black text-white">{zakazka.zakazkaTitle}</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      {zakazka.employees.length}{" "}
+                      {zakazka.employees.length === 1 ? "zaměstnanec" : "zaměstnanců"}
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-start gap-3">
-                    {group.qrDataUrl ? (
-                      <details className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
-                        <summary className="cursor-pointer text-sm font-bold text-blue-100">
-                          Zobrazit QR platbu
-                        </summary>
-                        <div className="mt-3 space-y-2">
-                          <img src={group.qrDataUrl} alt="QR platba za zakázku" className="rounded-xl bg-white p-2" />
-                          <div className="text-xs text-slate-400">{group.message}</div>
-                        </div>
-                      </details>
-                    ) : (
-                      <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-100">
-                        {getMissingBankAccountMessage(group.profile) ?? "Zaměstnanec nemá vyplněné číslo účtu."}
-                      </div>
-                    )}
-                    <form action={markZakazkaEmployeeWorkPaidAction}>
-                      <input type="hidden" name="zakazka_id" value={group.zakazkaId} />
-                      <input type="hidden" name="user_id" value={group.userId} />
-                      <button
-                        type="submit"
-                        className="rounded-xl bg-emerald-700 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-600"
-                      >
-                        Proplaceno
-                      </button>
-                    </form>
+                  <div className="text-right">
+                    <div className="text-xs uppercase tracking-wide text-slate-500">K proplacení</div>
+                    <div className="text-xl font-black text-blue-100">{formatMoneyCzk(zakazka.waitingTotal)}</div>
                   </div>
                 </div>
-              ) : null}
+              </summary>
 
-              <div className="space-y-2">
-                <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Intervaly</h3>
-                {group.groupItems.map((item) => {
-                  const status = normalizePaymentStatus(item.row.payment_status);
-                  return (
-                    <div
-                      key={item.row.id}
-                      className="rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3 space-y-3"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div className="text-sm font-semibold text-slate-200">
-                          {formatDate(item.row.checkin_at)} · {getAttendancePhaseLabel(item.row.typ_faze)}
+              <div className="space-y-2 border-t border-slate-800 px-3 pb-3 pt-2">
+                {zakazka.employees.map((employee) => (
+                  <details
+                    key={employee.key}
+                    className="rounded-xl border border-slate-800 bg-slate-950/70"
+                  >
+                    <summary className="cursor-pointer list-none px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="font-bold text-white">
+                          {getProfileName(employee.profile, employee.userId)}
                         </div>
-                        <Badge variant={status === "proplaceno" ? "success" : "warning"}>
-                          {getPaymentStatusLabel(status)}
-                        </Badge>
-                      </div>
-                      <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                        <div>
-                          <div className="text-xs uppercase tracking-wide text-slate-500">Schváleno</div>
-                          <div className="font-bold text-emerald-100">{formatHours(item.approvedMinutes)}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs uppercase tracking-wide text-slate-500">Naměřeno</div>
-                          <div className="font-bold text-slate-100">{formatHours(item.measuredMinutes)}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs uppercase tracking-wide text-slate-500">Sazba</div>
-                          <div className="font-bold text-slate-100">{formatMoneyCzk(item.hourlyRate)} / h</div>
-                        </div>
-                        <div>
-                          <div className="text-xs uppercase tracking-wide text-slate-500">Částka</div>
-                          <div className="font-black text-blue-100">{formatMoneyCzk(item.amount)}</div>
+                        <div className="text-sm font-black text-blue-100">
+                          {formatMoneyCzk(employee.waitingTotal)}
                         </div>
                       </div>
-                      {item.row.paid_at ? (
-                        <div className="text-xs text-emerald-200">Proplaceno {formatDate(item.row.paid_at)}</div>
+                    </summary>
+
+                    <div className="space-y-3 border-t border-slate-800 px-4 pb-4 pt-3">
+                      {employee.waitingTotal > 0 ? (
+                        <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 px-4 py-4 space-y-3">
+                          <p className="text-sm text-blue-100/90">
+                            QR pro platbu a označení jako proplaceno se vztahují k celé částce
+                            zaměstnance na zakázce.
+                          </p>
+                          <div className="grid gap-3 text-sm sm:grid-cols-2">
+                            <div>
+                              <div className="text-xs uppercase tracking-wide text-slate-500">Účet</div>
+                              <div className="font-bold text-slate-100">
+                                {employee.payout.account?.label ?? "Není vyplněn"}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-xs uppercase tracking-wide text-slate-500">K proplacení</div>
+                              <div className="font-black text-blue-100">
+                                {formatMoneyCzk(employee.waitingTotal)}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-start gap-3">
+                            {employee.payout.qrDataUrl ? (
+                              <details className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+                                <summary className="cursor-pointer text-sm font-bold text-blue-100">
+                                  Zobrazit QR platbu
+                                </summary>
+                                <div className="mt-3 space-y-2">
+                                  <img
+                                    src={employee.payout.qrDataUrl}
+                                    alt="QR platba za zakázku"
+                                    className="rounded-xl bg-white p-2"
+                                  />
+                                  <div className="text-xs text-slate-400">{employee.payout.message}</div>
+                                </div>
+                              </details>
+                            ) : (
+                              <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-100">
+                                {getMissingBankAccountMessage(employee.profile) ??
+                                  "Zaměstnanec nemá vyplněné číslo účtu."}
+                              </div>
+                            )}
+                            <form action={markZakazkaEmployeeWorkPaidAction}>
+                              <input type="hidden" name="zakazka_id" value={employee.zakazkaId} />
+                              <input type="hidden" name="user_id" value={employee.userId} />
+                              <button
+                                type="submit"
+                                className="rounded-xl bg-emerald-700 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-600"
+                              >
+                                Proplaceno
+                              </button>
+                            </form>
+                          </div>
+                        </div>
                       ) : null}
+
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {employee.phaseSummaries.map((phase) => (
+                          <div
+                            key={phase.phase}
+                            className={[
+                              "rounded-xl border px-3 py-3 text-sm",
+                              phase.hasData
+                                ? "border-slate-700 bg-slate-900/80"
+                                : "border-slate-800/60 bg-slate-950/40 text-slate-500",
+                            ].join(" ")}
+                          >
+                            <div
+                              className={[
+                                "font-bold",
+                                phase.hasData ? "text-slate-100" : "text-slate-500",
+                              ].join(" ")}
+                            >
+                              {phase.label}
+                              {phase.intervalCount > 1 ? (
+                                <span className="ml-2 text-xs font-normal text-slate-500">
+                                  ({phase.intervalCount}×)
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                              <div>
+                                <div className="uppercase tracking-wide text-slate-500">Naměřeno</div>
+                                <div className={phase.hasData ? "font-semibold text-slate-200" : ""}>
+                                  {formatHours(phase.measuredMinutes)}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="uppercase tracking-wide text-slate-500">Uznané</div>
+                                <div className={phase.hasData ? "font-semibold text-emerald-100" : ""}>
+                                  {formatHours(phase.approvedMinutes)}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="uppercase tracking-wide text-slate-500">Částka</div>
+                                <div className={phase.hasData ? "font-semibold text-blue-100" : ""}>
+                                  {formatMoneyCzk(phase.amount)}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  );
-                })}
+                  </details>
+                ))}
               </div>
-            </Card>
+            </details>
           ))}
         </div>
       )}
