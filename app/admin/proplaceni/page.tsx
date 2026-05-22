@@ -23,6 +23,7 @@ import {
   buildWorkPayoutGroupKey,
   employeeHasPayablePayout,
 } from "@/lib/admin/work-payout-display";
+import { buildWorkPayoutBreakdown } from "@/lib/payments/work-payout-breakdown";
 import {
   buildTravelPayoutGroupKey,
   getTravelZakazkaTitle,
@@ -33,7 +34,7 @@ import {
 } from "@/lib/admin/travel-payout-display";
 import { loadPayoutEmployeeProfiles, type PayoutEmployeeProfile } from "@/lib/admin/payout-profiles";
 import { loadPayoutOverridesByKeys } from "@/lib/admin/payout-overrides-server";
-import { resolveFinalPayoutAmount, toOverrideAmountNumber } from "@/lib/admin/work-payout-override";
+import { toOverrideAmountNumber } from "@/lib/admin/work-payout-override";
 import { getMissingBankAccountMessage, getPaymentAccount } from "@/lib/bank-account";
 import { verifyAppAdminOrSefPage } from "@/lib/auth/admin-access-server";
 import { createClient } from "@/lib/supabase/server";
@@ -242,10 +243,16 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
       const travelApprovedForPaymentTotal = sumTravelItemsByStatus(travelItems, "schvaleno");
       const travelPendingApprovalTotal = sumTravelItemsByStatus(travelItems, "ceka_na_schvaleni");
       const travelPaidTotal = sumTravelItemsByStatus(travelItems, "proplaceno");
-      const calculatedCombinedTotal = calculatedWorkWaitingTotal + travelApprovedForPaymentTotal;
       const overrideRow = overridesByKey.get(groupKey) ?? null;
       const overrideAmount = toOverrideAmountNumber(overrideRow?.override_amount_czk);
-      const finalPayoutAmount = resolveFinalPayoutAmount(calculatedCombinedTotal, overrideAmount);
+      const payoutBreakdown = buildWorkPayoutBreakdown({
+        calculatedWorkCzk: calculatedWorkWaitingTotal,
+        calculatedTravelCzk: travelApprovedForPaymentTotal,
+        overrideAmountCzk: overrideAmount,
+        payoutStatus: "waiting",
+      });
+      const calculatedCombinedTotal = payoutBreakdown.calculatedCombinedCzk;
+      const finalPayoutAmount = payoutBreakdown.finalCzk;
       const account = getPaymentAccount(profile);
       const message = `WEST COUNTY ${zakazkaTitle}`;
       const hasPayable = calculatedWorkWaitingTotal > 0 || travelApprovedForPaymentTotal > 0;

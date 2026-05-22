@@ -6,15 +6,23 @@ import { createClient } from "@/lib/supabase/server";
 import { loadEmployeeOwnPayoutOverrides } from "@/lib/admin/payout-overrides-server";
 import { formatMoneyCzk } from "@/lib/payments";
 import {
+  buildApprovedTravelTotalsByZakazka,
   buildEmployeeWorkPayoutSummaries,
   formatCorrectionDeltaCzk,
+  getEmployeeZakazkaPayoutBreakdown,
   type EmployeeWorkPayoutSummary,
 } from "@/lib/payments/work-payout-summary";
-import { splitTransportVehiclesForUser } from "@/lib/transport-attendance";
-import { isPrepravaTypBloku, normalizeTransportVehicleMode, type TransportVehicleMode } from "@/lib/zakazka-attendance";
+import {
+  formatAssignmentDateTime,
+  formatAssignmentRange,
+  getAssignmentLogisticsStatusLabel,
+  getAssignmentPhaseAccentClass,
+  getAssignmentPhaseLabel,
+  groupAssignmentsByZakazka,
+  isAssignmentLogisticsPhase,
+} from "@/lib/employee/assignment-display";
+import { getDochazkaPath } from "@/lib/mobile/routes";
 import { ParticipationActions } from "./ParticipationActions";
-import { AttendanceActions } from "./AttendanceActions";
-import { TransportAttendanceActions } from "./TransportAttendanceActions";
 import { submitTravelReimbursementAction } from "./cestovni-nahrady-actions";
 import {
   DEFAULT_KM_RATE,
@@ -45,11 +53,6 @@ type AssignmentRow = {
   assigned_at: string | null;
   created_at: string | null;
   active_attendance_id?: string | null;
-};
-
-type ZakazkaTransportState = {
-  active: boolean;
-  mode: TransportVehicleMode | null;
 };
 
 type ZakazkaRow = {
@@ -178,98 +181,10 @@ function getStatusVariant(value?: string | null) {
   return "warning";
 }
 
-function getPhaseLabel(value?: string | null) {
-  const raw = String(value ?? "").trim().toLowerCase();
-  if (raw === "sklad" || raw === "nakladka" || raw === "nakládka") return "Nakládka";
-  if (raw === "stavba") return "Stavba";
-  if (raw === "bourani" || raw === "bourání") return "Bourání";
-  if (raw === "preprava" || raw === "prejezd" || raw === "přejezd") return "Přeprava";
-  return "Provoz akce";
-}
-
-function getPhaseSortIndex(value?: string | null) {
-  const raw = String(value ?? "").trim().toLowerCase();
-  if (raw === "sklad" || raw === "nakladka" || raw === "nakládka") return 0;
-  if (raw === "stavba") return 1;
-  if (raw === "bourani" || raw === "bourání") return 3;
-  return 2;
-}
-
 const PHASE_GRID_CARD_CLASS =
   "flex h-full flex-col space-y-3 rounded-2xl border border-slate-800 bg-slate-950/80 p-4";
 
 const WORK_PHASES_GRID_CLASS = "grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3";
-
-function getPhaseAccentClass(value?: string | null) {
-  const raw = String(value ?? "").trim().toLowerCase();
-  if (raw === "sklad" || raw === "nakladka" || raw === "nakládka") {
-    return "border-cyan-400/70 bg-cyan-500/15 text-cyan-50";
-  }
-  if (raw === "stavba") return "border-amber-400/70 bg-amber-500/15 text-amber-50";
-  if (raw === "bourani" || raw === "bourání") {
-    return "border-orange-400/70 bg-orange-500/15 text-orange-50";
-  }
-  return "border-blue-400/70 bg-blue-500/15 text-blue-50";
-}
-
-function groupWorkItemsByZakazka(items: AssignmentWithZakazka[]) {
-  const workItems = items.filter((item) => !isPrepravaTypBloku(item.assignment.typ_bloku));
-  const groups = new Map<string, AssignmentWithZakazka[]>();
-
-  for (const item of workItems) {
-    const zakazkaId = item.assignment.zakazka_id;
-    const list = groups.get(zakazkaId) ?? [];
-    list.push(item);
-    groups.set(zakazkaId, list);
-  }
-
-  return [...groups.entries()].map(([zakazkaId, groupItems]) => ({
-    zakazkaId,
-    zakazka: groupItems[0]?.zakazka ?? null,
-    items: [...groupItems].sort(
-      (a, b) =>
-        getPhaseSortIndex(a.assignment.typ_bloku) - getPhaseSortIndex(b.assignment.typ_bloku)
-    ),
-  }));
-}
-
-function isLogisticsPhase(value?: string | null) {
-  const raw = String(value ?? "").trim().toLowerCase();
-  return raw === "sklad" || raw === "nakladka" || raw === "nakládka" || raw === "bourani" || raw === "bourání";
-}
-
-function getLogisticsStatusLabel(value?: string | null) {
-  if (value === "zruseno") return "Zrušeno";
-  if (value === "naklada_se") return "Nakládá se";
-  if (value === "nalozeno") return "Naloženo";
-  if (value === "vykladka") return "Probíhá vykládka";
-  if (value === "vraceno") return "Vráceno";
-  return "Čeká na nakládku";
-}
-
-function formatDateTime(value?: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  return date.toLocaleString("cs-CZ", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatRange(from?: string | null, to?: string | null) {
-  const fromText = formatDateTime(from);
-  const toText = formatDateTime(to);
-
-  if (fromText && toText) return `${fromText} – ${toText}`;
-  if (fromText) return `Od ${fromText}`;
-  if (toText) return `Do ${toText}`;
-  return "Čas není zadaný";
-}
 
 function getZakazkaTitle(zakazka?: ZakazkaRow | null) {
   if (!zakazka) return "Zakázka";
@@ -343,7 +258,7 @@ function MyNotificationsCard({ notifications }: { notifications: MyNotificationR
                   </Badge>
                 </div>
                 <div className="mt-2 text-sm text-slate-200">{notification.zprava}</div>
-                <div className="mt-2 text-xs text-slate-400">{formatDateTime(notification.created_at)} · {notification.typ}</div>
+                <div className="mt-2 text-xs text-slate-400">{formatAssignmentDateTime(notification.created_at)} · {notification.typ}</div>
               </div>
             );
 
@@ -370,7 +285,7 @@ type AssignmentWithZakazka = {
 function WorkPhaseCard({ item }: { item: AssignmentWithZakazka }) {
   const { assignment, zakazka, status } = item;
   const cancelled = Boolean(zakazka?.zrusena);
-  const phaseLabel = getPhaseLabel(assignment.typ_bloku);
+  const phaseLabel = getAssignmentPhaseLabel(assignment.typ_bloku);
 
   return (
     <div className={[PHASE_GRID_CARD_CLASS, cancelled ? "opacity-80" : ""].join(" ")}>
@@ -378,7 +293,7 @@ function WorkPhaseCard({ item }: { item: AssignmentWithZakazka }) {
         <div
           className={[
             "inline-flex rounded-xl border px-4 py-2 text-lg font-black tracking-tight",
-            getPhaseAccentClass(assignment.typ_bloku),
+            getAssignmentPhaseAccentClass(assignment.typ_bloku),
           ].join(" ")}
         >
           {phaseLabel}
@@ -387,12 +302,12 @@ function WorkPhaseCard({ item }: { item: AssignmentWithZakazka }) {
       </div>
 
       <div className="text-sm font-semibold text-slate-300">
-        {formatRange(assignment.datum_od, assignment.datum_do)}
+        {formatAssignmentRange(assignment.datum_od, assignment.datum_do)}
       </div>
 
-      {isLogisticsPhase(assignment.typ_bloku) ? (
+      {isAssignmentLogisticsPhase(assignment.typ_bloku) ? (
         <div className="inline-flex w-fit rounded-md border border-cyan-500/30 bg-cyan-500/15 px-3 py-1 text-xs font-bold text-cyan-100">
-          {getLogisticsStatusLabel(zakazka?.logistika_stav)}
+          {getAssignmentLogisticsStatusLabel(zakazka?.logistika_stav)}
         </div>
       ) : null}
 
@@ -410,11 +325,10 @@ function WorkPhaseCard({ item }: { item: AssignmentWithZakazka }) {
 
       {!cancelled ? <ParticipationActions assignmentId={String(assignment.id)} status={status} /> : null}
 
-      {!cancelled && status === "accepted" ? (
-        <AttendanceActions
-          assignmentId={String(assignment.id)}
-          active={Boolean(assignment.active_attendance_id)}
-        />
+      {!cancelled && status === "accepted" && assignment.active_attendance_id ? (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-100">
+          Práce právě běží — ovládání v sekci Docházka.
+        </div>
       ) : null}
     </div>
   );
@@ -424,22 +338,16 @@ function ZakazkaGroupCard({
   zakazkaId,
   zakazka,
   items,
-  showTransport,
-  transportVehicles,
-  transportByZakazka,
 }: {
   zakazkaId: string;
   zakazka: ZakazkaRow | null;
   items: AssignmentWithZakazka[];
-  showTransport: boolean;
-  transportVehicles: ReturnType<typeof splitTransportVehiclesForUser>;
-  transportByZakazka: Map<string, ZakazkaTransportState>;
 }) {
   const navigationUrl = getNavigationUrl(zakazka);
   const cancelled = Boolean(zakazka?.zrusena);
   const groupStatus = items[0]?.status ?? "pending";
   const hasPending = items.some((item) => item.status === "pending");
-  const transport = transportByZakazka.get(zakazkaId);
+  const isAccepted = groupStatus === "accepted";
 
   return (
     <Card
@@ -476,51 +384,57 @@ function ZakazkaGroupCard({
         ) : null}
       </div>
 
-      {!cancelled && groupStatus === "accepted" ? (
-        <div className="grid grid-cols-3 gap-2 lg:hidden">
+      {!cancelled && isAccepted ? (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          <Link
+            href={getDochazkaPath(zakazkaId)}
+            className="flex min-h-12 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-600/25 px-2 text-center text-xs font-black text-emerald-100 transition hover:bg-emerald-600/35 sm:col-span-2 lg:col-span-1"
+          >
+            Otevřít docházku
+          </Link>
           <Link
             href={`/moje/zakazky/${zakazkaId}`}
-            className="flex min-h-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-2 text-center text-xs font-black text-white"
+            className="flex min-h-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-2 text-center text-xs font-black text-white transition hover:bg-slate-700"
           >
             Detail
           </Link>
           <Link
             href={`/zakazky/${zakazkaId}/scan`}
-            className="flex min-h-12 items-center justify-center rounded-xl bg-blue-600 px-2 text-center text-xs font-black text-white"
+            className="flex min-h-12 items-center justify-center rounded-xl bg-blue-600 px-2 text-center text-xs font-black text-white transition hover:bg-blue-500"
           >
             Scan
           </Link>
-          <Link
-            href={`/dochazka?zakazka=${encodeURIComponent(zakazkaId)}`}
-            className="flex min-h-12 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-950/30 px-2 text-center text-xs font-black text-emerald-100"
-          >
-            Práce
-          </Link>
+          {navigationUrl ? (
+            <a
+              href={navigationUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex min-h-12 items-center justify-center rounded-xl border border-blue-500/40 bg-blue-600/20 px-2 text-center text-xs font-black text-blue-100 transition hover:bg-blue-600/30"
+            >
+              Navigovat
+            </a>
+          ) : null}
         </div>
-      ) : null}
-
-      <div className="hidden gap-2 lg:grid lg:grid-cols-2">
-        <Link
-          href={`/moje/zakazky/${zakazkaId}`}
-          className="inline-flex min-h-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-5 py-3 text-sm font-bold text-slate-100 transition hover:bg-slate-700"
-        >
-          Otevřít zakázku
-        </Link>
-        {navigationUrl ? (
-          <a
-            href={navigationUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex min-h-12 items-center justify-center rounded-xl border border-blue-500/40 bg-blue-600/20 px-5 py-3 text-sm font-bold text-blue-100 transition hover:bg-blue-600/30"
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={`/moje/zakazky/${zakazkaId}`}
+            className="inline-flex min-h-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-5 py-3 text-sm font-bold text-slate-100 transition hover:bg-slate-700"
           >
-            Navigovat
-          </a>
-        ) : (
-          <div className="inline-flex min-h-12 items-center justify-center rounded-xl border border-slate-800 bg-slate-900 px-5 py-3 text-sm font-semibold text-slate-500">
-            Navigace není dostupná
-          </div>
-        )}
-      </div>
+            Otevřít zakázku
+          </Link>
+          {navigationUrl ? (
+            <a
+              href={navigationUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-12 items-center justify-center rounded-xl border border-blue-500/40 bg-blue-600/20 px-5 py-3 text-sm font-bold text-blue-100 transition hover:bg-blue-600/30"
+            >
+              Navigovat
+            </a>
+          ) : null}
+        </div>
+      )}
 
       {zakazka?.poznamka ? (
         <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
@@ -530,40 +444,21 @@ function ZakazkaGroupCard({
       ) : null}
 
       <div className="space-y-3">
-        <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Pracovní úseky a přeprava</div>
+        <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Pracovní úseky</div>
         <div className={WORK_PHASES_GRID_CLASS}>
           {items.map((item) => (
             <WorkPhaseCard key={String(item.assignment.id)} item={item} />
           ))}
-          {showTransport ? (
-            <div className={PHASE_GRID_CARD_CLASS}>
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div
-                  className={[
-                    "inline-flex rounded-xl border px-4 py-2 text-lg font-black tracking-tight",
-                    "border-violet-400/70 bg-violet-500/15 text-violet-50",
-                  ].join(" ")}
-                >
-                  Přeprava
-                </div>
-                <Badge variant="default">Samoregistrace</Badge>
-              </div>
-              <p className="text-xs font-semibold text-slate-400">
-                Bez přiřazení od šéfa · firemní nebo vlastní vozidlo
-              </p>
-              <div className="flex flex-1 flex-col">
-                <TransportAttendanceActions
-                  zakazkaId={zakazkaId}
-                  active={Boolean(transport?.active)}
-                  activeTransportMode={transport?.mode ?? null}
-                  companyVehicles={transportVehicles.companyVehicles}
-                  privateVehicles={transportVehicles.privateVehicles}
-                  embedded
-                />
-              </div>
-            </div>
-          ) : null}
         </div>
+        {isAccepted ? (
+          <p className="text-xs text-slate-500">
+            Zahájení práce, přeprava a ukončení úkonů probíhají v sekci{" "}
+            <Link href={getDochazkaPath(zakazkaId)} className="font-semibold text-emerald-300 hover:text-emerald-200">
+              Docházka
+            </Link>
+            .
+          </p>
+        ) : null}
       </div>
     </Card>
   );
@@ -599,18 +494,12 @@ function AssignmentSection({
   title,
   items,
   emptyText,
-  transportVehicles,
-  transportByZakazka,
-  showTransport = false,
 }: {
   title: string;
   items: AssignmentWithZakazka[];
   emptyText: string;
-  transportVehicles: ReturnType<typeof splitTransportVehiclesForUser>;
-  transportByZakazka: Map<string, ZakazkaTransportState>;
-  showTransport?: boolean;
 }) {
-  const groups = groupWorkItemsByZakazka(items);
+  const groups = groupAssignmentsByZakazka(items, (item) => item.zakazka);
 
   return (
     <section className="space-y-3">
@@ -633,9 +522,6 @@ function AssignmentSection({
               zakazkaId={group.zakazkaId}
               zakazka={group.zakazka}
               items={group.items}
-              showTransport={showTransport && !Boolean(group.zakazka?.zrusena)}
-              transportVehicles={transportVehicles}
-              transportByZakazka={transportByZakazka}
             />
           ))}
         </div>
@@ -651,6 +537,7 @@ function WorkPaymentsOverview({
   workSummaries: EmployeeWorkPayoutSummary[];
   travelRows: TravelPaymentRow[];
 }) {
+  const approvedTravelByZakazka = buildApprovedTravelTotalsByZakazka(travelRows);
   const waitingTotal = workSummaries
     .filter((summary) => summary.status === "waiting")
     .reduce((sum, summary) => sum + summary.finalAmountCzk, 0);
@@ -715,65 +602,95 @@ function WorkPaymentsOverview({
         </div>
       ) : (
         <div className="space-y-2">
-          {workSummaries.map((summary) => (
-            <div
-              key={summary.zakazkaId}
-              className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="font-bold text-white">{summary.zakazkaTitle}</div>
-                <Badge
-                  variant={
-                    summary.status === "paid"
-                      ? "success"
-                      : summary.status === "waiting"
-                        ? "warning"
-                        : "default"
-                  }
-                >
-                  {summary.statusLabel}
-                </Badge>
-              </div>
+          {workSummaries.map((summary) => {
+            const breakdown = getEmployeeZakazkaPayoutBreakdown(
+              summary,
+              approvedTravelByZakazka.get(summary.zakazkaId) ?? 0
+            );
 
-              <div className="mt-3 space-y-2 text-sm">
-                <div className="flex flex-wrap justify-between gap-2">
-                  <span className="text-slate-400">Vypočteno systémem</span>
-                  <span className="font-bold text-slate-100">
-                    {formatMoneyCzk(summary.calculatedAmountCzk)}
-                  </span>
+            return (
+              <div
+                key={summary.zakazkaId}
+                className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="font-bold text-white">{summary.zakazkaTitle}</div>
+                  <Badge
+                    variant={
+                      summary.status === "paid"
+                        ? "success"
+                        : summary.status === "waiting"
+                          ? "warning"
+                          : "default"
+                    }
+                  >
+                    {summary.statusLabel}
+                  </Badge>
                 </div>
 
-                {summary.hasOverride ? (
-                  <>
+                <div className="mt-3 space-y-2 text-sm">
+                  {breakdown.hasTravel ? (
+                    <>
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <span className="text-slate-400">Práce</span>
+                        <span className="font-bold text-slate-100">
+                          {formatMoneyCzk(breakdown.workCalculatedCzk)}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <span className="text-slate-400">Cestovní náhrady</span>
+                        <span className="font-bold text-slate-100">
+                          {formatMoneyCzk(breakdown.travelCzk)}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <span className="text-slate-400">Vypočteno celkem</span>
+                        <span className="font-bold text-slate-100">
+                          {formatMoneyCzk(breakdown.calculatedCombinedCzk)}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
                     <div className="flex flex-wrap justify-between gap-2">
-                      <span className="text-slate-400">Korekce šéfem</span>
-                      <span className="font-bold text-amber-100">
-                        {formatCorrectionDeltaCzk(
-                          summary.calculatedAmountCzk,
-                          summary.finalAmountCzk
-                        )}
+                      <span className="text-slate-400">Vypočteno systémem</span>
+                      <span className="font-bold text-slate-100">
+                        {formatMoneyCzk(breakdown.workCalculatedCzk)}
                       </span>
                     </div>
-                    <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
-                      Částka byla upravena šéfem.
-                      {summary.correctionNote ? (
-                        <span className="mt-1 block text-amber-50/80">
-                          Poznámka: {summary.correctionNote}
-                        </span>
-                      ) : null}
-                    </div>
-                  </>
-                ) : null}
+                  )}
 
-                <div className="flex flex-wrap justify-between gap-2 border-t border-slate-800 pt-2">
-                  <span className="font-semibold text-slate-300">Finálně uznáno</span>
-                  <span className="font-black text-blue-100">
-                    {formatMoneyCzk(summary.finalAmountCzk)}
-                  </span>
+                  {summary.hasOverride && breakdown.correctionDeltaCzk !== null ? (
+                    <>
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <span className="text-slate-400">Korekce šéfem</span>
+                        <span className="font-bold text-amber-100">
+                          {formatCorrectionDeltaCzk(
+                            breakdown.calculatedCombinedCzk,
+                            breakdown.finalAmountCzk
+                          )}
+                        </span>
+                      </div>
+                      <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
+                        Částka byla upravena šéfem.
+                        {summary.correctionNote ? (
+                          <span className="mt-1 block text-amber-50/80">
+                            Poznámka: {summary.correctionNote}
+                          </span>
+                        ) : null}
+                      </div>
+                    </>
+                  ) : null}
+
+                  <div className="flex flex-wrap justify-between gap-2 border-t border-slate-800 pt-2">
+                    <span className="font-semibold text-slate-300">Finálně uznáno</span>
+                    <span className="font-black text-blue-100">
+                      {formatMoneyCzk(breakdown.finalAmountCzk)}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -792,8 +709,8 @@ function WorkPaymentsOverview({
                       {row.odkud || "Odkud ?"} → {row.kam || "Kam ?"}
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
-                      Podáno {formatDateTime(row.submitted_at)}
-                      {row.paid_at ? ` · Proplaceno ${formatDateTime(row.paid_at)}` : null}
+                      Podáno {formatAssignmentDateTime(row.submitted_at)}
+                      {row.paid_at ? ` · Proplaceno ${formatAssignmentDateTime(row.paid_at)}` : null}
                     </div>
                   </div>
                   <Badge variant={getTravelStatusBadgeVariant(row.status)}>
@@ -878,7 +795,7 @@ function MyTransportOverview({
                       {row.odkud || "Odkud ?"} → {row.kam || "Kam ?"}
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
-                      {formatDateTime(row.odjezd_at)} - {formatDateTime(row.prijezd_at)}
+                      {formatAssignmentDateTime(row.odjezd_at)} - {formatAssignmentDateTime(row.prijezd_at)}
                     </div>
                     {row.poznamka ? <div className="mt-2 text-sm text-slate-300">{row.poznamka}</div> : null}
                   </div>
@@ -969,17 +886,18 @@ export default async function MojePage({ searchParams }: PageProps) {
   const assignments = (assignmentsRaw ?? []) as AssignmentRow[];
   const zakazkaIds = [...new Set(assignments.map((assignment) => assignment.zakazka_id))];
   const assignmentIds = assignments.map((assignment) => String(assignment.id));
+
   if (assignmentIds.length > 0) {
     const { data: activeAttendanceRaw, error: activeAttendanceError } = await supabase
       .from("dochazka_zakazky")
-      .select("id, assignment_id, typ_faze")
+      .select("id, assignment_id")
       .eq("user_id", user.id)
       .is("checkout_at", null)
       .in("assignment_id", assignmentIds)
       .neq("typ_faze", "preprava");
 
     if (activeAttendanceError) {
-      return <div>Chyba načtení docházky: {activeAttendanceError.message}</div>;
+      return <div>Chyba načtení stavu docházky: {activeAttendanceError.message}</div>;
     }
 
     const activeByAssignment = new Map(
@@ -990,49 +908,6 @@ export default async function MojePage({ searchParams }: PageProps) {
       assignment.active_attendance_id = activeByAssignment.get(String(assignment.id)) ?? null;
     }
   }
-
-  const transportByZakazka = new Map<string, ZakazkaTransportState>();
-  if (zakazkaIds.length > 0) {
-    const { data: openTransportRaw, error: openTransportError } = await supabase
-      .from("dochazka_zakazky")
-      .select("zakazka_id, transport_vehicle_mode")
-      .eq("user_id", user.id)
-      .eq("typ_faze", "preprava")
-      .is("checkout_at", null)
-      .in("zakazka_id", zakazkaIds);
-
-    if (openTransportError) {
-      return <div>Chyba načtení přepravy: {openTransportError.message}</div>;
-    }
-
-    for (const row of openTransportRaw ?? []) {
-      transportByZakazka.set(String(row.zakazka_id), {
-        active: true,
-        mode: normalizeTransportVehicleMode(row.transport_vehicle_mode),
-      });
-    }
-  }
-
-  const { data: attendanceVehiclesRaw, error: attendanceVehiclesError } = await supabase
-    .from("vozidla")
-    .select("id, nazev, spz, typ, vlastnik_user_id")
-    .eq("aktivni", true)
-    .order("nazev");
-
-  if (attendanceVehiclesError) {
-    return <div>Chyba načtení vozidel: {attendanceVehiclesError.message}</div>;
-  }
-
-  const transportVehicles = splitTransportVehiclesForUser(
-    (attendanceVehiclesRaw ?? []) as Array<{
-      id: string;
-      nazev: string;
-      spz?: string | null;
-      typ: string;
-      vlastnik_user_id?: string | null;
-    }>,
-    user.id
-  );
 
   let zakazkyById = new Map<string, ZakazkaRow>();
 
@@ -1096,13 +971,6 @@ export default async function MojePage({ searchParams }: PageProps) {
   if (overridesError) {
     return <div>Chyba načtení korekcí proplacení: {overridesError}</div>;
   }
-
-  const workPayoutSummaries = buildEmployeeWorkPayoutSummaries({
-    rows: attendancePayments,
-    userId: user.id,
-    hourlyRate,
-    overridesByKey,
-  });
 
   const { data: myTransportsRaw, error: myTransportsError } = await supabase
     .from("zakazka_doprava")
@@ -1171,6 +1039,15 @@ export default async function MojePage({ searchParams }: PageProps) {
     zakazky: Array.isArray(row.zakazky) ? (row.zakazky[0] ?? null) : (row.zakazky ?? null),
   })) as TravelPaymentRow[];
 
+  const approvedTravelByZakazka = buildApprovedTravelTotalsByZakazka(travelPayments);
+  const workPayoutSummaries = buildEmployeeWorkPayoutSummaries({
+    rows: attendancePayments,
+    userId: user.id,
+    hourlyRate,
+    overridesByKey,
+    approvedTravelByZakazka,
+  });
+
   return (
     <div className="page-shell w-full space-y-4 lg:space-y-6">
       <div className="lg:hidden">
@@ -1207,25 +1084,18 @@ export default async function MojePage({ searchParams }: PageProps) {
             title="Čeká na potvrzení"
             items={pendingItems}
             emptyText="Žádná nová práce nečeká na potvrzení."
-            transportVehicles={transportVehicles}
-            transportByZakazka={transportByZakazka}
           />
 
           <AssignmentSection
             title="Potvrzené zakázky"
             items={acceptedItems}
             emptyText="Zatím nemáte potvrzené žádné práce."
-            transportVehicles={transportVehicles}
-            transportByZakazka={transportByZakazka}
-            showTransport
           />
 
           <AssignmentSection
             title="Odmítnuté"
             items={declinedItems}
             emptyText="Nemáte žádná odmítnutá přiřazení."
-            transportVehicles={transportVehicles}
-            transportByZakazka={transportByZakazka}
           />
         </>
       ) : (
@@ -1233,9 +1103,6 @@ export default async function MojePage({ searchParams }: PageProps) {
           title={getFilteredTitle(activeFilter)}
           items={filteredItems}
           emptyText={getFilteredEmptyText(activeFilter)}
-          transportVehicles={transportVehicles}
-          transportByZakazka={transportByZakazka}
-          showTransport={activeFilter === "accepted"}
         />
       )}
     </div>

@@ -1,15 +1,18 @@
 import {
   buildWorkPayoutOverrideKey,
-  resolveFinalPayoutAmount,
-  toOverrideAmountNumber,
   type WorkPayoutOverrideRow,
 } from "@/lib/admin/work-payout-override";
+import {
+  buildWorkPayoutBreakdown,
+  type WorkPayoutBreakdownStatus,
+} from "@/lib/payments/work-payout-breakdown";
 import {
   formatMoneyCzk,
   getApprovedMinutes,
   getPaymentAmount,
   normalizePaymentStatus,
 } from "@/lib/payments";
+import { getTravelRowAmount, normalizeTravelStatus } from "@/lib/transport";
 
 export type WorkPayoutIntervalRow = {
   zakazka_id: string;
@@ -67,17 +70,25 @@ function sumIntervalAmounts(
     }, 0);
 }
 
+function toBreakdownStatus(status: EmployeeWorkPayoutStatus): WorkPayoutBreakdownStatus {
+  if (status === "waiting") return "waiting";
+  if (status === "paid") return "paid";
+  return "none";
+}
+
 /** Stejná logika souhrnu jako /admin/proplaceni (zakázka × zaměstnanec, čekající + override). */
 export function buildEmployeeWorkPayoutSummaries({
   rows,
   userId,
   hourlyRate,
   overridesByKey,
+  approvedTravelByZakazka,
 }: {
   rows: WorkPayoutIntervalRow[];
   userId: string;
   hourlyRate: number;
   overridesByKey: Map<string, WorkPayoutOverrideRow>;
+  approvedTravelByZakazka?: Map<string, number>;
 }): EmployeeWorkPayoutSummary[] {
   const byZakazka = new Map<string, WorkPayoutIntervalRow[]>();
 
@@ -102,32 +113,35 @@ export function buildEmployeeWorkPayoutSummaries({
     const calculatedPaid = sumIntervalAmounts(zakazkaRows, hourlyRate, "proplaceno");
 
     const overrideRow = overridesByKey.get(buildWorkPayoutOverrideKey(zakazkaId, userId)) ?? null;
-    const overrideAmount = toOverrideAmountNumber(overrideRow?.override_amount_czk);
-    const hasOverride = overrideAmount !== null;
+    const overrideAmount = overrideRow?.override_amount_czk ?? null;
 
     let status: EmployeeWorkPayoutStatus = "none";
-    let calculatedAmountCzk = 0;
-    let finalAmountCzk = 0;
+    let calculatedWorkCzk = 0;
 
     if (waitingRows.length > 0) {
       status = "waiting";
-      calculatedAmountCzk = calculatedWaiting;
-      finalAmountCzk = resolveFinalPayoutAmount(calculatedWaiting, overrideAmount);
+      calculatedWorkCzk = calculatedWaiting;
     } else if (paidRows.length > 0) {
       status = "paid";
-      calculatedAmountCzk = calculatedPaid;
-      finalAmountCzk = calculatedPaid;
+      calculatedWorkCzk = calculatedPaid;
     }
 
-    const appliesOverride = status === "waiting" && hasOverride;
-    const correctionDeltaCzk = appliesOverride ? finalAmountCzk - calculatedAmountCzk : null;
+    const approvedTravelCzk = approvedTravelByZakazka?.get(zakazkaId) ?? 0;
+    const breakdown = buildWorkPayoutBreakdown({
+      calculatedWorkCzk,
+      calculatedTravelCzk: approvedTravelCzk,
+      overrideAmountCzk: overrideAmount,
+      payoutStatus: toBreakdownStatus(status),
+    });
+
+    const appliesOverride = status === "waiting" && breakdown.hasOverride;
 
     summaries.push({
       zakazkaId,
       zakazkaTitle: getZakazkaTitleFromRow(zakazkaRows[0]),
-      calculatedAmountCzk,
-      finalAmountCzk,
-      correctionDeltaCzk,
+      calculatedAmountCzk: breakdown.calculatedWorkCzk,
+      finalAmountCzk: breakdown.finalCzk,
+      correctionDeltaCzk: breakdown.correctionDeltaCzk,
       correctionNote: appliesOverride ? overrideRow?.correction_note ?? null : null,
       hasOverride: appliesOverride,
       status,
@@ -136,4 +150,48 @@ export function buildEmployeeWorkPayoutSummaries({
   }
 
   return summaries.sort((a, b) => a.zakazkaTitle.localeCompare(b.zakazkaTitle, "cs"));
+}
+
+export type EmployeeTravelPayoutRow = {
+  zakazka_id: string;
+  status?: string | null;
+  km: number | string;
+  sazba_za_km: number | string;
+  castka?: number | string | null;
+};
+
+/** Schválené cesty k proplacení (stejný stav jako admin „schvaleno“). */
+export function buildApprovedTravelTotalsByZakazka(rows: EmployeeTravelPayoutRow[]) {
+  const map = new Map<string, number>();
+
+  for (const row of rows) {
+    if (normalizeTravelStatus(row.status) !== "schvaleno") continue;
+    const amount = getTravelRowAmount(row);
+    map.set(row.zakazka_id, (map.get(row.zakazka_id) ?? 0) + amount);
+  }
+
+  return map;
+}
+
+/** Rozpad pro /moje — stejný helper jako admin proplacení. */
+export function getEmployeeZakazkaPayoutBreakdown(
+  summary: EmployeeWorkPayoutSummary,
+  approvedTravelCzk: number
+) {
+  const breakdown = buildWorkPayoutBreakdown({
+    calculatedWorkCzk: summary.calculatedAmountCzk,
+    calculatedTravelCzk: approvedTravelCzk,
+    overrideAmountCzk: summary.hasOverride ? summary.finalAmountCzk : null,
+    payoutStatus:
+      summary.status === "waiting" ? "waiting" : summary.status === "paid" ? "paid" : "none",
+  });
+
+  return {
+    workCalculatedCzk: breakdown.calculatedWorkCzk,
+    travelCzk: breakdown.calculatedTravelCzk,
+    hasTravel: breakdown.hasTravel,
+    calculatedCombinedCzk: breakdown.calculatedCombinedCzk,
+    finalAmountCzk: summary.finalAmountCzk,
+    correctionDeltaCzk: summary.correctionDeltaCzk,
+  };
 }
