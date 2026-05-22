@@ -3,15 +3,13 @@ import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
-import { getAttendancePhaseLabel } from "@/lib/zakazka-attendance";
+import { buildWorkPayoutOverrideKey, type WorkPayoutOverrideRow } from "@/lib/admin/work-payout-override";
+import { formatMoneyCzk } from "@/lib/payments";
 import {
-  formatHours,
-  formatMoneyCzk,
-  getApprovedMinutes,
-  getMeasuredMinutes,
-  getPaymentAmount,
-  getPaymentStatusLabel,
-} from "@/lib/payments";
+  buildEmployeeWorkPayoutSummaries,
+  formatCorrectionDeltaCzk,
+  type EmployeeWorkPayoutSummary,
+} from "@/lib/payments/work-payout-summary";
 import { ParticipationActions } from "./ParticipationActions";
 import { AttendanceActions } from "./AttendanceActions";
 import { submitTravelReimbursementAction } from "./cestovni-nahrady-actions";
@@ -497,28 +495,18 @@ function AssignmentSection({
 }
 
 function WorkPaymentsOverview({
-  rows,
+  workSummaries,
   travelRows,
 }: {
-  rows: AttendancePaymentRow[];
+  workSummaries: EmployeeWorkPayoutSummary[];
   travelRows: TravelPaymentRow[];
 }) {
-  const items = rows
-    .filter((row) => row.checkout_at)
-    .map((row) => {
-      const measuredMinutes = getMeasuredMinutes(row.checkin_at, row.checkout_at);
-      const approvedMinutes = getApprovedMinutes(row);
-      const hourlyRate = toNumber(row.profiles?.hodinovy_naklad_akce);
-      const amount = getPaymentAmount(approvedMinutes, hourlyRate);
-      return { row, measuredMinutes, approvedMinutes, hourlyRate, amount };
-    });
-
-  const waitingTotal = items
-    .filter((item) => item.row.payment_status !== "proplaceno")
-    .reduce((sum, item) => sum + item.amount, 0);
-  const paidTotal = items
-    .filter((item) => item.row.payment_status === "proplaceno")
-    .reduce((sum, item) => sum + item.amount, 0);
+  const waitingTotal = workSummaries
+    .filter((summary) => summary.status === "waiting")
+    .reduce((sum, summary) => sum + summary.finalAmountCzk, 0);
+  const paidTotal = workSummaries
+    .filter((summary) => summary.status === "paid")
+    .reduce((sum, summary) => sum + summary.finalAmountCzk, 0);
   const travelWaitingTotal = travelRows
     .filter((row) => row.status === "schvaleno")
     .reduce((sum, row) => sum + Number(row.castka ?? getTravelAmount(row.km, row.sazba_za_km)), 0);
@@ -532,10 +520,10 @@ function WorkPaymentsOverview({
         <div>
           <h2 className="text-2xl font-black text-white">Moje proplacení</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Provozní přehled uznané práce, cestovních náhrad a interního proplacení.
+            Souhrn práce po zakázkách — vypočtená částka, případná korekce šéfem a stav proplacení.
           </p>
         </div>
-        <Badge variant="default">{items.length} záznamů</Badge>
+        <Badge variant="default">{workSummaries.length} zakázek</Badge>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -557,55 +545,71 @@ function WorkPaymentsOverview({
         </div>
       </div>
 
-      {items.length === 0 ? (
+      {workSummaries.length === 0 ? (
         <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-slate-400">
           Zatím nemáte ukončenou žádnou práci.
         </div>
       ) : (
         <div className="space-y-2">
-          {items.map((item) => {
-            const title = [item.row.zakazky?.cislo_zakazky, item.row.zakazky?.nazev]
-              .filter(Boolean)
-              .join(" · ") || "Zakázka";
-            const paid = item.row.payment_status === "proplaceno";
-            return (
-              <div key={item.row.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="font-bold text-white">{title}</div>
-                    <div className="mt-1 text-xs text-slate-400">
-                      {getAttendancePhaseLabel(item.row.typ_faze)} · {formatDateTime(item.row.checkin_at)}
-                    </div>
-                  </div>
-                  <Badge variant={paid ? "success" : "warning"}>
-                    {getPaymentStatusLabel(item.row.payment_status)}
-                  </Badge>
+          {workSummaries.map((summary) => (
+            <div
+              key={summary.zakazkaId}
+              className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="font-bold text-white">{summary.zakazkaTitle}</div>
+                <Badge
+                  variant={
+                    summary.status === "paid"
+                      ? "success"
+                      : summary.status === "waiting"
+                        ? "warning"
+                        : "default"
+                  }
+                >
+                  {summary.statusLabel}
+                </Badge>
+              </div>
+
+              <div className="mt-3 space-y-2 text-sm">
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span className="text-slate-400">Vypočteno systémem</span>
+                  <span className="font-bold text-slate-100">
+                    {formatMoneyCzk(summary.calculatedAmountCzk)}
+                  </span>
                 </div>
-                <div className="mt-3 grid gap-2 text-sm sm:grid-cols-5">
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Naměřeno</div>
-                    <div className="font-bold text-slate-100">{formatHours(item.measuredMinutes)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Schváleno</div>
-                    <div className="font-bold text-emerald-100">{formatHours(item.approvedMinutes)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Sazba</div>
-                    <div className="font-bold text-slate-100">{formatMoneyCzk(item.hourlyRate)} / h</div>
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Částka</div>
-                    <div className="font-black text-blue-100">{formatMoneyCzk(item.amount)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Stav</div>
-                    <div className="font-bold text-slate-100">{getPaymentStatusLabel(item.row.payment_status)}</div>
-                  </div>
+
+                {summary.hasOverride && summary.correctionDeltaCzk !== null ? (
+                  <>
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <span className="text-slate-400">Korekce šéfem</span>
+                      <span className="font-bold text-amber-100">
+                        {formatCorrectionDeltaCzk(
+                          summary.calculatedAmountCzk,
+                          summary.finalAmountCzk
+                        )}
+                      </span>
+                    </div>
+                    <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
+                      Částka byla upravena šéfem.
+                      {summary.correctionNote ? (
+                        <span className="mt-1 block text-amber-50/80">
+                          Poznámka: {summary.correctionNote}
+                        </span>
+                      ) : null}
+                    </div>
+                  </>
+                ) : null}
+
+                <div className="flex flex-wrap justify-between gap-2 border-t border-slate-800 pt-2">
+                  <span className="font-semibold text-slate-300">Finálně uznáno</span>
+                  <span className="font-black text-blue-100">
+                    {formatMoneyCzk(summary.finalAmountCzk)}
+                  </span>
                 </div>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       )}
 
@@ -847,9 +851,32 @@ export default async function MojePage({ searchParams }: PageProps) {
     return <div>Chyba načtení sazby: {ownProfileError.message}</div>;
   }
 
-  for (const row of attendancePayments) {
-    row.profiles = { hodinovy_naklad_akce: ownProfileRaw?.hodinovy_naklad_akce ?? 0 };
+  const hourlyRate = toNumber(ownProfileRaw?.hodinovy_naklad_akce);
+  const attendanceZakazkaIds = [...new Set(attendancePayments.map((row) => row.zakazka_id))];
+  const overridesByKey = new Map<string, WorkPayoutOverrideRow>();
+
+  if (attendanceZakazkaIds.length > 0) {
+    const { data: overridesRaw, error: overridesError } = await supabase
+      .from("dochazka_payout_overrides")
+      .select("zakazka_id, user_id, override_amount_czk, correction_note, updated_by, updated_at")
+      .eq("user_id", user.id)
+      .in("zakazka_id", attendanceZakazkaIds);
+
+    if (overridesError) {
+      return <div>Chyba načtení korekcí proplacení: {overridesError.message}</div>;
+    }
+
+    for (const row of (overridesRaw ?? []) as WorkPayoutOverrideRow[]) {
+      overridesByKey.set(buildWorkPayoutOverrideKey(row.zakazka_id, row.user_id), row);
+    }
   }
+
+  const workPayoutSummaries = buildEmployeeWorkPayoutSummaries({
+    rows: attendancePayments,
+    userId: user.id,
+    hourlyRate,
+    overridesByKey,
+  });
 
   const { data: myTransportsRaw, error: myTransportsError } = await supabase
     .from("zakazka_doprava")
@@ -934,7 +961,7 @@ export default async function MojePage({ searchParams }: PageProps) {
       <FilterPills activeFilter={activeFilter} />
 
       <div className="hidden lg:block">
-        <WorkPaymentsOverview rows={attendancePayments} travelRows={travelPayments} />
+        <WorkPaymentsOverview workSummaries={workPayoutSummaries} travelRows={travelPayments} />
       </div>
 
       <div className="hidden lg:block">
