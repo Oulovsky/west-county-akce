@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getPaymentAmount } from "@/lib/payments";
 import {
   getAttendanceMinutes,
   getAttendancePhaseLabel,
@@ -9,7 +8,6 @@ import {
   normalizeGpsNumber,
   type AttendanceGpsInput,
 } from "@/lib/zakazka-attendance";
-import type { AttendanceDopravaRezim } from "@/lib/transport";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { createClient } from "@/lib/supabase/server";
 
@@ -57,37 +55,20 @@ async function loadOwnAssignment(supabase: any, assignmentId: string, userId: st
   return assignment;
 }
 
-function normalizeDopravaRezim(value?: string | null): AttendanceDopravaRezim | null {
-  const raw = String(value ?? "").trim();
-  if (raw === "firemni" || raw === "soukrome" || raw === "spolujizda" || raw === "bez_nahrady") {
-    return raw;
-  }
-  return null;
-}
-
 export async function checkInAttendanceAction({
   assignmentId,
   gps,
   overrideReason,
-  mode = "work",
-  dopravaRezim,
 }: {
   assignmentId: string;
   gps?: AttendanceGpsInput | null;
   overrideReason?: string | null;
-  mode?: "work" | "prejezd";
-  dopravaRezim?: string | null;
 }): Promise<AttendanceResult> {
   try {
     const { supabase, user } = await getCurrentUser();
     const assignment = await loadOwnAssignment(supabase, assignmentId, user.id);
     const warning = gpsWarning(gps);
-    const phase =
-      mode === "prejezd" ? "prejezd" : normalizeAttendancePhase(assignment.typ_bloku);
-    const rezim = mode === "prejezd" ? normalizeDopravaRezim(dopravaRezim) : null;
-    if (mode === "prejezd" && !rezim) {
-      return { ok: false, error: "U přejezdu vyberte režim dopravy." };
-    }
+    const phase = normalizeAttendancePhase(assignment.typ_bloku);
     const trimmedOverride = String(overrideReason ?? "").trim();
 
     const { data: existingOpen, error: existingOpenError } = await supabase
@@ -118,10 +99,7 @@ export async function checkInAttendanceAction({
       assignment_id: String(assignment.id),
       user_id: user.id,
       typ_faze: phase,
-      doprava_rezim: rezim,
       checkin_at: now,
-      approval_status: "ceka_na_schvaleni",
-      payment_status: "ceka_na_proplaceni",
       gps_checkin_lat: normalizeGpsNumber(gps?.lat),
       gps_checkin_lng: normalizeGpsNumber(gps?.lng),
       gps_accuracy: normalizeGpsNumber(gps?.accuracy),
@@ -161,7 +139,6 @@ export async function checkInAttendanceAction({
     });
 
     revalidatePath("/moje");
-    revalidatePath("/admin/proplaceni");
     revalidatePath(`/moje/zakazky/${assignment.zakazka_id}`);
     revalidatePath(`/zakazky/${assignment.zakazka_id}`);
     return { ok: true, warning };
@@ -211,30 +188,16 @@ export async function checkOutAttendanceAction({
     if (updateError) throw new Error(updateError.message);
 
     const minutes = getAttendanceMinutes(openAttendance.checkin_at, now);
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("hodinovy_naklad_akce")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (profileError) throw new Error(profileError.message);
-
-    const hourlyRate = Number(profile?.hodinovy_naklad_akce ?? 0);
-    const claimedAmount = getPaymentAmount(minutes, hourlyRate);
-
-    const { error: claimUpdateError } = await supabase
+    const { error: approvedUpdateError } = await supabase
       .from("dochazka_zakazky")
       .update({
-        claimed_duration_minutes: minutes,
-        claimed_amount_czk: claimedAmount,
-        approval_status: "ceka_na_schvaleni",
+        approved_duration_minutes: minutes,
         payment_status: "ceka_na_proplaceni",
-        approved_duration_minutes: null,
-        approved_amount_czk: null,
       })
-      .eq("id", openAttendance.id);
+      .eq("id", openAttendance.id)
+      .is("approved_duration_minutes", null);
 
-    if (claimUpdateError) throw new Error(claimUpdateError.message);
+    if (approvedUpdateError) throw new Error(approvedUpdateError.message);
 
     await logZakazkaHistory(supabase, {
       zakazkaId: assignment.zakazka_id,

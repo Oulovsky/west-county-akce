@@ -14,59 +14,19 @@ export function getMeasuredMinutes(checkinAt?: string | null, checkoutAt?: strin
   return getAttendanceMinutes(checkinAt, checkoutAt);
 }
 
-export function getClaimedMinutes(row: {
-  claimed_duration_minutes?: number | string | null;
-  checkin_at?: string | null;
-  checkout_at?: string | null;
-}) {
-  const claimed = Number(row.claimed_duration_minutes ?? NaN);
-  if (Number.isFinite(claimed) && claimed >= 0) return Math.round(claimed);
-  return getMeasuredMinutes(row.checkin_at, row.checkout_at);
-}
-
 export function getApprovedMinutes(row: {
   approved_duration_minutes?: number | string | null;
-  claimed_duration_minutes?: number | string | null;
   checkin_at?: string | null;
   checkout_at?: string | null;
 }) {
   const approved = Number(row.approved_duration_minutes ?? NaN);
   if (Number.isFinite(approved) && approved >= 0) return Math.round(approved);
-  return getClaimedMinutes(row);
+  return getMeasuredMinutes(row.checkin_at, row.checkout_at);
 }
 
 export function getPaymentAmount(minutes: number, hourlyRate: number) {
   if (!Number.isFinite(minutes) || !Number.isFinite(hourlyRate)) return 0;
   return Math.round((Math.max(0, minutes) / 60) * Math.max(0, hourlyRate));
-}
-
-export function getWorkClaimedAmount(row: {
-  claimed_amount_czk?: number | string | null;
-  claimed_duration_minutes?: number | string | null;
-  checkin_at?: string | null;
-  checkout_at?: string | null;
-  hourlyRate?: number | string | null;
-}) {
-  const stored = Number(row.claimed_amount_czk ?? NaN);
-  if (Number.isFinite(stored) && stored >= 0) return Math.round(stored);
-  return getPaymentAmount(getClaimedMinutes(row), Number(row.hourlyRate ?? 0));
-}
-
-export function getWorkApprovedAmount(row: {
-  approved_amount_czk?: number | string | null;
-  approved_duration_minutes?: number | string | null;
-  claimed_duration_minutes?: number | string | null;
-  checkin_at?: string | null;
-  checkout_at?: string | null;
-  hourlyRate?: number | string | null;
-}) {
-  const stored = Number(row.approved_amount_czk ?? NaN);
-  if (Number.isFinite(stored) && stored >= 0) return Math.round(stored);
-  return getPaymentAmount(getApprovedMinutes(row), Number(row.hourlyRate ?? 0));
-}
-
-export function defaultApprovedAmountFromMinutes(minutes: number, hourlyRate: number) {
-  return getPaymentAmount(minutes, hourlyRate);
 }
 
 export function formatMoneyCzk(value: number) {

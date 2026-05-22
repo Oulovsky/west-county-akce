@@ -3,8 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
 import { formatHours, formatMoneyCzk, getApprovedMinutes, getPaymentAmount } from "@/lib/payments";
-import { getTravelApprovedAmount } from "@/lib/transport";
-import { normalizeApprovalStatus } from "@/lib/approval";
+import { getTravelAmount } from "@/lib/transport";
 
 export const dynamic = "force-dynamic";
 
@@ -176,7 +175,7 @@ export default async function DashboardPage() {
     supabase.from("zakazka_faktury").select("id, zakazka_id, cislo_dokladu, stav, payment_status, splatnost_at, konecna_cena, celkem_s_dph"),
     supabase.from("dochazka_zakazky").select("id, zakazka_id, user_id, checkin_at, checkout_at, approved_duration_minutes, payment_status"),
     supabase.from("profiles").select("user_id, email, jmeno, prijmeni, hodinovy_naklad_akce"),
-    supabase.from("cestovni_nahrady").select("id, zakazka_id, user_id, km, sazba_za_km, claimed_amount_czk, approved_amount_czk, approval_status, payment_status, status"),
+    supabase.from("cestovni_nahrady").select("id, zakazka_id, user_id, km, sazba_za_km, castka, status"),
     supabase.from("sklad_polozky_kusy").select("kus_id, skladova_polozka_id, stav, aktivni, servisni_stav_changed_at, skladove_polozky(nazev)"),
     supabase.from("sklad_kus_historie").select("kus_id, typ_akce, created_at").in("typ_akce", ["poskozeno", "blokovano"]).order("created_at", { ascending: false }).limit(500),
     supabase.from("zakazka_historie").select("event_type, zakazka_id, actor_id, created_at, title").order("created_at", { ascending: false }).limit(1000),
@@ -212,16 +211,10 @@ export default async function DashboardPage() {
       const profile = profilesById.get(row.user_id);
       return sum + getPaymentAmount(getApprovedMinutes(row), toNumber(profile?.hodinovy_naklad_akce));
     }, 0);
-  const travelWaitingApproval = travel.filter(
-    (row: any) => normalizeApprovalStatus(row.approval_status ?? row.status) === "ceka_na_schvaleni"
-  );
+  const travelWaitingApproval = travel.filter((row: any) => row.status === "ceka_na_schvaleni");
   const travelWaitingPayment = travel
-    .filter(
-      (row: any) =>
-        normalizeApprovalStatus(row.approval_status ?? row.status) === "schvaleno" &&
-        row.payment_status !== "proplaceno"
-    )
-    .reduce((sum: number, row: any) => sum + getTravelApprovedAmount(row), 0);
+    .filter((row: any) => row.status === "schvaleno")
+    .reduce((sum: number, row: any) => sum + toNumber(row.castka ?? getTravelAmount(row.km, row.sazba_za_km)), 0);
 
   const revenueThisMonth = activeZakazky
     .filter((row) => {
@@ -238,10 +231,7 @@ export default async function DashboardPage() {
 
   const techCost = activeZakazky.reduce((sum, row) => sum + toNumber(row.cena_techniky), 0);
   const peopleCost = activeZakazky.reduce((sum, row) => sum + toNumber(row.cena_personalu), 0);
-  const transportCost = travel.reduce(
-    (sum: number, row: any) => sum + getTravelApprovedAmount(row),
-    0
-  );
+  const transportCost = travel.reduce((sum: number, row: any) => sum + toNumber(row.castka ?? getTravelAmount(row.km, row.sazba_za_km)), 0);
 
   const problemPieces = stockPieces.filter((row: any) => ["poskozeno", "blokovano", "v_oprave", "ceka_na_kontrolu", "vyrazeno", "odpis"].includes(String(row.stav ?? "")) || row.aktivni === false);
   const repairPieces = stockPieces.filter((row: any) => row.stav === "v_oprave");
@@ -277,7 +267,7 @@ export default async function DashboardPage() {
   const companyVehicleUse = transports.filter((row: any) => row.typ_dopravy === "firemni_auto");
   const carConflicts = history.filter((row: any) => String(row.event_type ?? "").includes("transport_collision"));
   const privateTrips = transports.filter((row: any) => row.typ_dopravy === "soukrome_auto");
-  const travelTotal = travel.reduce((sum: number, row: any) => sum + getTravelApprovedAmount(row), 0);
+  const travelTotal = travel.reduce((sum: number, row: any) => sum + toNumber(row.castka ?? getTravelAmount(row.km, row.sazba_za_km)), 0);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6 text-slate-200">

@@ -53,7 +53,7 @@ import {
 import { buildInvoiceDataFromRow } from "@/lib/invoice-data";
 import { InvoiceActionsClient } from "./InvoiceActionsClient";
 import { getApprovedMinutes, getPaymentAmount } from "@/lib/payments";
-import { getTravelApprovedAmount } from "@/lib/transport";
+import { getTravelAmount } from "@/lib/transport";
 import { getTechnikaAvailability } from "@/lib/technika-availability";
 import {
   PlaceTechnicalNotesCard,
@@ -3104,7 +3104,7 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
 
   const { data: travelPaymentsRaw, error: travelPaymentsError } = await supabase
     .from("cestovni_nahrady")
-    .select("km, sazba_za_km, claimed_amount_czk, approved_amount_czk, approval_status, payment_status, status")
+    .select("km, sazba_za_km, castka, status")
     .eq("zakazka_id", id);
 
   if (travelPaymentsError) {
@@ -3114,21 +3114,12 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
   const travelPayments = (travelPaymentsRaw ?? []) as Array<{
     km: number | string;
     sazba_za_km: number | string;
-    claimed_amount_czk?: number | string | null;
-    approved_amount_czk?: number | string | null;
-    approval_status?: string | null;
-    payment_status?: string | null;
-    status?: string | null;
+    castka: number | string | null;
+    status: string | null;
   }>;
   const approvedTravelPayments = travelPayments
-    .filter(
-      (row) =>
-        row.approval_status === "schvaleno" ||
-        row.status === "schvaleno" ||
-        row.payment_status === "proplaceno" ||
-        row.status === "proplaceno"
-    )
-    .reduce((sum, row) => sum + toCount(getTravelApprovedAmount(row)), 0);
+    .filter((row) => row.status === "schvaleno" || row.status === "proplaceno")
+    .reduce((sum, row) => sum + toCount(row.castka ?? getTravelAmount(row.km, row.sazba_za_km)), 0);
 
   const { data: transportRowsRaw, error: transportRowsError } = await supabase
     .from("zakazka_doprava")
