@@ -96,7 +96,7 @@ export async function runReminderEngine(supabase: any, nowInput = new Date()) {
         title: "Odjezd/nakládka do 2 hodin",
         message: title,
         relatedZakazkaId: zakazka.zakazka_id,
-        actionUrl: `/zakazky/${zakazka.zakazka_id}/nakladka`,
+        actionUrl: `/zakazky/${zakazka.zakazka_id}/scan`,
         dedupeKeyPrefix: `reminder:departure:${zakazka.zakazka_id}:${new Date(zakazka.odjezd_ze_skladu).toISOString().slice(0, 13)}`,
       }));
       result.departureSoon += 1;

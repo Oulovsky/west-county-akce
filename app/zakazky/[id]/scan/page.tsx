@@ -773,7 +773,7 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
     }
 
     revalidatePath(`/zakazky/${id}/scan`);
-    revalidatePath(`/zakazky/${id}/nakladka`);
+    revalidatePath(`/zakazky/${id}/scan`);
     revalidatePath(`/zakazky/${id}/technika`);
     revalidatePath(`/sklad/kus/${kus.kus_id}`);
     revalidatePath("/sklad/sprava");
@@ -962,7 +962,7 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
     const itemCounts = counts.get(cleanExpectedPolozkaId) ?? { loaded: 0, returned: 0 };
 
     revalidatePath(`/zakazky/${id}/scan`);
-    revalidatePath(`/zakazky/${id}/nakladka`);
+    revalidatePath(`/zakazky/${id}/scan`);
     revalidatePath(`/zakazky/${id}/technika`);
     revalidatePath(`/sklad/kus/${kus.kus_id}`);
     revalidatePath("/sklad/sprava");

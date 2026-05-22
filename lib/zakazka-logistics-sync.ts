@@ -258,7 +258,7 @@ export async function syncZakazkaLogisticsFromScan(
 
   revalidatePath(`/zakazky/${zakazkaId}`);
   revalidatePath(`/zakazky/${zakazkaId}/scan`);
-  revalidatePath(`/zakazky/${zakazkaId}/nakladka`);
+  revalidatePath(`/zakazky/${zakazkaId}/scan`);
   revalidatePath(`/zakazky/${zakazkaId}/technika`);
   revalidatePath("/zakazky");
   revalidatePath("/moje");
