@@ -191,13 +191,9 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
     return { row, profile, approvedMinutes, measuredMinutes, hourlyRate, amount };
   });
 
-  const calculatedWorkWaitingTotal = items
-    .filter((item) => normalizePaymentStatus(item.row.payment_status) === "ceka_na_proplaceni")
-    .reduce((sum, item) => sum + item.amount, 0);
   const paidTotal = items
     .filter((item) => normalizePaymentStatus(item.row.payment_status) === "proplaceno")
     .reduce((sum, item) => sum + item.amount, 0);
-  const travelWaitingTotal = sumTravelRowsByStatus(travelRows, "schvaleno");
   const travelPaidTotal = sumTravelRowsByStatus(travelRows, "proplaceno");
   const workGroupKeys = [
     ...new Set(items.map((item) => buildWorkPayoutGroupKey(item.row.zakazka_id, item.row.user_id))),
@@ -281,17 +277,28 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
     })
   );
 
-  const combinedWaitingTotal = payoutGroups
-    .filter(
-      (group) =>
-        group.calculatedWorkWaitingTotal > 0 || group.travelApprovedForPaymentTotal > 0
-    )
-    .reduce((sum, group) => sum + group.finalPayoutAmount, 0);
+  const payableGroups = payoutGroups.filter(
+    (group) => group.calculatedWorkWaitingTotal > 0 || group.travelApprovedForPaymentTotal > 0
+  );
 
-  const workWaitingTotal = payoutGroups.reduce(
+  const workCalculatedTotal = payableGroups.reduce(
     (sum, group) => sum + group.calculatedWorkWaitingTotal,
     0
   );
+  const travelCalculatedTotal = payableGroups.reduce(
+    (sum, group) => sum + group.travelApprovedForPaymentTotal,
+    0
+  );
+  const calculatedCombinedBeforeCorrections = payableGroups.reduce(
+    (sum, group) => sum + group.calculatedCombinedTotal,
+    0
+  );
+  const combinedWaitingTotal = payableGroups.reduce(
+    (sum, group) => sum + group.finalPayoutAmount,
+    0
+  );
+  const hasGlobalCorrectionDivergence =
+    Math.abs(calculatedCombinedBeforeCorrections - combinedWaitingTotal) > 0.005;
 
   const payoutZakazkaTree = buildWorkZakazkaPayoutTree(
     payoutGroups.map((group) => ({
@@ -341,20 +348,37 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="border-amber-500/30 bg-amber-500/10">
-          <div className="text-xs uppercase tracking-wide text-amber-200/80">Práce k proplacení</div>
-          <div className="mt-1 text-3xl font-black text-amber-100">{formatMoneyCzk(workWaitingTotal)}</div>
+          <div className="text-xs uppercase tracking-wide text-amber-200/80">Práce vypočteno</div>
+          <div className="mt-1 text-3xl font-black text-amber-100">
+            {formatMoneyCzk(workCalculatedTotal)}
+          </div>
+          <p className="mt-1 text-xs text-amber-100/70">Rozpad před korekcí</p>
         </Card>
         <Card className="border-amber-500/30 bg-amber-500/10">
-          <div className="text-xs uppercase tracking-wide text-amber-200/80">Cesty k proplacení</div>
-          <div className="mt-1 text-3xl font-black text-amber-100">{formatMoneyCzk(travelWaitingTotal)}</div>
+          <div className="text-xs uppercase tracking-wide text-amber-200/80">Cesty vypočteno</div>
+          <div className="mt-1 text-3xl font-black text-amber-100">
+            {formatMoneyCzk(travelCalculatedTotal)}
+          </div>
+          <p className="mt-1 text-xs text-amber-100/70">Schválené cestovní náhrady</p>
         </Card>
         <Card className="border-blue-500/30 bg-blue-500/10">
           <div className="text-xs uppercase tracking-wide text-blue-200/80">Celkem k proplacení</div>
-          <div className="mt-1 text-3xl font-black text-blue-100">{formatMoneyCzk(combinedWaitingTotal)}</div>
+          <div className="mt-1 text-3xl font-black text-blue-100">
+            {formatMoneyCzk(combinedWaitingTotal)}
+          </div>
+          {hasGlobalCorrectionDivergence ? (
+            <p className="mt-1 text-xs text-blue-100/70">
+              Vypočteno celkem {formatMoneyCzk(calculatedCombinedBeforeCorrections)} · po korekcích
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-blue-100/70">Práce + cesty (finální částka pro QR)</p>
+          )}
         </Card>
         <Card className="border-emerald-500/30 bg-emerald-500/10">
           <div className="text-xs uppercase tracking-wide text-emerald-200/80">Celkem proplaceno</div>
-          <div className="mt-1 text-3xl font-black text-emerald-100">{formatMoneyCzk(paidTotal + travelPaidTotal)}</div>
+          <div className="mt-1 text-3xl font-black text-emerald-100">
+            {formatMoneyCzk(paidTotal + travelPaidTotal)}
+          </div>
         </Card>
       </div>
 
@@ -429,10 +453,10 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
                             zakázce — práce i schválené cestovní náhrady.
                           </p>
                           <p className="text-xs text-blue-100/70">
-                            Vypočtený součet = práce k proplacení + schválené cesty. Vyplněná korekce
-                            nahrazuje celkovou částku pro QR i evidenci.
+                            Nejdřív práce + schválené cesty. Korekce šéfa přepíše finální částku pro QR
+                            i proplacení.
                           </p>
-                          <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                          <div className="grid gap-3 text-sm sm:grid-cols-2">
                             <div>
                               <div className="text-xs uppercase tracking-wide text-slate-500">Účet</div>
                               <div className="font-bold text-slate-100">
@@ -447,30 +471,40 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
                             </div>
                             <div>
                               <div className="text-xs uppercase tracking-wide text-slate-500">
-                                Cestovní náhrady (schváleno)
+                                Cestovní náhrady
                               </div>
                               <div className="font-bold text-slate-200">
                                 {formatMoneyCzk(employee.travelApprovedForPaymentTotal)}
                               </div>
                             </div>
-                            <div className="sm:col-span-2 lg:col-span-3">
+                            <div>
                               <div className="text-xs uppercase tracking-wide text-slate-500">
-                                Celkem k proplacení
+                                Vypočteno celkem
                               </div>
-                              {employee.hasOverride ? (
-                                <div className="space-y-1">
-                                  <div className="text-slate-400">
-                                    Vypočteno: {formatMoneyCzk(employee.calculatedCombinedTotal)}
-                                  </div>
-                                  <div className="font-black text-blue-100">
-                                    Po korekci: {formatMoneyCzk(employee.finalPayoutAmount)}
-                                  </div>
+                              <div className="font-bold text-slate-300">
+                                {formatMoneyCzk(employee.calculatedCombinedTotal)}
+                              </div>
+                            </div>
+                            {employee.hasOverride ? (
+                              <div className="sm:col-span-2">
+                                <div className="text-xs uppercase tracking-wide text-slate-500">
+                                  Korekce šéfem
                                 </div>
-                              ) : (
-                                <div className="font-black text-blue-100">
+                                <div className="font-bold text-amber-100">
                                   {formatMoneyCzk(employee.finalPayoutAmount)}
                                 </div>
-                              )}
+                                {employee.correctionNote ? (
+                                  <p className="mt-1 text-xs text-slate-400">{employee.correctionNote}</p>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="rounded-xl border border-blue-400/40 bg-blue-950/40 px-4 py-3">
+                            <div className="text-xs uppercase tracking-wide text-blue-200/80">
+                              Finálně k proplacení
+                            </div>
+                            <div className="mt-1 text-2xl font-black text-blue-100">
+                              {formatMoneyCzk(employee.finalPayoutAmount)}
                             </div>
                           </div>
 
