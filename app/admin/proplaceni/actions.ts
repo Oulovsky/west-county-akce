@@ -6,6 +6,7 @@ import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { requireAppAdminOrSef } from "@/lib/auth/admin-access-server";
 import { createClient } from "@/lib/supabase/server";
 import { createNotification } from "@/lib/notifications";
+import { parseOverrideAmountCzk } from "@/lib/admin/work-payout-override";
 
 async function requirePaymentManager() {
   try {
@@ -114,6 +115,18 @@ export async function markZakazkaEmployeeWorkPaidAction(formData: FormData) {
     totalAmount += getPaymentAmount(approvedMinutes, hourlyRate);
   }
 
+  const { data: payoutOverride } = await supabase
+    .from("dochazka_payout_overrides")
+    .select("override_amount_czk")
+    .eq("zakazka_id", zakazkaId)
+    .eq("user_id", employeeUserId)
+    .maybeSingle();
+
+  const loggedAmount =
+    payoutOverride?.override_amount_czk != null
+      ? Number(payoutOverride.override_amount_czk)
+      : totalAmount;
+
   const { error: updateError } = await supabase
     .from("dochazka_zakazky")
     .update({
@@ -131,17 +144,79 @@ export async function markZakazkaEmployeeWorkPaidAction(formData: FormData) {
     eventType: "attendance_paid",
     actorId: user.id,
     title: "Práce zaměstnance na zakázce byla označena jako proplacená.",
-    detail: `${pendingRows.length} intervalů · ${formatMoneyCzk(totalAmount)}`,
+    detail: `${pendingRows.length} intervalů · ${formatMoneyCzk(loggedAmount)}`,
     metadata: {
       target_user_id: employeeUserId,
       attendance_ids: attendanceIds,
-      amount_czk: totalAmount,
+      amount_czk: loggedAmount,
+      calculated_amount_czk: totalAmount,
+      override_amount_czk: payoutOverride?.override_amount_czk ?? null,
     },
   });
 
   revalidatePath("/admin/proplaceni");
   revalidatePath("/moje");
   revalidatePath(`/zakazky/${zakazkaId}`);
+}
+
+export async function saveWorkPayoutOverrideAction(formData: FormData) {
+  const zakazkaId = String(formData.get("zakazka_id") ?? "").trim();
+  const employeeUserId = String(formData.get("user_id") ?? "").trim();
+  const amountRaw = String(formData.get("override_amount_czk") ?? "");
+  const correctionNote = String(formData.get("correction_note") ?? "").trim();
+
+  if (!zakazkaId || !employeeUserId) {
+    throw new Error("Chybí zakázka nebo zaměstnanec.");
+  }
+
+  const { supabase, user } = await requirePaymentManager();
+  const overrideAmount = parseOverrideAmountCzk(amountRaw);
+
+  if (overrideAmount === null) {
+    const { error } = await supabase
+      .from("dochazka_payout_overrides")
+      .delete()
+      .eq("zakazka_id", zakazkaId)
+      .eq("user_id", employeeUserId);
+
+    if (error) throw new Error(error.message);
+  } else {
+    const updatedAt = new Date().toISOString();
+    const { error } = await supabase.from("dochazka_payout_overrides").upsert(
+      {
+        zakazka_id: zakazkaId,
+        user_id: employeeUserId,
+        override_amount_czk: overrideAmount,
+        correction_note: correctionNote || null,
+        updated_by: user.id,
+        updated_at: updatedAt,
+      },
+      { onConflict: "zakazka_id,user_id" }
+    );
+
+    if (error) throw new Error(error.message);
+  }
+
+  revalidatePath("/admin/proplaceni");
+}
+
+export async function clearWorkPayoutOverrideAction(formData: FormData) {
+  const zakazkaId = String(formData.get("zakazka_id") ?? "").trim();
+  const employeeUserId = String(formData.get("user_id") ?? "").trim();
+  if (!zakazkaId || !employeeUserId) {
+    throw new Error("Chybí zakázka nebo zaměstnanec.");
+  }
+
+  const { supabase } = await requirePaymentManager();
+  const { error } = await supabase
+    .from("dochazka_payout_overrides")
+    .delete()
+    .eq("zakazka_id", zakazkaId)
+    .eq("user_id", employeeUserId);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/admin/proplaceni");
 }
 
 export async function approveTravelReimbursementAction(formData: FormData) {

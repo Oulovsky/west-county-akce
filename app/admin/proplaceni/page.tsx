@@ -14,14 +14,22 @@ import {
 import { formatKm, getTravelAmount, getTravelStatusLabel } from "@/lib/transport";
 import { buildWorkZakazkaPayoutTree } from "@/lib/admin/work-payout-display";
 import { loadPayoutEmployeeProfiles, type PayoutEmployeeProfile } from "@/lib/admin/payout-profiles";
+import {
+  buildWorkPayoutOverrideKey,
+  resolveFinalPayoutAmount,
+  toOverrideAmountNumber,
+  type WorkPayoutOverrideRow,
+} from "@/lib/admin/work-payout-override";
 import { getMissingBankAccountMessage, getPaymentAccount } from "@/lib/bank-account";
 import { verifyAppAdminOrSefPage } from "@/lib/auth/admin-access-server";
 import { createClient } from "@/lib/supabase/server";
 import {
   approveTravelReimbursementAction,
+  clearWorkPayoutOverrideAction,
   markTravelReimbursementPaidAction,
   markZakazkaEmployeeWorkPaidAction,
   rejectTravelReimbursementAction,
+  saveWorkPayoutOverrideAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -192,7 +200,7 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
     return { row, profile, approvedMinutes, measuredMinutes, hourlyRate, amount };
   });
 
-  const waitingTotal = items
+  const calculatedWorkWaitingTotal = items
     .filter((item) => normalizePaymentStatus(item.row.payment_status) === "ceka_na_proplaceni")
     .reduce((sum, item) => sum + item.amount, 0);
   const paidTotal = items
@@ -220,6 +228,26 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
   const workGroupKeys = [
     ...new Set(items.map((item) => buildWorkPayoutGroupKey(item.row.zakazka_id, item.row.user_id))),
   ];
+
+  const zakazkaIdsForOverrides = [...new Set(items.map((item) => item.row.zakazka_id))];
+  const overridesByKey = new Map<string, WorkPayoutOverrideRow>();
+
+  if (zakazkaIdsForOverrides.length > 0 && userIds.length > 0) {
+    const { data: overridesRaw, error: overridesError } = await supabase
+      .from("dochazka_payout_overrides")
+      .select("zakazka_id, user_id, override_amount_czk, correction_note, updated_by, updated_at")
+      .in("zakazka_id", zakazkaIdsForOverrides)
+      .in("user_id", userIds);
+
+    if (overridesError) {
+      return <div className="p-6 text-red-300">{overridesError.message}</div>;
+    }
+
+    for (const row of (overridesRaw ?? []) as WorkPayoutOverrideRow[]) {
+      overridesByKey.set(buildWorkPayoutOverrideKey(row.zakazka_id, row.user_id), row);
+    }
+  }
+
   const workPayoutGroups = await Promise.all(
     workGroupKeys.map(async (groupKey) => {
       const [zakazkaId, userId] = groupKey.split(":");
@@ -231,12 +259,15 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
       const waitingItems = groupItems.filter(
         (item) => normalizePaymentStatus(item.row.payment_status) === "ceka_na_proplaceni"
       );
-      const waitingTotal = waitingItems.reduce((sum, item) => sum + item.amount, 0);
+      const calculatedWaitingTotal = waitingItems.reduce((sum, item) => sum + item.amount, 0);
+      const overrideRow = overridesByKey.get(groupKey) ?? null;
+      const overrideAmount = toOverrideAmountNumber(overrideRow?.override_amount_czk);
+      const finalPayoutAmount = resolveFinalPayoutAmount(calculatedWaitingTotal, overrideAmount);
       const account = getPaymentAccount(profile);
       const message = `WEST COUNTY práce ${zakazkaTitle}`;
       const qrDataUrl =
-        waitingTotal > 0 && account
-          ? await buildQrDataUrl({ account: account.qrAccount, amount: waitingTotal, message })
+        calculatedWaitingTotal > 0 && account
+          ? await buildQrDataUrl({ account: account.qrAccount, amount: finalPayoutAmount, message })
           : null;
 
       return {
@@ -247,13 +278,21 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
         zakazkaTitle,
         groupItems,
         waitingItems,
-        waitingTotal,
+        calculatedWaitingTotal,
+        finalPayoutAmount,
+        hasOverride: overrideAmount !== null,
+        correctionNote: overrideRow?.correction_note ?? null,
+        overrideAmount,
         account,
         message,
         qrDataUrl,
       };
     })
   );
+
+  const workWaitingTotal = workPayoutGroups
+    .filter((group) => group.calculatedWaitingTotal > 0)
+    .reduce((sum, group) => sum + group.finalPayoutAmount, 0);
 
   const workZakazkaTree = buildWorkZakazkaPayoutTree(
     workPayoutGroups.map((group) => ({
@@ -264,7 +303,10 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
       profile: group.profile,
       groupItems: group.groupItems.map((item) => item.row),
       hourlyRate: Number(group.profile?.hodinovy_naklad_akce ?? 0),
-      waitingTotal: group.waitingTotal,
+      calculatedWaitingTotal: group.calculatedWaitingTotal,
+      finalPayoutAmount: group.finalPayoutAmount,
+      hasOverride: group.hasOverride,
+      correctionNote: group.correctionNote,
       account: group.account,
       message: group.message,
       qrDataUrl: group.qrDataUrl,
@@ -296,7 +338,7 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="border-amber-500/30 bg-amber-500/10">
           <div className="text-xs uppercase tracking-wide text-amber-200/80">Práce k proplacení</div>
-          <div className="mt-1 text-3xl font-black text-amber-100">{formatMoneyCzk(waitingTotal)}</div>
+          <div className="mt-1 text-3xl font-black text-amber-100">{formatMoneyCzk(workWaitingTotal)}</div>
         </Card>
         <Card className="border-amber-500/30 bg-amber-500/10">
           <div className="text-xs uppercase tracking-wide text-amber-200/80">Cesty k proplacení</div>
@@ -304,7 +346,7 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
         </Card>
         <Card className="border-blue-500/30 bg-blue-500/10">
           <div className="text-xs uppercase tracking-wide text-blue-200/80">Celkem dlužíme</div>
-          <div className="mt-1 text-3xl font-black text-blue-100">{formatMoneyCzk(waitingTotal + travelWaitingTotal)}</div>
+          <div className="mt-1 text-3xl font-black text-blue-100">{formatMoneyCzk(workWaitingTotal + travelWaitingTotal)}</div>
         </Card>
         <Card className="border-emerald-500/30 bg-emerald-500/10">
           <div className="text-xs uppercase tracking-wide text-emerald-200/80">Celkem proplaceno</div>
@@ -370,17 +412,21 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
                           {getProfileName(employee.profile, employee.userId)}
                         </div>
                         <div className="text-sm font-black text-blue-100">
-                          {formatMoneyCzk(employee.waitingTotal)}
+                          {formatMoneyCzk(employee.finalPayoutAmount)}
                         </div>
                       </div>
                     </summary>
 
                     <div className="space-y-3 border-t border-slate-800 px-4 pb-4 pt-3">
-                      {employee.waitingTotal > 0 ? (
+                      {employee.calculatedWaitingTotal > 0 ? (
                         <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 px-4 py-4 space-y-3">
                           <p className="text-sm text-blue-100/90">
                             QR pro platbu a označení jako proplaceno se vztahují k celé částce
                             zaměstnance na zakázce.
+                          </p>
+                          <p className="text-xs text-blue-100/70">
+                            Bez korekce se použije vypočtená částka. Vyplněná korekce má přednost pro QR
+                            platbu.
                           </p>
                           <div className="grid gap-3 text-sm sm:grid-cols-2">
                             <div>
@@ -391,11 +437,73 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
                             </div>
                             <div>
                               <div className="text-xs uppercase tracking-wide text-slate-500">K proplacení</div>
-                              <div className="font-black text-blue-100">
-                                {formatMoneyCzk(employee.waitingTotal)}
-                              </div>
+                              {employee.hasOverride ? (
+                                <div className="space-y-1">
+                                  <div className="text-slate-400">
+                                    Vypočteno: {formatMoneyCzk(employee.calculatedWaitingTotal)}
+                                  </div>
+                                  <div className="font-black text-blue-100">
+                                    Po korekci: {formatMoneyCzk(employee.finalPayoutAmount)}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="font-black text-blue-100">
+                                  {formatMoneyCzk(employee.finalPayoutAmount)}
+                                </div>
+                              )}
                             </div>
                           </div>
+
+                          <form action={saveWorkPayoutOverrideAction} className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-3">
+                            <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                              Korekce částky
+                            </div>
+                            <div className="flex flex-wrap items-end gap-2">
+                              <label className="flex min-w-[10rem] flex-1 flex-col gap-1 text-xs text-slate-400">
+                                Částka (Kč)
+                                <input
+                                  name="override_amount_czk"
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  defaultValue={employee.hasOverride ? employee.finalPayoutAmount : ""}
+                                  placeholder={String(employee.calculatedWaitingTotal)}
+                                  className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                                />
+                              </label>
+                              <label className="flex min-w-[12rem] flex-[2] flex-col gap-1 text-xs text-slate-400">
+                                Poznámka (volitelně)
+                                <input
+                                  name="correction_note"
+                                  type="text"
+                                  defaultValue={employee.correctionNote ?? ""}
+                                  placeholder="Důvod korekce"
+                                  className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                                />
+                              </label>
+                              <input type="hidden" name="zakazka_id" value={employee.zakazkaId} />
+                              <input type="hidden" name="user_id" value={employee.userId} />
+                              <button
+                                type="submit"
+                                className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-600"
+                              >
+                                Uložit korekci
+                              </button>
+                            </div>
+                          </form>
+                          {employee.hasOverride ? (
+                            <form action={clearWorkPayoutOverrideAction}>
+                              <input type="hidden" name="zakazka_id" value={employee.zakazkaId} />
+                              <input type="hidden" name="user_id" value={employee.userId} />
+                              <button
+                                type="submit"
+                                className="text-xs font-semibold text-slate-400 underline-offset-2 hover:text-slate-200 hover:underline"
+                              >
+                                Zrušit korekci (použít vypočtenou částku)
+                              </button>
+                            </form>
+                          ) : null}
+
                           <div className="flex flex-wrap items-start gap-3">
                             {employee.payout.qrDataUrl ? (
                               <details className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">

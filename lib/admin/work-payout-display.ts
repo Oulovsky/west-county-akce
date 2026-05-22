@@ -91,7 +91,10 @@ export type WorkEmployeePayoutGroup = {
   userId: string;
   zakazkaTitle: string;
   profile: WorkPayoutProfile | null;
-  waitingTotal: number;
+  calculatedWaitingTotal: number;
+  finalPayoutAmount: number;
+  hasOverride: boolean;
+  correctionNote: string | null;
   phaseSummaries: WorkPhaseSummary[];
   payout: {
     account: { label: string; qrAccount: string } | null;
@@ -116,7 +119,10 @@ export function buildWorkZakazkaPayoutTree(
     profile: WorkEmployeePayoutGroup["profile"];
     groupItems: WorkIntervalLike[];
     hourlyRate: number;
-    waitingTotal: number;
+    calculatedWaitingTotal: number;
+    finalPayoutAmount: number;
+    hasOverride: boolean;
+    correctionNote?: string | null;
     account: WorkEmployeePayoutGroup["payout"]["account"];
     message: string;
     qrDataUrl: string | null;
@@ -137,14 +143,19 @@ export function buildWorkZakazkaPayoutTree(
       byZakazka.set(group.zakazkaId, zakazka);
     }
 
-    zakazka.waitingTotal += group.waitingTotal;
+    if (group.calculatedWaitingTotal > 0) {
+      zakazka.waitingTotal += group.finalPayoutAmount;
+    }
     zakazka.employees.push({
       key: group.key,
       zakazkaId: group.zakazkaId,
       userId: group.userId,
       zakazkaTitle: group.zakazkaTitle,
       profile: group.profile,
-      waitingTotal: group.waitingTotal,
+      calculatedWaitingTotal: group.calculatedWaitingTotal,
+      finalPayoutAmount: group.finalPayoutAmount,
+      hasOverride: group.hasOverride,
+      correctionNote: group.correctionNote ?? null,
       phaseSummaries: buildWorkPhaseSummaries(group.groupItems, group.hourlyRate),
       payout: {
         account: group.account,
