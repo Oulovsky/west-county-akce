@@ -14,6 +14,8 @@ import {
 } from "@/lib/payments";
 import { getAttendancePhaseLabel } from "@/lib/zakazka-attendance";
 import { formatKm, getTravelAmount, getTravelStatusLabel } from "@/lib/transport";
+import { loadPayoutEmployeeProfiles, type PayoutEmployeeProfile } from "@/lib/admin/payout-profiles";
+import { getMissingBankAccountMessage, getPaymentAccount } from "@/lib/bank-account";
 import { verifyAppAdminOrSefPage } from "@/lib/auth/admin-access-server";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -22,6 +24,8 @@ import {
   markTravelReimbursementPaidAction,
   rejectTravelReimbursementAction,
 } from "./actions";
+
+export const dynamic = "force-dynamic";
 
 type PageProps = {
   searchParams?: Promise<{ stav?: string }>;
@@ -39,17 +43,6 @@ type AttendanceRow = {
   paid_at: string | null;
   paid_by: string | null;
   zakazky?: { cislo_zakazky: string | null; nazev: string | null } | null;
-};
-
-type ProfileRow = {
-  user_id: string;
-  email: string | null;
-  jmeno: string | null;
-  prijmeni: string | null;
-  hodinovy_naklad_akce: number | string | null;
-  bank_account_number: string | null;
-  bank_code: string | null;
-  iban: string | null;
 };
 
 type TravelRow = {
@@ -85,24 +78,13 @@ function formatDate(value?: string | null) {
   return date.toLocaleDateString("cs-CZ", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-function getProfileName(profile?: ProfileRow | null, fallback?: string | null) {
+function getProfileName(profile?: PayoutEmployeeProfile | null, fallback?: string | null) {
   const name = [profile?.jmeno, profile?.prijmeni].filter(Boolean).join(" ").trim();
   return name || profile?.email || fallback || "Zaměstnanec";
 }
 
 function getZakazkaTitle(row: AttendanceRow) {
   return [row.zakazky?.cislo_zakazky, row.zakazky?.nazev].filter(Boolean).join(" · ") || "Zakázka";
-}
-
-function getPaymentAccount(profile?: ProfileRow | null) {
-  const iban = profile?.iban?.trim();
-  if (iban) return { label: iban, qrAccount: iban.replace(/\s+/g, "").toUpperCase() };
-
-  const account = profile?.bank_account_number?.trim();
-  const bank = profile?.bank_code?.trim();
-  if (!account || !bank) return null;
-
-  return { label: `${account}/${bank}`, qrAccount: `${account}/${bank}` };
 }
 
 async function buildQrDataUrl({
@@ -188,21 +170,10 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
   const userIds = [
     ...new Set([...rows.map((row) => row.user_id), ...travelRows.map((row) => row.user_id)].filter(Boolean)),
   ];
-  const profilesById = new Map<string, ProfileRow>();
+  const { profilesById, error: profilesError } = await loadPayoutEmployeeProfiles(supabase, userIds);
 
-  if (userIds.length > 0) {
-    const { data: profilesRaw, error: profilesError } = await supabase
-      .from("profiles")
-      .select("user_id, email, jmeno, prijmeni, hodinovy_naklad_akce, bank_account_number, bank_code, iban")
-      .in("user_id", userIds);
-
-    if (profilesError) {
-      return <div className="p-6 text-red-300">{profilesError.message}</div>;
-    }
-
-    for (const profile of (profilesRaw ?? []) as ProfileRow[]) {
-      profilesById.set(profile.user_id, profile);
-    }
+  if (profilesError) {
+    return <div className="p-6 text-red-300">{profilesError}</div>;
   }
 
   const items = await Promise.all(
@@ -361,7 +332,9 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
                     <img src={payout.qrDataUrl} alt="QR souhrnná platba" className="mt-3 rounded-xl bg-white p-2" />
                   </details>
                 ) : (
-                  <div className="mt-3 text-sm font-bold text-red-100">Zaměstnanec nemá vyplněné číslo účtu.</div>
+                  <div className="mt-3 text-sm font-bold text-red-100">
+                    {getMissingBankAccountMessage(payout.profile) ?? "Zaměstnanec nemá vyplněné číslo účtu."}
+                  </div>
                 )}
               </div>
             ))}
@@ -437,7 +410,7 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
                       </details>
                     ) : (
                       <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-100">
-                        Zaměstnanec nemá vyplněné číslo účtu.
+                        {getMissingBankAccountMessage(item.profile) ?? "Zaměstnanec nemá vyplněné číslo účtu."}
                       </div>
                     )}
 
@@ -553,7 +526,7 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps) {
                       </details>
                     ) : (
                       <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-100">
-                        Zaměstnanec nemá vyplněné číslo účtu.
+                        {getMissingBankAccountMessage(item.profile) ?? "Zaměstnanec nemá vyplněné číslo účtu."}
                       </div>
                     )}
                     <form action={markTravelReimbursementPaidAction}>
