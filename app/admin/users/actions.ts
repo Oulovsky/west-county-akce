@@ -286,6 +286,39 @@ function isAuthUserNotFound(message: string | undefined): boolean {
   return message.toLowerCase().includes("user not found");
 }
 
+async function resolveAuthUserIdForEmployee(
+  admin: ReturnType<typeof createAdminClient>,
+  email: string,
+  fullName: string
+): Promise<{ userId: string; authAlreadyExisted: boolean } | { error: string }> {
+  const password = crypto.randomUUID() + crypto.randomUUID();
+  const createResult = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { name: fullName },
+  });
+
+  if (!createResult.error && createResult.data.user?.id) {
+    return { userId: createResult.data.user.id, authAlreadyExisted: false };
+  }
+
+  if (createResult.error) {
+    const existingId = await findAuthUserIdByEmail(admin, email);
+    if (existingId) {
+      return { userId: existingId, authAlreadyExisted: true };
+    }
+  }
+
+  const createMessage = createResult.error?.message;
+
+  return {
+    error:
+      createMessage ??
+      "Auth uživatele se nepodařilo vytvořit ani dohledat podle e-mailu.",
+  };
+}
+
 async function findAuthUserIdByEmail(
   admin: ReturnType<typeof createAdminClient>,
   email: string
@@ -484,7 +517,7 @@ export async function deactivateEmployee(targetUserId: string): Promise<ActionRe
 
 export async function createEmployee(formData: FormData): Promise<ActionResult> {
   try {
-    const { supabase, error: authError } = await requireAdmin();
+    const { error: authError } = await requireAdmin();
     if (authError) return { ok: false, error: authError };
 
     const fullName = String(formData.get("name") ?? "").trim();
@@ -501,38 +534,52 @@ export async function createEmployee(formData: FormData): Promise<ActionResult> 
     }
 
     const admin = createAdminClient();
-    const password = crypto.randomUUID() + crypto.randomUUID();
-    const createResult = await admin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { name: fullName },
-    });
+    const authResolved = await resolveAuthUserIdForEmployee(admin, email, fullName);
+    if ("error" in authResolved) {
+      return { ok: false, error: authResolved.error };
+    }
 
-    if (createResult.error) {
+    const { userId, authAlreadyExisted } = authResolved;
+
+    if (await isEmailUsedByOtherActiveProfile(admin, email, userId)) {
       return {
         ok: false,
-        error:
-          "Email byl povolen, ale auth uživatele se nepodařilo vytvořit. Pokud už existuje, uprav ho v seznamu zaměstnanců.",
+        error: "Tento email už používá jiný aktivní zaměstnanec.",
       };
     }
 
     const { jmeno, prijmeni } = splitEmployeeName(fullName);
-    const { error: profileError } = await admin
+    const { data: profileRow, error: profileError } = await admin
       .from("profiles")
-      .upsert({
-        user_id: createResult.data.user.id,
-        email,
-        role,
-        jmeno,
-        prijmeni,
-        hodinovy_naklad_akce: hourlyCost,
-        aktivni: true,
-      });
+      .upsert(
+        {
+          user_id: userId,
+          email,
+          role,
+          jmeno,
+          prijmeni,
+          hodinovy_naklad_akce: hourlyCost,
+          aktivni: true,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      )
+      .select("user_id")
+      .maybeSingle();
 
     if (profileError) return { ok: false, error: profileError.message };
+    if (!profileRow?.user_id) {
+      return { ok: false, error: "Profil zaměstnance se nepodařilo uložit." };
+    }
+
     revalidatePath("/admin");
-    return { ok: true };
+    return {
+      ok: true,
+      warning: authAlreadyExisted
+        ? "Účet v přihlášení už existoval — profil byl vytvořen nebo aktualizován."
+        : undefined,
+      hodinovy_naklad_akce: hourlyCost,
+    };
   } catch (error: unknown) {
     return { ok: false, error: getErrorMessage(error) };
   }

@@ -626,7 +626,12 @@ export default function UsersClient({ users: initialUsers }: { users: UserRow[] 
     startCreateTransition(async () => {
       const result = await createEmployee(formData);
       if (result.ok) {
-        setToast({ message: "Zaměstnanec přidán", type: "success" });
+        setToast({
+          message: result.warning
+            ? `Zaměstnanec přidán. ${result.warning}`
+            : "Zaměstnanec přidán",
+          type: "success",
+        });
         setAddOpen(false);
         router.refresh();
       } else {
