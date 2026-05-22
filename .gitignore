@@ -22,6 +22,9 @@
 
 # misc
 .DS_Store
+
+# supabase CLI local link state (project ref, pooler URL)
+supabase/.temp/
 *.pem
 
 # debug
