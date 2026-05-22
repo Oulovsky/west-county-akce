@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -19,24 +20,6 @@ import {
 import type { FakturacniFirma } from "@/lib/fakturacni-firmy";
 
 type TypObsluhy = "s_obsluhou" | "bez_obsluhy";
-type TechSectionKey = "stage" | "sound" | "lights" | "led" | "kamery";
-type SetupCategoryKey = "stage" | "sound" | "lights" | "led" | "kamery";
-
-type RealizaceForm = {
-  local_id: string;
-  nazev: string;
-  stagePreset: string;
-  stageWidth: string;
-  stageDepth: string;
-  soundPreset: string;
-  lightsPreset: string;
-  ledKind: string;
-  ledWidth: string;
-  ledHeight: string;
-  ledRohy: boolean;
-  kamery: number;
-  dron: boolean;
-};
 
 type SkladSetup = {
   setup_id: string;
@@ -175,20 +158,6 @@ const selectChevronStyle = {
 const AVAILABILITY_WARNING_NOTE =
   "Upozornění dostupnosti: některé položky překračují dostupné množství. Řešení: doplnit externě nebo upravit technický plán.";
 
-const STAGE_PRESET_DIMENSIONS: Record<string, { width: string; depth: string }> = {
-  mala: { width: "6", depth: "4" },
-  stredni: { width: "8", depth: "6" },
-  velka: { width: "10", depth: "8" },
-};
-
-const SETUP_CATEGORY_KEYWORDS: Record<SetupCategoryKey, string[]> = {
-  stage: ["stage", "pódium", "podium", "střecha", "strecha"],
-  sound: ["sound", "zvuk", "audio", "pa", "repro"],
-  lights: ["lights", "světla", "svetla", "osvětlení", "osvetleni"],
-  led: ["led", "mantinel", "obrazovka"],
-  kamery: ["kamera", "kamery", "video", "stream"],
-};
-
 function PickerInput({
   type,
   value,
@@ -266,40 +235,6 @@ function deriveLegacyTime(value: string | null) {
   return value ? value.slice(11, 16) : null;
 }
 
-function getLedMaxArea(kind: string) {
-  switch (kind) {
-    case "p2_indoor":
-      return 24.5;
-    case "p2_6_outdoor":
-      return 17.5;
-    case "p3_9_outdoor":
-      return 45;
-    case "p4_8_outdoor":
-      return 22.5;
-    case "p6_4_mantel":
-      return 21;
-    default:
-      return null;
-  }
-}
-
-function getLedKindLabel(kind: string) {
-  switch (kind) {
-    case "p2_indoor":
-      return "P2 – indoor";
-    case "p2_6_outdoor":
-      return "P2,6 – outdoor";
-    case "p3_9_outdoor":
-      return "P3,9 – outdoor";
-    case "p4_8_outdoor":
-      return "P4,8 – outdoor";
-    case "p6_4_mantel":
-      return "P6,4 – mantinel";
-    default:
-      return "—";
-  }
-}
-
 function toNumber(value: number | string | null | undefined) {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
@@ -340,43 +275,6 @@ function createManualPlanItem(): ManualPlanItem {
   };
 }
 
-function createRealizace(index: number): RealizaceForm {
-  return {
-    local_id:
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `stage-${Date.now()}-${index}`,
-    nazev: `Stage ${index + 1}`,
-    stagePreset: "",
-    stageWidth: "",
-    stageDepth: "",
-    soundPreset: "",
-    lightsPreset: "",
-    ledKind: "",
-    ledWidth: "",
-    ledHeight: "",
-    ledRohy: false,
-    kamery: 0,
-    dron: false,
-  };
-}
-
-function isRealizaceEffectivelyEmpty(realizace: RealizaceForm) {
-  return (
-    realizace.stagePreset === "" &&
-    realizace.stageWidth === "" &&
-    realizace.stageDepth === "" &&
-    realizace.soundPreset === "" &&
-    realizace.lightsPreset === "" &&
-    realizace.ledKind === "" &&
-    realizace.ledWidth === "" &&
-    realizace.ledHeight === "" &&
-    realizace.ledRohy === false &&
-    realizace.kamery === 0 &&
-    realizace.dron === false
-  );
-}
-
 export default function NovaZakazkaPage() {
   const router = useRouter();
 
@@ -414,13 +312,6 @@ export default function NovaZakazkaPage() {
   const [bouraniOdCas, setBouraniOdCas] = useState("12:00");
   const [bouraniDoDatum, setBouraniDoDatum] = useState("");
   const [bouraniDoCas, setBouraniDoCas] = useState("12:00");
-
-  const [realizaceList, setRealizaceList] = useState<RealizaceForm[]>([
-    createRealizace(0),
-  ]);
-  const [activeTechSections, setActiveTechSections] = useState<
-    Record<string, Partial<Record<TechSectionKey, boolean>>>
-  >({});
 
   const [poznamka, setPoznamka] = useState("");
   const [ukladam, setUkladam] = useState(false);
@@ -768,227 +659,6 @@ export default function NovaZakazkaPage() {
     [setupSelections]
   );
 
-  function renderCategorySetups(category: SetupCategoryKey) {
-    const categorySetups = getCategorySetups(category);
-
-    if (setupyLoading) {
-      return (
-        <div className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-400">
-          Načítám skladové setupy...
-        </div>
-      );
-    }
-
-    if (setupyError) {
-      return (
-        <div className="rounded-xl border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-100">
-          Chyba načtení setupů: {setupyError}
-        </div>
-      );
-    }
-
-    if (categorySetups.length === 0) return null;
-
-    return (
-      <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-        <div>
-          <div className="text-sm font-bold text-white">Skladové setupy pro tuto kategorii</div>
-          <div className="mt-1 text-xs text-slate-400">
-            Volitelné. Vybrané setupy předvyplní plán techniky po uložení zakázky.
-          </div>
-        </div>
-
-        <div className="grid gap-2">
-          {categorySetups.map((setup) => {
-            const selection = setupSelections[setup.setup_id] ?? {
-              selected: false,
-              quantity: "1",
-            };
-            const polozky = setupPolozkyBySetup.get(setup.setup_id) ?? [];
-
-            return (
-              <div
-                key={setup.setup_id}
-                className={[
-                  "grid gap-3 rounded-xl border px-3 py-3 sm:grid-cols-[minmax(0,1fr)_120px] sm:items-center",
-                  selection.selected
-                    ? "border-blue-600 bg-blue-950/30"
-                    : "border-slate-800 bg-[#0b1324]",
-                ].join(" ")}
-              >
-                <label className="flex cursor-pointer items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={selection.selected}
-                    onChange={(event) =>
-                      updateSetupSelection(setup.setup_id, {
-                        selected: event.target.checked,
-                      })
-                    }
-                    className="mt-1 h-5 w-5 accent-blue-600"
-                  />
-                  <span>
-                    <span className="block font-bold text-white">{setup.nazev}</span>
-                    {setup.popis ? (
-                      <span className="mt-1 block text-xs text-slate-400">{setup.popis}</span>
-                    ) : null}
-                    <span className="mt-1 block text-xs text-slate-500">
-                      Položek v setupu: {polozky.length}
-                    </span>
-                  </span>
-                </label>
-
-                <Input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={selection.quantity}
-                  onChange={(event) =>
-                    updateSetupSelection(setup.setup_id, {
-                      quantity: event.target.value,
-                    })
-                  }
-                  disabled={!selection.selected}
-                  aria-label={`Množství setupu ${setup.nazev}`}
-                />
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  function updateRealizace(
-    localId: string,
-    field: keyof RealizaceForm,
-    value: string | number | boolean
-  ) {
-    setRealizaceList((prev) =>
-      prev.map((item) =>
-        item.local_id === localId
-          ? {
-              ...item,
-              [field]: value,
-              ...(field === "ledKind" && value === "p6_4_mantel"
-                ? { ledRohy: false }
-                : {}),
-            }
-          : item
-      )
-    );
-  }
-
-  function hasTechSectionValues(realizace: RealizaceForm, section: TechSectionKey) {
-    if (section === "stage") {
-      return Boolean(realizace.stagePreset || realizace.stageWidth || realizace.stageDepth);
-    }
-
-    if (section === "sound") return Boolean(realizace.soundPreset);
-    if (section === "lights") return Boolean(realizace.lightsPreset);
-    if (section === "led") {
-      return Boolean(realizace.ledKind || realizace.ledWidth || realizace.ledHeight || realizace.ledRohy);
-    }
-
-    return realizace.kamery > 0;
-  }
-
-  function isTechSectionActive(realizace: RealizaceForm, section: TechSectionKey) {
-    return Boolean(activeTechSections[realizace.local_id]?.[section] || hasTechSectionValues(realizace, section));
-  }
-
-  function setTechSectionActive(localId: string, section: TechSectionKey, active: boolean) {
-    setActiveTechSections((prev) => ({
-      ...prev,
-      [localId]: {
-        ...(prev[localId] ?? {}),
-        [section]: active,
-      },
-    }));
-
-    if (active) return;
-
-    setRealizaceList((prev) =>
-      prev.map((item) => {
-        if (item.local_id !== localId) return item;
-
-        if (section === "stage") {
-          return { ...item, stagePreset: "", stageWidth: "", stageDepth: "" };
-        }
-
-        if (section === "sound") return { ...item, soundPreset: "" };
-        if (section === "lights") return { ...item, lightsPreset: "" };
-        if (section === "led") {
-          return { ...item, ledKind: "", ledWidth: "", ledHeight: "", ledRohy: false };
-        }
-
-        return { ...item, kamery: 0 };
-      })
-    );
-  }
-
-  function updateStagePreset(localId: string, preset: string) {
-    setActiveTechSections((prev) => ({
-      ...prev,
-      [localId]: {
-        ...(prev[localId] ?? {}),
-        stage: true,
-      },
-    }));
-
-    const dimensions = STAGE_PRESET_DIMENSIONS[preset];
-    setRealizaceList((prev) =>
-      prev.map((item) =>
-        item.local_id === localId
-          ? {
-              ...item,
-              stagePreset: preset,
-              ...(dimensions ? { stageWidth: dimensions.width, stageDepth: dimensions.depth } : {}),
-            }
-          : item
-      )
-    );
-  }
-
-  function matchesSetupCategory(setup: SkladSetup, category: SetupCategoryKey) {
-    const haystack = `${setup.nazev} ${setup.popis ?? ""}`
-      .toLocaleLowerCase("cs-CZ")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
-
-    return SETUP_CATEGORY_KEYWORDS[category].some((keyword) =>
-      haystack.includes(
-        keyword
-          .toLocaleLowerCase("cs-CZ")
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-      )
-    );
-  }
-
-  function getCategorySetups(category: SetupCategoryKey) {
-    return setupy.filter((setup) => matchesSetupCategory(setup, category));
-  }
-
-  function addRealizace() {
-    setRealizaceList((prev) => [...prev, createRealizace(prev.length)]);
-  }
-
-  function removeRealizace(localId: string) {
-    setRealizaceList((prev) => {
-      if (prev.length <= 1) return prev;
-
-      const next = prev.filter((item) => item.local_id !== localId);
-      return next.map((item, index) => ({
-        ...item,
-        nazev:
-          item.nazev.trim() === "" || item.nazev.startsWith("Stage ")
-            ? `Stage ${index + 1}`
-            : item.nazev,
-      }));
-    });
-  }
-
   function updateSetupSelection(setupId: string, patch: Partial<SetupSelection>) {
     setSetupSelections((prev) => {
       const current = prev[setupId] ?? { selected: false, quantity: "1" };
@@ -1159,39 +829,6 @@ export default function NovaZakazkaPage() {
       return;
     }
 
-    const realizaceKeKontrole = realizaceList.filter(
-      (item, index) => index === 0 || !isRealizaceEffectivelyEmpty(item)
-    );
-
-    for (const item of realizaceKeKontrole) {
-      const ledWidthNumber = item.ledWidth ? Number(item.ledWidth.replace(",", ".")) : 0;
-      const ledHeightNumber = item.ledHeight ? Number(item.ledHeight.replace(",", ".")) : 0;
-      const ledRequestedArea =
-        ledWidthNumber > 0 && ledHeightNumber > 0
-          ? Number((ledWidthNumber * ledHeightNumber).toFixed(2))
-          : null;
-      const ledMaxArea = getLedMaxArea(item.ledKind);
-
-      if (item.ledKind) {
-        if (!item.ledWidth || !item.ledHeight) {
-          showError(`U ${item.nazev} vyplň šířku i výšku LED.`);
-          return;
-        }
-
-        if (!ledRequestedArea || ledRequestedArea <= 0) {
-          showError(`LED plocha u ${item.nazev} musí být větší než 0.`);
-          return;
-        }
-
-        if (ledMaxArea && ledRequestedArea > ledMaxArea) {
-          showError(
-            `Požadovaná LED plocha ${ledRequestedArea} m² překračuje maximum ${ledMaxArea} m² pro ${getLedKindLabel(item.ledKind)} u ${item.nazev}.`
-          );
-          return;
-        }
-      }
-    }
-
     try {
       setUkladam(true);
       const shouldAppendAvailabilityWarning =
@@ -1208,22 +845,11 @@ export default function NovaZakazkaPage() {
       }
 
       const cisloZakazky = await vygenerovatCisloZakazky();
-      const prvniRealizace = realizaceList[0];
       const finalPoznamka =
         shouldAppendAvailabilityWarning
           ? [poznamka.trim(), AVAILABILITY_WARNING_NOTE].filter(Boolean).join("\n")
           : poznamka.trim();
 
-      const prvniLedWidthNumber = prvniRealizace.ledWidth
-        ? Number(prvniRealizace.ledWidth.replace(",", "."))
-        : 0;
-      const prvniLedHeightNumber = prvniRealizace.ledHeight
-        ? Number(prvniRealizace.ledHeight.replace(",", "."))
-        : 0;
-      const prvniLedRequestedArea =
-        prvniLedWidthNumber > 0 && prvniLedHeightNumber > 0
-          ? Number((prvniLedWidthNumber * prvniLedHeightNumber).toFixed(2))
-          : null;
       const mistoLat = toOptionalNumber(mistoGps.lat);
       const mistoLng = toOptionalNumber(mistoGps.lng);
       const mistoGpsRadius = toOptionalNumber(mistoGps.radiusM) ?? 300;
@@ -1242,29 +868,6 @@ export default function NovaZakazkaPage() {
             }
           : null;
 
-      const realizaceNaUlozeni = realizaceList.filter(
-        (item, index) => index === 0 || !isRealizaceEffectivelyEmpty(item)
-      );
-      const realizacePayload = realizaceNaUlozeni.map((item, index) => {
-        const ledWidthNumber = item.ledWidth ? Number(item.ledWidth.replace(",", ".")) : null;
-        const ledHeightNumber = item.ledHeight ? Number(item.ledHeight.replace(",", ".")) : null;
-
-        return {
-          nazev: item.nazev || `Stage ${index + 1}`,
-          poradi: index + 1,
-          stage_typ: item.stagePreset || null,
-          stage_sirka: item.stageWidth ? Number(item.stageWidth.replace(",", ".")) : null,
-          stage_hloubka: item.stageDepth ? Number(item.stageDepth.replace(",", ".")) : null,
-          sound_typ: item.soundPreset || null,
-          lights_typ: item.lightsPreset || null,
-          led_typ: item.ledKind || null,
-          led_sirka: ledWidthNumber,
-          led_vyska: ledHeightNumber,
-          led_rohy: item.ledKind === "p6_4_mantel" ? false : item.ledRohy,
-          kamery: item.kamery,
-          dron: item.dron,
-        };
-      });
       const technikaPayload = aggregatedPlanRows.map((row) => ({
         skladova_polozka_id: row.skladova_polozka_id,
         mnozstvi: row.vysledneMnozstvi,
@@ -1273,7 +876,7 @@ export default function NovaZakazkaPage() {
       const { data: zakazkaId, error } = await supabase
         .rpc("create_zakazka_atomic", {
           misto_payload: mistoPayload,
-          realizace_payload: realizacePayload,
+          realizace_payload: [],
           technika_payload: technikaPayload,
           zakazka_payload: {
           cislo_zakazky: cisloZakazky,
@@ -1309,32 +912,6 @@ export default function NovaZakazkaPage() {
           datum_do: deriveLegacyDate(akceDo),
           cas_od: deriveLegacyTime(akceOd),
           cas_do: deriveLegacyTime(akceDo),
-
-          stage_preset: prvniRealizace.stagePreset || null,
-          stage_width_m: prvniRealizace.stageWidth
-            ? Number(prvniRealizace.stageWidth.replace(",", "."))
-            : null,
-          stage_depth_m: prvniRealizace.stageDepth
-            ? Number(prvniRealizace.stageDepth.replace(",", "."))
-            : null,
-
-          sound_preset: prvniRealizace.soundPreset || null,
-          lights_preset: prvniRealizace.lightsPreset || null,
-
-          led_kind: prvniRealizace.ledKind || null,
-          led_width_m: prvniRealizace.ledWidth
-            ? Number(prvniRealizace.ledWidth.replace(",", "."))
-            : null,
-          led_height_m: prvniRealizace.ledHeight
-            ? Number(prvniRealizace.ledHeight.replace(",", "."))
-            : null,
-          led_requested_area_m2: prvniLedRequestedArea,
-          led_wall_rohy:
-            prvniRealizace.ledKind === "p6_4_mantel" ? false : prvniRealizace.ledRohy,
-          led_is_mantel: prvniRealizace.ledKind === "p6_4_mantel",
-
-          kamery_count: prvniRealizace.kamery,
-          dron: prvniRealizace.dron,
 
           poznamka: finalPoznamka || null,
           },
@@ -1447,7 +1024,7 @@ export default function NovaZakazkaPage() {
 
       <PageHeader
         title="Nová zakázka"
-        description="Vyplň základní informace, logistiku, časové bloky a basic look."
+        description="Vyplň základní informace, logistiku, termíny a plán techniky ze skladových setupů."
       />
 
       <Card>
@@ -1712,391 +1289,13 @@ export default function NovaZakazkaPage() {
             </div>
           </Card>
 
-          <Card className="space-y-6 border-slate-700 bg-[#0b1324]">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="text-lg font-semibold text-white">Technika</div>
-                <div className="mt-1 text-sm text-slate-400">
-                  Vyber jen kategorie, které zakázka opravdu potřebuje. Ostatní části zůstanou skryté.
-                </div>
-              </div>
-
-              <Button variant="secondary" onClick={addRealizace}>
-                + Přidat stage
-              </Button>
-            </div>
-
-            <div className="grid gap-6">
-              {realizaceList.map((realizace, index) => {
-                const ledWidthNumber = realizace.ledWidth
-                  ? Number(realizace.ledWidth.replace(",", "."))
-                  : 0;
-                const ledHeightNumber = realizace.ledHeight
-                  ? Number(realizace.ledHeight.replace(",", "."))
-                  : 0;
-                const ledRequestedArea =
-                  ledWidthNumber > 0 && ledHeightNumber > 0
-                    ? Number((ledWidthNumber * ledHeightNumber).toFixed(2))
-                    : null;
-                const ledMaxArea = getLedMaxArea(realizace.ledKind);
-                const isLedOverLimit = Boolean(
-                  ledRequestedArea && ledMaxArea && ledRequestedArea > ledMaxArea
-                );
-                const stageActive = isTechSectionActive(realizace, "stage");
-                const soundActive = isTechSectionActive(realizace, "sound");
-                const lightsActive = isTechSectionActive(realizace, "lights");
-                const ledActive = isTechSectionActive(realizace, "led");
-                const kameryActive = isTechSectionActive(realizace, "kamery");
-
-                return (
-                  <Card
-                    key={realizace.local_id}
-                    className="space-y-6 border-slate-700 bg-slate-950/40"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <Field label={`Název realizace ${index + 1}`}>
-                        <Input
-                          value={realizace.nazev}
-                          onChange={(e) =>
-                            updateRealizace(realizace.local_id, "nazev", e.target.value)
-                          }
-                          placeholder={`Stage ${index + 1}`}
-                        />
-                      </Field>
-
-                      {realizaceList.length > 1 ? (
-                        <div className="pt-7">
-                          <Button
-                            variant="secondary"
-                            onClick={() => removeRealizace(realizace.local_id)}
-                          >
-                            Odebrat stage
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                      {[
-                        ["stage", "Stage"],
-                        ["sound", "Sound"],
-                        ["lights", "Lights"],
-                        ["led", "LED / mantinel"],
-                        ["kamery", "Kamery"],
-                      ].map(([section, label]) => {
-                        const key = section as TechSectionKey;
-                        const active = isTechSectionActive(realizace, key);
-
-                        return (
-                          <label
-                            key={section}
-                            className={[
-                              "flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm font-black transition",
-                              active
-                                ? "border-blue-500 bg-blue-600/20 text-white"
-                                : "border-slate-700 bg-[#0b1324] text-slate-300 hover:bg-slate-900",
-                            ].join(" ")}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={active}
-                              onChange={(event) =>
-                                setTechSectionActive(realizace.local_id, key, event.target.checked)
-                              }
-                              className="h-5 w-5 accent-blue-600"
-                            />
-                            {label}
-                          </label>
-                        );
-                      })}
-
-                      <label
-                        className={[
-                          "flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm font-black transition",
-                          realizace.dron
-                            ? "border-blue-500 bg-blue-600/20 text-white"
-                            : "border-slate-700 bg-[#0b1324] text-slate-300 hover:bg-slate-900",
-                        ].join(" ")}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={realizace.dron}
-                          onChange={(event) =>
-                            updateRealizace(realizace.local_id, "dron", event.target.checked)
-                          }
-                          className="h-5 w-5 accent-blue-600"
-                        />
-                        Dron
-                      </label>
-                    </div>
-
-                    {!stageActive && !soundActive && !lightsActive && !ledActive && !kameryActive && !realizace.dron ? (
-                      <div className="rounded-xl border border-dashed border-slate-700 bg-[#0b1324] px-4 py-4 text-sm text-slate-400">
-                        Technika je zatím prázdná. Zaškrtni kategorii, kterou chceš pro tuto realizaci zadat.
-                      </div>
-                    ) : null}
-
-                    <div className="grid gap-4">
-                      {stageActive ? (
-                      <Card className="border-slate-700 bg-[#0b1324]">
-                        <div className="space-y-4">
-                          <div className="text-base font-semibold text-white">Stage</div>
-
-                          <Field label="Setup stage">
-                            <select
-                              value={realizace.stagePreset}
-                              onChange={(e) =>
-                                updateStagePreset(realizace.local_id, e.target.value)
-                              }
-                              className={selectClassName}
-                              style={selectChevronStyle}
-                            >
-                              <option value="">—</option>
-                              <option value="mala">Malý setup</option>
-                              <option value="stredni">Střední setup</option>
-                              <option value="velka">Velký setup</option>
-                              <option value="vlastni">Vlastní</option>
-                            </select>
-                          </Field>
-
-                          <div className="grid gap-4 md:grid-cols-2">
-                            <Field label="Šířka stage (m)">
-                              <Input
-                                type="number"
-                                inputMode="decimal"
-                                step="0.5"
-                                min="0"
-                                value={realizace.stageWidth}
-                                onChange={(e) =>
-                                  updateRealizace(realizace.local_id, "stageWidth", e.target.value)
-                                }
-                                placeholder="Např. 10"
-                              />
-                            </Field>
-
-                            <Field label="Hloubka stage (m)">
-                              <Input
-                                type="number"
-                                inputMode="decimal"
-                                step="0.5"
-                                min="0"
-                                value={realizace.stageDepth}
-                                onChange={(e) =>
-                                  updateRealizace(realizace.local_id, "stageDepth", e.target.value)
-                                }
-                                placeholder="Např. 8"
-                              />
-                            </Field>
-                          </div>
-                          {renderCategorySetups("stage")}
-                        </div>
-                      </Card>
-                      ) : null}
-
-                      {soundActive || lightsActive ? (
-                      <Card className="border-slate-700 bg-[#0b1324]">
-                        <div className="space-y-4">
-                          <div className="text-base font-semibold text-white">
-                            {[soundActive ? "Sound" : "", lightsActive ? "Lights" : ""]
-                              .filter(Boolean)
-                              .join(" / ")}
-                          </div>
-
-                          {soundActive ? (
-                          <>
-                          <Field label="Sound">
-                            <select
-                              value={realizace.soundPreset}
-                              onChange={(e) =>
-                                updateRealizace(realizace.local_id, "soundPreset", e.target.value)
-                              }
-                              className={selectClassName}
-                              style={selectChevronStyle}
-                            >
-                              <option value="">—</option>
-                              <option value="mala">Malý setup</option>
-                              <option value="stredni">Střední setup</option>
-                              <option value="velka">Velký setup</option>
-                              <option value="vlastni">Vlastní</option>
-                            </select>
-                          </Field>
-                          {renderCategorySetups("sound")}
-                          </>
-                          ) : null}
-
-                          {lightsActive ? (
-                          <>
-                          <Field label="Lights">
-                            <select
-                              value={realizace.lightsPreset}
-                              onChange={(e) =>
-                                updateRealizace(realizace.local_id, "lightsPreset", e.target.value)
-                              }
-                              className={selectClassName}
-                              style={selectChevronStyle}
-                            >
-                              <option value="">—</option>
-                              <option value="mala">Malý setup</option>
-                              <option value="stredni">Střední setup</option>
-                              <option value="velka">Velký setup</option>
-                              <option value="vlastni">Vlastní</option>
-                            </select>
-                          </Field>
-                          {renderCategorySetups("lights")}
-                          </>
-                          ) : null}
-                        </div>
-                      </Card>
-                      ) : null}
-                    </div>
-
-                    {ledActive || kameryActive ? (
-                    <Card className="border-slate-700 bg-[#0b1324]">
-                      <div className="space-y-4">
-                        <div className="text-base font-semibold text-white">
-                          {[ledActive ? "LED / mantinel" : "", kameryActive ? "Kamery" : ""]
-                            .filter(Boolean)
-                            .join(" / ")}
-                        </div>
-
-                        {ledActive ? (
-                        <>
-                        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-                          <Field label="Typ LED / mantinelu">
-                            <select
-                              value={realizace.ledKind}
-                              onChange={(e) =>
-                                updateRealizace(realizace.local_id, "ledKind", e.target.value)
-                              }
-                              className={selectClassName}
-                              style={selectChevronStyle}
-                            >
-                              <option value="">—</option>
-                              <option value="p2_indoor">P2 – 24,5 m² indoor</option>
-                              <option value="p2_6_outdoor">P2,6 – 17,5 m² outdoor</option>
-                              <option value="p3_9_outdoor">P3,9 – 45 m² outdoor</option>
-                              <option value="p4_8_outdoor">P4,8 – 22,5 m² outdoor</option>
-                              <option value="p6_4_mantel">P6,4 – mantinel – 21 m běžných (22 ks)</option>
-                            </select>
-                          </Field>
-
-                          <div className="pb-3">
-                            <label
-                              className={`flex items-center gap-2 whitespace-nowrap ${
-                                realizace.ledKind === "p6_4_mantel"
-                                  ? "text-slate-500"
-                                  : "text-white"
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={
-                                  realizace.ledKind === "p6_4_mantel" ? false : realizace.ledRohy
-                                }
-                                onChange={(e) =>
-                                  updateRealizace(realizace.local_id, "ledRohy", e.target.checked)
-                                }
-                                disabled={realizace.ledKind === "p6_4_mantel"}
-                              />
-                              Rohy
-                            </label>
-                          </div>
-                        </div>
-
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <Field
-                            label={
-                              realizace.ledKind === "p6_4_mantel"
-                                ? "Délka mantinelu (m)"
-                                : "Šířka LED (m)"
-                            }
-                          >
-                            <Input
-                              type="number"
-                              inputMode="decimal"
-                              step="0.5"
-                              min="0"
-                              value={realizace.ledWidth}
-                              onChange={(e) =>
-                                updateRealizace(realizace.local_id, "ledWidth", e.target.value)
-                              }
-                              placeholder={
-                                realizace.ledKind === "p6_4_mantel" ? "Např. 21" : "Např. 7"
-                              }
-                            />
-                          </Field>
-
-                          <Field
-                            label={
-                              realizace.ledKind === "p6_4_mantel"
-                                ? "Výška mantinelu (m)"
-                                : "Výška LED (m)"
-                            }
-                          >
-                            <Input
-                              type="number"
-                              inputMode="decimal"
-                              step="0.5"
-                              min="0"
-                              value={realizace.ledHeight}
-                              onChange={(e) =>
-                                updateRealizace(realizace.local_id, "ledHeight", e.target.value)
-                              }
-                              placeholder={
-                                realizace.ledKind === "p6_4_mantel" ? "Např. 1" : "Např. 3,5"
-                              }
-                            />
-                          </Field>
-                        </div>
-
-                        <div
-                          className={`text-sm ${
-                            isLedOverLimit ? "font-semibold text-red-400" : "text-slate-400"
-                          }`}
-                        >
-                          Požadovaná plocha / rozsah:{" "}
-                          {ledRequestedArea ? `${ledRequestedArea} m²` : "—"}
-                          {ledMaxArea ? ` / maximum ${ledMaxArea} m²` : ""}
-                        </div>
-                        {renderCategorySetups("led")}
-                        </>
-                        ) : null}
-
-                        {kameryActive ? (
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <Field label="Kamery">
-                            <select
-                              value={String(realizace.kamery)}
-                              onChange={(e) =>
-                                updateRealizace(realizace.local_id, "kamery", Number(e.target.value))
-                              }
-                              className={selectClassName}
-                              style={selectChevronStyle}
-                            >
-                              <option value="0">0</option>
-                              <option value="1">1</option>
-                              <option value="2">2</option>
-                              <option value="3">3</option>
-                            </select>
-                          </Field>
-                          {renderCategorySetups("kamery")}
-                        </div>
-                        ) : null}
-                      </div>
-                    </Card>
-                    ) : null}
-                  </Card>
-                );
-              })}
-            </div>
-          </Card>
-
-          <Card className="border-blue-900/50 bg-blue-950/20">
+          <Card className="space-y-6 border-blue-900/50 bg-blue-950/20">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <div className="text-base font-semibold text-blue-100">Plán techniky</div>
+                <div className="text-lg font-semibold text-blue-100">Plán techniky</div>
                 <div className="mt-1 text-sm text-slate-300">
-                  Plán techniky se vytvoří podle vybraných sekcí a setupů.
+                  Vyber existující setupy ze skladu a případně doplň extra položky. Konkrétní kusy
+                  se vybírají až při nakládce scanem.
                 </div>
               </div>
               <div className="rounded-xl border border-blue-800/60 bg-slate-950 px-4 py-2 text-sm font-bold text-blue-100">
@@ -2107,14 +1306,18 @@ export default function NovaZakazkaPage() {
             </div>
           </Card>
 
-          <Card className="hidden space-y-6 border-slate-700 bg-[#0b1324]">
+          <Card className="space-y-6 border-slate-700 bg-[#0b1324]">
             <div>
-              <div className="text-lg font-semibold text-white">Setupy skladu</div>
+              <div className="text-lg font-semibold text-white">Setupy ze skladu</div>
               <div className="mt-1 text-sm text-slate-400">
-                Vyber skladové setupy, ze kterých se po uložení vytvoří plán množství v technice
-                zakázky. Konkrétní kusy se vybírají až při fyzické nakládce scanem.
+                Setupy spravujte v{" "}
+                <Link href="/sklad/setupy" className="font-semibold text-blue-400 hover:text-blue-300">
+                  /sklad/setupy
+                </Link>
+                . Zakázka setup pouze používá — negeneruje je.
               </div>
             </div>
+
 
             {setupyLoading ? (
               <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-4 text-sm text-slate-400">
@@ -2125,8 +1328,14 @@ export default function NovaZakazkaPage() {
                 Chyba načtení setupů: {setupyError}
               </div>
             ) : setupy.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-700 px-4 py-4 text-sm text-slate-400">
-                Zatím nejsou vytvořené žádné aktivní skladové setupy.
+              <div className="rounded-xl border border-dashed border-slate-700 px-4 py-6 text-sm text-slate-400">
+                <p>Zatím nejsou vytvořené žádné aktivní skladové setupy.</p>
+                <Link
+                  href="/sklad/setupy"
+                  className="mt-4 inline-flex rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-500"
+                >
+                  Přejít na /sklad/setupy
+                </Link>
               </div>
             ) : (
               <div className="grid gap-4">
@@ -2272,10 +1481,10 @@ export default function NovaZakazkaPage() {
             ) : null}
           </Card>
 
-          <Card className="hidden space-y-6 border-slate-700 bg-[#0b1324]">
+          <Card className="space-y-6 border-slate-700 bg-[#0b1324]">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="text-lg font-semibold text-white">Další položky mimo setup</div>
+                <div className="text-lg font-semibold text-white">Extra položky</div>
                 <div className="mt-1 text-sm text-slate-400">
                   Přidej další skladové položky do plánu množství. Stále se nevybírají konkrétní kusy.
                 </div>
@@ -2391,7 +1600,7 @@ export default function NovaZakazkaPage() {
             )}
           </Card>
 
-          <Card className="hidden space-y-4 border-emerald-800 bg-emerald-950/20">
+          <Card className="space-y-4 border-emerald-800 bg-emerald-950/20">
             <div>
               <div className="text-lg font-semibold text-emerald-100">
                 Výsledný plán techniky

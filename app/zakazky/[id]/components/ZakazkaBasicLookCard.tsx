@@ -106,7 +106,48 @@ function getSoundLightsLabel(value?: string | null) {
   }
 }
 
+function hasLegacyRealizaceRow(item: RealizaceBasicLookRow) {
+  return Boolean(
+    item.stage_typ ||
+      item.stage_sirka ||
+      item.stage_hloubka ||
+      item.sound_typ ||
+      item.lights_typ ||
+      item.led_typ ||
+      item.led_sirka ||
+      item.led_vyska ||
+      item.led_rohy ||
+      (item.kamery != null && Number(item.kamery) > 0) ||
+      item.dron
+  );
+}
+
+function hasLegacyZakazkaBasicLook(data: ZakazkaBasicLookData) {
+  return Boolean(
+    data.stage_preset ||
+      data.stage_width_m ||
+      data.stage_depth_m ||
+      data.sound_preset ||
+      data.lights_preset ||
+      data.led_kind ||
+      data.led_width_m ||
+      data.led_height_m ||
+      data.led_requested_area_m2 ||
+      (data.kamery_count != null && Number(data.kamery_count) > 0) ||
+      data.dron
+  );
+}
+
 export function ZakazkaBasicLookCard({ realizace, data }: ZakazkaBasicLookCardProps) {
+  const legacyRealizace = realizace.filter(hasLegacyRealizaceRow);
+  const hasLegacy =
+    legacyRealizace.length > 0 ||
+    (realizace.length === 0 && hasLegacyZakazkaBasicLook(data));
+
+  if (!hasLegacy) {
+    return null;
+  }
+
   const fallbackLedMaxArea = getLedMaxArea(data.led_kind ?? "");
 
   return (
@@ -115,15 +156,15 @@ export function ZakazkaBasicLookCard({ realizace, data }: ZakazkaBasicLookCardPr
         <div>
           <div className="text-lg font-semibold text-white">Basic look</div>
           <div className="mt-1 text-sm text-slate-400">
-            {realizace.length > 0
-              ? "Základní produkční zadání po jednotlivých stage / realizacích."
-              : "Základní produkční zadání zakázky."}
+            {legacyRealizace.length > 0
+              ? "Historické produkční zadání po jednotlivých stage / realizacích."
+              : "Historické produkční zadání zakázky."}
           </div>
         </div>
 
-        {realizace.length > 0 ? (
+        {legacyRealizace.length > 0 ? (
           <div className="grid gap-6">
-            {realizace.map((item, index) => {
+            {legacyRealizace.map((item, index) => {
               const ledArea =
                 item.led_sirka && item.led_vyska
                   ? Number(item.led_sirka) * Number(item.led_vyska)
