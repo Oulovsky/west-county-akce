@@ -6,11 +6,14 @@ import { MobileFieldLayout } from "@/components/mobile/MobileFieldLayout";
 import { RememberActiveZakazka } from "@/components/mobile/RememberActiveZakazka";
 import { getDochazkaPath, getZakazkaScanPath } from "@/lib/mobile/routes";
 import { createClient } from "@/lib/supabase/server";
-import { splitTransportVehiclesForUser } from "@/lib/transport-attendance";
-import { isPrepravaTypBloku, normalizeTransportVehicleMode } from "@/lib/zakazka-attendance";
+import {
+  formatAssignmentRange,
+  getAssignmentLogisticsStatusLabel,
+  getAssignmentPhaseLabel,
+  isAssignmentLogisticsPhase,
+} from "@/lib/employee/assignment-display";
+import { isPrepravaTypBloku } from "@/lib/zakazka-attendance";
 import { ParticipationActions } from "../../ParticipationActions";
-import { AttendanceActions } from "../../AttendanceActions";
-import { TransportAttendanceActions } from "../../TransportAttendanceActions";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -78,53 +81,6 @@ function getStatusVariant(value?: string | null) {
   return "warning";
 }
 
-function getPhaseLabel(value?: string | null) {
-  const raw = String(value ?? "").trim().toLowerCase();
-  if (raw === "sklad" || raw === "nakladka" || raw === "nakládka") return "Nakládka";
-  if (raw === "stavba") return "Stavba";
-  if (raw === "bourani" || raw === "bourání") return "Bourání";
-  if (raw === "preprava" || raw === "prejezd" || raw === "přejezd") return "Přeprava";
-  return "Provoz akce";
-}
-
-function isLogisticsPhase(value?: string | null) {
-  const raw = String(value ?? "").trim().toLowerCase();
-  return raw === "sklad" || raw === "nakladka" || raw === "nakládka" || raw === "bourani" || raw === "bourání";
-}
-
-function getLogisticsStatusLabel(value?: string | null) {
-  if (value === "zruseno") return "Zrušeno";
-  if (value === "naklada_se") return "Nakládá se";
-  if (value === "nalozeno") return "Naloženo";
-  if (value === "vykladka") return "Probíhá vykládka";
-  if (value === "vraceno") return "Vráceno";
-  return "Čeká na nakládku";
-}
-
-function formatDateTime(value?: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  return date.toLocaleString("cs-CZ", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatRange(from?: string | null, to?: string | null) {
-  const fromText = formatDateTime(from);
-  const toText = formatDateTime(to);
-
-  if (fromText && toText) return `${fromText} – ${toText}`;
-  if (fromText) return `Od ${fromText}`;
-  if (toText) return `Do ${toText}`;
-  return "Čas není zadaný";
-}
-
 function formatDateOnly(value?: string | null) {
   if (!value) return "";
   const [year, month, day] = value.split("-");
@@ -133,7 +89,7 @@ function formatDateOnly(value?: string | null) {
 }
 
 function formatZakazkaDate(zakazka: ZakazkaRow) {
-  const directRange = formatRange(zakazka.akce_od, zakazka.akce_do);
+  const directRange = formatAssignmentRange(zakazka.akce_od, zakazka.akce_do);
   if (directRange !== "Čas není zadaný") return directRange;
 
   const from = formatDateOnly(zakazka.datum_od);
@@ -226,47 +182,11 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
     }
   }
 
-  const { data: openTransportRaw, error: openTransportError } = await supabase
-    .from("dochazka_zakazky")
-    .select("transport_vehicle_mode")
-    .eq("user_id", user.id)
-    .eq("zakazka_id", id)
-    .eq("typ_faze", "preprava")
-    .is("checkout_at", null)
-    .maybeSingle();
-
-  if (openTransportError) {
-    return <div>Chyba načtení přepravy: {openTransportError.message}</div>;
-  }
-
-  const activeTransport = Boolean(openTransportRaw);
-  const activeTransportMode = normalizeTransportVehicleMode(openTransportRaw?.transport_vehicle_mode);
   const workAssignments = assignments.filter(
     (assignment) => !isPrepravaTypBloku(assignment.typ_bloku)
   );
   const hasAcceptedWork = workAssignments.some(
     (assignment) => normalizeStatus(assignment.confirmation_status) === "accepted"
-  );
-
-  const { data: attendanceVehiclesRaw, error: attendanceVehiclesError } = await supabase
-    .from("vozidla")
-    .select("id, nazev, spz, typ, vlastnik_user_id")
-    .eq("aktivni", true)
-    .order("nazev");
-
-  if (attendanceVehiclesError) {
-    return <div>Chyba načtení vozidel: {attendanceVehiclesError.message}</div>;
-  }
-
-  const transportVehicles = splitTransportVehiclesForUser(
-    (attendanceVehiclesRaw ?? []) as Array<{
-      id: string;
-      nazev: string;
-      spz?: string | null;
-      typ: string;
-      vlastnik_user_id?: string | null;
-    }>,
-    user.id
   );
 
   const { data: technikaRaw, error: technikaError } = await supabase
@@ -306,7 +226,7 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
               href={getDochazkaPath(id)}
               className="flex min-h-12 items-center justify-center rounded-2xl border border-emerald-500/40 bg-emerald-950/30 px-3 text-sm font-black text-emerald-100"
             >
-              Začít práci
+              Otevřít docházku
             </Link>
             {navigationUrl ? (
               <a
@@ -387,14 +307,14 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="text-lg font-bold text-white">
-                        {getPhaseLabel(assignment.typ_bloku)}
+                        {getAssignmentPhaseLabel(assignment.typ_bloku)}
                       </div>
                       <div className="mt-1 text-sm text-slate-300">
-                        {formatRange(assignment.datum_od, assignment.datum_do)}
+                        {formatAssignmentRange(assignment.datum_od, assignment.datum_do)}
                       </div>
-                      {isLogisticsPhase(assignment.typ_bloku) ? (
+                      {isAssignmentLogisticsPhase(assignment.typ_bloku) ? (
                         <div className="mt-3 inline-flex rounded-md border border-cyan-500/30 bg-cyan-500/15 px-3 py-1 text-xs font-bold text-cyan-100">
-                          {getLogisticsStatusLabel(zakazka.logistika_stav)}
+                          {getAssignmentLogisticsStatusLabel(zakazka.logistika_stav)}
                         </div>
                       ) : null}
                     </div>
@@ -422,11 +342,10 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
                     <ParticipationActions assignmentId={String(assignment.id)} status={status} />
                   ) : null}
 
-                  {!zakazka.zrusena && status === "accepted" ? (
-                    <AttendanceActions
-                      assignmentId={String(assignment.id)}
-                      active={Boolean(assignment.active_attendance_id)}
-                    />
+                  {!zakazka.zrusena && status === "accepted" && assignment.active_attendance_id ? (
+                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-100">
+                      Práce právě běží — ovládání v sekci Docházka.
+                    </div>
                   ) : null}
                 </Card>
               );
@@ -436,19 +355,18 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
       </section>
 
       {!zakazka.zrusena && hasAcceptedWork ? (
-        <section className="space-y-3">
-          <h2 className="text-xl font-bold text-white">Přeprava</h2>
-          <p className="text-sm text-slate-400">
-            Přeprava je dostupná automaticky u zakázky. Není potřeba zvláštní přiřazení od šéfa.
+        <Card className="border-emerald-500/30 bg-emerald-950/20">
+          <h2 className="text-xl font-bold text-white">Docházka a přeprava</h2>
+          <p className="mt-2 text-sm text-slate-300">
+            Zahájení práce, přeprava a ukončení úkonů probíhají v samostatné sekci Docházka.
           </p>
-          <TransportAttendanceActions
-            zakazkaId={id}
-            active={activeTransport}
-            activeTransportMode={activeTransportMode}
-            companyVehicles={transportVehicles.companyVehicles}
-            privateVehicles={transportVehicles.privateVehicles}
-          />
-        </section>
+          <Link
+            href={getDochazkaPath(id)}
+            className="mt-4 inline-flex min-h-12 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-600/25 px-5 py-3 text-sm font-black text-emerald-100 transition hover:bg-emerald-600/35"
+          >
+            Otevřít docházku
+          </Link>
+        </Card>
       ) : null}
 
       {zakazka.poznamka ? (

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { getAssignmentPhaseAccentClass } from "@/lib/employee/assignment-display";
 import { getAttendancePhaseLabel } from "@/lib/zakazka-attendance";
 import type { TransportVehicleOption } from "@/lib/transport-attendance";
 import { getZakazkaScanPath } from "@/lib/mobile/routes";
@@ -39,7 +40,7 @@ function DochazkaPhaseCard({ assignment, logistikaStav }: { assignment: Dochazka
       <div
         className={[
           "inline-flex w-fit rounded-xl border px-4 py-2 text-lg font-black tracking-tight",
-          getPhaseAccentClass(assignment.typ_bloku),
+          getAssignmentPhaseAccentClass(assignment.typ_bloku),
         ].join(" ")}
       >
         {getAttendancePhaseLabel(assignment.typ_bloku)}

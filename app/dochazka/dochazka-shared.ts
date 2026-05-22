@@ -1,4 +1,10 @@
 import { isPrepravaTypBloku } from "@/lib/zakazka-attendance";
+import {
+  formatAssignmentRange,
+  getAssignmentLogisticsStatusLabel,
+  getAssignmentPhaseSortIndex,
+  isAssignmentLogisticsPhase,
+} from "@/lib/employee/assignment-display";
 
 export type DochazkaAssignmentRow = {
   id: string;
@@ -29,13 +35,9 @@ export function isAcceptedAssignment(status: string | null | undefined) {
   return String(status ?? "").trim() === "accepted";
 }
 
-function getPhaseSortIndex(value?: string | null) {
-  const raw = String(value ?? "").trim().toLowerCase();
-  if (raw === "sklad" || raw === "nakladka" || raw === "nakládka") return 0;
-  if (raw === "stavba") return 1;
-  if (raw === "bourani" || raw === "bourání") return 2;
-  return 3;
-}
+export const formatRange = formatAssignmentRange;
+export const isLogisticsPhase = isAssignmentLogisticsPhase;
+export const getLogisticsStatusLabel = getAssignmentLogisticsStatusLabel;
 
 export function buildDochazkaGroups(
   acceptedAssignments: DochazkaAssignmentRow[],
@@ -54,7 +56,10 @@ export function buildDochazkaGroups(
         .filter(
           (row) => row.zakazka_id === zakazkaId && !isPrepravaTypBloku(row.typ_bloku)
         )
-        .sort((a, b) => getPhaseSortIndex(a.typ_bloku) - getPhaseSortIndex(b.typ_bloku));
+        .sort(
+          (a, b) =>
+            getAssignmentPhaseSortIndex(a.typ_bloku) - getAssignmentPhaseSortIndex(b.typ_bloku)
+        );
 
       return { zakazkaId, zakazka, assignments };
     })
@@ -65,42 +70,6 @@ export function buildDochazkaGroups(
 export function getZakazkaTitle(zakazka?: DochazkaZakazkaRow | null) {
   if (!zakazka) return "Zakázka";
   return [zakazka.cislo_zakazky, zakazka.nazev].filter(Boolean).join(" · ") || "Zakázka";
-}
-
-export function formatRange(from?: string | null, to?: string | null) {
-  const formatDateTime = (value?: string | null) => {
-    if (!value) return "";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "";
-    return date.toLocaleString("cs-CZ", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const fromText = formatDateTime(from);
-  const toText = formatDateTime(to);
-  if (fromText && toText) return `${fromText} – ${toText}`;
-  if (fromText) return `Od ${fromText}`;
-  if (toText) return `Do ${toText}`;
-  return "Čas není zadaný";
-}
-
-export function isLogisticsPhase(value?: string | null) {
-  const raw = String(value ?? "").trim().toLowerCase();
-  return raw === "sklad" || raw === "nakladka" || raw === "nakládka" || raw === "bourani" || raw === "bourání";
-}
-
-export function getLogisticsStatusLabel(value?: string | null) {
-  if (value === "zruseno") return "Zrušeno";
-  if (value === "naklada_se") return "Nakládá se";
-  if (value === "nalozeno") return "Naloženo";
-  if (value === "vykladka") return "Probíhá vykládka";
-  if (value === "vraceno") return "Vráceno";
-  return "Čeká na nakládku";
 }
 
 export function sortGroupsWithHighlight(
