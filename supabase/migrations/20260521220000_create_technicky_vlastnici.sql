@@ -137,9 +137,7 @@ begin
   end if;
 
   update public.skladove_polozky
-  set
-    technicky_vlastnik_id = p_technicky_vlastnik_id,
-    updated_at = now()
+  set technicky_vlastnik_id = p_technicky_vlastnik_id
   where skladova_polozka_id = p_skladova_polozka_id;
 
   if not found then
