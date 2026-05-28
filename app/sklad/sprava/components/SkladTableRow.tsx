@@ -29,6 +29,7 @@ import type {
   SkladKategorie,
   SkladPodkategorie,
   SkladPolozkaRow,
+  TechnickyVlastnik,
 } from "@/lib/sklad/types";
 import {
   tableDangerBoxRight,
@@ -62,6 +63,7 @@ type Props = {
   draft: Draft;
   bloky: SkladBlok[];
   jednotky: SkladJednotka[];
+  vlastnici: TechnickyVlastnik[];
   kategorieOptions: SkladKategorie[];
   podkategorieOptions: SkladPodkategorie[];
   onStartEdit: () => void;
@@ -70,6 +72,7 @@ type Props = {
     podkategorieId: string | null,
     blokId: string | null
   ) => void;
+  onUpdateVlastnik: (vlastnikId: string) => void;
   onDraftChange: Dispatch<SetStateAction<Draft>>;
   /** Called after jednotka select change — persists immediately (správa table). */
   onCommitJednotka?: (value: string) => void;
@@ -104,10 +107,12 @@ export function SkladTableRow({
   draft,
   bloky,
   jednotky,
+  vlastnici,
   kategorieOptions,
   podkategorieOptions,
   onStartEdit,
   onUpdateZaklad,
+  onUpdateVlastnik,
   onDraftChange,
   onCommitJednotka,
   onKeyDown,
@@ -274,6 +279,44 @@ export function SkladTableRow({
             quickCreateDisabledTitle="Nejdřív vyber kategorii"
             onQuickCreate={onQuickCreatePodkategorie}
           />
+        </div>
+
+        <div className="flex min-h-8 min-w-0 items-center px-1">
+          <select
+            value={item.technicky_vlastnik_id ?? ""}
+            disabled={isSaving}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value) onUpdateVlastnik(value);
+            }}
+            style={tableSelectStyle}
+            className="min-w-0 max-w-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
+            title="Vlastník techniky"
+          >
+            {(item.technicky_vlastnik_id &&
+            !vlastnici.some((v) => v.id === item.technicky_vlastnik_id && v.aktivni)
+              ? [
+                  {
+                    id: item.technicky_vlastnik_id,
+                    nazev: item.technicky_vlastnik_nazev ?? "Neznámý vlastník",
+                    aktivni: false,
+                  },
+                ]
+              : []
+            ).map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.nazev}
+                {!v.aktivni ? " (neaktivní)" : ""}
+              </option>
+            ))}
+            {vlastnici
+              .filter((v) => v.aktivni)
+              .map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.nazev}
+                </option>
+              ))}
+          </select>
         </div>
 
         <div

@@ -166,6 +166,8 @@ export type SkladPolozkaRow = {
   availability_usable?: number | null;
   /** Sloupec pozice ve skladove_polozky — doplňuje se dotazem vedle RPC. */
   pozice?: number | string | null;
+  technicky_vlastnik_id?: string | null;
+  technicky_vlastnik_nazev?: string | null;
 };
 
 /** Skladový okruh / blok (přehled, dashboard). */
@@ -211,6 +213,21 @@ export type SkladPrioritaOption = {
   priorita_id: string;
   nazev: string;
   poradi: number | null;
+};
+
+/** Konfigurace: vlastník techniky (WEST COUNTY, HDT, …). */
+export type TechnickyVlastnik = {
+  id: string;
+  nazev: string;
+  kod: string;
+  poznamka: string | null;
+  poradi: number;
+  aktivni: boolean;
+};
+
+export type SkladPolozkaVlastnikRow = {
+  skladova_polozka_id: string;
+  technicky_vlastnik_id: string | null;
 };
 
 /** Statistika poškození (RPC get_statistika_poskozeni). */

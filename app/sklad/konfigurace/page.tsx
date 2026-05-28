@@ -99,6 +99,13 @@ export default function SkladKonfiguracePage() {
         />
 
         <SectionCard
+          title="Vlastníci techniky"
+          description="Evidence vlastníků techniky ve skladu (WEST COUNTY, HDT…)."
+          status="Hotovo"
+          href="/sklad/konfigurace/vlastnici"
+        />
+
+        <SectionCard
           title="Typy poškození"
           description="Typy závad (mechanické, elektrické…)."
           status="Hotovo"

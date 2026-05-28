@@ -22,7 +22,7 @@ export function SkladTable({
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/60">
       <div className="overflow-x-auto">
-        <div className="min-w-[1260px]">
+        <div className="min-w-[1380px]">
           <SkladTableHeader tableGrid={tableGrid} />
 
           {children}

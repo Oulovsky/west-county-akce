@@ -42,6 +42,7 @@ export const SKLAD_RPC = {
   updateSkladovaPolozka: "update_skladova_polozka",
   updateSkladovaPolozkaDetail: "update_skladova_polozka_detail",
   updateSkladovaPolozkaZaklad: "update_skladova_polozka_zaklad",
+  updateSkladovaPolozkaVlastnik: "update_skladova_polozka_vlastnik",
   createJednotkaSkladu: "create_jednotka_skladu",
   createKategorieTechniky: "create_kategorie_techniky",
   updateKategorieTechniky: "update_kategorie_techniky",
@@ -72,6 +73,7 @@ export const SKLAD_TABLE = {
   typyPoskozeni: "typy_poskozeni",
   priorityPoskozeni: "priority_poskozeni",
   odpisovaPasma: "sklad_odpisova_pasma",
+  technickyVlastnici: "technicky_vlastnici",
   technikaNaZakazce: "technika_na_zakazce",
   zakazkaKusy: "zakazka_kusy",
   zakazky: "zakazky",
@@ -85,6 +87,7 @@ export const SKLAD_REALTIME_CHANNEL = {
   spravaPoskozeni: "sklad-sprava-poskozeni",
   konfigTypyPoskozeni: "typy-poskozeni-realtime",
   konfigPriorityPoskozeni: "priority-poskozeni-realtime",
+  spravaTechnickyVlastnici: "sklad-sprava-technicky-vlastnici",
 } as const;
 
 export const SKLAD_KUS_STATUS_CLASS = {

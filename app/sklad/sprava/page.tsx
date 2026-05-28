@@ -17,6 +17,7 @@ import {
 } from "@/lib/sklad/constants";
 import {
   enrichSpravaPolozkyWithPodkategorie,
+  enrichSpravaPolozkyWithVlastnici,
   filterSpravaInventoryItems,
   toNumber,
 } from "@/lib/sklad/helpers";
@@ -33,6 +34,7 @@ import {
   querySkladBloky,
   querySkladovePolozkyPodkategorie,
   querySpravaKatalog,
+  queryTechnickyVlastniciFull,
 } from "@/lib/sklad/queries";
 import {
   querySpravaFyzickyNaZakazkachCountsByPolozka,
@@ -51,6 +53,7 @@ import {
   type SkladPodkategorie,
   type SkladPolozkaRow,
   type SpravaInventoryFilters as SpravaInventoryFiltersState,
+  type TechnickyVlastnik,
 } from "@/lib/sklad/types";
 
 type RpcErrorResult = {
@@ -63,6 +66,7 @@ export default function Page() {
   const [podkategorie, setPodkategorie] = useState<SkladPodkategorie[]>([]);
   const [jednotky, setJednotky] = useState<SkladJednotka[]>([]);
   const [bloky, setBloky] = useState<SkladBlok[]>([]);
+  const [vlastnici, setVlastnici] = useState<TechnickyVlastnik[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -127,12 +131,13 @@ export default function Page() {
   );
 
   const reloadCatalog = useCallback(async () => {
-    const [kategorieRes, podkategorieRes, jednotkyRes, blokyRes] =
+    const [kategorieRes, podkategorieRes, jednotkyRes, blokyRes, vlastniciRes] =
       await Promise.all([
         queryKategorieTechnikyFull(supabase),
         queryPodkategorieTechnikyFull(supabase),
         queryJednotkySkladuFull(supabase),
         querySkladBloky(supabase),
+        queryTechnickyVlastniciFull(supabase),
       ]);
 
     if (kategorieRes.error) {
@@ -155,10 +160,16 @@ export default function Page() {
       return false;
     }
 
+    if (vlastniciRes.error) {
+      alert(vlastniciRes.error.message);
+      return false;
+    }
+
     setKategorie((kategorieRes.data ?? []) as SkladKategorie[]);
     setPodkategorie((podkategorieRes.data ?? []) as SkladPodkategorie[]);
     setJednotky((jednotkyRes.data ?? []) as SkladJednotka[]);
     setBloky((blokyRes.data ?? []) as SkladBlok[]);
+    setVlastnici((vlastniciRes.data ?? []) as TechnickyVlastnik[]);
     return true;
   }, []);
 
@@ -175,6 +186,8 @@ export default function Page() {
         jednotkyRes,
         blokyRes,
         polozkyPodkategorieRes,
+        vlastniciRes,
+        polozkyVlastniciRes,
       ] = await querySpravaKatalog(supabase);
 
       if (itemsRes.error) {
@@ -213,8 +226,23 @@ export default function Page() {
         return;
       }
 
+      if (vlastniciRes.error) {
+        alert(vlastniciRes.error.message);
+        if (!options?.silent) setLoading(false);
+        return;
+      }
+
+      if (polozkyVlastniciRes.error) {
+        alert(polozkyVlastniciRes.error.message);
+        if (!options?.silent) setLoading(false);
+        return;
+      }
+
       const podkategorieCatalog = (podkategorieRes.data ??
         []) as SkladPodkategorie[];
+      const vlastniciCatalog = (vlastniciRes.data ?? []) as TechnickyVlastnik[];
+
+      setVlastnici(vlastniciCatalog);
 
       const { data: pozRows, error: pozErr } = await supabase
         .from(SKLAD_TABLE.skladovePolozky)
@@ -248,6 +276,15 @@ export default function Page() {
           podkategorie_techniky_id: string | null;
         }>,
         podkategorieCatalog
+      );
+
+      const enrichedItems = enrichSpravaPolozkyWithVlastnici(
+        enrichedPodkategorie,
+        (polozkyVlastniciRes.data ?? []) as Array<{
+          skladova_polozka_id: string;
+          technicky_vlastnik_id: string | null;
+        }>,
+        vlastniciCatalog
       );
 
       const { data: kusyRaw, error: kusyError } = await supabase
@@ -306,7 +343,7 @@ export default function Page() {
           body: JSON.stringify({
             from: now.toISOString(),
             to: horizon.toISOString(),
-            items: enrichedPodkategorie.map((item) => ({
+            items: enrichedItems.map((item) => ({
               skladova_polozka_id: item.skladova_polozka_id,
               requestedQuantity: 0,
             })),
@@ -330,7 +367,7 @@ export default function Page() {
         // Přehled skladu zůstává použitelný i bez doplňkového kapacitního warningu.
       }
 
-      const mergedItems = enrichedPodkategorie.map((item) => {
+      const mergedItems = enrichedItems.map((item) => {
         const id = item.skladova_polozka_id;
         const celkem = toNumber(item.celkem_k_dispozici);
         const futureAvailability = futureAvailabilityMap.get(id);
@@ -898,6 +935,37 @@ export default function Page() {
     return options[0]?.kategorie_techniky_id ?? previousKategorieId;
   }
 
+  async function updateVlastnik(id: string, vlastnikId: string) {
+    const oldItem = items.find((item) => item.skladova_polozka_id === id);
+    if (!oldItem) return;
+
+    const vlastnik = vlastnici.find((v) => v.id === vlastnikId);
+
+    setItems((prev) =>
+      prev.map((item) =>
+        item.skladova_polozka_id === id
+          ? {
+              ...item,
+              technicky_vlastnik_id: vlastnikId,
+              technicky_vlastnik_nazev: vlastnik?.nazev ?? null,
+            }
+          : item
+      )
+    );
+
+    const { error } = await supabase.rpc(SKLAD_RPC.updateSkladovaPolozkaVlastnik, {
+      p_skladova_polozka_id: id,
+      p_technicky_vlastnik_id: vlastnikId,
+    });
+
+    if (error) {
+      alert(error.message);
+      setItems((prev) =>
+        prev.map((item) => (item.skladova_polozka_id === id ? oldItem : item))
+      );
+    }
+  }
+
   async function updateZaklad(
     id: string,
     kategorieId: string | null,
@@ -1313,9 +1381,13 @@ export default function Page() {
               draft={draft}
               bloky={bloky}
               jednotky={jednotky}
+              vlastnici={vlastnici}
               kategorieOptions={kategorieOptions}
               podkategorieOptions={podkategorieOptions}
               onStartEdit={() => startEdit(i)}
+              onUpdateVlastnik={(vlastnikId) =>
+                updateVlastnik(i.skladova_polozka_id, vlastnikId)
+              }
               onUpdateZaklad={(kategorieId, podkategorieId, blokId) =>
                 updateZaklad(
                   i.skladova_polozka_id,

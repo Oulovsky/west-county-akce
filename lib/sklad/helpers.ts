@@ -8,10 +8,12 @@ import type {
   SkladKusRow,
   SkladPodkategorie,
   SkladPolozkaRow,
+  SkladPolozkaVlastnikRow,
   SkladPoskozeniListRow,
   SkladPoskozeniRow,
   SkladZakazkaOption,
   SpravaInventoryFilters,
+  TechnickyVlastnik,
 } from "@/lib/sklad/types";
 
 type SkladPolozkaPodkategorieRow = {
@@ -494,6 +496,7 @@ export function filterSpravaInventoryItems(
       item.kategorie_nazev,
       item.podkategorie_nazev,
       item.blok_nazev,
+      item.technicky_vlastnik_nazev,
     ]
       .map(normalizeSkladSearchText)
       .join(" ");
@@ -528,6 +531,32 @@ export function enrichSpravaPolozkyWithPodkategorie(
       podkategorie_techniky_id: podkategorieTechnikyId,
       podkategorie_nazev: podkategorieTechnikyId
         ? (podkategorieNazevById.get(podkategorieTechnikyId) ?? null)
+        : null,
+    };
+  });
+}
+
+/** Doplní vlastníka techniky — RPC get_skladove_polozky ho neobsahuje. */
+export function enrichSpravaPolozkyWithVlastnici(
+  items: SkladPolozkaRow[],
+  vlastnikRows: SkladPolozkaVlastnikRow[],
+  vlastniciCatalog: TechnickyVlastnik[]
+): SkladPolozkaRow[] {
+  const vlastnikByPolozkaId = new Map(
+    vlastnikRows.map((row) => [row.skladova_polozka_id, row.technicky_vlastnik_id])
+  );
+
+  const nazevById = new Map(vlastniciCatalog.map((row) => [row.id, row.nazev]));
+
+  return items.map((item) => {
+    const technickyVlastnikId =
+      vlastnikByPolozkaId.get(item.skladova_polozka_id) ?? null;
+
+    return {
+      ...item,
+      technicky_vlastnik_id: technickyVlastnikId,
+      technicky_vlastnik_nazev: technickyVlastnikId
+        ? (nazevById.get(technickyVlastnikId) ?? null)
         : null,
     };
   });

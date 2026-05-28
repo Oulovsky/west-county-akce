@@ -96,6 +96,21 @@ export function querySkladovePolozkyPodkategorie(client: SkladSupabaseClient) {
     .select("skladova_polozka_id, podkategorie_techniky_id");
 }
 
+export function queryTechnickyVlastniciFull(client: SkladSupabaseClient) {
+  return client
+    .from(SKLAD_TABLE.technickyVlastnici)
+    .select("id, nazev, kod, poznamka, poradi, aktivni")
+    .order("aktivni", { ascending: false })
+    .order("poradi", { ascending: true })
+    .order("nazev", { ascending: true });
+}
+
+export function querySkladovePolozkyVlastnici(client: SkladSupabaseClient) {
+  return client
+    .from(SKLAD_TABLE.skladovePolozky)
+    .select("skladova_polozka_id, technicky_vlastnik_id");
+}
+
 /** Katalog pro /sklad/sprava. */
 export function querySpravaKatalog(client: SkladSupabaseClient) {
   return Promise.all([
@@ -105,6 +120,8 @@ export function querySpravaKatalog(client: SkladSupabaseClient) {
     queryJednotkySkladuFull(client),
     querySkladBloky(client),
     querySkladovePolozkyPodkategorie(client),
+    queryTechnickyVlastniciFull(client),
+    querySkladovePolozkyVlastnici(client),
   ] as const);
 }
 
