@@ -3,6 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
+function revalidateNotificationSurfaces() {
+  revalidatePath("/notifikace");
+  revalidatePath("/moje");
+  revalidatePath("/mobile");
+  revalidatePath("/", "layout");
+}
+
 async function getCurrentUser() {
   const supabase = await createClient();
   const {
@@ -17,6 +24,7 @@ async function getCurrentUser() {
 export async function markNotificationReadAction(formData: FormData) {
   const id = String(formData.get("id") ?? "").trim();
   if (!id) throw new Error("Chybí ID notifikace.");
+
   const { supabase, user } = await getCurrentUser();
   const { error } = await supabase
     .from("notifikace")
@@ -25,14 +33,16 @@ export async function markNotificationReadAction(formData: FormData) {
     .eq("user_id", user.id);
 
   if (error) throw new Error(error.message);
-  revalidatePath("/notifikace");
+  revalidateNotificationSurfaces();
 }
 
 export async function dismissNotificationAction(formData: FormData) {
   const id = String(formData.get("id") ?? "").trim();
   if (!id) throw new Error("Chybí ID notifikace.");
+
   const { supabase, user } = await getCurrentUser();
   const now = new Date().toISOString();
+
   const { error } = await supabase
     .from("notifikace")
     .update({ dismissed_at: now, read_at: now })
@@ -40,11 +50,12 @@ export async function dismissNotificationAction(formData: FormData) {
     .eq("user_id", user.id);
 
   if (error) throw new Error(error.message);
-  revalidatePath("/notifikace");
+  revalidateNotificationSurfaces();
 }
 
 export async function markAllNotificationsReadAction() {
   const { supabase, user } = await getCurrentUser();
+
   const { error } = await supabase
     .from("notifikace")
     .update({ read_at: new Date().toISOString() })
@@ -53,5 +64,5 @@ export async function markAllNotificationsReadAction() {
     .is("dismissed_at", null);
 
   if (error) throw new Error(error.message);
-  revalidatePath("/notifikace");
+  revalidateNotificationSurfaces();
 }
