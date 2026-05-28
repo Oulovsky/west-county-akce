@@ -51,7 +51,9 @@ function formatDateTime(value?: string | null) {
 export default async function NotificationsPage({ searchParams }: PageProps) {
   const resolvedSearchParams = await searchParams;
   const filter = normalizeFilter(resolvedSearchParams?.filtr);
+
   const supabase = await createClient();
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -66,10 +68,16 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
     .order("created_at", { ascending: false })
     .limit(100);
 
-  if (filter === "neprectene") query = query.is("read_at", null);
-  if (filter === "warning" || filter === "critical") query = query.eq("priorita", filter);
+  if (filter === "neprectene") {
+    query = query.is("read_at", null);
+  }
+
+  if (filter === "warning" || filter === "critical") {
+    query = query.eq("priorita", filter);
+  }
 
   const { data, error } = await query;
+
   if (error) {
     return (
       <div className="page-shell w-full text-red-300">
@@ -80,22 +88,40 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
   }
 
   const rows = (data ?? []) as NotificationRow[];
+
   const filters: Array<{ key: FilterMode; label: string; href: string }> = [
     { key: "vse", label: "Vše", href: "/notifikace" },
-    { key: "neprectene", label: "Nepřečtené", href: "/notifikace?filtr=neprectene" },
-    { key: "warning", label: "Warning", href: "/notifikace?filtr=warning" },
-    { key: "critical", label: "Critical", href: "/notifikace?filtr=critical" },
+    {
+      key: "neprectene",
+      label: "Nepřečtené",
+      href: "/notifikace?filtr=neprectene",
+    },
+    {
+      key: "warning",
+      label: "Warning",
+      href: "/notifikace?filtr=warning",
+    },
+    {
+      key: "critical",
+      label: "Critical",
+      href: "/notifikace?filtr=critical",
+    },
   ];
 
   return (
     <div className="page-shell w-full space-y-4 text-slate-200 lg:space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-white lg:text-3xl">Upozornění</h1>
+          <h1 className="text-2xl font-black text-white lg:text-3xl">
+            Upozornění
+          </h1>
+
           <p className="mt-2 hidden text-sm text-slate-400 lg:block">
-            Interní provozní upozornění. Ne push provider, jen přehled věcí, které vyžadují pozornost.
+            Interní provozní upozornění. Ne push provider, jen přehled věcí,
+            které vyžadují pozornost.
           </p>
         </div>
+
         <form action={markAllNotificationsReadAction}>
           <button className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-bold text-slate-100 transition hover:bg-slate-800">
             Označit vše přečtené
@@ -122,12 +148,15 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
 
       {rows.length === 0 ? (
         <Card>
-          <div className="text-sm text-slate-400">Žádné notifikace pro tento filtr.</div>
+          <div className="text-sm text-slate-400">
+            Žádné notifikace pro tento filtr.
+          </div>
         </Card>
       ) : (
         <div className="space-y-3">
           {rows.map((row) => {
             const unread = !row.read_at;
+
             return (
               <Card
                 key={row.id}
@@ -140,12 +169,22 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-lg font-black text-white">{row.titulek}</h2>
-                      {unread ? <Badge variant="warning">Nepřečtené</Badge> : null}
+                      <h2 className="text-lg font-black text-white">
+                        {row.titulek}
+                      </h2>
+
+                      {unread ? (
+                        <Badge variant="warning">Nepřečtené</Badge>
+                      ) : null}
                     </div>
-                    <div className="mt-1 text-sm text-slate-200">{row.zprava}</div>
+
+                    <div className="mt-1 text-sm text-slate-200">
+                      {row.zprava}
+                    </div>
+
                     <div className="mt-2 text-xs text-slate-400">
-                      {getNotificationPriorityLabel(row.priorita)} · {formatDateTime(row.created_at)} · {row.typ}
+                      {getNotificationPriorityLabel(row.priorita)} ·{" "}
+                      {formatDateTime(row.created_at)} · {row.typ}
                     </div>
                   </div>
                 </div>
@@ -159,16 +198,20 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
                       Otevřít
                     </Link>
                   ) : null}
+
                   {unread ? (
                     <form action={markNotificationReadAction}>
                       <input type="hidden" name="id" value={row.id} />
+
                       <button className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-bold text-slate-100 transition hover:bg-slate-800">
                         Přečteno
                       </button>
                     </form>
                   ) : null}
+
                   <form action={dismissNotificationAction}>
                     <input type="hidden" name="id" value={row.id} />
+
                     <button className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-bold text-slate-100 transition hover:bg-slate-800">
                       Skrýt
                     </button>
