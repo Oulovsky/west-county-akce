@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="cs">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WEST COUNTY AKCE — Interní manuál</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --card: #1e293b;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #3b82f6;
+        --accent-soft: #1e3a5f;
+        --ok: #10b981;
+        --border: #334155;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        font-size: 11pt;
+        line-height: 1.55;
+        color: #1e293b;
+        background: #f8fafc;
+      }
+
+      .cover {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 48px 56px;
+        background: linear-gradient(145deg, #0f172a 0%, #1e3a5f 55%, #0f172a 100%);
+        color: #fff;
+        page-break-after: always;
+      }
+
+      .cover-kicker {
+        font-size: 11pt;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: #93c5fd;
+        margin-bottom: 12px;
+      }
+
+      .cover h1 {
+        margin: 0 0 16px;
+        font-size: 34pt;
+        font-weight: 800;
+        line-height: 1.1;
+      }
+
+      .cover p {
+        margin: 0;
+        max-width: 520px;
+        font-size: 13pt;
+        color: #cbd5e1;
+      }
+
+      .cover-meta {
+        margin-top: 48px;
+        font-size: 10pt;
+        color: #94a3b8;
+      }
+
+      .cover-roles {
+        margin-top: 32px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .role-pill {
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: rgba(59, 130, 246, 0.2);
+        border: 1px solid rgba(147, 197, 253, 0.35);
+        font-size: 10pt;
+        font-weight: 600;
+      }
+
+      main {
+        max-width: 820px;
+        margin: 0 auto;
+        padding: 40px 48px 64px;
+      }
+
+      h2 {
+        margin: 40px 0 12px;
+        font-size: 18pt;
+        font-weight: 800;
+        color: #0f172a;
+        page-break-after: avoid;
+      }
+
+      h2 .num {
+        color: var(--accent);
+        margin-right: 8px;
+      }
+
+      h3 {
+        margin: 24px 0 8px;
+        font-size: 12pt;
+        font-weight: 700;
+        color: #334155;
+      }
+
+      p.lead {
+        margin: 0 0 16px;
+        color: #475569;
+        font-size: 11pt;
+      }
+
+      .toc {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 24px 28px;
+        margin-bottom: 32px;
+        page-break-after: always;
+      }
+
+      .toc h2 {
+        margin-top: 0;
+      }
+
+      .toc ol {
+        margin: 0;
+        padding-left: 22px;
+      }
+
+      .toc li {
+        margin: 6px 0;
+      }
+
+      .toc a {
+        color: #2563eb;
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      .box {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 18px 20px;
+        margin: 16px 0;
+      }
+
+      .box-blue {
+        background: #eff6ff;
+        border-color: #bfdbfe;
+      }
+
+      .box-title {
+        font-size: 9pt;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #2563eb;
+        margin-bottom: 8px;
+      }
+
+      ul {
+        margin: 8px 0;
+        padding-left: 20px;
+      }
+
+      li {
+        margin: 4px 0;
+      }
+
+      .workflow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 4px;
+        margin: 20px 0;
+        font-size: 9.5pt;
+        font-weight: 700;
+      }
+
+      .workflow span {
+        background: #0f172a;
+        color: #fff;
+        padding: 8px 12px;
+        border-radius: 8px;
+      }
+
+      .workflow .arrow {
+        background: transparent;
+        color: #64748b;
+        padding: 0 2px;
+        font-weight: 400;
+      }
+
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin: 16px 0;
+      }
+
+      .mini-card {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 14px 16px;
+      }
+
+      .mini-card strong {
+        display: block;
+        margin-bottom: 6px;
+        color: #0f172a;
+      }
+
+      figure {
+        margin: 20px 0;
+        page-break-inside: avoid;
+      }
+
+      figure img {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid #cbd5e1;
+        display: block;
+      }
+
+      figcaption {
+        margin-top: 8px;
+        font-size: 9pt;
+        color: #64748b;
+        text-align: center;
+      }
+
+      table.roles {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 10pt;
+        margin: 16px 0;
+      }
+
+      table.roles th,
+      table.roles td {
+        border: 1px solid #e2e8f0;
+        padding: 10px 12px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      table.roles th {
+        background: #f1f5f9;
+        font-weight: 700;
+      }
+
+      .page-break {
+        page-break-before: always;
+      }
+
+      @media print {
+        body {
+          background: #fff;
+        }
+
+        main {
+          max-width: none;
+          padding: 0;
+        }
+
+        a {
+          color: inherit;
+          text-decoration: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <section class="cover">
+      <div class="cover-kicker">Interní dokumentace</div>
+      <h1>WEST COUNTY AKCE</h1>
+      <p>
+        Uživatelský manuál pro skladníky, techniky a šéfy / koordinátory. Praktická
+        orientace v aplikaci — bez technických detailů.
+      </p>
+      <div class="cover-roles">
+        <span class="role-pill">Skladník</span>
+        <span class="role-pill">Technik</span>
+        <span class="role-pill">Šéf / koordinátor</span>
+      </div>
+      <div class="cover-meta">Verze podle aktuálního systému · 2026</div>
+    </section>
+
+    <main>
+      <nav class="toc">
+        <h2>Obsah</h2>
+        <ol>
+          <li><a href="#start">Rychlý start</a></li>
+          <li><a href="#pojmy">Základní pojmy</a></li>
+          <li><a href="#sklad">Sklad</a></li>
+          <li><a href="#setupy">Setupy</a></li>
+          <li><a href="#zakazky">Zakázky</a></li>
+          <li><a href="#scan">Scan / nakládka</a></li>
+          <li><a href="#mobil">Mobilní režim</a></li>
+          <li><a href="#dochazka">Docházka</a></li>
+          <li><a href="#workflow">Typický workflow firmy</a></li>
+        </ol>
+      </nav>
+
+      <section id="start">
+        <h2><span class="num">1.</span>Rychlý start</h2>
+        <p class="lead">
+          Systém řídí akce od skladu po návrat techniky. Zakázka <strong>negeneruje</strong>
+          vybavení — jen vybírá hotové balíky ze skladu.
+        </p>
+
+        <div class="workflow">
+          <span>SKLAD</span><span class="arrow">→</span>
+          <span>SETUPY</span><span class="arrow">→</span>
+          <span>ZAKÁZKA</span><span class="arrow">→</span>
+          <span>SCAN</span><span class="arrow">→</span>
+          <span>AKCE</span><span class="arrow">→</span>
+          <span>NÁVRAT</span>
+        </div>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <strong>Šéf / koordinátor</strong>
+            <ul>
+              <li>Založí zakázku</li>
+              <li>Vybere setupy + extra</li>
+              <li>Přiřadí lidi</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <strong>Skladník</strong>
+            <ul>
+              <li>Spravuje sklad a setupy</li>
+              <li>Nakládá scanem</li>
+              <li>Vrací techniku</li>
+            </ul>
+          </div>
+        </div>
+        <div class="mini-card" style="margin-top: 0">
+          <strong>Technik v terénu</strong>
+          <ul>
+            <li><strong>Moje zakázky</strong> — přehled práce</li>
+            <li><strong>Scan</strong> — u vybrané zakázky</li>
+            <li><strong>Docházka</strong> — začátek / konec práce</li>
+          </ul>
+        </div>
+
+        <div class="box box-blue">
+          <div class="box-title">Přihlášení</div>
+          <ul>
+            <li>Otevřete aplikaci v prohlížeči (počítač nebo mobil).</li>
+            <li>Přihlaste se firemním účtem.</li>
+            <li>Na mobilu použijte spodní menu; na počítači horní / boční navigaci.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="pojmy">
+        <h2><span class="num">2.</span>Základní pojmy</h2>
+
+        <h3>Zakázka</h3>
+        <ul>
+          <li><strong>K čemu:</strong> jedna akce — místo, termíny, plán techniky, lidé.</li>
+          <li><strong>Co tam dělám:</strong> zakládám / upravuji akci, sleduji stav.</li>
+        </ul>
+
+        <h3>Setup (skladový balík)</h3>
+        <ul>
+          <li><strong>K čemu:</strong> hotová sestava techniky (např. „Stage 6×8“, „P3.9 outdoor 7×4“).</li>
+          <li><strong>Kde vzniká:</strong> pouze ve skladu → <em>Setupy skladu</em>.</li>
+          <li><strong>Na zakázce:</strong> jen výběr a počet — žádné skládání po dílech.</li>
+        </ul>
+
+        <h3>Skladová položka</h3>
+        <ul>
+          <li>Typ věci ve skladu (CASE, motor, kabel…).</li>
+          <li>Má název, pozici, počet kusů skladem.</li>
+        </ul>
+
+        <h3>Kus</h3>
+        <ul>
+          <li>Konkrétní fyzický kus s vlastním kódem.</li>
+          <li>Eviduje se kvůli historii a poškození.</li>
+        </ul>
+
+        <h3>CASE</h3>
+        <ul>
+          <li>Bedna / case jako <strong>jedna skladová položka</strong>.</li>
+          <li>Při nakládce se často skenuje <strong>celá CASE</strong>, ne každý kabinet zvlášť.</li>
+          <li>Uvnitř mohou být kabinety — evidence poškození zůstává na úrovni kusů.</li>
+        </ul>
+
+        <h3>Plán techniky</h3>
+        <ul>
+          <li>Seznam položek a množství pro akci.</li>
+          <li>Vzniká z vybraných <strong>setupů</strong> + <strong>extra položek</strong>.</li>
+          <li>Říká <em>kolik</em> — konkrétní kusy přiřadí až <strong>scan</strong>.</li>
+        </ul>
+
+        <div class="box">
+          <div class="box-title">Setup vs. extra položka</div>
+          <ul>
+            <li><strong>Setup</strong> — opakovaný balík ze skladu (stage, LED, zvuk…).</li>
+            <li><strong>Extra</strong> — jednorázový doplněk přímo na zakázce (kabel navíc, adaptér…).</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="sklad" class="page-break">
+        <h2><span class="num">3.</span>Sklad</h2>
+        <p class="lead">Sklad je evidence techniky — co máme, kde to leží a v jakém stavu.</p>
+
+        <div class="box">
+          <div class="box-title">K čemu to je?</div>
+          <ul>
+            <li>Přehled položek a kusů</li>
+            <li>Pozice ve skladu</li>
+            <li>Poškození, servis, dostupnost</li>
+            <li>Základ pro setupy a zakázky</li>
+          </ul>
+        </div>
+
+        <div class="box-title" style="margin-top: 16px">Co tam dělám?</div>
+        <ul>
+          <li>Prohlížím položky a kusy</li>
+          <li>Kontroluji, zda sedí skutečný stav s systémem</li>
+          <li>Nahlašuji poškození</li>
+          <li>Připravuji podklady pro setupy (co do balíku patří)</li>
+        </ul>
+
+        <p><strong>Kam v aplikaci:</strong> menu <em>Sklad</em> (přehled, správa, scan skladu dle oprávnění).</p>
+      </section>
+
+      <section id="setupy">
+        <h2><span class="num">4.</span>Setupy</h2>
+        <p class="lead">
+          Setup = recept balíku. Obsahuje skladové položky a množství v jednom balíku. Neobsahuje
+          konkrétní kusy.
+        </p>
+
+        <div class="workflow">
+          <span>Položky ve skladu</span><span class="arrow">→</span>
+          <span>Nový setup</span><span class="arrow">→</span>
+          <span>Položky v setupu</span><span class="arrow">→</span>
+          <span>Aktivní = lze vybrat na zakázce</span>
+        </div>
+
+        <div class="box">
+          <div class="box-title">Co tam dělám? (skladník / sklad)</div>
+          <ul>
+            <li>Vytvořím setup (název např. „Stage 6×8“)</li>
+            <li>Přidám položky a množství (trusy, motory, CASE…)</li>
+            <li>Nechám setup <strong>aktivní</strong></li>
+            <li>Neaktivní setupy se na nové zakázce neukážou</li>
+          </ul>
+        </div>
+
+        <p><strong>Kam:</strong> <em>Sklad → Setupy skladu</em> (<code>/sklad/setupy</code>)</p>
+
+        <figure>
+          <img src="screenshots/sklad-setupy.png" alt="Obrazovka Setupy skladu" />
+          <figcaption>Setupy skladu — knihovna balíků pro zakázky</figcaption>
+        </figure>
+      </section>
+
+      <section id="zakazky" class="page-break">
+        <h2><span class="num">5.</span>Zakázky</h2>
+        <p class="lead">Zakázka objednává techniku výběrem setupů. Šéf neskládá stage po dílech.</p>
+
+        <div class="box box-blue">
+          <div class="box-title">Nová zakázka — postup</div>
+          <ul>
+            <li><strong>Základ</strong> — název, místo, klient, termíny</li>
+            <li><strong>Setupy ze skladu</strong> — zaškrtnutí balíků + počet kusů setupu</li>
+            <li><strong>Extra položky</strong> — doplnění mimo setupy</li>
+            <li><strong>Náhled plánu</strong> — kontrola součtu a dostupnosti</li>
+            <li><strong>Uložit</strong> — vznikne plán techniky na zakázce</li>
+          </ul>
+        </div>
+
+        <p><strong>Kam:</strong> <em>Zakázky → Nová zakázka</em></p>
+
+        <figure>
+          <img src="screenshots/zakazky-prehled.png" alt="Přehled zakázek" />
+          <figcaption>Přehled zakázek a tlačítko Nová zakázka</figcaption>
+        </figure>
+
+        <figure>
+          <img src="screenshots/nova-zakazka.png" alt="Formulář nové zakázky" />
+          <figcaption>Nová zakázka — základní údaje a začátek formuláře</figcaption>
+        </figure>
+
+        <div class="box">
+          <div class="box-title">Detail zakázky — co najdu</div>
+          <ul>
+            <li>Termíny, místo, poznámky</li>
+            <li><strong>Technika</strong> — úprava plánu množství</li>
+            <li><strong>Scan / nakládka</strong> — naložení a vrácení</li>
+            <li><strong>Lidé</strong> — kdo na akci jede</li>
+          </ul>
+        </div>
+
+        <p>
+          Pokud ve skladu nejsou aktivní setupy, systém zobrazí prázdný stav a odkaz na
+          <em>Setupy skladu</em>.
+        </p>
+      </section>
+
+      <section id="scan" class="page-break">
+        <h2><span class="num">6.</span>Scan / nakládka</h2>
+        <p class="lead">
+          Scan přiřadí <strong>konkrétní kusy</strong> (nebo CASE) k zakázce podle plánu techniky.
+        </p>
+
+        <div class="workflow">
+          <span>Plán na zakázce</span><span class="arrow">→</span>
+          <span>Scan kódů</span><span class="arrow">→</span>
+          <span>Kus na zakázce</span><span class="arrow">→</span>
+          <span>Návrat scanem</span>
+        </div>
+
+        <div class="two-col">
+          <div class="mini-card">
+            <strong>Nakládka (odjezd)</strong>
+            <ul>
+              <li>Otevřu zakázku → Scan</li>
+              <li>Vidím, co má být naloženo</li>
+              <li>Skenuji CASE / kusy</li>
+              <li>Systém ukáže, co ještě chybí</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <strong>Návrat</strong>
+            <ul>
+              <li>Stejná obrazovka scan</li>
+              <li>Vracím naskenovaním</li>
+              <li>Poškození řeším ve skladu</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="box">
+          <div class="box-title">Co tam dělám?</div>
+          <ul>
+            <li>Kontroluji plán vs. skutečně naložené</li>
+            <li>Skenuji čárové kódy na bednách a kusích</li>
+            <li>Nepřeskakuji položky z plánu bez důvodu</li>
+          </ul>
+        </div>
+
+        <figure>
+          <img src="screenshots/mobile-scan.png" alt="Mobilní výběr scanu" />
+          <figcaption>Mobil — výběr zakázky před scanem / nakládkou</figcaption>
+        </figure>
+      </section>
+
+      <section id="mobil" class="page-break">
+        <h2><span class="num">7.</span>Mobilní režim</h2>
+        <p class="lead">
+          Na telefonu je zjednodušené menu dole. Vhodné pro skladníka a technika v terénu.
+        </p>
+
+        <table class="roles">
+          <thead>
+            <tr>
+              <th>Ikona</th>
+              <th>K čemu</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Zakázky</strong></td>
+              <td>Přehled / Moje zakázky, nová zakázka (šéf)</td>
+            </tr>
+            <tr>
+              <td><strong>Scan</strong></td>
+              <td>Nakládka u aktivní nebo vybrané zakázky</td>
+            </tr>
+            <tr>
+              <td><strong>Docházka</strong></td>
+              <td>Začátek a konec práce na zakázce</td>
+            </tr>
+            <tr>
+              <td><strong>Upozornění</strong></td>
+              <td>Provozní zprávy ze systému</td>
+            </tr>
+            <tr>
+              <td><strong>Profil</strong></td>
+              <td>Účet a rychlé odkazy</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="box">
+          <div class="box-title">Lišta u zakázky (workflow)</div>
+          <ul>
+            <li>Po otevření zakázky: přepínání <strong>Detail → Scan → Docházka</strong></li>
+            <li>Systém si pamatuje poslední zakázku pro rychlý scan</li>
+          </ul>
+        </div>
+
+        <figure>
+          <img src="screenshots/moje-zakazky.png" alt="Moje zakázky mobil" />
+          <figcaption>Moje zakázky — práce přiřazená technikovi</figcaption>
+        </figure>
+      </section>
+
+      <section id="dochazka">
+        <h2><span class="num">8.</span>Docházka</h2>
+        <p class="lead">Evidence práce na akci — kdy začínám a končím, u které zakázky.</p>
+
+        <ul>
+          <li><strong>K čemu:</strong> přehled hodin, podklad pro proplacení</li>
+          <li><strong>Kde:</strong> záložka <em>Docházka</em> (mobil) nebo <em>Moje</em> u zakázky</li>
+          <li><strong>Postup:</strong> vyberu zakázku → <em>Začít práci</em> → po akci <em>Ukončit práci</em></li>
+        </ul>
+
+        <figure>
+          <img src="screenshots/dochazka.png" alt="Docházka mobil" />
+          <figcaption>Docházka — výběr zakázky a začátek / konec práce</figcaption>
+        </figure>
+
+        <div class="box box-blue">
+          <div class="box-title">Upozornění</div>
+          <ul>
+            <li>Menu <em>Upozornění</em> — změny zakázek, sklad, schválení</li>
+            <li>Nepřečtené jsou zvýrazněné</li>
+            <li>Kontrolujte před odjezdem na akci</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="workflow" class="page-break">
+        <h2><span class="num">9.</span>Typický workflow firmy</h2>
+        <p class="lead">Jeden den akce od přípravy ve skladu po návrat.</p>
+
+        <h3>Příprava (sklad + kancelář)</h3>
+        <ul>
+          <li>Sklad: setupy sedí s realitou, položky aktivní</li>
+          <li>Šéf: nová zakázka, výběr setupů a extra, uložení plánu</li>
+          <li>Skladník: scan nakládky podle plánu (CASE a kusy)</li>
+        </ul>
+
+        <h3>Akce (terén)</h3>
+        <ul>
+          <li>Technik: <em>Moje zakázky</em>, potvrzení účasti</li>
+          <li>Docházka: začátek práce</li>
+          <li>Realizace akce</li>
+        </ul>
+
+        <h3>Návrat</h3>
+        <ul>
+          <li>Scan vrácení techniky</li>
+          <li>Poškození → evidence ve skladu</li>
+          <li>Docházka: ukončení práce</li>
+          <li>Šéf / admin: uzavření zakázky, fakturace dle oprávnění</li>
+        </ul>
+
+        <div class="workflow" style="margin-top: 24px">
+          <span>SKLAD</span><span class="arrow">→</span>
+          <span>SETUPY</span><span class="arrow">→</span>
+          <span>ZAKÁZKA</span><span class="arrow">→</span>
+          <span>SCAN</span><span class="arrow">→</span>
+          <span>AKCE</span><span class="arrow">→</span>
+          <span>NÁVRAT</span>
+        </div>
+
+        <table class="roles" style="margin-top: 24px">
+          <thead>
+            <tr>
+              <th>Role</th>
+              <th>Hlavně používá</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Skladník</td>
+              <td>Sklad, setupy, scan nakládka / návrat</td>
+            </tr>
+            <tr>
+              <td>Šéf / koordinátor</td>
+              <td>Nová zakázka, lidé, technika, upozornění</td>
+            </tr>
+            <tr>
+              <td>Technik</td>
+              <td>Moje zakázky, scan, docházka (mobil)</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>
