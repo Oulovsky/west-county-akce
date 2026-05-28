@@ -110,11 +110,11 @@ set search_path = public
 as $$
 begin
   if p_skladova_polozka_id is null then
-    raise exception 'Chybí ID skladové položky.';
+    raise exception 'MISSING_SKLADOVA_POLOZKA_ID';
   end if;
 
   if p_technicky_vlastnik_id is null then
-    raise exception 'Vlastník techniky je povinný.';
+    raise exception 'MISSING_TECHNICKY_VLASTNIK_ID';
   end if;
 
   if not exists (
@@ -124,7 +124,7 @@ begin
       and p.role in ('admin', 'sef', 'skladnik')
       and coalesce(p.aktivni, true) = true
   ) then
-    raise exception 'Forbidden';
+    raise exception 'FORBIDDEN';
   end if;
 
   if not exists (
@@ -133,7 +133,7 @@ begin
     where tv.id = p_technicky_vlastnik_id
       and tv.aktivni = true
   ) then
-    raise exception 'Neplatný nebo neaktivní vlastník techniky.';
+    raise exception 'INVALID_OR_INACTIVE_TECHNICKY_VLASTNIK';
   end if;
 
   update public.skladove_polozky
@@ -143,7 +143,7 @@ begin
   where skladova_polozka_id = p_skladova_polozka_id;
 
   if not found then
-    raise exception 'Skladová položka nebyla nalezena.';
+    raise exception 'SKLADOVA_POLOZKA_NOT_FOUND';
   end if;
 end;
 $$;
