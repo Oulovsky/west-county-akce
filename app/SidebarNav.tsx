@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { resolveAppAdminAccess } from "@/lib/auth/admin-access";
+import { subscribeNotificationsUnreadChanged } from "@/lib/notifications/unread-count-sync";
 import { supabase } from "@/lib/supabase";
 
 function NavLink({
@@ -84,9 +85,11 @@ export default function SidebarNav() {
 
     void loadNavAccess();
     const interval = window.setInterval(() => void loadNavAccess(), 60000);
+    const unsubscribe = subscribeNotificationsUnreadChanged(() => void loadNavAccess());
     return () => {
       active = false;
       window.clearInterval(interval);
+      unsubscribe();
     };
   }, [pathname]);
 

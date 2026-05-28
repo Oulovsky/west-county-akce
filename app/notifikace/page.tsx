@@ -8,10 +8,10 @@ import {
   getNotificationPriorityLabel,
 } from "@/lib/notifications";
 import {
-  dismissNotificationAction,
-  markAllNotificationsReadAction,
-  markNotificationReadAction,
-} from "./actions";
+  DismissNotificationButton,
+  MarkAllReadButton,
+  MarkReadButton,
+} from "./NotificationsClientActions";
 
 type PageProps = {
   searchParams?: Promise<{ filtr?: string }>;
@@ -122,11 +122,7 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
           </p>
         </div>
 
-        <form action={markAllNotificationsReadAction}>
-          <button className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-bold text-slate-100 transition hover:bg-slate-800">
-            Označit vše přečtené
-          </button>
-        </form>
+        <MarkAllReadButton />
       </div>
 
       <div className="flex max-w-full flex-wrap gap-2">
@@ -199,23 +195,9 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
                     </Link>
                   ) : null}
 
-                  {unread ? (
-                    <form action={markNotificationReadAction}>
-                      <input type="hidden" name="id" value={row.id} />
+                  {unread ? <MarkReadButton notificationId={row.id} /> : null}
 
-                      <button className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-bold text-slate-100 transition hover:bg-slate-800">
-                        Přečteno
-                      </button>
-                    </form>
-                  ) : null}
-
-                  <form action={dismissNotificationAction}>
-                    <input type="hidden" name="id" value={row.id} />
-
-                    <button className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-bold text-slate-100 transition hover:bg-slate-800">
-                      Skrýt
-                    </button>
-                  </form>
+                  <DismissNotificationButton notificationId={row.id} />
                 </div>
               </Card>
             );

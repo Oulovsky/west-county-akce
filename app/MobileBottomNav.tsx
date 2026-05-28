@@ -9,6 +9,7 @@ import {
   getMobileScanNavHref,
   MOBILE_NAV_ITEMS,
 } from "@/lib/mobile/routes";
+import { subscribeNotificationsUnreadChanged } from "@/lib/notifications/unread-count-sync";
 import { supabase } from "@/lib/supabase";
 
 export default function MobileBottomNav() {
@@ -49,9 +50,11 @@ export default function MobileBottomNav() {
 
     void loadUnreadCount();
     const interval = window.setInterval(() => void loadUnreadCount(), 60000);
+    const unsubscribe = subscribeNotificationsUnreadChanged(() => void loadUnreadCount());
     return () => {
       active = false;
       window.clearInterval(interval);
+      unsubscribe();
     };
   }, [pathname]);
 
