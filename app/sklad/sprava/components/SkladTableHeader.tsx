@@ -3,15 +3,12 @@
   SKLAD_SPRAVA_HINT_NA_ZAKAZKACH,
 } from "@/lib/sklad/constants";
 import {
-  SPRAVA_TABLE_GRID,
+  SPRAVA_TABLE_CHEVRON_SPACER,
   SPRAVA_TABLE_HEADER_CELL,
   SPRAVA_TABLE_HEADER_CELL_STICKY,
   SPRAVA_TABLE_HEADER_CLASS,
+  spravaTableGridStyle,
 } from "./spravaTableLayout";
-
-type Props = {
-  tableGrid?: string;
-};
 
 function HeaderLines({ lines }: { lines: [string, string] }) {
   return (
@@ -22,43 +19,38 @@ function HeaderLines({ lines }: { lines: [string, string] }) {
   );
 }
 
-export function SkladTableHeader({ tableGrid = SPRAVA_TABLE_GRID }: Props) {
+export function SkladTableHeader() {
   return (
-    <section className={["grid", tableGrid, SPRAVA_TABLE_HEADER_CLASS].join(" ")}>
-      <span className={[SPRAVA_TABLE_HEADER_CELL_STICKY, "min-h-8"].join(" ")}>
-        Název
-      </span>
-      <span className={[SPRAVA_TABLE_HEADER_CELL, "min-h-8"].join(" ")}>Okruh</span>
-      <span className={[SPRAVA_TABLE_HEADER_CELL, "min-h-8"].join(" ")}>
-        Kategorie
-      </span>
-      <span className={[SPRAVA_TABLE_HEADER_CELL, "min-h-8"].join(" ")}>
-        Podkategorie
-      </span>
-      <span className={[SPRAVA_TABLE_HEADER_CELL, "min-h-8"].join(" ")}>Vlastník</span>
-      <span className={[SPRAVA_TABLE_HEADER_CELL, "min-h-8"].join(" ")}>Pozice</span>
-      <span className={[SPRAVA_TABLE_HEADER_CELL, "min-h-8"].join(" ")}>Celkem</span>
-      <span className={[SPRAVA_TABLE_HEADER_CELL, "min-h-8"].join(" ")}>Skladem</span>
-      <span
-        className={[SPRAVA_TABLE_HEADER_CELL, "min-h-8"].join(" ")}
-        title={SKLAD_SPRAVA_HINT_NA_ZAKAZKACH}
-      >
+    <section
+      className={SPRAVA_TABLE_HEADER_CLASS}
+      style={spravaTableGridStyle}
+    >
+      <div className={SPRAVA_TABLE_HEADER_CELL_STICKY}>
+        <span className={SPRAVA_TABLE_CHEVRON_SPACER} aria-hidden />
+        <span>Název</span>
+      </div>
+      <div className={SPRAVA_TABLE_HEADER_CELL}>Okruh</div>
+      <div className={SPRAVA_TABLE_HEADER_CELL}>Kategorie</div>
+      <div className={SPRAVA_TABLE_HEADER_CELL}>Podkategorie</div>
+      <div className={SPRAVA_TABLE_HEADER_CELL}>Vlastník</div>
+      <div className={SPRAVA_TABLE_HEADER_CELL}>Pozice</div>
+      <div className={SPRAVA_TABLE_HEADER_CELL}>Celkem</div>
+      <div className={SPRAVA_TABLE_HEADER_CELL}>Skladem</div>
+      <div className={SPRAVA_TABLE_HEADER_CELL} title={SKLAD_SPRAVA_HINT_NA_ZAKAZKACH}>
         <HeaderLines lines={["Plánováno", "na zakázkách"]} />
-      </span>
-      <span
-        className={[SPRAVA_TABLE_HEADER_CELL, "min-h-8"].join(" ")}
+      </div>
+      <div
+        className={SPRAVA_TABLE_HEADER_CELL}
         title={SKLAD_SPRAVA_HINT_FYZICKY_NA_ZAKAZKACH}
       >
         <HeaderLines lines={["Fyzicky", "na zakázkách"]} />
-      </span>
-      <span className={[SPRAVA_TABLE_HEADER_CELL, "min-h-8"].join(" ")}>
-        Poškozené
-      </span>
-      <span className={[SPRAVA_TABLE_HEADER_CELL, "min-h-8"].join(" ")}>Jednotka</span>
-      <span className={[SPRAVA_TABLE_HEADER_CELL, "min-h-8"].join(" ")}>
+      </div>
+      <div className={SPRAVA_TABLE_HEADER_CELL}>Poškozené</div>
+      <div className={SPRAVA_TABLE_HEADER_CELL}>Jednotka</div>
+      <div className={SPRAVA_TABLE_HEADER_CELL}>
         <HeaderLines lines={["Cena", "pro akce"]} />
-      </span>
-      <span className={[SPRAVA_TABLE_HEADER_CELL, "min-h-8"].join(" ")}>Detail</span>
+      </div>
+      <div className={SPRAVA_TABLE_HEADER_CELL}>Detail</div>
     </section>
   );
 }

@@ -34,7 +34,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { formatMoney } from "./formatMoney";
 import { formatNumber } from "./formatNumber";
-import { SPRAVA_TABLE_GRID } from "./spravaTableLayout";
+import { spravaTableGridStyle } from "./spravaTableLayout";
 import {
   tableDangerBoxRight,
   tableMutedBoxRight,
@@ -64,11 +64,7 @@ type Props = {
 const SPRAVA_QR_TRIGGER =
   "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-600 bg-slate-950 text-slate-300 outline-none transition hover:border-slate-500 hover:bg-slate-900 hover:text-white focus-visible:ring-2 focus-visible:ring-blue-500/60";
 
-const KUS_SUBROW_GRID_CLASS = [
-  "grid",
-  SPRAVA_TABLE_GRID,
-  "items-start px-2 py-1 text-xs text-slate-300",
-].join(" ");
+const KUS_SUBROW_GRID_CLASS = "grid items-start px-2 py-1 text-xs text-slate-300";
 
 /** Hodnota ve čtecích boxech správy — prázdná buňka jako „—“. */
 function inheritedBoxText(value: string | null | undefined): string {
@@ -183,7 +179,7 @@ function SpravaExpandKusRow({
 
   return (
     <li className={kus.aktivni ? "" : "opacity-60"}>
-      <div className={KUS_SUBROW_GRID_CLASS}>
+      <div className={KUS_SUBROW_GRID_CLASS} style={spravaTableGridStyle}>
         <div className="sticky left-0 z-10 flex min-h-8 min-w-0 flex-col gap-0.5 bg-slate-950/95 pr-1 pt-0.5">
           <div className="flex min-h-8 min-w-0 items-center gap-1.5">
             <span className="inline-block h-8 w-8 shrink-0" aria-hidden />

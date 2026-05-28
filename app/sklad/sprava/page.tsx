@@ -8,7 +8,6 @@ import { SkladStats } from "./components/SkladStats";
 import { AddItemModal } from "./components/AddItemModal";
 import { SkladTable } from "./components/SkladTable";
 import { SkladTableRow } from "./components/SkladTableRow";
-import { SPRAVA_TABLE_GRID } from "./components/spravaTableLayout";
 import {
   SKLAD_DEFAULT_JEDNOTKA,
   SKLAD_REALTIME_CHANNEL,
@@ -1354,7 +1353,7 @@ export default function Page() {
         onQuickCreatePodkategorie={handleQuickCreatePodkategorie}
         />
 
-        <SkladTable loading={loading} tableGrid={SPRAVA_TABLE_GRID}>
+        <SkladTable loading={loading}>
           {!loading && filteredItems.length === 0 ? (
             <div className="border-t border-slate-800 px-4 py-10 text-center text-sm text-slate-400">
               Žádná položka nevyhovuje zadaným filtrům.

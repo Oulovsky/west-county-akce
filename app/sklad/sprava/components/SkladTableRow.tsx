@@ -16,8 +16,11 @@ import { toNumber } from "./toNumber";
 import { SelectWithQuickCreate } from "./SelectWithQuickCreate";
 import { SpravaKusyExpandPanel } from "./SpravaKusyExpandPanel";
 import {
-  SPRAVA_TABLE_GRID,
+  SPRAVA_TABLE_CELL,
+  SPRAVA_TABLE_CELL_CENTER,
+  SPRAVA_TABLE_CELL_STICKY,
   SPRAVA_TABLE_ROW_CLASS,
+  spravaTableGridStyle,
 } from "./spravaTableLayout";
 import {
   SKLAD_SPRAVA_HINT_FYZICKY_NA_ZAKAZKACH,
@@ -156,8 +159,6 @@ export function SkladTableRow({
   }, [isEditing]);
 
   const rowClass = [
-    "grid",
-    SPRAVA_TABLE_GRID,
     SPRAVA_TABLE_ROW_CLASS,
     isHighlight ? "bg-blue-950/40" : "bg-transparent",
     isSaving ? "opacity-60" : "opacity-100",
@@ -170,10 +171,10 @@ export function SkladTableRow({
         isExpanded ? "bg-slate-950/30" : "",
       ].join(" ")}
     >
-      <div className={rowClass}>
+      <div className={rowClass} style={spravaTableGridStyle}>
         <div
           onClick={() => !isEditing && beginEdit("nazev")}
-          className="sticky left-0 z-10 flex min-h-8 min-w-0 items-center gap-1.5 bg-inherit pr-1"
+          className={SPRAVA_TABLE_CELL_STICKY}
           style={{ cursor: isEditing ? "default" : "pointer" }}
         >
           <button
@@ -215,7 +216,7 @@ export function SkladTableRow({
           )}
         </div>
 
-        <div className="flex min-h-8 min-w-0 items-center px-1">
+        <div className={SPRAVA_TABLE_CELL}>
           <SelectWithQuickCreate
             variant="table"
             value={item.sklad_blok_id ?? ""}
@@ -233,7 +234,7 @@ export function SkladTableRow({
           />
         </div>
 
-        <div className="flex min-h-8 min-w-0 items-center px-1">
+        <div className={SPRAVA_TABLE_CELL}>
           <SelectWithQuickCreate
             variant="table"
             value={item.kategorie_techniky_id ?? ""}
@@ -255,7 +256,7 @@ export function SkladTableRow({
           />
         </div>
 
-        <div className="flex min-h-8 min-w-0 items-center px-1">
+        <div className={SPRAVA_TABLE_CELL}>
           <SelectWithQuickCreate
             variant="table"
             value={item.podkategorie_techniky_id ?? ""}
@@ -281,7 +282,7 @@ export function SkladTableRow({
           />
         </div>
 
-        <div className="flex min-h-8 min-w-0 items-center px-1">
+        <div className={SPRAVA_TABLE_CELL}>
           <select
             value={item.technicky_vlastnik_id ?? ""}
             disabled={isSaving}
@@ -321,7 +322,7 @@ export function SkladTableRow({
 
         <div
           onClick={() => !isEditing && beginEdit("pozice")}
-          className="flex min-h-8 items-center justify-center px-1 text-center"
+          className={SPRAVA_TABLE_CELL_CENTER}
           style={{ cursor: "pointer" }}
         >
           {isEditing ? (
@@ -348,7 +349,7 @@ export function SkladTableRow({
 
         <div
           onClick={() => !isEditing && beginEdit("kusy")}
-          className="flex min-h-8 items-center justify-center px-1 text-center"
+          className={SPRAVA_TABLE_CELL_CENTER}
           style={{ cursor: "pointer" }}
         >
           {isEditing ? (
@@ -372,14 +373,14 @@ export function SkladTableRow({
           )}
         </div>
 
-        <div className="flex min-h-8 items-center justify-center px-1 text-center">
+        <div className={SPRAVA_TABLE_CELL_CENTER}>
           <span style={tableValueBoxRight}>
             {formatNumber(item.na_sklade)}
           </span>
         </div>
 
         <div
-          className="flex min-h-8 min-w-0 items-center justify-center px-0.5 text-center"
+          className={SPRAVA_TABLE_CELL_CENTER}
           title={SKLAD_SPRAVA_HINT_NA_ZAKAZKACH}
         >
           <span
@@ -395,7 +396,7 @@ export function SkladTableRow({
         </div>
 
         <div
-          className="flex min-h-8 min-w-0 items-center justify-center px-0.5 text-center"
+          className={SPRAVA_TABLE_CELL_CENTER}
           title={SKLAD_SPRAVA_HINT_FYZICKY_NA_ZAKAZKACH}
         >
           <span style={tableValueBoxRight}>
@@ -403,7 +404,7 @@ export function SkladTableRow({
           </span>
         </div>
 
-        <div className="flex min-h-8 min-w-0 items-center justify-center px-0.5 text-center">
+        <div className={SPRAVA_TABLE_CELL_CENTER}>
           {toNumber(item.poskozene) > 0 ? (
             <Link
               href={`/sklad/${item.skladova_polozka_id}`}
@@ -421,7 +422,7 @@ export function SkladTableRow({
         <div
           ref={jednotkaCellRef}
           onClick={() => !isEditing && beginEdit("jednotka")}
-          className="flex min-h-8 w-full min-w-0 items-center justify-center px-1"
+          className={SPRAVA_TABLE_CELL_CENTER}
           style={{ cursor: "pointer" }}
         >
           {isEditing ? (
@@ -451,7 +452,7 @@ export function SkladTableRow({
 
         <div
           onClick={() => !isEditing && beginEdit("naklad")}
-          className="flex min-h-8 items-center justify-center px-1 text-center"
+          className={SPRAVA_TABLE_CELL_CENTER}
           style={{ cursor: "pointer" }}
         >
           {isEditing ? (
@@ -475,7 +476,7 @@ export function SkladTableRow({
           )}
         </div>
 
-        <div className="flex min-h-8 items-center justify-center px-1">
+        <div className={SPRAVA_TABLE_CELL_CENTER}>
           <Link
             href={`/sklad/${item.skladova_polozka_id}`}
             className="inline-flex h-8 max-h-8 w-full min-w-0 items-center justify-center rounded-md border border-amber-700 bg-amber-800 px-2 py-0 text-xs font-semibold leading-none text-white outline-none transition hover:bg-amber-700 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-500/70"
