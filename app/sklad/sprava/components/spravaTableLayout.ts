@@ -35,7 +35,7 @@ export const SPRAVA_TABLE_ROW_CLASS =
   "grid border-t border-slate-800 py-1.5 text-[13px] transition items-center";
 
 export const SPRAVA_TABLE_HEADER_CLASS =
-  "grid border-b border-slate-700 bg-slate-900/95 py-1.5 text-[10px] font-semibold uppercase tracking-tight text-slate-300 items-center min-h-[2.75rem]";
+  "grid border-b border-slate-700 bg-slate-900/95 py-1 text-[9px] font-semibold uppercase tracking-normal text-slate-300 items-center min-h-[2.5rem]";
 
 export const SPRAVA_TABLE_CHEVRON_SPACER = "h-8 w-8 shrink-0";
 
@@ -49,7 +49,13 @@ export const SPRAVA_TABLE_CELL_STICKY =
   "sticky left-0 z-10 flex min-h-8 min-w-0 items-center gap-1.5 bg-inherit px-1";
 
 export const SPRAVA_TABLE_HEADER_CELL =
-  "flex min-h-8 min-w-0 items-center justify-center px-1 text-center leading-[1.2] whitespace-normal";
+  "flex min-h-8 min-w-0 items-center justify-center overflow-hidden px-0.5 text-center leading-tight";
+
+export const SPRAVA_TABLE_HEADER_CELL_SHORT =
+  "flex min-h-8 min-w-0 items-center justify-center overflow-hidden px-0.5 text-center leading-tight whitespace-nowrap";
+
+export const SPRAVA_TABLE_HEADER_CELL_MULTILINE =
+  "flex min-h-8 min-w-0 flex-col items-center justify-center gap-0 overflow-hidden px-0.5 text-center leading-none";
 
 export const SPRAVA_TABLE_HEADER_CELL_STICKY =
-  "sticky left-0 z-20 flex min-h-8 min-w-0 items-center gap-1.5 bg-slate-900/95 px-1 leading-[1.2] whitespace-normal";
+  "sticky left-0 z-20 flex min-h-8 min-w-0 items-center gap-1.5 overflow-hidden bg-slate-900/95 px-0.5 leading-tight whitespace-nowrap";

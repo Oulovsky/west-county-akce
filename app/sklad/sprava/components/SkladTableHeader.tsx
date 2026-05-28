@@ -5,6 +5,8 @@
 import {
   SPRAVA_TABLE_CHEVRON_SPACER,
   SPRAVA_TABLE_HEADER_CELL,
+  SPRAVA_TABLE_HEADER_CELL_MULTILINE,
+  SPRAVA_TABLE_HEADER_CELL_SHORT,
   SPRAVA_TABLE_HEADER_CELL_STICKY,
   SPRAVA_TABLE_HEADER_CLASS,
   spravaTableGridStyle,
@@ -33,24 +35,27 @@ export function SkladTableHeader() {
       <div className={SPRAVA_TABLE_HEADER_CELL}>Kategorie</div>
       <div className={SPRAVA_TABLE_HEADER_CELL}>Podkategorie</div>
       <div className={SPRAVA_TABLE_HEADER_CELL}>Vlastník</div>
-      <div className={SPRAVA_TABLE_HEADER_CELL}>Pozice</div>
-      <div className={SPRAVA_TABLE_HEADER_CELL}>Celkem</div>
-      <div className={SPRAVA_TABLE_HEADER_CELL}>Skladem</div>
-      <div className={SPRAVA_TABLE_HEADER_CELL} title={SKLAD_SPRAVA_HINT_NA_ZAKAZKACH}>
+      <div className={SPRAVA_TABLE_HEADER_CELL_SHORT}>Pozice</div>
+      <div className={SPRAVA_TABLE_HEADER_CELL_SHORT}>Celkem</div>
+      <div className={SPRAVA_TABLE_HEADER_CELL_SHORT}>Skladem</div>
+      <div
+        className={SPRAVA_TABLE_HEADER_CELL_MULTILINE}
+        title={SKLAD_SPRAVA_HINT_NA_ZAKAZKACH}
+      >
         <HeaderLines lines={["Plánováno", "na zakázkách"]} />
       </div>
       <div
-        className={SPRAVA_TABLE_HEADER_CELL}
+        className={SPRAVA_TABLE_HEADER_CELL_MULTILINE}
         title={SKLAD_SPRAVA_HINT_FYZICKY_NA_ZAKAZKACH}
       >
         <HeaderLines lines={["Fyzicky", "na zakázkách"]} />
       </div>
-      <div className={SPRAVA_TABLE_HEADER_CELL}>Poškozené</div>
-      <div className={SPRAVA_TABLE_HEADER_CELL}>Jednotka</div>
-      <div className={SPRAVA_TABLE_HEADER_CELL}>
-        <HeaderLines lines={["Cena", "pro akce"]} />
+      <div className={SPRAVA_TABLE_HEADER_CELL_SHORT}>Poškozené</div>
+      <div className={SPRAVA_TABLE_HEADER_CELL_SHORT}>Jednotka</div>
+      <div className={SPRAVA_TABLE_HEADER_CELL_MULTILINE}>
+        <HeaderLines lines={["Cena", "akce"]} />
       </div>
-      <div className={SPRAVA_TABLE_HEADER_CELL}>Detail</div>
+      <div className={SPRAVA_TABLE_HEADER_CELL_SHORT}>Detail</div>
     </section>
   );
 }
