@@ -207,7 +207,7 @@ export function SkladTableRow({
             />
           ) : (
             <div
-              className="flex min-h-8 min-w-0 flex-1 items-center truncate text-sm font-medium leading-normal text-white"
+              className="flex min-h-8 min-w-0 flex-1 items-center truncate text-[13px] font-medium leading-normal text-white"
               title={item.nazev}
             >
               {item.nazev}
@@ -290,7 +290,7 @@ export function SkladTableRow({
               if (value) onUpdateVlastnik(value);
             }}
             style={tableSelectStyle}
-            className="min-w-0 max-w-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
+            className="min-w-0 max-w-full truncate text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
             title="Vlastník techniky"
           >
             {(item.technicky_vlastnik_id &&
@@ -379,7 +379,7 @@ export function SkladTableRow({
         </div>
 
         <div
-          className="flex min-h-8 items-center justify-center px-1 text-center"
+          className="flex min-h-8 min-w-0 items-center justify-center px-0.5 text-center"
           title={SKLAD_SPRAVA_HINT_NA_ZAKAZKACH}
         >
           <span
@@ -395,7 +395,7 @@ export function SkladTableRow({
         </div>
 
         <div
-          className="flex min-h-8 items-center justify-center px-1 text-center"
+          className="flex min-h-8 min-w-0 items-center justify-center px-0.5 text-center"
           title={SKLAD_SPRAVA_HINT_FYZICKY_NA_ZAKAZKACH}
         >
           <span style={tableValueBoxRight}>
@@ -403,7 +403,7 @@ export function SkladTableRow({
           </span>
         </div>
 
-        <div className="flex min-h-8 items-center justify-center px-1 text-center">
+        <div className="flex min-h-8 min-w-0 items-center justify-center px-0.5 text-center">
           {toNumber(item.poskozene) > 0 ? (
             <Link
               href={`/sklad/${item.skladova_polozka_id}`}
