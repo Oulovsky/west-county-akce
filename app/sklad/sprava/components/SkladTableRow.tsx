@@ -44,8 +44,6 @@ import {
   tableValueBoxRight,
 } from "./styles";
 
-type QuickCreateHandler = (name: string) => Promise<{ error?: string } | void>;
-
 /** Které pole zaměřit po přepnutí řádku do režimu úprav (stejné kliknutí). */
 type EditFocusTarget = "nazev" | "pozice" | "kusy" | "naklad" | "jednotka";
 
@@ -80,9 +78,6 @@ type Props = {
   /** Called after jednotka select change — persists immediately (správa table). */
   onCommitJednotka?: (value: string) => void;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
-  onQuickCreateBlok: QuickCreateHandler;
-  onQuickCreateKategorie: QuickCreateHandler;
-  onQuickCreatePodkategorie: QuickCreateHandler;
 };
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
@@ -119,9 +114,6 @@ export function SkladTableRow({
   onDraftChange,
   onCommitJednotka,
   onKeyDown,
-  onQuickCreateBlok,
-  onQuickCreateKategorie,
-  onQuickCreatePodkategorie,
 }: Props) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -219,6 +211,7 @@ export function SkladTableRow({
         <div className={SPRAVA_TABLE_CELL}>
           <SelectWithQuickCreate
             variant="table"
+            showQuickCreate={false}
             value={item.sklad_blok_id ?? ""}
             disabled={isSaving}
             onChange={(value) => onUpdateZaklad(null, null, value || null)}
@@ -228,15 +221,13 @@ export function SkladTableRow({
               value: b.sklad_blok_id,
               label: b.nazev,
             }))}
-            quickCreateTitle="Nový okruh"
-            quickCreatePlaceholder="Název okruhu"
-            onQuickCreate={onQuickCreateBlok}
           />
         </div>
 
         <div className={SPRAVA_TABLE_CELL}>
           <SelectWithQuickCreate
             variant="table"
+            showQuickCreate={false}
             value={item.kategorie_techniky_id ?? ""}
             disabled={isSaving || !item.sklad_blok_id}
             onChange={(value) =>
@@ -248,17 +239,13 @@ export function SkladTableRow({
               value: k.kategorie_techniky_id,
               label: k.nazev,
             }))}
-            quickCreateTitle="Nová kategorie"
-            quickCreatePlaceholder="Název kategorie"
-            quickCreateDisabled={!item.sklad_blok_id}
-            quickCreateDisabledTitle="Nejdřív přiřaď okruh"
-            onQuickCreate={onQuickCreateKategorie}
           />
         </div>
 
         <div className={SPRAVA_TABLE_CELL}>
           <SelectWithQuickCreate
             variant="table"
+            showQuickCreate={false}
             value={item.podkategorie_techniky_id ?? ""}
             disabled={isSaving || !item.kategorie_techniky_id}
             onChange={(value) =>
@@ -274,11 +261,6 @@ export function SkladTableRow({
               value: p.podkategorie_techniky_id,
               label: p.nazev,
             }))}
-            quickCreateTitle="Nová podkategorie"
-            quickCreatePlaceholder="Název podkategorie"
-            quickCreateDisabled={!item.kategorie_techniky_id}
-            quickCreateDisabledTitle="Nejdřív vyber kategorii"
-            onQuickCreate={onQuickCreatePodkategorie}
           />
         </div>
 

@@ -3,9 +3,9 @@ import type { CSSProperties } from "react";
 /** Pevné šířky sloupců — stejné pro hlavičku i každý řádek (fr rozjíždí samostatné gridy). */
 export const SPRAVA_TABLE_COLUMN_WIDTHS = [
   240, // Název (+ chevron)
-  152, // Okruh
-  152, // Kategorie
-  160, // Podkategorie
+  124, // Okruh
+  124, // Kategorie
+  132, // Podkategorie
   96, // Vlastník
   60, // Pozice
   60, // Celkem
