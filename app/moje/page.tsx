@@ -32,7 +32,6 @@ import {
   getTravelRowAmount,
   getTravelStatusBadgeVariant,
   normalizeTravelStatus,
-  type TravelReimbursementStatus,
 } from "@/lib/transport";
 import {
   getNotificationPriorityClass,
@@ -131,12 +130,6 @@ type TravelPaymentRow = {
 
 function getTravelZakazkaTitle(row: TravelPaymentRow) {
   return [row.zakazky?.cislo_zakazky, row.zakazky?.nazev].filter(Boolean).join(" · ") || "Zakázka";
-}
-
-function sumTravelAmount(rows: TravelPaymentRow[], status: TravelReimbursementStatus) {
-  return rows
-    .filter((row) => normalizeTravelStatus(row.status) === status)
-    .reduce((sum, row) => sum + getTravelRowAmount(row), 0);
 }
 
 type MyNotificationRow = {
@@ -544,17 +537,14 @@ function WorkPaymentsOverview({
   const paidTotal = workSummaries
     .filter((summary) => summary.status === "paid")
     .reduce((sum, summary) => sum + summary.finalAmountCzk, 0);
-  const travelPendingApprovalTotal = sumTravelAmount(travelRows, "ceka_na_schvaleni");
-  const travelApprovedTotal = sumTravelAmount(travelRows, "schvaleno");
-  const travelPaidTotal = sumTravelAmount(travelRows, "proplaceno");
-
   return (
     <Card className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl font-black text-white">Moje proplacení</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Souhrn práce a cestovních náhrad — stavy schválení, korekce šéfem u práce a částky k proplacení.
+            Finální částky k vyplacení podle zakázek. Rozpad práce, cestovních náhrad a korekcí
+            je u jednotlivých zakázek níže.
           </p>
         </div>
         <Badge variant="default">
@@ -562,37 +552,14 @@ function WorkPaymentsOverview({
         </Badge>
       </div>
 
-      <div className="space-y-3">
-        <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Práce</div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-            <div className="text-xs uppercase tracking-wide text-amber-200/80">Čeká na proplacení</div>
-            <div className="mt-1 text-2xl font-black text-amber-100">{formatMoneyCzk(waitingTotal)}</div>
-          </div>
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
-            <div className="text-xs uppercase tracking-wide text-emerald-200/80">Proplaceno</div>
-            <div className="mt-1 text-2xl font-black text-emerald-100">{formatMoneyCzk(paidTotal)}</div>
-          </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-amber-200/80">Čeká na proplacení</div>
+          <div className="mt-1 text-2xl font-black text-amber-100">{formatMoneyCzk(waitingTotal)}</div>
         </div>
-      </div>
-
-      <div className="space-y-3">
-        <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Cestovní náhrady</div>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border border-slate-600/40 bg-slate-900/60 px-4 py-3">
-            <div className="text-xs uppercase tracking-wide text-slate-300">Čeká na schválení</div>
-            <div className="mt-1 text-2xl font-black text-slate-100">
-              {formatMoneyCzk(travelPendingApprovalTotal)}
-            </div>
-          </div>
-          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-            <div className="text-xs uppercase tracking-wide text-amber-200/80">Schváleno k proplacení</div>
-            <div className="mt-1 text-2xl font-black text-amber-100">{formatMoneyCzk(travelApprovedTotal)}</div>
-          </div>
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
-            <div className="text-xs uppercase tracking-wide text-emerald-200/80">Proplaceno</div>
-            <div className="mt-1 text-2xl font-black text-emerald-100">{formatMoneyCzk(travelPaidTotal)}</div>
-          </div>
+        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-emerald-200/80">Proplaceno</div>
+          <div className="mt-1 text-2xl font-black text-emerald-100">{formatMoneyCzk(paidTotal)}</div>
         </div>
       </div>
 
