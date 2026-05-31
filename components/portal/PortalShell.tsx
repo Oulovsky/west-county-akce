@@ -50,7 +50,7 @@ export function PortalShell({
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
+      <main className="relative z-10 mx-auto w-full max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
         {children}
       </main>
     </div>

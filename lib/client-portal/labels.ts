@@ -10,6 +10,17 @@ export const SETUP_OBLAST_LABELS: Record<SetupOblast, string> = {
   other: "Ostatní",
 };
 
+export const TYP_AKCE_LABELS: Record<string, string> = {
+  koncert: "Koncert",
+  festival: "Festival",
+  firemni_akce: "Firemní akce",
+  svatba: "Svatba",
+  galavecer: "Galavečer",
+  sport: "Sportovní akce",
+  konference: "Konference",
+  jine: "Jiné",
+};
+
 export const POPTAVKA_STAV_LABELS: Record<PoptavkaStav, string> = {
   koncept: "Koncept",
   odeslana: "Odeslána",

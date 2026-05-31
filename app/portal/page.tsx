@@ -138,14 +138,17 @@ export default async function PortalPage({
 
         <div className="mt-6 grid gap-3">
           <Link
+            href="/portal/poptavky"
+            className="rounded-xl border border-amber-500/40 bg-amber-500/15 px-4 py-3 text-sm font-semibold text-amber-50 transition hover:border-amber-500/60 hover:bg-amber-500/25"
+          >
+            Moje poptávky
+          </Link>
+          <Link
             href="/portal/profil"
             className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-amber-500/30 hover:bg-white/[0.05]"
           >
             Profil a kontakt
           </Link>
-          <div className="rounded-xl border border-dashed border-white/10 px-4 py-3 text-sm text-slate-500">
-            Zadání poptávky — připravujeme v další fázi
-          </div>
         </div>
 
         <form action={portalSignOutAction} className="mt-6">
