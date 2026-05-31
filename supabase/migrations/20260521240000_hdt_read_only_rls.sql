@@ -592,27 +592,27 @@ begin
   ]
   loop
     if to_regclass(format('public.%I', t)) is not null then
-      execute format('drop policy if exists %L on public.%I', 'Interni ctou ' || t, t);
-      execute format('drop policy if exists %L on public.%I', 'Operational zapisuji ' || t, t);
-      execute format('drop policy if exists %L on public.%I', 'Operational upravuji ' || t, t);
-      execute format('drop policy if exists %L on public.%I', 'Operational mazaji ' || t, t);
+      execute format('drop policy if exists %I on public.%I', 'Interni ctou ' || t, t);
+      execute format('drop policy if exists %I on public.%I', 'Operational zapisuji ' || t, t);
+      execute format('drop policy if exists %I on public.%I', 'Operational upravuji ' || t, t);
+      execute format('drop policy if exists %I on public.%I', 'Operational mazaji ' || t, t);
       execute format(
-        'create policy %L on public.%I for select to authenticated using (public.is_active_internal_reader())',
+        'create policy %I on public.%I for select to authenticated using (public.is_active_internal_reader())',
         'Interni ctou ' || t,
         t
       );
       execute format(
-        'create policy %L on public.%I for insert to authenticated with check (public.is_operational_write_user())',
+        'create policy %I on public.%I for insert to authenticated with check (public.is_operational_write_user())',
         'Operational zapisuji ' || t,
         t
       );
       execute format(
-        'create policy %L on public.%I for update to authenticated using (public.is_operational_write_user()) with check (public.is_operational_write_user())',
+        'create policy %I on public.%I for update to authenticated using (public.is_operational_write_user()) with check (public.is_operational_write_user())',
         'Operational upravuji ' || t,
         t
       );
       execute format(
-        'create policy %L on public.%I for delete to authenticated using (public.is_operational_write_user())',
+        'create policy %I on public.%I for delete to authenticated using (public.is_operational_write_user())',
         'Operational mazaji ' || t,
         t
       );
