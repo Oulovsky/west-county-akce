@@ -43,7 +43,7 @@ export default function HomeLandingPage() {
       />
 
       <header className="relative z-10 border-b border-white/5 bg-[#030712]/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
+        <div className="mx-auto flex max-w-6xl items-center px-4 py-4 sm:px-6">
           <Link href="/" className="flex items-center gap-3">
             <Image
               src={LOGO_SRC}
@@ -57,31 +57,27 @@ export default function HomeLandingPage() {
               WEST COUNTY
             </span>
           </Link>
-
-          <nav className="flex items-center gap-2 sm:gap-3">
-            <Link
-              href="/portal"
-              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-amber-400/40 hover:bg-amber-500/10 hover:text-white sm:px-4 sm:text-sm"
-            >
-              Zadat poptávku
-            </Link>
-            <Link
-              href="/portal"
-              className="rounded-lg border border-amber-500/50 bg-amber-500/15 px-3 py-2 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/25 sm:px-4 sm:text-sm"
-            >
-              Klientská zóna
-            </Link>
-          </nav>
         </div>
       </header>
 
       <main className="relative z-10">
         <section className="mx-auto max-w-6xl px-4 pb-10 pt-14 sm:px-6 sm:pt-20">
-          <div className="mx-auto max-w-3xl text-center">
-            <h1 className="text-4xl font-black tracking-[0.18em] text-white sm:text-5xl md:text-6xl">
-              <span className="block">WEST</span>
-              <span className="block">COUNTY</span>
-            </h1>
+          <div className="relative mx-auto max-w-3xl text-center">
+            <div className="relative flex flex-col items-center py-2">
+              <Image
+                src={LOGO_SRC}
+                alt=""
+                aria-hidden
+                width={400}
+                height={400}
+                className="pointer-events-none absolute left-1/2 top-1/2 z-0 h-[min(78vw,24rem)] w-[min(78vw,24rem)] -translate-x-1/2 -translate-y-1/2 select-none opacity-[0.06]"
+                priority
+              />
+              <h1 className="relative z-10 text-4xl font-black tracking-[0.18em] text-white sm:text-5xl md:text-6xl">
+                <span className="block">WEST</span>
+                <span className="block">COUNTY</span>
+              </h1>
+            </div>
             <p className="mt-4 text-lg font-medium tracking-wide text-slate-300 sm:text-xl">
               Technické zajištění akcí
             </p>
