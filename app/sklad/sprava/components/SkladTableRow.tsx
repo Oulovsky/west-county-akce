@@ -78,6 +78,7 @@ type Props = {
   /** Called after jednotka select change — persists immediately (správa table). */
   onCommitJednotka?: (value: string) => void;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
+  readOnly?: boolean;
 };
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
@@ -114,6 +115,7 @@ export function SkladTableRow({
   onDraftChange,
   onCommitJednotka,
   onKeyDown,
+  readOnly = false,
 }: Props) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -125,7 +127,7 @@ export function SkladTableRow({
   const jednotkaCellRef = useRef<HTMLDivElement>(null);
 
   function beginEdit(target: EditFocusTarget) {
-    if (isEditing) return;
+    if (readOnly || isEditing) return;
     pendingEditFocus.current = target;
     onStartEdit();
   }
@@ -165,9 +167,9 @@ export function SkladTableRow({
     >
       <div className={rowClass} style={spravaTableGridStyle}>
         <div
-          onClick={() => !isEditing && beginEdit("nazev")}
+          onClick={() => !readOnly && !isEditing && beginEdit("nazev")}
           className={SPRAVA_TABLE_CELL_STICKY}
-          style={{ cursor: isEditing ? "default" : "pointer" }}
+          style={{ cursor: readOnly || isEditing ? "default" : "pointer" }}
         >
           <button
             type="button"
@@ -213,7 +215,7 @@ export function SkladTableRow({
             variant="table"
             showQuickCreate={false}
             value={item.sklad_blok_id ?? ""}
-            disabled={isSaving}
+            disabled={isSaving || readOnly}
             onChange={(value) => onUpdateZaklad(null, null, value || null)}
             selectStyle={tableSelectStyle}
             placeholder="Nepřiřazeno"
@@ -267,7 +269,7 @@ export function SkladTableRow({
         <div className={SPRAVA_TABLE_CELL}>
           <select
             value={item.technicky_vlastnik_id ?? ""}
-            disabled={isSaving}
+            disabled={isSaving || readOnly}
             onChange={(e) => {
               const value = e.target.value;
               if (value) onUpdateVlastnik(value);

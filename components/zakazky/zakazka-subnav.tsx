@@ -12,10 +12,14 @@ export function ZakazkaSubnav({
   zakazkaId,
   active,
   showBackLink = false,
+  showNakladka = true,
+  showPeople = true,
 }: {
   zakazkaId: string;
   active: ZakazkaSubnavTab;
   showBackLink?: boolean;
+  showNakladka?: boolean;
+  showPeople?: boolean;
 }) {
   const items: Array<{
     key: ZakazkaSubnavTab;
@@ -32,21 +36,29 @@ export function ZakazkaSubnav({
       label: "Technika",
       href: `/zakazky/${zakazkaId}/technika`,
     },
-    {
-      key: "nakladka",
-      label: "Nakládka",
-      href: `/zakazky/${zakazkaId}/scan`,
-    },
+    ...(showNakladka
+      ? [
+          {
+            key: "nakladka" as const,
+            label: "Nakládka",
+            href: `/zakazky/${zakazkaId}/scan`,
+          },
+        ]
+      : []),
     {
       key: "historie",
       label: "Historie",
       href: `/zakazky/${zakazkaId}/historie`,
     },
-    {
-      key: "people",
-      label: "Lidé",
-      href: `/zakazky/${zakazkaId}/people`,
-    },
+    ...(showPeople
+      ? [
+          {
+            key: "people" as const,
+            label: "Lidé",
+            href: `/zakazky/${zakazkaId}/people`,
+          },
+        ]
+      : []),
   ];
 
   return (

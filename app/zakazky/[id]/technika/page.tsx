@@ -1,6 +1,7 @@
 import { revalidatePath, unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getRolePermissions } from "@/lib/roles";
+import { assertInternalWriteAccess } from "@/lib/auth/internal-role-access-server";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { markZakazkaCriticalChangeIfApproved } from "@/lib/zakazka-critical-changes";
 import { getTechnikaAvailability } from "@/lib/technika-availability";
@@ -326,6 +327,7 @@ export default async function TechnikaZakazkyPage({ params }: PageProps) {
     if (!canEdit) return;
 
     const supabase = await createClient();
+    await assertInternalWriteAccess(supabase);
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -407,6 +409,7 @@ export default async function TechnikaZakazkyPage({ params }: PageProps) {
     if (!canEdit) return;
 
     const supabase = await createClient();
+    await assertInternalWriteAccess(supabase);
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -489,7 +492,12 @@ export default async function TechnikaZakazkyPage({ params }: PageProps) {
             </div>
           </div>
 
-          <ZakazkaSubnav zakazkaId={id} active="technika" />
+          <ZakazkaSubnav
+            zakazkaId={id}
+            active="technika"
+            showNakladka={perms.nakladkaCteni}
+            showPeople={perms.zakazkyEditace}
+          />
         </div>
       </Card>
 

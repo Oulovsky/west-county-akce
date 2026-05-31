@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { assertInternalWriteAccess } from "@/lib/auth/internal-role-access-server";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { DEFAULT_KM_RATE, getTransportTypeLabel, normalizeTransportType } from "@/lib/transport";
 import { createNotificationsForRoles } from "@/lib/notifications";
@@ -51,6 +52,7 @@ function overlaps(from?: string | null, to?: string | null, otherFrom?: string |
 
 async function getCurrentUser() {
   const supabase = await createClient();
+  await assertInternalWriteAccess(supabase);
   const {
     data: { user },
     error,

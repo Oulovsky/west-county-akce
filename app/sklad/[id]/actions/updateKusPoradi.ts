@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { assertInternalWriteAccess } from "@/lib/auth/internal-role-access-server";
 import {
   formatSkladKusDuplicatePoradiMessage,
   isKusEvidencniAutoForPoradi,
@@ -17,6 +18,7 @@ export async function updateKusPoradiAction(
   formData: FormData
 ): Promise<UpdateKusPoradiResult> {
   const supabase = await createClient();
+  await assertInternalWriteAccess(supabase);
   const skladovaPolozkaId = String(formData.get("skladova_polozka_id") || "");
   const kusId = String(formData.get("kus_id") || "");
   const raw = String(formData.get("poradove_cislo") ?? "").trim();

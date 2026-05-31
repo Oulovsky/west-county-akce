@@ -361,7 +361,12 @@ export default async function HistorieZakazkyPage({ params }: PageProps) {
             </div>
           </div>
 
-          <ZakazkaSubnav zakazkaId={id} active="historie" />
+          <ZakazkaSubnav
+            zakazkaId={id}
+            active="historie"
+            showNakladka={getRolePermissions(role).nakladkaCteni}
+            showPeople={getRolePermissions(role).zakazkyEditace}
+          />
         </div>
       </Card>
 

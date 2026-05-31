@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { resolveAppAdminAccess } from "@/lib/auth/admin-access";
+import { useProfileRole } from "@/lib/auth/use-profile-role";
 import { subscribeNotificationsUnreadChanged } from "@/lib/notifications/unread-count-sync";
 import { supabase } from "@/lib/supabase";
 
@@ -51,6 +52,7 @@ export default function SidebarNav() {
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(0);
   const [showAdmin, setShowAdmin] = useState(false);
+  const { nav } = useProfileRole();
 
   useEffect(() => {
     let active = true;
@@ -104,33 +106,47 @@ export default function SidebarNav() {
 
   return (
     <nav className="flex items-center gap-2">
-      <NavLink href="/moje" exact>
-        Moje
-      </NavLink>
+      {nav.showMoje ? (
+        <NavLink href="/moje" exact>
+          Moje
+        </NavLink>
+      ) : null}
 
-      <NavLink href="/dashboard" exact>
-        Dashboard
-      </NavLink>
+      {nav.showDashboard ? (
+        <NavLink href="/dashboard" exact>
+          Dashboard
+        </NavLink>
+      ) : null}
 
-      <NavLink href="/kalendar" exact>
-        Kalendář
-      </NavLink>
+      {nav.showKalendar ? (
+        <NavLink href="/kalendar" exact>
+          Kalendář
+        </NavLink>
+      ) : null}
 
-      <NavLink href="/zakazky" exact>
-        Zakázky
-      </NavLink>
+      {nav.showZakazky ? (
+        <NavLink href="/zakazky" exact>
+          Zakázky
+        </NavLink>
+      ) : null}
 
-      <NavLink href="/mista">
-        Místa
-      </NavLink>
+      {nav.showMista ? (
+        <NavLink href="/mista">
+          Místa
+        </NavLink>
+      ) : null}
 
-      <NavLink href="/sklad/sprava" exact>
-        Správa skladu
-      </NavLink>
+      {nav.showSkladSprava ? (
+        <NavLink href="/sklad/sprava" exact>
+          Správa skladu
+        </NavLink>
+      ) : null}
 
-      <NavLink href="/sklad/setupy">
-        Setupy
-      </NavLink>
+      {nav.showSkladSetupy ? (
+        <NavLink href="/sklad/setupy">
+          Setupy
+        </NavLink>
+      ) : null}
 
       {showAdmin ? (
         <NavLink href="/admin" danger>
@@ -138,18 +154,20 @@ export default function SidebarNav() {
         </NavLink>
       ) : null}
 
-      <Link
-        href="/notifikace"
-        className="relative rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 transition hover:bg-blue-600/10 hover:text-blue-100"
-        title="Notifikace"
-      >
-        Upozornění
-        {unreadCount > 0 ? (
-          <span className="absolute -right-2 -top-2 min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-center text-[11px] font-black text-white">
-            {unreadCount > 99 ? "99+" : unreadCount}
-          </span>
-        ) : null}
-      </Link>
+      {nav.showNotifikace ? (
+        <Link
+          href="/notifikace"
+          className="relative rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 transition hover:bg-blue-600/10 hover:text-blue-100"
+          title="Notifikace"
+        >
+          Upozornění
+          {unreadCount > 0 ? (
+            <span className="absolute -right-2 -top-2 min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-center text-[11px] font-black text-white">
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
+          ) : null}
+        </Link>
+      ) : null}
 
       <button
         onClick={() => void handleLogout()}

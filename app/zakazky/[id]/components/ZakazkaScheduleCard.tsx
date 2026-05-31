@@ -13,6 +13,7 @@ type ZakazkaScheduleCardProps = {
     bourani_do?: string | null;
   };
   action: (formData: FormData) => Promise<void>;
+  readOnly?: boolean;
 };
 
 function toDateInput(value?: string | null) {
@@ -28,7 +29,56 @@ function toTimeInput(value?: string | null) {
 const inputClassName =
   "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-500";
 
-export function ZakazkaScheduleCard({ data, action }: ZakazkaScheduleCardProps) {
+function formatScheduleValue(value?: string | null) {
+  if (!value) return "—";
+  const date = toDateInput(value);
+  const time = toTimeInput(value);
+  if (!date) return value;
+  if (!time) return date;
+  return `${date} ${time}`;
+}
+
+export function ZakazkaScheduleCard({ data, action, readOnly = false }: ZakazkaScheduleCardProps) {
+  if (readOnly) {
+    return (
+      <Card className="mt-6">
+        <div className="space-y-6">
+          <div>
+            <div className="text-lg font-semibold text-white">Termíny zakázky</div>
+            <div className="mt-1 text-sm text-slate-400">Pouze pro čtení.</div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Odjezd ze skladu">
+              <div className="mt-2 text-slate-300">{formatScheduleValue(data.odjezd_ze_skladu)}</div>
+            </Field>
+            <Field label="Sraz na místě">
+              <div className="mt-2 text-slate-300">{formatScheduleValue(data.sraz_na_miste)}</div>
+            </Field>
+            <Field label="Stavba od">
+              <div className="mt-2 text-slate-300">{formatScheduleValue(data.stavba_od)}</div>
+            </Field>
+            <Field label="Stavba do">
+              <div className="mt-2 text-slate-300">{formatScheduleValue(data.stavba_do)}</div>
+            </Field>
+            <Field label="Akce od">
+              <div className="mt-2 text-slate-300">{formatScheduleValue(data.akce_od)}</div>
+            </Field>
+            <Field label="Akce do">
+              <div className="mt-2 text-slate-300">{formatScheduleValue(data.akce_do)}</div>
+            </Field>
+            <Field label="Bourání od">
+              <div className="mt-2 text-slate-300">{formatScheduleValue(data.bourani_od)}</div>
+            </Field>
+            <Field label="Bourání do">
+              <div className="mt-2 text-slate-300">{formatScheduleValue(data.bourani_do)}</div>
+            </Field>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
   return (
     <Card className="mt-6">
       <div className="space-y-6">

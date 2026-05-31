@@ -26,6 +26,7 @@ type ZakazkaHeaderCardProps = {
   };
   hasInvoice?: boolean;
   cancelAction: (formData: FormData) => Promise<void>;
+  readOnly?: boolean;
 };
 
 export function ZakazkaHeaderCard({
@@ -33,6 +34,7 @@ export function ZakazkaHeaderCard({
   data,
   hasInvoice = false,
   cancelAction,
+  readOnly = false,
 }: ZakazkaHeaderCardProps) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const lat = String(data.misto_lat ?? "").trim();
@@ -104,37 +106,47 @@ export function ZakazkaHeaderCard({
 
         <Card className="border-red-500/20 bg-red-950/10">
           <div className="space-y-4">
-            <div className="text-base font-semibold text-white">Správa zakázky</div>
+            <div className="text-base font-semibold text-white">
+              {readOnly ? "Přehled zakázky" : "Správa zakázky"}
+            </div>
 
-            <Link
-              href={`/zakazky/${zakazkaId}/poskozeni`}
-              className="block w-full rounded-xl border border-amber-500/40 px-4 py-3 text-center font-semibold text-amber-300 transition hover:bg-amber-500/10 hover:text-amber-200"
-            >
-              Poškození na zakázce
-            </Link>
-
-            {data.zrusena ? (
-              <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-100">
-                Zakázka je zrušená.
+            {readOnly ? (
+              <div className="rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-3 text-sm text-slate-300">
+                Režim pouze pro čtení. Úpravy, zrušení a poškození nejsou k dispozici.
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => setCancelOpen(true)}
-                className="w-full rounded-xl border border-red-500/40 px-4 py-3 font-semibold text-red-300 transition hover:bg-red-500/10 hover:text-red-200"
-              >
-                Zrušit zakázku
-              </button>
-            )}
+              <>
+                <Link
+                  href={`/zakazky/${zakazkaId}/poskozeni`}
+                  className="block w-full rounded-xl border border-amber-500/40 px-4 py-3 text-center font-semibold text-amber-300 transition hover:bg-amber-500/10 hover:text-amber-200"
+                >
+                  Poškození na zakázce
+                </Link>
 
-            <div className="text-sm text-slate-400">
-              Zakázka se přesune mimo běžný seznam a odpojí se od techniky, lidí a nakládky.
-            </div>
+                {data.zrusena ? (
+                  <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-100">
+                    Zakázka je zrušená.
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setCancelOpen(true)}
+                    className="w-full rounded-xl border border-red-500/40 px-4 py-3 font-semibold text-red-300 transition hover:bg-red-500/10 hover:text-red-200"
+                  >
+                    Zrušit zakázku
+                  </button>
+                )}
+
+                <div className="text-sm text-slate-400">
+                  Zakázka se přesune mimo běžný seznam a odpojí se od techniky, lidí a nakládky.
+                </div>
+              </>
+            )}
           </div>
         </Card>
       </div>
 
-      <Modal open={cancelOpen} onClose={() => setCancelOpen(false)} title="Zrušit zakázku" widthClassName="max-w-xl">
+      <Modal open={cancelOpen && !readOnly} onClose={() => setCancelOpen(false)} title="Zrušit zakázku" widthClassName="max-w-xl">
         <form action={cancelAction} className="space-y-4">
           <input type="hidden" name="zakazka_id" value={zakazkaId} />
           <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">

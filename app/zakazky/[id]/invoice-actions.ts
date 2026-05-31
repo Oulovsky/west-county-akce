@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
+import { assertInternalWriteAccess } from "@/lib/auth/internal-role-access-server";
 import { buildCurrentInvoiceData } from "@/lib/invoice-data";
 import { renderInvoicePdf } from "@/lib/invoice-pdf";
 import { buildInvoiceRenderPath } from "@/lib/invoice-render-token";
@@ -49,6 +50,7 @@ function buildVariableSymbol(documentNumber: string) {
 export async function issueInvoiceAction(zakazkaId: string): Promise<ActionResult> {
   try {
     const supabase = await createClient();
+    await assertInternalWriteAccess(supabase);
     const user = await getUserOrThrow(supabase);
     const { data: existingInvoice, error: existingInvoiceError } = await supabase
       .from("zakazka_faktury")
@@ -171,6 +173,7 @@ export async function sendInvoiceEmailAction(
 ): Promise<ActionResult> {
   try {
     const supabase = await createClient();
+    await assertInternalWriteAccess(supabase);
     const user = await getUserOrThrow(supabase);
     const resendApiKey = process.env.RESEND_API_KEY?.trim();
     if (!resendApiKey) return { ok: false, error: "Chybí RESEND_API_KEY." };
@@ -282,6 +285,7 @@ export async function markInvoicePaidAction(
 ): Promise<ActionResult> {
   try {
     const supabase = await createClient();
+    await assertInternalWriteAccess(supabase);
     const user = await getUserOrThrow(supabase);
     const { data: invoiceRaw, error: invoiceError } = await supabase
       .from("zakazka_faktury")
@@ -338,6 +342,7 @@ export async function cancelInvoiceAction(
     if (!trimmedReason) return { ok: false, error: "Storno faktury vyžaduje důvod." };
 
     const supabase = await createClient();
+    await assertInternalWriteAccess(supabase);
     const user = await getUserOrThrow(supabase);
     const { data: invoiceRaw, error: invoiceError } = await supabase
       .from("zakazka_faktury")
@@ -397,6 +402,7 @@ export async function cancelInvoiceAction(
 export async function archiveZakazkaAction(zakazkaId: string): Promise<ActionResult> {
   try {
     const supabase = await createClient();
+    await assertInternalWriteAccess(supabase);
     const user = await getUserOrThrow(supabase);
     const result = await setZakazkaWorkflowStatus(supabase, {
       zakazkaId,

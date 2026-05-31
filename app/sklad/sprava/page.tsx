@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useProfileRole } from "@/lib/auth/use-profile-role";
 import { SpravaInventoryFilters } from "./components/SpravaInventoryFilters";
 import { supabase } from "@/lib/supabase";
 import { SkladToolbar } from "./components/SkladToolbar";
@@ -60,6 +61,8 @@ type RpcErrorResult = {
 };
 
 export default function Page() {
+  const { nav } = useProfileRole();
+  const readOnly = nav.readOnly;
   const [items, setItems] = useState<SkladPolozkaRow[]>([]);
   const [kategorie, setKategorie] = useState<SkladKategorie[]>([]);
   const [podkategorie, setPodkategorie] = useState<SkladPodkategorie[]>([]);
@@ -1273,6 +1276,7 @@ export default function Page() {
       <SkladToolbar
         onAddClick={openAddModal}
         totalPoskozene={totalPoskozene}
+        readOnly={readOnly}
       />
 
       <section
@@ -1287,15 +1291,18 @@ export default function Page() {
             Položky skladu
           </h2>
           <p className="mt-1 text-sm text-slate-400">
-            Kompletní katalog. Editace přímo v tabulce, Enter uloží řádek, Ctrl+Z
-            vrátí poslední změnu.
+            {readOnly
+              ? "Přehled katalogu techniky. Režim pouze pro čtení."
+              : "Kompletní katalog. Editace přímo v tabulce, Enter uloží řádek, Ctrl+Z vrátí poslední změnu."}
           </p>
+          {!readOnly ? (
           <a
             href="/sklad/servis"
             className="mt-3 inline-flex rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm font-bold text-amber-100 transition hover:bg-amber-500/20"
           >
             Otevřít servis a blokace kusů
           </a>
+          ) : null}
         </div>
 
         <SkladStats
@@ -1383,7 +1390,10 @@ export default function Page() {
               vlastnici={vlastnici}
               kategorieOptions={kategorieOptions}
               podkategorieOptions={podkategorieOptions}
-              onStartEdit={() => startEdit(i)}
+              onStartEdit={() => {
+                if (readOnly) return;
+                startEdit(i);
+              }}
               onUpdateVlastnik={(vlastnikId) =>
                 updateVlastnik(i.skladova_polozka_id, vlastnikId)
               }
@@ -1401,7 +1411,11 @@ export default function Page() {
                   ? (value) => commitJednotkaChange(i.skladova_polozka_id, value)
                   : undefined
               }
-              onKeyDown={(e) => handleKeyDown(e, i.skladova_polozka_id)}
+              onKeyDown={(e) => {
+                if (readOnly) return;
+                handleKeyDown(e, i.skladova_polozka_id);
+              }}
+              readOnly={readOnly}
               />
             );
           })}

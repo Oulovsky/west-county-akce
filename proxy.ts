@@ -6,6 +6,11 @@ import {
   loadEmployeeProfile,
   OAUTH_PROFILE_GATE_COOKIE,
 } from "@/lib/auth/employee-access";
+import {
+  isPathForbiddenForReadOnlyInternalRole,
+  READ_ONLY_INTERNAL_REDIRECT,
+} from "@/lib/auth/internal-role-access";
+import { isReadOnlyInternalRole } from "@/lib/roles";
 import { getSafeNextPath } from "@/lib/auth/oauth-redirect";
 
 function isPublicPath(pathname: string) {
@@ -162,6 +167,17 @@ export async function proxy(req: NextRequest) {
       path: "/",
       maxAge: 0,
     });
+
+    if (
+      profile?.role &&
+      isReadOnlyInternalRole(profile.role) &&
+      isPathForbiddenForReadOnlyInternalRole(pathname)
+    ) {
+      const redirectUrl = req.nextUrl.clone();
+      redirectUrl.pathname = READ_ONLY_INTERNAL_REDIRECT;
+      redirectUrl.search = "";
+      return NextResponse.redirect(redirectUrl);
+    }
   }
 
   return res;

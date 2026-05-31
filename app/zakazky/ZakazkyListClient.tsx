@@ -328,9 +328,11 @@ function Sekce({
 export default function ZakazkyListClient({
   initialZakazky,
   smazatTrvaleAction,
+  canCreateZakazka = true,
 }: {
   initialZakazky: Zakazka[];
   smazatTrvaleAction: (formData: FormData) => Promise<void>;
+  canCreateZakazka?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [datumOd, setDatumOd] = useState("");
@@ -401,12 +403,14 @@ export default function ZakazkyListClient({
           title="Zakázky"
           description="Přehled aktuálních zakázek a archivu."
         />
-        <Link
-          href="/zakazky/nova"
-          className="inline-flex min-h-12 items-center justify-center rounded-xl border border-blue-500 bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500"
-        >
-          Nová zakázka
-        </Link>
+        {canCreateZakazka ? (
+          <Link
+            href="/zakazky/nova"
+            className="inline-flex min-h-12 items-center justify-center rounded-xl border border-blue-500 bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500"
+          >
+            Nová zakázka
+          </Link>
+        ) : null}
       </div>
 
       <Card className="mb-8">

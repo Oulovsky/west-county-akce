@@ -15,6 +15,7 @@ import {
 } from "@/lib/zakazka-attendance";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { createClient } from "@/lib/supabase/server";
+import { assertInternalWriteAccess } from "@/lib/auth/internal-role-access-server";
 
 type AttendanceResult =
   | { ok: true; warning?: string | null }
@@ -26,6 +27,7 @@ function gpsWarning(gps?: AttendanceGpsInput | null) {
 
 async function getCurrentUser() {
   const supabase = await createClient();
+  await assertInternalWriteAccess(supabase);
   const {
     data: { user },
     error,

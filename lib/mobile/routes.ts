@@ -45,6 +45,31 @@ export const MOBILE_NAV_ITEMS = [
   },
 ] as const;
 
+export function getMobileNavItemsForRole(role: string | null | undefined) {
+  const readOnly = role === "hdt";
+
+  if (!readOnly) {
+    return MOBILE_NAV_ITEMS;
+  }
+
+  return MOBILE_NAV_ITEMS.filter(
+    (item) => item.id === "zakazky" || item.id === "profil"
+  ).map((item) =>
+    item.id === "zakazky"
+      ? {
+          ...item,
+          href: "/zakazky",
+          match: (pathname: string) =>
+            pathname === "/zakazky" ||
+            pathname.startsWith("/zakazky/") ||
+            pathname === "/kalendar" ||
+            pathname.startsWith("/kalendar/") ||
+            pathname.startsWith("/sklad/"),
+        }
+      : item
+  );
+}
+
 const ZAKAZKA_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 

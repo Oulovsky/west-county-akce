@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { assertInternalWriteAccess } from "@/lib/auth/internal-role-access-server";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { createNotificationsForRoles, createNotificationsForUsers } from "@/lib/notifications";
 import { setZakazkaWorkflowStatus } from "@/lib/zakazka-workflow";
@@ -21,6 +22,7 @@ export async function cancelZakazkaAction(formData: FormData) {
   const invoiceOverrideReason = String(formData.get("invoice_override_reason") ?? "").trim() || null;
 
   const supabase = await createClient();
+  await assertInternalWriteAccess(supabase);
   const {
     data: { user },
     error: userError,

@@ -2,11 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { assertInternalWriteAccess } from "@/lib/auth/internal-role-access-server";
 import { markZakazkaCriticalChangeIfApproved } from "@/lib/zakazka-critical-changes";
 import { createNotificationsForRoles } from "@/lib/notifications";
 
 async function getCurrentUserId() {
   const supabase = await createClient();
+  await assertInternalWriteAccess(supabase);
   const {
     data: { user },
     error,

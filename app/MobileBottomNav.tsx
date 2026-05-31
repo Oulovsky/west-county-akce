@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useActiveZakazkaId } from "@/components/mobile/useActiveZakazkaId";
+import { useProfileRole } from "@/lib/auth/use-profile-role";
 import {
   getMobileDochazkaNavHref,
+  getMobileNavItemsForRole,
   getMobileScanNavHref,
-  MOBILE_NAV_ITEMS,
 } from "@/lib/mobile/routes";
 import { subscribeNotificationsUnreadChanged } from "@/lib/notifications/unread-count-sync";
 import { supabase } from "@/lib/supabase";
@@ -17,6 +18,8 @@ export default function MobileBottomNav() {
   const searchParams = useSearchParams();
   const activeZakazkaId = useActiveZakazkaId();
   const [unreadCount, setUnreadCount] = useState(0);
+  const { role } = useProfileRole();
+  const navItems = getMobileNavItemsForRole(role);
 
   const scanHref = getMobileScanNavHref(pathname, activeZakazkaId);
   const dochazkaHref = getMobileDochazkaNavHref(
@@ -63,8 +66,16 @@ export default function MobileBottomNav() {
       className="mobile-bottom-nav fixed inset-x-0 bottom-0 z-40 border-t border-slate-800 bg-slate-950/95 backdrop-blur-md lg:hidden"
       aria-label="Mobilní navigace"
     >
-      <div className="grid w-full max-w-full grid-cols-5 gap-1 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
-        {MOBILE_NAV_ITEMS.map((item) => {
+      <div
+        className={`grid w-full max-w-full gap-1 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 ${
+          navItems.length === 5
+            ? "grid-cols-5"
+            : navItems.length === 3
+              ? "grid-cols-3"
+              : "grid-cols-2"
+        }`}
+      >
+        {navItems.map((item) => {
           const href =
             item.id === "scan"
               ? scanHref

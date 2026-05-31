@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
+import { assertInternalWriteAccess } from "@/lib/auth/internal-role-access-server";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { setZakazkaWorkflowStatus } from "@/lib/zakazka-workflow";
 import { isApprovedOrLaterWorkflowStatus } from "@/lib/zakazka-critical-changes";
@@ -26,6 +27,12 @@ function getZakazkaId(formData: FormData) {
     throw new Error("Chybí ID zakázky.");
   }
   return zakazkaId;
+}
+
+async function requireWriteSupabase() {
+  const supabase = await createClient();
+  await assertInternalWriteAccess(supabase);
+  return supabase;
 }
 
 function toOptionalNumber(value: unknown) {
@@ -181,7 +188,7 @@ async function setClientVerificationStatus(
   zakazkaId: string,
   stav: "neni_potreba" | "overeno_interne"
 ) {
-  const supabase = await createClient();
+  const supabase = await requireWriteSupabase();
 
   const { data: currentDotaznik, error: currentError } = await supabase
     .from("zakazka_dotazniky")
@@ -239,7 +246,7 @@ export async function updateZakazkaLogisticsAction(formData: FormData) {
     throw new Error("Neplatná logistická akce.");
   }
 
-  const supabase = await createClient();
+  const supabase = await requireWriteSupabase();
   const {
     data: { user },
     error: userError,
@@ -313,7 +320,7 @@ export async function updateZakazkaLogisticsAction(formData: FormData) {
 
 export async function createPlaceFromZakazkaAction(formData: FormData) {
   const zakazkaId = getZakazkaId(formData);
-  const supabase = await createClient();
+  const supabase = await requireWriteSupabase();
 
   const {
     data: { user },
@@ -385,7 +392,7 @@ export async function linkZakazkaToExistingPlaceAction(formData: FormData) {
     return { ok: false, errorMessage: "Vyberte prosím existující místo.", mistoId: null };
   }
 
-  const supabase = await createClient();
+  const supabase = await requireWriteSupabase();
   const {
     data: { user },
     error: userError,
@@ -427,7 +434,7 @@ export async function linkZakazkaToExistingPlaceAction(formData: FormData) {
 
 export async function sendClientQuestionnaireAction(formData: FormData) {
   const zakazkaId = getZakazkaId(formData);
-  const supabase = await createClient();
+  const supabase = await requireWriteSupabase();
 
   const resendApiKey = process.env.RESEND_API_KEY?.trim();
   if (!resendApiKey) {
@@ -570,7 +577,7 @@ export async function sendClientQuestionnaireAction(formData: FormData) {
 
 export async function sendClientApprovalAction(formData: FormData) {
   const zakazkaId = getZakazkaId(formData);
-  const supabase = await createClient();
+  const supabase = await requireWriteSupabase();
 
   const resendApiKey = process.env.RESEND_API_KEY?.trim();
   if (!resendApiKey) {
@@ -720,7 +727,7 @@ export async function sendClientApprovalAction(formData: FormData) {
 
 export async function revokeClientApprovalLinkAction(formData: FormData) {
   const zakazkaId = getZakazkaId(formData);
-  const supabase = await createClient();
+  const supabase = await requireWriteSupabase();
   const now = new Date().toISOString();
 
   const { error } = await supabase

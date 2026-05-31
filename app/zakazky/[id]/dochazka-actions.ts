@@ -5,6 +5,7 @@ import { getRolePermissions } from "@/lib/roles";
 import { getAttendanceMinutes, getAttendancePhaseLabel } from "@/lib/zakazka-attendance";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { createClient } from "@/lib/supabase/server";
+import { assertInternalWriteAccess } from "@/lib/auth/internal-role-access-server";
 
 function text(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -19,6 +20,7 @@ function requireDate(value: string, label: string) {
 
 async function requireAttendanceEditor() {
   const supabase = await createClient();
+  await assertInternalWriteAccess(supabase);
   const {
     data: { user },
     error,

@@ -11,9 +11,10 @@ const panelLinkClass =
 
 type Props = {
   totalPoskozene?: number;
+  readOnly?: boolean;
 };
 
-export function SpravaSupportNav({ totalPoskozene = 0 }: Props) {
+export function SpravaSupportNav({ totalPoskozene = 0, readOnly = false }: Props) {
   return (
     <nav
       className="grid gap-3 lg:grid-cols-3"
@@ -39,15 +40,19 @@ export function SpravaSupportNav({ totalPoskozene = 0 }: Props) {
           </p>
         ) : null}
         <div className="mt-3 flex flex-col gap-2">
+          {readOnly ? null : (
           <Link href="/sklad/poskozeni" className={chipLinkClass}>
             Otevřená poškození
           </Link>
+          )}
           <Link href="/sklad/statistika" className={chipLinkClass}>
             Statistika poškození
           </Link>
         </div>
       </section>
 
+      {readOnly ? null : (
+      <>
       <section className="rounded-xl border border-slate-800/80 bg-slate-950/30 p-4">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           Konfigurace
@@ -71,6 +76,8 @@ export function SpravaSupportNav({ totalPoskozene = 0 }: Props) {
           Setupy skladu →
         </Link>
       </section>
+      </>
+      )}
     </nav>
   );
 }

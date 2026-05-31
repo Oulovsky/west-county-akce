@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { loadSessionRolePermissions } from "@/lib/auth/internal-role-access-server";
 import { markZakazkaCriticalChangeIfApproved } from "@/lib/zakazka-critical-changes";
 
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,12 @@ function toOptionalNumber(value: string) {
 
 export default async function EditZakazkyPage({ params }: PageProps) {
   const { id } = await params;
+  const serverSupabase = await createServerClient();
+  const { perms } = await loadSessionRolePermissions(serverSupabase);
+
+  if (!perms.zakazkyEditace) {
+    redirect("/zakazky");
+  }
 
   const { data, error } = await supabase
     .from("zakazky")

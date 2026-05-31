@@ -1,5 +1,6 @@
 import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { loadSessionRolePermissions } from "@/lib/auth/internal-role-access-server";
 import ZakazkyListClient, { type Zakazka } from "./ZakazkyListClient";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,7 @@ export default async function ZakazkyPage() {
   noStore();
 
   const supabase = await createClient();
+  const { perms } = await loadSessionRolePermissions(supabase);
 
   const { data, error } = await supabase
     .from("zakazky")
@@ -65,6 +67,7 @@ export default async function ZakazkyPage() {
     <ZakazkyListClient
       initialZakazky={zakazky}
       smazatTrvaleAction={smazatTrvale}
+      canCreateZakazka={perms.zakazkyEditace}
     />
   );
 }

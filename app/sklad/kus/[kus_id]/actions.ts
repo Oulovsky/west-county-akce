@@ -5,6 +5,7 @@ import { SKLAD_TABLE } from "@/lib/sklad/constants";
 import { insertSkladKusHistorie } from "@/lib/sklad/kusHistorie";
 import type { SkladKusHistorieTypAkce } from "@/lib/sklad/types";
 import { createClient } from "@/lib/supabase/server";
+import { assertInternalWriteAccess } from "@/lib/auth/internal-role-access-server";
 import { createNotificationsForRoles } from "@/lib/notifications";
 
 type ServiceAction = "damage" | "block" | "repair" | "return_service" | "checked" | "retire";
@@ -67,6 +68,7 @@ export async function updateSkladKusServiceStateAction(formData: FormData) {
   const note = optionalText(formData, "note");
   const config = getActionConfig(action);
   const supabase = await createClient();
+  await assertInternalWriteAccess(supabase);
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -165,6 +167,7 @@ export async function reportSkladKusDamageAction(formData: FormData) {
   const note = requiredText(formData, "note", "Popis poškození");
   const blocksUse = formData.get("blocks_use") === "true";
   const supabase = await createClient();
+  await assertInternalWriteAccess(supabase);
   const {
     data: { user },
   } = await supabase.auth.getUser();

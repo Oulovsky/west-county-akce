@@ -1,5 +1,6 @@
 ﻿import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { assertInternalWriteAccess, loadSessionRolePermissions } from "@/lib/auth/internal-role-access-server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   formatQuestionnaireRiskCount,
@@ -699,10 +700,12 @@ function LogisticsCard({
   zakazkaId,
   data,
   profilesById,
+  readOnly = false,
 }: {
   zakazkaId: string;
   data: LogisticsData;
   profilesById: Map<string, LogisticsProfileRow>;
+  readOnly?: boolean;
 }) {
   const status = normalizeLogisticsStatus(data.logistika_stav);
 
@@ -743,6 +746,7 @@ function LogisticsCard({
         />
       </div>
 
+      {readOnly ? null : (
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <LogisticsActionButton
           zakazkaId={zakazkaId}
@@ -769,6 +773,7 @@ function LogisticsCard({
           enabled={status === "vykladka"}
         />
       </div>
+      )}
     </Card>
   );
 }
@@ -1211,6 +1216,7 @@ function ClientTechnicalVerificationCard({
   galleryPhotos,
   message,
   hasSavedPlace,
+  readOnly = false,
 }: {
   zakazkaId: string;
   mistoId: string | null;
@@ -1221,6 +1227,7 @@ function ClientTechnicalVerificationCard({
   galleryPhotos: QuestionnairePhotoGalleryItem[];
   message: "sent" | "missing_email" | "missing_resend_key" | null;
   hasSavedPlace: boolean;
+  readOnly?: boolean;
 }) {
   const risks = normalizeQuestionnaireRiskCodes(dotaznik?.rizika);
   const decision = getExtraAnswer(dotaznik?.odpovedi_extra, "decision");
@@ -1385,6 +1392,7 @@ function ClientTechnicalVerificationCard({
         </div>
       ) : null}
 
+      {readOnly ? null : (
       <div className="flex flex-wrap gap-3">
         <form action={sendClientQuestionnaireAction}>
           <input type="hidden" name="zakazka_id" value={zakazkaId} />
@@ -1407,6 +1415,7 @@ function ClientTechnicalVerificationCard({
           </button>
         </form>
       </div>
+      )}
     </Card>
   );
 }
@@ -1417,12 +1426,14 @@ function ClientApprovalCard({
   link,
   publicLink,
   message,
+  readOnly = false,
 }: {
   zakazkaId: string;
   status?: string | null;
   link: ClientApprovalLinkRow | null;
   publicLink: string | null;
   message: "sent" | "revoked" | "missing_email" | "missing_resend_key" | null;
+  readOnly?: boolean;
 }) {
   const declined = status === "declined";
 
@@ -1500,6 +1511,7 @@ function ClientApprovalCard({
         </div>
       ) : null}
 
+      {readOnly ? null : (
       <div className="flex flex-wrap gap-3">
         <form action={sendClientApprovalAction}>
           <input type="hidden" name="zakazka_id" value={zakazkaId} />
@@ -1516,6 +1528,7 @@ function ClientApprovalCard({
           </form>
         ) : null}
       </div>
+      )}
     </Card>
   );
 }
@@ -1530,6 +1543,7 @@ function PricingRecapCard({
   fakturacniFirmy,
   selectedFakturacniFirmaId,
   action,
+  readOnly = false,
 }: {
   zakazkaId: string;
   pricing: PricingData;
@@ -1540,6 +1554,7 @@ function PricingRecapCard({
   fakturacniFirmy: FakturacniFirma[];
   selectedFakturacniFirmaId?: string | null;
   action: (formData: FormData) => Promise<void>;
+  readOnly?: boolean;
 }) {
   const techPrice = computedTechPrice;
   const staffPrice = computedStaffPrice;
@@ -1584,6 +1599,7 @@ function PricingRecapCard({
         </div>
       </div>
 
+      {readOnly ? null : (
       <form action={action} className="grid gap-4 md:grid-cols-3">
         <input type="hidden" name="zakazka_id" value={zakazkaId} />
         <input type="hidden" name="cena_techniky" value={computedTechPrice} />
@@ -1612,6 +1628,7 @@ function PricingRecapCard({
           </button>
         </div>
       </form>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <PricingInvoicePreview
@@ -1720,9 +1737,11 @@ function WorkflowCard({
 function WorkflowChangePendingWarning({
   zakazkaId,
   summary,
+  readOnly = false,
 }: {
   zakazkaId: string;
   summary?: string | null;
+  readOnly?: boolean;
 }) {
   return (
     <Card className="mt-6 border-amber-500/40 bg-amber-500/10">
@@ -1738,12 +1757,14 @@ function WorkflowChangePendingWarning({
             <p className="mt-2 text-sm text-amber-200">Změny: {summary}</p>
           ) : null}
         </div>
+        {readOnly ? null : (
         <form action={sendClientApprovalAction}>
           <input type="hidden" name="zakazka_id" value={zakazkaId} />
           <button className="rounded-xl bg-amber-500 px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-amber-400">
             Odeslat změny klientovi ke schválení
           </button>
         </form>
+        )}
       </div>
     </Card>
   );
@@ -1943,7 +1964,7 @@ function getRecommendedAction({
   };
 }
 
-function WorkflowCockpitCard({ action }: { action: RecommendedAction }) {
+function WorkflowCockpitCard({ action, readOnly = false }: { action: RecommendedAction; readOnly?: boolean }) {
   const toneClass =
     action.tone === "danger"
       ? "border-red-500/40 bg-red-500/10"
@@ -1961,12 +1982,14 @@ function WorkflowCockpitCard({ action }: { action: RecommendedAction }) {
           <h2 className="mt-1 text-3xl font-black text-white">{action.title}</h2>
           <p className="mt-2 max-w-3xl text-sm text-slate-200">{action.detail}</p>
         </div>
+        {readOnly ? null : (
         <a
           href={action.href}
           className="inline-flex w-fit rounded-xl bg-blue-700 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-600"
         >
           Otevřít další krok
         </a>
+        )}
       </div>
     </Card>
   );
@@ -2100,10 +2123,12 @@ function InvoiceCard({
   zakazkaId,
   invoice,
   previewData,
+  readOnly = false,
 }: {
   zakazkaId: string;
   invoice: (InvoiceRow & Record<string, unknown>) | null;
   previewData: InvoiceDocumentData | null;
+  readOnly?: boolean;
 }) {
   const printHref = invoice ? `/zakazky/${zakazkaId}/faktura/${invoice.id}/print` : null;
   const pdfHref = invoice ? `/zakazky/${zakazkaId}/faktura/${invoice.id}/pdf` : null;
@@ -2210,14 +2235,16 @@ function InvoiceCard({
         </div>
       )}
 
+      {readOnly ? null : (
       <InvoiceActionsClient
         zakazkaId={zakazkaId}
         invoiceId={invoice?.id ?? null}
         printHref={printHref}
         pdfHref={pdfHref}
       />
+      )}
 
-      {exportHref ? (
+      {!readOnly && exportHref ? (
         <a
           href={exportHref}
           className="inline-flex w-fit rounded-xl border border-cyan-500/40 bg-cyan-500/15 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/25"
@@ -2242,10 +2269,13 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
   const supabase = await createClient();
+  const { perms } = await loadSessionRolePermissions(supabase);
+  const readOnly = !perms.zakazkyEditace;
 
   async function updateZakazkaSchedule(formData: FormData) {
     "use server";
     const supabase = await createClient();
+    await assertInternalWriteAccess(supabase);
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -2294,6 +2324,7 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
   async function updateZakazkaPricing(formData: FormData) {
     "use server";
     const supabase = await createClient();
+    await assertInternalWriteAccess(supabase);
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -3383,14 +3414,16 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
         data={headerData}
         hasInvoice={Boolean(latestInvoice)}
         cancelAction={cancelZakazkaAction}
+        readOnly={readOnly}
       />
 
-      <WorkflowCockpitCard action={recommendedAction} />
+      <WorkflowCockpitCard action={recommendedAction} readOnly={readOnly} />
 
       {(data as { workflow_change_pending?: boolean | null }).workflow_change_pending ? (
         <WorkflowChangePendingWarning
           zakazkaId={id}
           summary={(data as { workflow_change_summary?: string | null }).workflow_change_summary}
+          readOnly={readOnly}
         />
       ) : null}
 
@@ -3401,14 +3434,19 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
       />
 
       <div id="harmonogram">
-        <ZakazkaScheduleCard data={data} action={updateZakazkaSchedule} />
+        <ZakazkaScheduleCard data={data} action={updateZakazkaSchedule} readOnly={readOnly} />
       </div>
 
-      <LogisticsCard zakazkaId={id} data={data as LogisticsData} profilesById={logisticsProfilesById} />
+      <LogisticsCard
+        zakazkaId={id}
+        data={data as LogisticsData}
+        profilesById={logisticsProfilesById}
+        readOnly={readOnly}
+      />
 
       <ZakazkaBasicLookCard realizace={(realizace ?? []) as RealizaceRow[]} data={data} />
 
-      {!data.misto_id ? (
+      {!readOnly && !data.misto_id ? (
         <ZakazkaPlaceConnectionCard
           zakazka={{
             zakazkaId: id,
@@ -3443,6 +3481,7 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
           galleryPhotos={dotaznikGalleryPhotos}
           message={technicalVerificationMessage}
           hasSavedPlace={Boolean(data.misto_id)}
+          readOnly={readOnly}
         />
       </div>
 
@@ -3457,6 +3496,7 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
           fakturacniFirmy={fakturacniFirmy}
           selectedFakturacniFirmaId={effectiveFakturacniFirma?.id ?? data.fakturacni_firma_id ?? null}
           action={updateZakazkaPricing}
+          readOnly={readOnly}
         />
       </div>
 
@@ -3471,7 +3511,7 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
         approvedTravelPayments={approvedTravelPayments}
       />
 
-      <InvoiceCard zakazkaId={id} invoice={latestInvoice} previewData={invoicePreviewData} />
+      <InvoiceCard zakazkaId={id} invoice={latestInvoice} previewData={invoicePreviewData} readOnly={readOnly} />
 
       <div id="schvaleni-klienta">
         <ClientApprovalCard
@@ -3480,6 +3520,7 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
           link={clientApprovalLink}
           publicLink={approvalPublicLink}
           message={approvalMessage}
+          readOnly={readOnly}
         />
       </div>
 
@@ -3489,12 +3530,19 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
 
       <PreloadChecklistCard items={preloadItems} />
 
-      <ZakazkaDopravaCard zakazkaId={id} />
+      {!readOnly ? <ZakazkaDopravaCard zakazkaId={id} /> : null}
 
       <div className="mt-6">
-        <ZakazkaSubnav zakazkaId={id} active="detail" showBackLink />
+        <ZakazkaSubnav
+          zakazkaId={id}
+          active="detail"
+          showBackLink
+          showNakladka={perms.nakladkaCteni}
+          showPeople={!readOnly}
+        />
       </div>
 
+      {!readOnly ? (
       <div className="mt-10">
         {declinedAssignmentAlerts.length > 0 ? (
           <Card className="mb-4 border-red-500/30 bg-red-500/10">
@@ -3538,6 +3586,7 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
         ) : null}
         <PeoplePool zakazkaId={id} />
       </div>
+      ) : null}
 
       <HistoryTimelineCard events={timelineEvents} />
     </div>

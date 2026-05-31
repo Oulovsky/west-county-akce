@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { assertInternalWriteAccess } from "@/lib/auth/internal-role-access-server";
 import { logZakazkaHistory } from "@/lib/zakazka-history";
 import { DEFAULT_KM_RATE } from "@/lib/transport";
 import { createNotificationsForRoles } from "@/lib/notifications";
@@ -25,6 +26,7 @@ function getNumber(formData: FormData, key: string, fallback?: number) {
 
 export async function submitTravelReimbursementAction(formData: FormData) {
   const supabase = await createClient();
+  await assertInternalWriteAccess(supabase);
   const {
     data: { user },
     error,
