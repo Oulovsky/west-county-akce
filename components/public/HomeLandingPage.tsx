@@ -42,20 +42,6 @@ export default function HomeLandingPage() {
         className="pointer-events-none absolute -left-32 bottom-0 h-96 w-96 rounded-full bg-blue-600/10 blur-3xl"
       />
 
-      <div
-        aria-hidden
-        className="pointer-events-none absolute left-1/2 top-[22rem] -translate-x-1/2 opacity-[0.04]"
-      >
-        <Image
-          src={LOGO_SRC}
-          alt=""
-          width={520}
-          height={520}
-          className="h-auto w-[min(520px,80vw)]"
-          priority
-        />
-      </div>
-
       <header className="relative z-10 border-b border-white/5 bg-[#030712]/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <Link href="/" className="flex items-center gap-3">
@@ -92,29 +78,10 @@ export default function HomeLandingPage() {
       <main className="relative z-10">
         <section className="mx-auto max-w-6xl px-4 pb-10 pt-14 sm:px-6 sm:pt-20">
           <div className="mx-auto max-w-3xl text-center">
-            <div className="flex items-center justify-center gap-3 sm:gap-5">
-              <Image
-                src={LOGO_SRC}
-                alt=""
-                aria-hidden
-                width={56}
-                height={56}
-                className="h-11 w-11 shrink-0 opacity-95 sm:h-14 sm:w-14"
-                priority
-              />
-              <h1 className="text-3xl font-black tracking-[0.18em] text-white sm:text-5xl md:text-6xl">
-                WEST COUNTY
-              </h1>
-              <Image
-                src={LOGO_SRC}
-                alt=""
-                aria-hidden
-                width={56}
-                height={56}
-                className="h-11 w-11 shrink-0 opacity-95 sm:h-14 sm:w-14"
-                priority
-              />
-            </div>
+            <h1 className="text-4xl font-black tracking-[0.18em] text-white sm:text-5xl md:text-6xl">
+              <span className="block">WEST</span>
+              <span className="block">COUNTY</span>
+            </h1>
             <p className="mt-4 text-lg font-medium tracking-wide text-slate-300 sm:text-xl">
               Technické zajištění akcí
             </p>
@@ -156,11 +123,11 @@ export default function HomeLandingPage() {
         </section>
 
         <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="flex flex-wrap justify-center gap-4">
             {SERVICES.map((service) => (
               <article
                 key={service.title}
-                className="rounded-xl border border-white/8 bg-white/[0.03] p-5 transition hover:border-amber-500/20 hover:bg-white/[0.05]"
+                className="w-full max-w-xs rounded-xl border border-white/8 bg-white/[0.03] p-5 text-center transition hover:border-amber-500/20 hover:bg-white/[0.05] sm:w-72"
               >
                 <h2 className="text-base font-bold tracking-wide text-white">
                   {service.title}
