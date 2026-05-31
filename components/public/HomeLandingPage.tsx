@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 
+const LOGO_SRC = "/brand/westcounty-logo-white-transparent.png";
+
 const SERVICES = [
   {
     title: "Stage",
@@ -45,7 +47,7 @@ export default function HomeLandingPage() {
         className="pointer-events-none absolute left-1/2 top-[22rem] -translate-x-1/2 opacity-[0.04]"
       >
         <Image
-          src="/brand/westcounty-logo-bw.png"
+          src={LOGO_SRC}
           alt=""
           width={520}
           height={520}
@@ -58,7 +60,7 @@ export default function HomeLandingPage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <Link href="/" className="flex items-center gap-3">
             <Image
-              src="/brand/westcounty-logo-bw.png"
+              src={LOGO_SRC}
               alt="WEST COUNTY"
               width={44}
               height={44}
@@ -90,20 +92,29 @@ export default function HomeLandingPage() {
       <main className="relative z-10">
         <section className="mx-auto max-w-6xl px-4 pb-10 pt-14 sm:px-6 sm:pt-20">
           <div className="mx-auto max-w-3xl text-center">
-            <div className="mb-8 flex justify-center">
+            <div className="flex items-center justify-center gap-3 sm:gap-5">
               <Image
-                src="/brand/westcounty-logo-bw.png"
-                alt="WEST COUNTY logo"
-                width={168}
-                height={168}
-                className="h-32 w-32 sm:h-40 sm:w-40"
+                src={LOGO_SRC}
+                alt=""
+                aria-hidden
+                width={56}
+                height={56}
+                className="h-11 w-11 shrink-0 opacity-95 sm:h-14 sm:w-14"
+                priority
+              />
+              <h1 className="text-3xl font-black tracking-[0.18em] text-white sm:text-5xl md:text-6xl">
+                WEST COUNTY
+              </h1>
+              <Image
+                src={LOGO_SRC}
+                alt=""
+                aria-hidden
+                width={56}
+                height={56}
+                className="h-11 w-11 shrink-0 opacity-95 sm:h-14 sm:w-14"
                 priority
               />
             </div>
-
-            <h1 className="text-4xl font-black tracking-[0.18em] text-white sm:text-5xl md:text-6xl">
-              WEST COUNTY
-            </h1>
             <p className="mt-4 text-lg font-medium tracking-wide text-slate-300 sm:text-xl">
               Technické zajištění akcí
             </p>
