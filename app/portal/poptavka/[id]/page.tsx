@@ -4,7 +4,7 @@ import PoptavkaFormClient from "@/components/portal/PoptavkaFormClient";
 import PoptavkaFotkyClient from "@/components/portal/PoptavkaFotkyClient";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
-import { POPTAVKA_STAV_LABELS, SETUP_OBLAST_LABELS } from "@/lib/client-portal/labels";
+import { CLIENT_POPTAVKA_STAV_LABELS, SETUP_OBLAST_LABELS } from "@/lib/client-portal/labels";
 import {
   formatPoptavkaDateRange,
   formatPoptavkaTime,
@@ -183,10 +183,30 @@ export default async function PortalPoptavkaDetailPage({
             <span className="font-semibold">Důvod zamítnutí:</span> {detail.zamitnuto_duvod}
           </p>
         ) : null}
+        {detail.stav === "v_revizi" && detail.zamitnuto_duvod ? (
+          <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            <p className="font-semibold">Poptávka byla vrácena k doplnění</p>
+            <p className="mt-2 whitespace-pre-wrap">{detail.zamitnuto_duvod}</p>
+            <p className="mt-3 text-amber-200/90">
+              Upravte poptávku podle poznámky a znovu ji odešlete.
+            </p>
+          </div>
+        ) : null}
         {detail.stav === "schvalena" ? (
           <p className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-            Poptávka byla schválena WEST COUNTY.
+            Poptávka byla schválena. WEST COUNTY připravuje interní zakázku.
           </p>
+        ) : null}
+        {detail.stav === "prevadena_do_zakazky" && detail.zakazka_id ? (
+          <div className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
+            <p>Poptávka byla převedena do interní zakázky.</p>
+            <Link
+              href={`/portal/zakazky/${detail.zakazka_id}`}
+              className="mt-2 inline-flex font-semibold text-blue-200 hover:text-blue-100"
+            >
+              Zobrazit zakázku →
+            </Link>
+          </div>
         ) : null}
         {detail.stav === "odeslana" || detail.stav === "ceka_na_schvaleni" ? (
           <p className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
@@ -200,6 +220,11 @@ export default async function PortalPoptavkaDetailPage({
                   minute: "2-digit",
                 }).format(new Date(detail.odeslano_at))}.`
               : null}
+          </p>
+        ) : null}
+        {resolvedSearchParams?.submitted === "1" ? (
+          <p className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+            Poptávka byla znovu odeslána a čeká na kontrolu WEST COUNTY.
           </p>
         ) : null}
         {resolvedSearchParams?.saved === "1" ? (
@@ -218,7 +243,7 @@ export default async function PortalPoptavkaDetailPage({
             </div>
           </div>
           <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
-            {POPTAVKA_STAV_LABELS[detail.stav]}
+            {CLIENT_POPTAVKA_STAV_LABELS[detail.stav]}
           </span>
         </div>
 
@@ -311,6 +336,14 @@ export default async function PortalPoptavkaDetailPage({
           >
             ← Seznam poptávek
           </Link>
+          {detail.zakazka_id ? (
+            <Link
+              href={`/portal/zakazky/${detail.zakazka_id}`}
+              className="text-sm font-medium text-blue-300 hover:text-blue-200"
+            >
+              Zobrazit zakázku →
+            </Link>
+          ) : null}
         </div>
       </PortalCard>
     </PortalShell>

@@ -25,6 +25,7 @@ import {
   isPoptavkaEditable,
   loadPoptavkaDetail,
 } from "@/lib/client-portal/poptavka-server";
+import { notifyInternalTeamAboutSubmittedPoptavka } from "@/lib/client-portal/poptavka-notifications-server";
 import { createClient } from "@/lib/supabase/server";
 
 function redirectWithError(path: string, error: string): never {
@@ -286,6 +287,7 @@ export async function submitPoptavkaAction(formData: FormData) {
     redirectWithError(`/portal/poptavka/${poptavkaId}`, "submit_incomplete");
   }
 
+  const wasRevision = detail.stav === "v_revizi";
   const now = new Date().toISOString();
   const { error } = await supabase
     .from("poptavky")
@@ -301,7 +303,20 @@ export async function submitPoptavkaAction(formData: FormData) {
     redirectWithError(`/portal/poptavka/${poptavkaId}`, "submit_failed");
   }
 
+  try {
+    await notifyInternalTeamAboutSubmittedPoptavka({
+      poptavkaId,
+      cisloPoptavky: detail.cislo_poptavky,
+      mistoNazev: detail.misto_nazev,
+      isResubmit: wasRevision,
+    });
+  } catch (notifyError) {
+    console.warn("Poptavka submit notification failed:", notifyError);
+  }
+
   revalidatePath("/portal/poptavky");
   revalidatePath(`/portal/poptavka/${poptavkaId}`);
+  revalidatePath("/zakazky/poptavky");
+  revalidatePath(`/zakazky/poptavky/${poptavkaId}`);
   redirect(`/portal/poptavka/${poptavkaId}?submitted=1`);
 }

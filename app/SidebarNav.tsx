@@ -13,11 +13,13 @@ function NavLink({
   children,
   danger = false,
   exact = false,
+  badgeCount = 0,
 }: {
   href: string;
   children: React.ReactNode;
   danger?: boolean;
   exact?: boolean;
+  badgeCount?: number;
 }) {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
@@ -41,8 +43,13 @@ function NavLink({
     : "border-transparent text-slate-300 hover:bg-blue-600/10 hover:text-blue-200";
 
   return (
-    <Link href={href} className={`${base} ${active ? activeClass : idleClass}`}>
+    <Link href={href} className={`relative ${base} ${active ? activeClass : idleClass}`}>
       {children}
+      {badgeCount > 0 ? (
+        <span className="absolute -right-2 -top-2 min-w-5 rounded-full bg-amber-500 px-1.5 py-0.5 text-center text-[11px] font-black text-slate-950">
+          {badgeCount > 99 ? "99+" : badgeCount}
+        </span>
+      ) : null}
     </Link>
   );
 }
@@ -51,6 +58,7 @@ export default function SidebarNav() {
   const router = useRouter();
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [pendingPoptavkyCount, setPendingPoptavkyCount] = useState(0);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showPoptavkyInbox, setShowPoptavkyInbox] = useState(false);
   const { nav } = useProfileRole();
@@ -65,6 +73,7 @@ export default function SidebarNav() {
       if (!user) {
         setShowAdmin(false);
         setShowPoptavkyInbox(false);
+        setPendingPoptavkyCount(0);
         return;
       }
 
@@ -76,15 +85,37 @@ export default function SidebarNav() {
       setShowAdmin(isAdmin);
       setShowPoptavkyInbox(canManagePoptavky);
 
-      const { count, error } = await supabase
-        .from("notifikace")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .is("read_at", null)
-        .is("dismissed_at", null);
+      const queries = [
+        supabase
+          .from("notifikace")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .is("read_at", null)
+          .is("dismissed_at", null),
+      ];
 
-      if (!active || error) return;
-      setUnreadCount(count ?? 0);
+      if (canManagePoptavky) {
+        queries.push(
+          supabase
+            .from("poptavky")
+            .select("poptavka_id", { count: "exact", head: true })
+            .in("stav", ["odeslana", "ceka_na_schvaleni"])
+        );
+      }
+
+      const [notificationsResult, pendingPoptavkyResult] = await Promise.all(queries);
+
+      if (!active) return;
+
+      if (!notificationsResult.error) {
+        setUnreadCount(notificationsResult.count ?? 0);
+      }
+
+      if (canManagePoptavky && pendingPoptavkyResult && !pendingPoptavkyResult.error) {
+        setPendingPoptavkyCount(pendingPoptavkyResult.count ?? 0);
+      } else {
+        setPendingPoptavkyCount(0);
+      }
     }
 
     void loadNavAccess();
@@ -133,7 +164,9 @@ export default function SidebarNav() {
       ) : null}
 
       {showPoptavkyInbox ? (
-        <NavLink href="/zakazky/poptavky">Poptávky</NavLink>
+        <NavLink href="/zakazky/poptavky" badgeCount={pendingPoptavkyCount}>
+          Poptávky
+        </NavLink>
       ) : null}
 
       {nav.showMista ? (

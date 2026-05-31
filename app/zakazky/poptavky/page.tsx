@@ -2,7 +2,10 @@ import Link from "next/link";
 import { verifyAppAdminOrSefPage } from "@/lib/auth/admin-access-server";
 import { POPTAVKA_STAV_LABELS } from "@/lib/client-portal/labels";
 import { formatPoptavkaDateRange } from "@/lib/client-portal/poptavka-form";
-import { loadInternalPoptavkyInbox } from "@/lib/client-portal/poptavka-internal-server";
+import {
+  countPendingInternalPoptavky,
+  loadInternalPoptavkyInbox,
+} from "@/lib/client-portal/poptavka-internal-server";
 import { createClient } from "@/lib/supabase/server";
 
 function formatOdeslano(value: string | null) {
@@ -30,12 +33,20 @@ export default async function ZakazkyPoptavkyPage() {
   }
 
   const rows = await loadInternalPoptavkyInbox(supabase);
+  const pendingCount = await countPendingInternalPoptavky(supabase);
 
   return (
     <div className="p-6">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-white">Poptávky klientů</h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-3xl font-bold text-white">Poptávky klientů</h1>
+            {pendingCount > 0 ? (
+              <span className="rounded-full border border-amber-500/40 bg-amber-500/15 px-3 py-1 text-sm font-semibold text-amber-100">
+                {pendingCount} čeká na zpracování
+              </span>
+            ) : null}
+          </div>
           <p className="mt-2 text-sm text-slate-400">
             Odeslané a zpracované klientské poptávky z portálu. Schválené lze převést na interní
             zakázku.

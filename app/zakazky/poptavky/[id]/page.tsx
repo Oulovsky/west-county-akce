@@ -42,12 +42,23 @@ const SAVED_MESSAGES: Record<string, string> = {
   converted: "Interní zakázka byla vytvořena.",
 };
 
+const EMAIL_STATUS_MESSAGES: Record<string, string> = {
+  sent: "Klientovi byl odeslán informační e-mail s odkazem do klientské zóny.",
+  missing_email:
+    "Stav poptávky byl uložen, ale klient nemá dostupný e-mail pro upozornění.",
+  missing_resend_key:
+    "Stav poptávky byl uložen, ale chybí RESEND_API_KEY — e-mail klientovi nebyl odeslán.",
+  missing_base_url:
+    "Stav poptávky byl uložen, ale nepodařilo se sestavit veřejnou URL aplikace pro e-mail.",
+  failed: "Stav poptávky byl uložen, ale odeslání e-mailu klientovi selhalo.",
+};
+
 export default async function ZakazkyPoptavkaDetailPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ saved?: string; error?: string; zakazka?: string }>;
+  searchParams?: Promise<{ saved?: string; error?: string; zakazka?: string; email?: string }>;
 }) {
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
@@ -85,6 +96,7 @@ export default async function ZakazkyPoptavkaDetailPage({
   })).filter((group) => group.rows.length > 0);
 
   const savedKey = resolvedSearchParams?.saved;
+  const emailStatus = resolvedSearchParams?.email ?? null;
   const canAct = canInternalActOnPoptavka(detail.stav);
   const canConvert = canConvertPoptavkaToZakazka(detail);
   const convertedZakazkaId =
@@ -116,17 +128,31 @@ export default async function ZakazkyPoptavkaDetailPage({
       </div>
 
       {savedKey && SAVED_MESSAGES[savedKey] ? (
-        <p className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
-          {SAVED_MESSAGES[savedKey]}
-          {savedKey === "converted" && convertedZakazkaId ? (
-            <>
-              {" "}
-              <Link href={`/zakazky/${convertedZakazkaId}`} className="font-semibold underline">
-                Otevřít zakázku
-              </Link>
-            </>
+        <div className="space-y-3">
+          <p className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
+            {SAVED_MESSAGES[savedKey]}
+            {savedKey === "converted" && convertedZakazkaId ? (
+              <>
+                {" "}
+                <Link href={`/zakazky/${convertedZakazkaId}`} className="font-semibold underline">
+                  Otevřít zakázku
+                </Link>
+              </>
+            ) : null}
+          </p>
+          {savedKey === "revision" && emailStatus && EMAIL_STATUS_MESSAGES[emailStatus] ? (
+            <p
+              className={[
+                "rounded-lg border px-4 py-3 text-sm",
+                emailStatus === "sent"
+                  ? "border-blue-500/30 bg-blue-950/20 text-blue-100"
+                  : "border-amber-500/30 bg-amber-950/20 text-amber-100",
+              ].join(" ")}
+            >
+              {EMAIL_STATUS_MESSAGES[emailStatus]}
+            </p>
           ) : null}
-        </p>
+        </div>
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">

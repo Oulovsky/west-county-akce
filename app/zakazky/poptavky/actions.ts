@@ -1,8 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireAppAdminOrSef } from "@/lib/auth/admin-access-server";
+import {
+  getPortalAppBaseUrl,
+  sendPoptavkaRevisionEmail,
+} from "@/lib/client-portal/poptavka-email-server";
 import {
   canInternalActOnPoptavka,
   loadInternalPoptavkaDetail,
@@ -49,10 +54,24 @@ export async function returnPoptavkaToRevisionAction(formData: FormData) {
     redirectWithError(`/zakazky/poptavky/${poptavkaId}`, "save_failed");
   }
 
+  const emailResult = await sendPoptavkaRevisionEmail({
+    detail,
+    baseUrl: getPortalAppBaseUrl(await headers()),
+  });
+
   revalidatePath("/zakazky/poptavky");
   revalidatePath(`/zakazky/poptavky/${poptavkaId}`);
   revalidatePath(`/portal/poptavka/${poptavkaId}`);
-  redirect(`/zakazky/poptavky/${poptavkaId}?saved=revision`);
+  revalidatePath("/portal/poptavky");
+
+  const emailQuery =
+    emailResult.ok && emailResult.sent
+      ? "sent"
+      : emailResult.ok && !emailResult.sent
+        ? emailResult.reason
+        : "failed";
+
+  redirect(`/zakazky/poptavky/${poptavkaId}?saved=revision&email=${encodeURIComponent(emailQuery)}`);
 }
 
 export async function rejectPoptavkaAction(formData: FormData) {
@@ -191,7 +210,8 @@ export async function convertPoptavkaToZakazkaAction(formData: FormData) {
 
   revalidatePath("/zakazky/poptavky");
   revalidatePath(`/zakazky/poptavky/${poptavkaId}`);
-  revalidatePath(`/zakazky/${result.zakazkaId}`);
   revalidatePath(`/portal/poptavka/${poptavkaId}`);
+  revalidatePath("/portal/poptavky");
+  revalidatePath("/portal/zakazky");
   redirect(`/zakazky/poptavky/${poptavkaId}?saved=converted&zakazka=${result.zakazkaId}`);
 }

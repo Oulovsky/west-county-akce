@@ -19,6 +19,11 @@ export const INTERNAL_INBOX_POPTAVKA_STAVY: readonly PoptavkaStav[] = [
   "zamitnuta",
 ] as const;
 
+export const PENDING_INTERNAL_POPTAVKA_STAVY: readonly PoptavkaStav[] = [
+  "odeslana",
+  "ceka_na_schvaleni",
+] as const;
+
 const POPTAVKA_DETAIL_SELECT =
   "poptavka_id, cislo_poptavky, klient_id, vytvoril_account_id, stav, kontakt_jmeno, kontakt_telefon, kontakt_email, misto_id, misto_nazev, misto_adresa, misto_poznamka, misto_lat, misto_lng, datum_od, datum_do, cas_programu_od, cas_programu_do, cas_prijezd_orientacni, vice_denni, typ_akce, typ_akce_poznamka, stavba_datum, stavba_cas_od, stavba_cas_do, stavba_pristup_od, stavba_omezeni_vjezdu, stavba_poznamka, bourani_datum, bourani_cas_od, bourani_cas_do, bourani_misto_uvolneno_do, bourani_poznamka, interni_poznamka, schvalil_user_id, schvaleno_at, zamitnuto_duvod, zakazka_id, odeslano_at, created_at, updated_at" as const;
 
@@ -178,4 +183,17 @@ export function canInternalManagePoptavka(stav: PoptavkaStav) {
 
 export function canInternalActOnPoptavka(stav: PoptavkaStav) {
   return stav === "odeslana" || stav === "ceka_na_schvaleni" || stav === "v_revizi";
+}
+
+export async function countPendingInternalPoptavky(supabase: SupabaseClient) {
+  const { count, error } = await supabase
+    .from("poptavky")
+    .select("poptavka_id", { count: "exact", head: true })
+    .in("stav", [...PENDING_INTERNAL_POPTAVKA_STAVY]);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return count ?? 0;
 }

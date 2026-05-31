@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
-import { POPTAVKA_STAV_LABELS } from "@/lib/client-portal/labels";
+import { CLIENT_POPTAVKA_STAV_LABELS } from "@/lib/client-portal/labels";
 import { formatPoptavkaDateRange } from "@/lib/client-portal/poptavka-form";
 import { loadClientPoptavkyList } from "@/lib/client-portal/poptavka-server";
 import { createClient } from "@/lib/supabase/server";
@@ -45,22 +45,33 @@ export default async function PortalPoptavkyPage() {
                 .join(" · ");
 
               return (
-                <li key={row.poptavka_id}>
-                  <Link
-                    href={`/portal/poptavka/${row.poptavka_id}`}
-                    className="block rounded-xl border border-white/10 bg-white/[0.03] px-4 py-4 transition hover:border-amber-500/30 hover:bg-white/[0.05]"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-semibold text-white">{title}</div>
-                        <div className="mt-1 text-sm text-slate-400">{subtitle || "—"}</div>
-                        <div className="mt-2 text-xs text-slate-500">{row.cislo_poptavky}</div>
-                      </div>
-                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
-                        {POPTAVKA_STAV_LABELS[row.stav]}
-                      </span>
+                <li
+                  key={row.poptavka_id}
+                  className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-4 transition hover:border-amber-500/30 hover:bg-white/[0.05]"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/portal/poptavka/${row.poptavka_id}`}
+                        className="font-semibold text-white hover:text-amber-100"
+                      >
+                        {title}
+                      </Link>
+                      <div className="mt-1 text-sm text-slate-400">{subtitle || "—"}</div>
+                      <div className="mt-2 text-xs text-slate-500">{row.cislo_poptavky}</div>
+                      {row.zakazka_id ? (
+                        <Link
+                          href={`/portal/zakazky/${row.zakazka_id}`}
+                          className="mt-2 inline-flex text-xs font-semibold text-blue-300 hover:text-blue-200"
+                        >
+                          Zobrazit zakázku →
+                        </Link>
+                      ) : null}
                     </div>
-                  </Link>
+                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
+                      {CLIENT_POPTAVKA_STAV_LABELS[row.stav]}
+                    </span>
+                  </div>
                 </li>
               );
             })}

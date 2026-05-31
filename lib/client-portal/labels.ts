@@ -30,3 +30,14 @@ export const POPTAVKA_STAV_LABELS: Record<PoptavkaStav, string> = {
   zamitnuta: "Zamítnutá",
   prevadena_do_zakazky: "Převedena do zakázky",
 };
+
+/** Texty stavů zobrazené klientovi v portálu. */
+export const CLIENT_POPTAVKA_STAV_LABELS: Record<PoptavkaStav, string> = {
+  koncept: "Rozpracováno",
+  odeslana: "Čeká na kontrolu",
+  ceka_na_schvaleni: "Čeká na kontrolu",
+  v_revizi: "Vráceno k doplnění",
+  schvalena: "Schváleno, připravujeme zakázku",
+  zamitnuta: "Zamítnuto",
+  prevadena_do_zakazky: "Převedeno na zakázku",
+};
