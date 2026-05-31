@@ -12,7 +12,11 @@ import {
 } from "@/lib/auth/internal-role-access";
 import { isReadOnlyInternalRole } from "@/lib/roles";
 import { getSafeNextPath } from "@/lib/auth/oauth-redirect";
-import { isPublicAppPath } from "@/lib/public-routes";
+import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
+import {
+  isProtectedPortalPath,
+  isPublicAppPath,
+} from "@/lib/public-routes";
 
 function isPublicPath(pathname: string) {
   if (isPublicAppPath(pathname)) return true;
@@ -115,7 +119,25 @@ export async function proxy(req: NextRequest) {
 
   if (!user && !isPublicPath(pathname)) {
     const nextPath = `${pathname}${req.nextUrl.search}`;
+    if (isProtectedPortalPath(pathname)) {
+      const redirectUrl = req.nextUrl.clone();
+      redirectUrl.pathname = "/portal/prihlaseni";
+      redirectUrl.search = "";
+      redirectUrl.searchParams.set("next", nextPath);
+      return NextResponse.redirect(redirectUrl);
+    }
     return redirectToLogin(req, { next: nextPath });
+  }
+
+  if (user && isProtectedPortalPath(pathname)) {
+    const session = await loadClientPortalSession(supabase);
+    if (session.kind !== "active") {
+      const redirectUrl = req.nextUrl.clone();
+      redirectUrl.pathname = "/portal";
+      redirectUrl.search = "";
+      return NextResponse.redirect(redirectUrl);
+    }
+    return res;
   }
 
   if (user && !isPublicPath(pathname)) {

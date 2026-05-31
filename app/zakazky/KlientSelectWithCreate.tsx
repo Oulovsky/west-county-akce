@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { fetchKlientFromAres, normalizeIco } from "@/lib/ares/klient-ares";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
@@ -23,23 +24,6 @@ type KlientFormState = {
   telefon: string;
   email: string;
   poznamka: string;
-};
-
-type AresSidlo = {
-  nazevUlice?: unknown;
-  cisloDomovni?: unknown;
-  cisloOrientacni?: unknown;
-  nazevObce?: unknown;
-  nazevCastiObce?: unknown;
-  textovaAdresa?: unknown;
-  psc?: unknown;
-};
-
-type AresSubject = {
-  ico?: unknown;
-  obchodniJmeno?: unknown;
-  dic?: unknown;
-  sidlo?: AresSidlo;
 };
 
 type Props = {
@@ -66,40 +50,6 @@ const emptyForm: KlientFormState = {
 function toNullable(value: string) {
   const trimmed = value.trim();
   return trimmed || null;
-}
-
-function getString(value: unknown) {
-  return typeof value === "string" || typeof value === "number" ? String(value).trim() : "";
-}
-
-function formatAddressNumber(address?: AresSidlo) {
-  const houseNumber = getString(address?.cisloDomovni);
-  const orientationNumber = getString(address?.cisloOrientacni);
-  return [houseNumber, orientationNumber].filter(Boolean).join("/");
-}
-
-function getStreetFromTextAddress(address?: AresSidlo) {
-  const textAddress = getString(address?.textovaAdresa);
-  if (!textAddress) return "";
-
-  const firstPart = textAddress.split(",")[0]?.trim() ?? "";
-  return /\d/.test(firstPart) ? firstPart : "";
-}
-
-function formatStreet(address?: AresSidlo) {
-  const streetName =
-    getString(address?.nazevUlice) || getString(address?.nazevCastiObce);
-  const numberPart = formatAddressNumber(address);
-
-  if (!streetName) {
-    return getStreetFromTextAddress(address);
-  }
-
-  return [streetName, numberPart].filter(Boolean).join(" ");
-}
-
-function normalizePsc(value: unknown) {
-  return getString(value).replace(/\s+/g, "");
 }
 
 function dedupeClientsById(clients: KlientOption[]) {
@@ -150,7 +100,7 @@ export function KlientSelectWithCreate({
   }
 
   async function loadFromAres() {
-    const ico = form.ico.replace(/\D/g, "");
+    const ico = normalizeIco(form.ico);
     if (!/^\d{8}$/.test(ico)) {
       setError("IČO musí mít přesně 8 číslic.");
       return;
@@ -159,41 +109,29 @@ export function KlientSelectWithCreate({
     setAresLoading(true);
     setError(null);
 
-    try {
-      const response = await fetch(
-        `https://ares.gov.cz/ekonomicke-subjekty-v-be/rest/ekonomicke-subjekty/${ico}`,
-        { headers: { Accept: "application/json" } }
-      );
+    const result = await fetchKlientFromAres(ico);
+    setAresLoading(false);
 
-      if (response.status === 404) {
+    if (!result.ok) {
+      if (result.error === "not_found") {
         setError("ARES nenašel subjekt pro zadané IČO.");
-        return;
-      }
-
-      if (!response.ok) {
+      } else if (result.error === "invalid_ico") {
+        setError("IČO musí mít přesně 8 číslic.");
+      } else {
         setError("ARES je momentálně nedostupný. Klienta můžeš vyplnit ručně.");
-        return;
       }
-
-      const subject = (await response.json()) as AresSubject;
-      const street = formatStreet(subject.sidlo);
-      const city = getString(subject.sidlo?.nazevObce) || getString(subject.sidlo?.nazevCastiObce);
-      const psc = normalizePsc(subject.sidlo?.psc);
-
-      setForm((current) => ({
-        ...current,
-        nazev: getString(subject.obchodniJmeno) || current.nazev,
-        ico: getString(subject.ico) || ico,
-        dic: getString(subject.dic) || current.dic,
-        ulice: street || current.ulice,
-        mesto: city || current.mesto,
-        psc: psc || current.psc,
-      }));
-    } catch {
-      setError("ARES je momentálně nedostupný. Klienta můžeš vyplnit ručně.");
-    } finally {
-      setAresLoading(false);
+      return;
     }
+
+    setForm((current) => ({
+      ...current,
+      nazev: result.form.nazev || current.nazev,
+      ico: result.form.ico || ico,
+      dic: result.form.dic || current.dic,
+      ulice: result.form.ulice || current.ulice,
+      mesto: result.form.mesto || current.mesto,
+      psc: result.form.psc || current.psc,
+    }));
   }
 
   async function createClient() {
