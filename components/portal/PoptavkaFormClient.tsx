@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { createPoptavkaAction, updatePoptavkaAction } from "@/app/portal/poptavky/actions";
+import {
+  createPoptavkaAction,
+  updatePoptavkaAction,
+} from "@/app/portal/poptavky/actions";
+import PoptavkaFotkyClient from "@/components/portal/PoptavkaFotkyClient";
+import PoptavkaSubmitButton from "@/components/portal/PoptavkaSubmitButton";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
 import { SETUP_OBLAST_LABELS } from "@/lib/client-portal/labels";
 import {
@@ -11,7 +16,14 @@ import {
   type PoptavkaPrefill,
   type PoptavkaSetupInput,
 } from "@/lib/client-portal/poptavka-form";
+import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-server";
 import type { PortalSetupsByOblast } from "@/lib/client-portal/poptavka-server";
+import {
+  ELEKTRO_ZASUVKA_OPTIONS,
+  EMPTY_POPTAVKA_TECHNIKA,
+  TRIZVOLBA_OPTIONS,
+  type PoptavkaTechnikaFormValues,
+} from "@/lib/client-portal/poptavka-technika-form";
 import { SETUP_OBLASTI, type SetupOblast } from "@/lib/client-portal/types";
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -26,6 +38,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   setups_failed: "Základ poptávky byl uložen, ale setupy se nepodařilo zapsat.",
   not_editable: "Tuto poptávku už nelze upravovat.",
   not_found: "Poptávka nenalezena.",
+  submit_incomplete: "Doplňte kontakt, název akce a termín před odesláním.",
+  submit_failed: "Odeslání se nezdařilo.",
 };
 
 type Props = {
@@ -33,16 +47,25 @@ type Props = {
   prefill: PoptavkaPrefill;
   setupsByOblast: PortalSetupsByOblast;
   initialValues?: Partial<PoptavkaFormValues>;
+  initialTechnika?: PoptavkaTechnikaFormValues;
+  initialFotky?: PoptavkaFotkaWithUrl[];
   poptavkaId?: string;
   readOnly?: boolean;
   errorCode?: string | null;
   saved?: boolean;
+  submitted?: boolean;
 };
 
-const STEPS = [
+const CREATE_STEPS = [
   { id: 1, title: "Kdo zadává" },
   { id: 2, title: "Kde a kdy" },
   { id: 3, title: "Setupy" },
+] as const;
+
+const EDIT_STEPS = [
+  ...CREATE_STEPS,
+  { id: 4, title: "Technika místa" },
+  { id: 5, title: "Fotky" },
 ] as const;
 
 function setupDescription(setup: {
@@ -61,11 +84,16 @@ export default function PoptavkaFormClient({
   prefill,
   setupsByOblast,
   initialValues,
+  initialTechnika,
+  initialFotky = [],
   poptavkaId,
   readOnly = false,
   errorCode,
   saved,
+  submitted,
 }: Props) {
+  const steps = mode === "create" ? CREATE_STEPS : EDIT_STEPS;
+  const maxStep = steps.length;
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
 
@@ -82,6 +110,11 @@ export default function PoptavkaFormClient({
     cas_programu_do: initialValues?.cas_programu_do ?? "",
     misto_poznamka: initialValues?.misto_poznamka ?? "",
     setupy: initialValues?.setupy ?? [],
+  });
+
+  const [technika, setTechnika] = useState<PoptavkaTechnikaFormValues>({
+    ...EMPTY_POPTAVKA_TECHNIKA,
+    ...initialTechnika,
   });
 
   const [selectedSetups, setSelectedSetups] = useState<Record<string, PoptavkaSetupInput>>(
@@ -143,6 +176,13 @@ export default function PoptavkaFormClient({
     });
   }
 
+  function updateTechnikaField<K extends keyof PoptavkaTechnikaFormValues>(
+    key: K,
+    value: PoptavkaTechnikaFormValues[K]
+  ) {
+    setTechnika((current) => ({ ...current, [key]: value }));
+  }
+
   async function handleSubmit() {
     if (readOnly) return;
     setSubmitting(true);
@@ -154,9 +194,17 @@ export default function PoptavkaFormClient({
     "w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none ring-amber-500/40 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60";
   const labelClass = "text-sm font-medium text-slate-300";
 
+  const optionCardClass =
+    "flex gap-2 rounded-xl border border-white/10 bg-white/[0.02] p-3 text-sm text-slate-200";
+
   return (
     <PortalShell showBackToPortal>
       <PortalCard title={title}>
+        {submitted ? (
+          <p className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
+            Poptávka byla odeslána a čeká na kontrolu WEST COUNTY.
+          </p>
+        ) : null}
         {saved ? (
           <p className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
             Poptávka byla uložena jako koncept.
@@ -170,7 +218,7 @@ export default function PoptavkaFormClient({
 
         {!readOnly ? (
           <div className="mb-8 flex flex-wrap gap-2">
-            {STEPS.map((item) => (
+            {steps.map((item) => (
               <button
                 key={item.id}
                 type="button"
@@ -461,6 +509,229 @@ export default function PoptavkaFormClient({
             </section>
           )}
 
+          {mode === "edit" && (readOnly || step === 4) && (
+            <section className="space-y-4">
+              <h2 className="text-lg font-semibold text-white">4. Technické údaje místa</h2>
+
+              <label className="block space-y-2">
+                <span className={labelClass}>Poznámka k příjezdu</span>
+                <textarea
+                  name="prijezd_poznamka"
+                  value={technika.prijezd_poznamka}
+                  onChange={(e) => updateTechnikaField("prijezd_poznamka", e.target.value)}
+                  disabled={readOnly}
+                  rows={3}
+                  className={inputClass}
+                  placeholder="Vjezd, brána, omezení pro dodávku…"
+                />
+              </label>
+
+              <div>
+                <span className={labelClass}>Lze zajet dodávkou až k místu?</span>
+                <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                  {TRIZVOLBA_OPTIONS.map(([value, label]) => (
+                    <label key={value} className={optionCardClass}>
+                      <input
+                        type="radio"
+                        name="lze_zajet_autem"
+                        value={value}
+                        checked={technika.lze_zajet_autem === value}
+                        onChange={() => updateTechnikaField("lze_zajet_autem", value)}
+                        disabled={readOnly}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <label className="block space-y-2">
+                <span className={labelClass}>Parkování</span>
+                <textarea
+                  name="parkovani_poznamka"
+                  value={technika.parkovani_poznamka}
+                  onChange={(e) => updateTechnikaField("parkovani_poznamka", e.target.value)}
+                  disabled={readOnly}
+                  rows={2}
+                  className={inputClass}
+                />
+              </label>
+
+              <label className="block space-y-2">
+                <span className={labelClass}>Rozvaděče / elektro na místě</span>
+                <textarea
+                  name="rozvadece_poznamka"
+                  value={technika.rozvadece_poznamka}
+                  onChange={(e) => updateTechnikaField("rozvadece_poznamka", e.target.value)}
+                  disabled={readOnly}
+                  rows={2}
+                  className={inputClass}
+                />
+              </label>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block space-y-2">
+                  <span className={labelClass}>Přípojka / proud</span>
+                  <input
+                    name="elektro_pripojka"
+                    value={technika.elektro_pripojka}
+                    onChange={(e) => updateTechnikaField("elektro_pripojka", e.target.value)}
+                    disabled={readOnly}
+                    className={inputClass}
+                    placeholder="Např. 32A, 63A"
+                  />
+                </label>
+                <label className="block space-y-2">
+                  <span className={labelClass}>Jištění / okruhy</span>
+                  <input
+                    name="elektro_jisteni"
+                    value={technika.elektro_jisteni}
+                    onChange={(e) => updateTechnikaField("elektro_jisteni", e.target.value)}
+                    disabled={readOnly}
+                    className={inputClass}
+                  />
+                </label>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block space-y-2">
+                  <span className={labelClass}>Typ zásuvky</span>
+                  <select
+                    name="elektro_zasuvka"
+                    value={technika.elektro_zasuvka}
+                    onChange={(e) => updateTechnikaField("elektro_zasuvka", e.target.value)}
+                    disabled={readOnly}
+                    className={inputClass}
+                  >
+                    <option value="">—</option>
+                    {ELEKTRO_ZASUVKA_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block space-y-2">
+                  <span className={labelClass}>Vzdálenost elektřiny (m)</span>
+                  <input
+                    name="elektro_vzdalenost_m"
+                    inputMode="decimal"
+                    value={technika.elektro_vzdalenost_m}
+                    onChange={(e) => updateTechnikaField("elektro_vzdalenost_m", e.target.value)}
+                    disabled={readOnly}
+                    className={inputClass}
+                  />
+                </label>
+              </div>
+
+              <label className="block space-y-2">
+                <span className={labelClass}>Kabelové trasy</span>
+                <textarea
+                  name="kabelove_trasy"
+                  value={technika.kabelove_trasy}
+                  onChange={(e) => updateTechnikaField("kabelove_trasy", e.target.value)}
+                  disabled={readOnly}
+                  rows={2}
+                  className={inputClass}
+                />
+              </label>
+
+              <div>
+                <span className={labelClass}>Kabel přes silnici / veřejný průchod?</span>
+                <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                  {TRIZVOLBA_OPTIONS.map(([value, label]) => (
+                    <label key={value} className={optionCardClass}>
+                      <input
+                        type="radio"
+                        name="kabel_pres_silnici"
+                        value={value}
+                        checked={technika.kabel_pres_silnici === value}
+                        onChange={() => updateTechnikaField("kabel_pres_silnici", value)}
+                        disabled={readOnly}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block space-y-2">
+                  <span className={labelClass}>Místo pro stage</span>
+                  <textarea
+                    name="misto_stage"
+                    value={technika.misto_stage}
+                    onChange={(e) => updateTechnikaField("misto_stage", e.target.value)}
+                    disabled={readOnly}
+                    rows={2}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="block space-y-2">
+                  <span className={labelClass}>Místo pro FOH</span>
+                  <textarea
+                    name="misto_foh"
+                    value={technika.misto_foh}
+                    onChange={(e) => updateTechnikaField("misto_foh", e.target.value)}
+                    disabled={readOnly}
+                    rows={2}
+                    className={inputClass}
+                  />
+                </label>
+              </div>
+
+              <label className="block space-y-2">
+                <span className={labelClass}>Omezení hluku</span>
+                <textarea
+                  name="omezeni_hluku"
+                  value={technika.omezeni_hluku}
+                  onChange={(e) => updateTechnikaField("omezeni_hluku", e.target.value)}
+                  disabled={readOnly}
+                  rows={2}
+                  className={inputClass}
+                />
+              </label>
+
+              <label className="block space-y-2">
+                <span className={labelClass}>Časová omezení</span>
+                <textarea
+                  name="casova_omezeni"
+                  value={technika.casova_omezeni}
+                  onChange={(e) => updateTechnikaField("casova_omezeni", e.target.value)}
+                  disabled={readOnly}
+                  rows={2}
+                  className={inputClass}
+                />
+              </label>
+
+              <label className="block space-y-2">
+                <span className={labelClass}>Další technické poznámky</span>
+                <textarea
+                  name="dalsi_poznamky"
+                  value={technika.dalsi_poznamky}
+                  onChange={(e) => updateTechnikaField("dalsi_poznamky", e.target.value)}
+                  disabled={readOnly}
+                  rows={3}
+                  className={inputClass}
+                />
+              </label>
+
+              <label className="flex gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  name="pozadovan_vyjezd_technika"
+                  checked={technika.pozadovan_vyjezd_technika}
+                  onChange={(e) =>
+                    updateTechnikaField("pozadovan_vyjezd_technika", e.target.checked)
+                  }
+                  disabled={readOnly}
+                  value="on"
+                />
+                <span>Požaduji výjezd technika před akcí</span>
+              </label>
+            </section>
+          )}
+
           <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-6">
             {!readOnly && step > 1 ? (
               <button
@@ -472,7 +743,7 @@ export default function PoptavkaFormClient({
               </button>
             ) : null}
 
-            {!readOnly && step < 3 ? (
+            {!readOnly && step < maxStep ? (
               <button
                 type="button"
                 onClick={() => setStep((current) => current + 1)}
@@ -482,7 +753,7 @@ export default function PoptavkaFormClient({
               </button>
             ) : null}
 
-            {!readOnly && step === 3 ? (
+            {!readOnly && (step === 3 || step === 4) ? (
               <button
                 type="submit"
                 disabled={submitting}
@@ -504,6 +775,18 @@ export default function PoptavkaFormClient({
             </Link>
           </div>
         </form>
+
+        {mode === "edit" && poptavkaId && (readOnly || step === 5) ? (
+          <div className="mt-8 space-y-6 border-t border-white/10 pt-8">
+            <PoptavkaFotkyClient
+              key={initialFotky.map((row) => row.id).join("-") || "empty"}
+              poptavkaId={poptavkaId}
+              initialFotky={initialFotky}
+              readOnly={readOnly}
+            />
+            {!readOnly ? <PoptavkaSubmitButton poptavkaId={poptavkaId} /> : null}
+          </div>
+        ) : null}
       </PortalCard>
     </PortalShell>
   );

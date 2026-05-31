@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import PoptavkaFormClient from "@/components/portal/PoptavkaFormClient";
+import PoptavkaFotkyClient from "@/components/portal/PoptavkaFotkyClient";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
 import { POPTAVKA_STAV_LABELS, SETUP_OBLAST_LABELS } from "@/lib/client-portal/labels";
@@ -10,11 +11,15 @@ import {
   formatTypAkce,
 } from "@/lib/client-portal/poptavka-form";
 import {
+  formatTriVolba,
+  technikaFromRecord,
+} from "@/lib/client-portal/poptavka-technika-form";
+import {
   isPoptavkaEditable,
   loadPoptavkaDetail,
   loadPortalSetups,
 } from "@/lib/client-portal/poptavka-server";
-import { SETUP_OBLASTI } from "@/lib/client-portal/types";
+import { SETUP_OBLASTI, type PoptavkaTechnickeUdaje } from "@/lib/client-portal/types";
 import { createClient } from "@/lib/supabase/server";
 
 function trimTime(value: string | null | undefined) {
@@ -22,12 +27,75 @@ function trimTime(value: string | null | undefined) {
   return value.slice(0, 5);
 }
 
+function ReadOnlyField({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value?.trim()) return null;
+  return (
+    <div>
+      <dt className="text-slate-500">{label}</dt>
+      <dd className="whitespace-pre-wrap text-slate-100">{value}</dd>
+    </div>
+  );
+}
+
+function TechnikaReadOnlySection({ row }: { row: PoptavkaTechnickeUdaje | null }) {
+  if (!row) {
+    return (
+      <section className="mt-8 space-y-3 border-t border-white/10 pt-6">
+        <h2 className="text-lg font-semibold text-white">Technické údaje místa</h2>
+        <p className="text-sm text-slate-500">Technické údaje nebyly doplněny.</p>
+      </section>
+    );
+  }
+
+  const extra = row.odpovedi_extra ?? {};
+
+  return (
+    <section className="mt-8 space-y-4 border-t border-white/10 pt-6">
+      <h2 className="text-lg font-semibold text-white">Technické údaje místa</h2>
+      <dl className="grid gap-4 text-sm sm:grid-cols-2">
+        <ReadOnlyField label="Příjezd" value={row.prijezd_poznamka} />
+        <ReadOnlyField
+          label="Lze zajet dodávkou"
+          value={formatTriVolba(String(extra.lze_zajet_autem ?? ""))}
+        />
+        <ReadOnlyField label="Parkování" value={row.parkovani_poznamka} />
+        <ReadOnlyField label="Rozvaděče" value={row.rozvadece_poznamka} />
+        <ReadOnlyField label="Přípojka / proud" value={row.elektro_pripojka} />
+        <ReadOnlyField label="Jištění / okruhy" value={row.elektro_jisteni} />
+        <ReadOnlyField label="Typ zásuvky" value={row.elektro_zasuvka} />
+        <ReadOnlyField
+          label="Vzdálenost elektřiny"
+          value={
+            row.elektro_vzdalenost_m != null ? `${row.elektro_vzdalenost_m} m` : null
+          }
+        />
+        <ReadOnlyField label="Kabelové trasy" value={row.kabelove_trasy} />
+        <ReadOnlyField
+          label="Kabel přes silnici"
+          value={formatTriVolba(String(extra.kabel_pres_silnici ?? ""))}
+        />
+        <ReadOnlyField label="Místo pro stage" value={row.misto_stage} />
+        <ReadOnlyField label="Místo pro FOH" value={row.misto_foh} />
+        <ReadOnlyField label="Omezení hluku" value={row.omezeni_hluku} />
+        <ReadOnlyField label="Časová omezení" value={row.casova_omezeni} />
+        <ReadOnlyField label="Další poznámky" value={row.dalsi_poznamky} />
+        <div>
+          <dt className="text-slate-500">Výjezd technika</dt>
+          <dd className="text-slate-100">
+            {row.pozadovan_vyjezd_technika ? "Ano" : "Ne"}
+          </dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
 export default async function PortalPoptavkaDetailPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ saved?: string; error?: string }>;
+  searchParams?: Promise<{ saved?: string; error?: string; submitted?: string }>;
 }) {
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
@@ -90,8 +158,11 @@ export default async function PortalPoptavkaDetailPage({
             poznamka_klienta: row.poznamka_klienta,
           })),
         }}
+        initialTechnika={technikaFromRecord(detail.technicke_udaje)}
+        initialFotky={detail.fotky}
         errorCode={resolvedSearchParams?.error ?? null}
         saved={resolvedSearchParams?.saved === "1"}
+        submitted={resolvedSearchParams?.submitted === "1"}
       />
     );
   }
@@ -104,6 +175,20 @@ export default async function PortalPoptavkaDetailPage({
   return (
     <PortalShell showBackToPortal>
       <PortalCard title="Detail poptávky">
+        {detail.stav === "odeslana" || detail.stav === "ceka_na_schvaleni" ? (
+          <p className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
+            Poptávka čeká na kontrolu WEST COUNTY.
+            {detail.odeslano_at
+              ? ` Odesláno ${new Intl.DateTimeFormat("cs-CZ", {
+                  day: "numeric",
+                  month: "numeric",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }).format(new Date(detail.odeslano_at))}.`
+              : null}
+          </p>
+        ) : null}
         {resolvedSearchParams?.saved === "1" ? (
           <p className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
             Poptávka byla uložena.
@@ -195,6 +280,16 @@ export default async function PortalPoptavkaDetailPage({
             ))
           )}
         </section>
+
+        <TechnikaReadOnlySection row={detail.technicke_udaje} />
+
+        <div className="mt-8 border-t border-white/10 pt-8">
+          <PoptavkaFotkyClient
+            poptavkaId={detail.poptavka_id}
+            initialFotky={detail.fotky}
+            readOnly
+          />
+        </div>
 
         <div className="mt-8 flex flex-wrap gap-3">
           <Link
