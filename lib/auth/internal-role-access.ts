@@ -11,6 +11,7 @@ export function isPathForbiddenForReadOnlyInternalRole(pathname: string): boolea
   if (path === "/dochazka" || path.startsWith("/dochazka/")) return true;
   if (path.startsWith("/admin")) return true;
   if (path === "/zakazky/nova") return true;
+  if (path === "/zakazky/poptavky" || path.startsWith("/zakazky/poptavky/")) return true;
   if (/^\/zakazky\/[^/]+\/edit(\/|$)/.test(path)) return true;
   if (/^\/zakazky\/[^/]+\/(scan|nakladka)(\/|$)/.test(path)) return true;
   if (/^\/zakazky\/[^/]+\/poskozeni(\/|$)/.test(path)) return true;
@@ -31,6 +32,7 @@ export type InternalNavVisibility = {
   showDashboard: boolean;
   showKalendar: boolean;
   showZakazky: boolean;
+  showPoptavkyInbox: boolean;
   showMista: boolean;
   showSkladSprava: boolean;
   showSkladSetupy: boolean;
@@ -47,6 +49,7 @@ export function getInternalNavVisibility(role: string | null | undefined): Inter
     showDashboard: !readOnly,
     showKalendar: true,
     showZakazky: true,
+    showPoptavkyInbox: role === "admin" || role === "sef",
     showMista: !readOnly,
     showSkladSprava: true,
     showSkladSetupy: !readOnly,

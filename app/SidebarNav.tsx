@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { resolveAppAdminAccess } from "@/lib/auth/admin-access";
+import { resolveAppAdminAccess, resolveAppAdminOrSefAccess } from "@/lib/auth/admin-access";
 import { useProfileRole } from "@/lib/auth/use-profile-role";
 import { subscribeNotificationsUnreadChanged } from "@/lib/notifications/unread-count-sync";
 import { supabase } from "@/lib/supabase";
@@ -52,6 +52,7 @@ export default function SidebarNav() {
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(0);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showPoptavkyInbox, setShowPoptavkyInbox] = useState(false);
   const { nav } = useProfileRole();
 
   useEffect(() => {
@@ -63,16 +64,17 @@ export default function SidebarNav() {
       } = await supabase.auth.getUser();
       if (!user) {
         setShowAdmin(false);
+        setShowPoptavkyInbox(false);
         return;
       }
 
-      const isAdmin = await resolveAppAdminAccess(
-        supabase,
-        user.id,
-        user.email
-      );
+      const [isAdmin, canManagePoptavky] = await Promise.all([
+        resolveAppAdminAccess(supabase, user.id, user.email),
+        resolveAppAdminOrSefAccess(supabase, user.id, user.email),
+      ]);
       if (!active) return;
       setShowAdmin(isAdmin);
+      setShowPoptavkyInbox(canManagePoptavky);
 
       const { count, error } = await supabase
         .from("notifikace")
@@ -128,6 +130,10 @@ export default function SidebarNav() {
         <NavLink href="/zakazky" exact>
           Zakázky
         </NavLink>
+      ) : null}
+
+      {showPoptavkyInbox ? (
+        <NavLink href="/zakazky/poptavky">Poptávky</NavLink>
       ) : null}
 
       {nav.showMista ? (

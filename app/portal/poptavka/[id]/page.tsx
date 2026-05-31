@@ -163,6 +163,9 @@ export default async function PortalPoptavkaDetailPage({
         errorCode={resolvedSearchParams?.error ?? null}
         saved={resolvedSearchParams?.saved === "1"}
         submitted={resolvedSearchParams?.submitted === "1"}
+        revisionNote={
+          detail.stav === "v_revizi" ? detail.zamitnuto_duvod : null
+        }
       />
     );
   }
@@ -175,6 +178,16 @@ export default async function PortalPoptavkaDetailPage({
   return (
     <PortalShell showBackToPortal>
       <PortalCard title="Detail poptávky">
+        {detail.stav === "zamitnuta" && detail.zamitnuto_duvod ? (
+          <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+            <span className="font-semibold">Důvod zamítnutí:</span> {detail.zamitnuto_duvod}
+          </p>
+        ) : null}
+        {detail.stav === "schvalena" ? (
+          <p className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+            Poptávka byla schválena WEST COUNTY.
+          </p>
+        ) : null}
         {detail.stav === "odeslana" || detail.stav === "ceka_na_schvaleni" ? (
           <p className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
             Poptávka čeká na kontrolu WEST COUNTY.

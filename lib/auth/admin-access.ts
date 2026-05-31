@@ -25,6 +25,34 @@ export function hasAppAdminOrSefAccess(
   return hasAppAdminAccess(role, isSystemAdminEmail) || role === "sef";
 }
 
+export async function resolveAppAdminOrSefAccess(
+  supabase: SupabaseClient,
+  userId: string,
+  authEmail?: string | null
+): Promise<boolean> {
+  const email = normalizeAuthEmail(authEmail);
+  if (!email) {
+    return false;
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (profile?.role === "sef" || isAdminRole(profile?.role)) {
+    return true;
+  }
+
+  const systemCheck = await checkSystemAdminEmail(supabase, email);
+  if (systemCheck.error) {
+    return false;
+  }
+
+  return hasAppAdminOrSefAccess(profile?.role, systemCheck.isSystemAdmin);
+}
+
 function isMissingTableError(message: string): boolean {
   const lower = message.toLowerCase();
   return (

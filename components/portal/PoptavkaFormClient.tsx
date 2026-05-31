@@ -54,6 +54,7 @@ type Props = {
   errorCode?: string | null;
   saved?: boolean;
   submitted?: boolean;
+  revisionNote?: string | null;
 };
 
 const CREATE_STEPS = [
@@ -91,6 +92,7 @@ export default function PoptavkaFormClient({
   errorCode,
   saved,
   submitted,
+  revisionNote,
 }: Props) {
   const steps = mode === "create" ? CREATE_STEPS : EDIT_STEPS;
   const maxStep = steps.length;
@@ -200,6 +202,11 @@ export default function PoptavkaFormClient({
   return (
     <PortalShell showBackToPortal>
       <PortalCard title={title}>
+        {revisionNote ? (
+          <p className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            <span className="font-semibold">Poznámka k doplnění:</span> {revisionNote}
+          </p>
+        ) : null}
         {submitted ? (
           <p className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
             Poptávka byla odeslána a čeká na kontrolu WEST COUNTY.

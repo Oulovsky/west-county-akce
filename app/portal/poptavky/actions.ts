@@ -292,6 +292,7 @@ export async function submitPoptavkaAction(formData: FormData) {
     .update({
       stav: "odeslana",
       odeslano_at: now,
+      zamitnuto_duvod: null,
       updated_at: now,
     })
     .eq("poptavka_id", poptavkaId);

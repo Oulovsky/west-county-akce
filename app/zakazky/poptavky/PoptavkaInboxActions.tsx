@@ -1,0 +1,151 @@
+"use client";
+
+import {
+  approvePoptavkaAction,
+  rejectPoptavkaAction,
+  returnPoptavkaToRevisionAction,
+  updatePoptavkaInterniPoznamkaAction,
+} from "@/app/zakazky/poptavky/actions";
+import type { PoptavkaStav } from "@/lib/client-portal/types";
+
+const ERROR_MESSAGES: Record<string, string> = {
+  missing_reason: "Vyplňte důvod nebo poznámku.",
+  invalid_state: "Akce není pro aktuální stav poptávky dostupná.",
+  save_failed: "Uložení se nezdařilo.",
+  not_found: "Poptávka nenalezena.",
+};
+
+export default function PoptavkaInboxActions({
+  poptavkaId,
+  stav,
+  canAct,
+  errorCode,
+}: {
+  poptavkaId: string;
+  stav: PoptavkaStav;
+  canAct: boolean;
+  errorCode?: string | null;
+}) {
+  const inputClass =
+    "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none ring-blue-500/40 focus:ring-2";
+
+  return (
+    <section className="space-y-6 rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
+      <h2 className="text-xl font-semibold text-white">Akce šéfa / admina</h2>
+
+      {errorCode && ERROR_MESSAGES[errorCode] ? (
+        <p className="rounded-lg border border-red-500/30 bg-red-950/20 px-4 py-3 text-sm text-red-200">
+          {ERROR_MESSAGES[errorCode]}
+        </p>
+      ) : null}
+
+      {!canAct ? (
+        <p className="text-sm text-slate-400">
+          Poptávka je ve stavu <strong className="text-slate-200">{stav}</strong>. Stavové akce
+          nejsou dostupné.
+        </p>
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-3">
+          <form action={returnPoptavkaToRevisionAction} className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-950/10 p-4">
+            <h3 className="font-semibold text-amber-100">Vrátit k doplnění</h3>
+            <input type="hidden" name="poptavka_id" value={poptavkaId} />
+            <label className="block text-sm text-slate-300">
+              Poznámka pro klienta
+              <textarea
+                name="duvod"
+                required
+                rows={4}
+                className={inputClass}
+                placeholder="Co má klient doplnit nebo upravit…"
+              />
+            </label>
+            <button
+              type="submit"
+              className="rounded-xl border border-amber-500/40 bg-amber-600/20 px-4 py-2 text-sm font-semibold text-amber-50 hover:bg-amber-600/30"
+            >
+              Vrátit k doplnění
+            </button>
+          </form>
+
+          <form action={rejectPoptavkaAction} className="space-y-3 rounded-xl border border-red-500/20 bg-red-950/10 p-4">
+            <h3 className="font-semibold text-red-100">Zamítnout</h3>
+            <input type="hidden" name="poptavka_id" value={poptavkaId} />
+            <label className="block text-sm text-slate-300">
+              Důvod zamítnutí
+              <textarea
+                name="duvod"
+                required
+                rows={4}
+                className={inputClass}
+                placeholder="Důvod, který uvidí klient…"
+              />
+            </label>
+            <button
+              type="submit"
+              className="rounded-xl border border-red-500/40 bg-red-600/20 px-4 py-2 text-sm font-semibold text-red-50 hover:bg-red-600/30"
+            >
+              Zamítnout poptávku
+            </button>
+          </form>
+
+          <form
+            action={approvePoptavkaAction}
+            onSubmit={(event) => {
+              const confirmed = window.confirm(
+                "Schválit poptávku? Zakázka se zatím nevytvoří — pouze se změní stav."
+              );
+              if (!confirmed) event.preventDefault();
+            }}
+            className="space-y-3 rounded-xl border border-emerald-500/20 bg-emerald-950/10 p-4"
+          >
+            <h3 className="font-semibold text-emerald-100">Schválit</h3>
+            <input type="hidden" name="poptavka_id" value={poptavkaId} />
+            <p className="text-sm leading-relaxed text-slate-400">
+              Poptávka přejde do stavu schválená. Konverze na zakázku proběhne v další fázi.
+            </p>
+            <button
+              type="submit"
+              className="rounded-xl border border-emerald-500/40 bg-emerald-600/20 px-4 py-2 text-sm font-semibold text-emerald-50 hover:bg-emerald-600/30"
+            >
+              Schválit poptávku
+            </button>
+          </form>
+        </div>
+      )}
+    </section>
+  );
+}
+
+export function PoptavkaInterniPoznamkaForm({
+  poptavkaId,
+  defaultValue,
+}: {
+  poptavkaId: string;
+  defaultValue: string;
+}) {
+  const inputClass =
+    "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none ring-blue-500/40 focus:ring-2";
+
+  return (
+    <section className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
+      <h2 className="text-xl font-semibold text-white">Interní poznámka</h2>
+      <p className="mt-1 text-sm text-slate-400">Viditelná pouze pro interní tým. Klient ji neuvidí.</p>
+      <form action={updatePoptavkaInterniPoznamkaAction} className="mt-4 space-y-3">
+        <input type="hidden" name="poptavka_id" value={poptavkaId} />
+        <textarea
+          name="interni_poznamka"
+          defaultValue={defaultValue}
+          rows={5}
+          className={inputClass}
+          placeholder="Interní poznámky k poptávce…"
+        />
+        <button
+          type="submit"
+          className="rounded-xl border border-blue-500/40 bg-blue-600/20 px-4 py-2 text-sm font-semibold text-blue-50 hover:bg-blue-600/30"
+        >
+          Uložit interní poznámku
+        </button>
+      </form>
+    </section>
+  );
+}
