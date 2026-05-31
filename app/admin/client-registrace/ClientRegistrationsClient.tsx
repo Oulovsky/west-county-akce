@@ -1,31 +1,43 @@
 "use client";
 
-import { useState } from "react";
-import { approveClientRegistrationAction, rejectClientRegistrationAction } from "./actions";
 import { parseClientRegistrationSnapshot } from "@/lib/client-portal/registration-snapshot";
 
-export type PendingClientRegistrationRow = {
+export type ClientRegistrationAuditRow = {
   registration_id: string;
   user_id: string;
   navrh_ico: string | null;
   navrh_nazev_firmy: string | null;
   ares_snapshot: unknown;
   stav: string;
+  klient_id: string | null;
+  schvaleno_at: string | null;
   created_at: string;
 };
+
+const STAV_LABELS: Record<string, string> = {
+  approved: "Aktivováno",
+  pending: "Legacy — čekalo na schválení",
+  rejected: "Zamítnuto",
+};
+
+function stavTone(stav: string) {
+  if (stav === "approved") {
+    return "border-emerald-500/40 bg-emerald-500/10 text-emerald-100";
+  }
+  if (stav === "rejected") {
+    return "border-red-500/40 bg-red-500/10 text-red-100";
+  }
+  return "border-amber-500/40 bg-amber-500/10 text-amber-100";
+}
 
 export default function ClientRegistrationsClient({
   registrations,
 }: {
-  registrations: PendingClientRegistrationRow[];
+  registrations: ClientRegistrationAuditRow[];
 }) {
-  const [rejectingId, setRejectingId] = useState<string | null>(null);
-  const [rejectReason, setRejectReason] = useState("");
-  const [busyId, setBusyId] = useState<string | null>(null);
-
   if (registrations.length === 0) {
     return (
-      <p className="text-sm text-slate-400">Žádné registrace ke schválení.</p>
+      <p className="text-sm text-slate-400">Zatím nejsou žádné záznamy registrací.</p>
     );
   }
 
@@ -46,12 +58,17 @@ export default function ClientRegistrationsClient({
                   {registration.navrh_nazev_firmy ?? form?.nazev ?? "—"}
                 </h3>
                 <p className="mt-1 text-sm text-slate-400">
-                  IČO {registration.navrh_ico ?? form?.ico ?? "—"} · odesláno{" "}
+                  IČO {registration.navrh_ico ?? form?.ico ?? "—"} · registrace{" "}
                   {new Date(registration.created_at).toLocaleString("cs-CZ")}
+                  {registration.schvaleno_at
+                    ? ` · aktivováno ${new Date(registration.schvaleno_at).toLocaleString("cs-CZ")}`
+                    : null}
                 </p>
               </div>
-              <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-100">
-                {registration.stav}
+              <span
+                className={`rounded-full border px-3 py-1 text-xs font-semibold ${stavTone(registration.stav)}`}
+              >
+                {STAV_LABELS[registration.stav] ?? registration.stav}
               </span>
             </div>
 
@@ -75,72 +92,13 @@ export default function ClientRegistrationsClient({
                     {[form.ulice, form.mesto, form.psc].filter(Boolean).join(", ") || "—"}
                   </dd>
                 </div>
-                {form.poznamka ? (
+                {registration.klient_id ? (
                   <div className="sm:col-span-2">
-                    <dt className="text-slate-500">Poznámka</dt>
-                    <dd className="text-slate-200">{form.poznamka}</dd>
+                    <dt className="text-slate-500">Klient v systému</dt>
+                    <dd className="font-mono text-xs text-slate-300">{registration.klient_id}</dd>
                   </div>
                 ) : null}
               </dl>
-            ) : null}
-
-            <div className="mt-4 flex flex-wrap gap-3">
-              <form
-                action={(formData) => {
-                  setBusyId(registration.registration_id);
-                  void approveClientRegistrationAction(formData);
-                }}
-              >
-                <input type="hidden" name="registration_id" value={registration.registration_id} />
-                <button
-                  type="submit"
-                  disabled={busyId === registration.registration_id}
-                  className="rounded-lg border border-emerald-500/50 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/25 disabled:opacity-60"
-                >
-                  Schválit
-                </button>
-              </form>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setRejectingId(registration.registration_id);
-                  setRejectReason("");
-                }}
-                className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/20"
-              >
-                Zamítnout
-              </button>
-            </div>
-
-            {rejectingId === registration.registration_id ? (
-              <form
-                className="mt-4 space-y-3 border-t border-slate-700 pt-4"
-                action={(formData) => {
-                  setBusyId(registration.registration_id);
-                  void rejectClientRegistrationAction(formData);
-                }}
-              >
-                <input type="hidden" name="registration_id" value={registration.registration_id} />
-                <label className="block space-y-2">
-                  <span className="text-sm text-slate-300">Důvod zamítnutí</span>
-                  <textarea
-                    name="zamitnuto_duvod"
-                    value={rejectReason}
-                    onChange={(event) => setRejectReason(event.target.value)}
-                    required
-                    rows={3}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
-                  />
-                </label>
-                <button
-                  type="submit"
-                  disabled={busyId === registration.registration_id}
-                  className="rounded-lg border border-red-500/50 bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-100"
-                >
-                  Potvrdit zamítnutí
-                </button>
-              </form>
             ) : null}
           </article>
         );

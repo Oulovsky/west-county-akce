@@ -10,7 +10,7 @@ export default async function AdminClientRegistracePage() {
   if (!access.ok) {
     return (
       <div className="p-6">
-        <h1 className="text-3xl font-bold text-white">Registrace klientů</h1>
+        <h1 className="text-3xl font-bold text-white">Přehled registrací klientů</h1>
         <p className="mt-4 text-red-400">{access.message}</p>
       </div>
     );
@@ -19,15 +19,15 @@ export default async function AdminClientRegistracePage() {
   const { data, error } = await supabase
     .from("client_registrations")
     .select(
-      "registration_id, user_id, navrh_ico, navrh_nazev_firmy, ares_snapshot, stav, created_at"
+      "registration_id, user_id, navrh_ico, navrh_nazev_firmy, ares_snapshot, stav, klient_id, schvaleno_at, created_at"
     )
-    .eq("stav", "pending")
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false })
+    .limit(100);
 
   if (error) {
     return (
       <div className="p-6">
-        <h1 className="text-3xl font-bold text-white">Registrace klientů</h1>
+        <h1 className="text-3xl font-bold text-white">Přehled registrací klientů</h1>
         <p className="mt-4 text-red-400">{error.message}</p>
       </div>
     );
@@ -37,11 +37,10 @@ export default async function AdminClientRegistracePage() {
     <div className="p-6">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-white">Registrace klientů</h1>
+          <h1 className="text-3xl font-bold text-white">Přehled registrací klientů</h1>
           <p className="mt-2 text-sm text-slate-400">
-            Schvalování klientských registrací z portálu. Po schválení vznikne aktivní{" "}
-            <code className="text-slate-300">client_accounts</code> vazba na{" "}
-            <code className="text-slate-300">klienti</code>.
+            Auditní log registrací z klientského portálu. Účty se aktivují automaticky —
+            schvalování probíhá až u konkrétních poptávek.
           </p>
         </div>
         <Link href="/admin" className="text-sm text-blue-300 hover:text-blue-200">

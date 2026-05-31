@@ -1,14 +1,10 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type {
-  ClientAccount,
-  ClientRegistration,
-} from "@/lib/client-portal/types";
+import type { ClientAccount } from "@/lib/client-portal/types";
 
 export type ClientPortalSession =
   | { kind: "guest" }
-  | { kind: "authenticated_pending"; registration: ClientRegistration }
   | { kind: "authenticated_no_registration"; userId: string; email: string | null }
   | { kind: "active"; account: ClientAccount; klientNazev: string | null }
   | { kind: "disabled"; account: ClientAccount };
@@ -52,10 +48,7 @@ export async function loadClientPortalSession(
     return { kind: "guest" };
   }
 
-  const [{ data: account }, { data: registration }] = await Promise.all([
-    loadClientAccount(supabase, user.id),
-    loadLatestClientRegistration(supabase, user.id),
-  ]);
+  const { data: account } = await loadClientAccount(supabase, user.id);
 
   if (account?.stav === "active" && account.klient_id) {
     const { data: klient } = await supabase
@@ -75,13 +68,6 @@ export async function loadClientPortalSession(
     return {
       kind: "disabled",
       account: account as ClientAccount,
-    };
-  }
-
-  if (registration?.stav === "pending") {
-    return {
-      kind: "authenticated_pending",
-      registration: registration as ClientRegistration,
     };
   }
 

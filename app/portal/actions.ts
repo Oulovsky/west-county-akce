@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { normalizeIco } from "@/lib/ares/klient-ares";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
+import { activateClientPortalRegistration } from "@/lib/client-portal/register-client-server";
 import {
   buildClientRegistrationSnapshot,
   splitContactName,
@@ -16,6 +17,7 @@ function revalidatePortalPaths() {
   revalidatePath("/portal/prihlaseni");
   revalidatePath("/portal/registrace");
   revalidatePath("/portal/profil");
+  revalidatePath("/portal/poptavky");
   revalidatePath("/admin/client-registrace");
 }
 
@@ -91,21 +93,26 @@ export async function portalRegisterAction(formData: FormData) {
 
   if (existingUser) {
     const existingSession = await loadClientPortalSession(supabase);
-    if (existingSession.kind === "authenticated_pending") {
-      redirect("/portal/registrace?error=already_signed_in");
-    }
     if (existingSession.kind === "active") {
       redirect("/portal/registrace?error=already_signed_in");
     }
   }
 
-  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-    email,
-    password,
-  });
+  let userId: string;
 
-  if (signUpError || !signUpData.user) {
-    redirect("/portal/registrace?error=signup_failed");
+  if (existingUser) {
+    userId = existingUser.id;
+  } else {
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+
+    if (signUpError || !signUpData.user) {
+      redirect("/portal/registrace?error=signup_failed");
+    }
+
+    userId = signUpData.user.id;
   }
 
   let aresSubject: AresSubject | null = null;
@@ -133,16 +140,17 @@ export async function portalRegisterAction(formData: FormData) {
     },
   });
 
-  const { error: registrationError } = await supabase.from("client_registrations").insert({
-    user_id: signUpData.user.id,
-    navrh_ico: ico,
-    navrh_nazev_firmy: nazev,
-    ares_snapshot: snapshot,
-    stav: "pending",
-  });
-
-  if (registrationError) {
-    await supabase.auth.signOut();
+  try {
+    await activateClientPortalRegistration({
+      userId,
+      snapshot,
+      ico,
+      nazev,
+    });
+  } catch {
+    if (!existingUser) {
+      await supabase.auth.signOut();
+    }
     redirect("/portal/registrace?error=registration_save_failed");
   }
 

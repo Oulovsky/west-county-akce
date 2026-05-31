@@ -90,8 +90,9 @@ export default function PortalRegistraceClient() {
     <PortalShell>
       <PortalCard title="Registrace klienta">
         <p className="text-sm leading-relaxed text-slate-400">
-          Po odeslání registrace ji schválí WEST COUNTY. Do interního systému se
-          nedostanete automaticky — pouze do klientské zóny.
+          Po registraci je váš klientský účet aktivní okamžitě. Můžete rovnou zadat
+          poptávku — schvaluje ji WEST COUNTY, ne samotná registrace. Do interního
+          systému se nedostanete, pouze do klientské zóny.
         </p>
 
         {errorCode ? (
@@ -265,7 +266,7 @@ export default function PortalRegistraceClient() {
             disabled={loading}
             className="w-full rounded-xl border border-amber-500/60 bg-amber-500/20 px-4 py-3 text-sm font-bold text-amber-50 transition hover:bg-amber-500/30 disabled:opacity-60"
           >
-            {loading ? "Odesílám registraci…" : "Odeslat registraci ke schválení"}
+            {loading ? "Registruji…" : "Dokončit registraci"}
           </button>
         </form>
 

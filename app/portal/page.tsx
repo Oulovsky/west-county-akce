@@ -42,36 +42,6 @@ export default async function PortalPage({
     );
   }
 
-  if (session.kind === "authenticated_pending") {
-    return (
-      <PortalShell>
-        <PortalCard title="Registrace čeká na schválení">
-          <p className="text-sm leading-relaxed text-slate-400">
-            Vaše registrace firmy{" "}
-            <span className="font-semibold text-white">
-              {session.registration.navrh_nazev_firmy ?? "—"}
-            </span>{" "}
-            (IČO {session.registration.navrh_ico ?? "—"}) byla odeslána a čeká na
-            schválení WEST COUNTY.
-          </p>
-          {justRegistered ? (
-            <p className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-              Registrace byla úspěšně odeslána.
-            </p>
-          ) : null}
-          <form action={portalSignOutAction} className="mt-6">
-            <button
-              type="submit"
-              className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-slate-200 transition hover:bg-white/10"
-            >
-              Odhlásit se
-            </button>
-          </form>
-        </PortalCard>
-      </PortalShell>
-    );
-  }
-
   if (session.kind === "disabled") {
     return (
       <PortalShell>
@@ -98,7 +68,7 @@ export default async function PortalPage({
         <PortalCard title="Dokončete registraci">
           <p className="text-sm text-slate-400">
             Jste přihlášeni, ale nemáte aktivní klientský účet. Dokončete registraci
-            firmy nebo počkejte na schválení.
+            firmy pro zadávání poptávek.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
@@ -128,6 +98,11 @@ export default async function PortalPage({
   return (
     <PortalShell showMainNav>
       <PortalCard title="Vítejte v klientské zóně">
+        {justRegistered ? (
+          <p className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+            Registrace proběhla úspěšně. Můžete rovnou vytvořit poptávku.
+          </p>
+        ) : null}
         <p className="text-sm leading-relaxed text-slate-400">
           Přihlášen jako klient{" "}
           <span className="font-semibold text-white">

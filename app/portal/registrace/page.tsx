@@ -12,10 +12,6 @@ export default async function PortalRegistracePage() {
     redirect("/portal");
   }
 
-  if (session.kind === "authenticated_pending") {
-    redirect("/portal");
-  }
-
   return (
     <Suspense fallback={<div className="min-h-screen bg-[#030712]" />}>
       <PortalRegistraceClient />
