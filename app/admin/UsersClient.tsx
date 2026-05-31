@@ -402,6 +402,7 @@ function UserEditorRow({
             <option value="sef">sef</option>
             <option value="skladnik">skladnik</option>
             <option value="zamestnanec">zamestnanec</option>
+            <option value="hdt">hdt</option>
           </select>
         </label>
 
@@ -709,6 +710,7 @@ export default function UsersClient({ users: initialUsers }: { users: UserRow[] 
               <option value="sef">sef</option>
               <option value="skladnik">skladnik</option>
               <option value="zamestnanec">zamestnanec</option>
+              <option value="hdt">hdt</option>
             </select>
           </label>
           <label className="block">

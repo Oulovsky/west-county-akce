@@ -12,7 +12,7 @@ type ActionResult = {
   hodinovy_naklad_akce?: number;
 };
 
-const allowedRoles = ["admin", "sef", "skladnik", "zamestnanec"];
+import { isUserRole } from "@/lib/roles";
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Unknown error";
@@ -87,7 +87,7 @@ export async function updateUserRole(
 
     const normalizedRole = String(newRole).trim().toLowerCase();
 
-    if (!allowedRoles.includes(normalizedRole)) {
+    if (!isUserRole(normalizedRole)) {
       return { ok: false, error: "Neplatná role" };
     }
 
@@ -528,7 +528,7 @@ export async function createEmployee(formData: FormData): Promise<ActionResult> 
 
     if (!fullName) return { ok: false, error: "Jméno je povinné." };
     if (!email) return { ok: false, error: "Email je povinný." };
-    if (!allowedRoles.includes(role)) return { ok: false, error: "Neplatná role." };
+    if (!isUserRole(role)) return { ok: false, error: "Neplatná role." };
     if (!Number.isFinite(hourlyCost) || hourlyCost < 0) {
       return { ok: false, error: "Hodinový náklad musí být číslo 0 nebo vyšší." };
     }
