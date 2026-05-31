@@ -8,17 +8,12 @@ import {
   isEmployeeLoginAllowed,
   loadEmployeeProfile,
 } from "@/lib/auth/employee-access";
+import { isPublicAppPath } from "@/lib/public-routes";
 
 type AuthStatus = "loading" | "authorized" | "public" | "unauthorized";
 
 function isPublicPath(pathname: string) {
-  return (
-    pathname === "/login" ||
-    pathname.startsWith("/auth/") ||
-    pathname.startsWith("/dotaznik/") ||
-    pathname.startsWith("/schvaleni/") ||
-    pathname.startsWith("/faktura-render/")
-  );
+  return isPublicAppPath(pathname);
 }
 
 export default function AuthGate({
@@ -45,7 +40,7 @@ export default function AuthGate({
 
       const publicPath = isPublicPath(pathname);
 
-      if (pathname.startsWith("/dotaznik/")) {
+      if (pathname.startsWith("/dotaznik/") || isPublicPath(pathname)) {
         setStatus("public");
         return;
       }

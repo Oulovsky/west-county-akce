@@ -166,12 +166,8 @@ export function getDochazkaPath(zakazkaId?: string | null) {
   return "/dochazka";
 }
 
+import { shouldHideAppChrome as hidePublicChrome } from "@/lib/public-routes";
+
 export function shouldHideAppChrome(pathname: string) {
-  return (
-    pathname === "/login" ||
-    pathname.startsWith("/auth/") ||
-    pathname.startsWith("/dotaznik/") ||
-    pathname.startsWith("/schvaleni/") ||
-    pathname.startsWith("/faktura-render/")
-  );
+  return hidePublicChrome(pathname);
 }

@@ -12,13 +12,10 @@ import {
 } from "@/lib/auth/internal-role-access";
 import { isReadOnlyInternalRole } from "@/lib/roles";
 import { getSafeNextPath } from "@/lib/auth/oauth-redirect";
+import { isPublicAppPath } from "@/lib/public-routes";
 
 function isPublicPath(pathname: string) {
-  if (pathname === "/login") return true;
-  if (pathname.startsWith("/auth/")) return true;
-  if (pathname.startsWith("/dotaznik/")) return true;
-  if (pathname.startsWith("/schvaleni/")) return true;
-  if (pathname.startsWith("/faktura-render/")) return true;
+  if (isPublicAppPath(pathname)) return true;
   if (pathname.startsWith("/api/")) return true;
   if (pathname.startsWith("/_next/")) return true;
   if (pathname === "/favicon.ico") return true;
@@ -58,7 +55,7 @@ export async function proxy(req: NextRequest) {
     callbackUrl.searchParams.set("code", oauthCode);
     const nextFromQuery = req.nextUrl.searchParams.get("next");
     const nextFallback =
-      pathname === "/" ? "/zakazky" : `${pathname}${req.nextUrl.search}`;
+      pathname === "/" ? "/" : `${pathname}${req.nextUrl.search}`;
     callbackUrl.searchParams.set(
       "next",
       getSafeNextPath(nextFromQuery ?? nextFallback)
