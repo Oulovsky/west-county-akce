@@ -62,22 +62,11 @@ export default function HomeLandingPage() {
 
       <main className="relative z-10">
         <section className="mx-auto max-w-6xl px-4 pb-10 pt-14 sm:px-6 sm:pt-20">
-          <div className="relative mx-auto max-w-3xl text-center">
-            <div className="relative flex flex-col items-center py-2">
-              <Image
-                src={LOGO_SRC}
-                alt=""
-                aria-hidden
-                width={400}
-                height={400}
-                className="pointer-events-none absolute left-1/2 top-1/2 z-0 h-[min(78vw,24rem)] w-[min(78vw,24rem)] -translate-x-1/2 -translate-y-1/2 select-none opacity-[0.06]"
-                priority
-              />
-              <h1 className="relative z-10 text-4xl font-black tracking-[0.18em] text-white sm:text-5xl md:text-6xl">
-                <span className="block">WEST</span>
-                <span className="block">COUNTY</span>
-              </h1>
-            </div>
+          <div className="mx-auto max-w-3xl text-center">
+            <h1 className="text-4xl font-black tracking-[0.18em] text-white sm:text-5xl md:text-6xl">
+              <span className="block">WEST</span>
+              <span className="block">COUNTY</span>
+            </h1>
             <p className="mt-4 text-lg font-medium tracking-wide text-slate-300 sm:text-xl">
               Technické zajištění akcí
             </p>
