@@ -200,7 +200,7 @@ export default function PoptavkaFormClient({
     "flex gap-2 rounded-xl border border-white/10 bg-white/[0.02] p-3 text-sm text-slate-200";
 
   return (
-    <PortalShell showBackToPortal>
+    <PortalShell showBackToPortal showMainNav>
       <PortalCard title={title}>
         {revisionNote ? (
           <p className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">

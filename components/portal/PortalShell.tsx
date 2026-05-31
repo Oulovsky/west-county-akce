@@ -1,14 +1,17 @@
 import Image from "next/image";
 import Link from "next/link";
+import { PortalNav } from "@/components/portal/PortalNav";
 
 const LOGO_SRC = "/brand/westcounty-logo-white-transparent.png";
 
 export function PortalShell({
   children,
   showBackToPortal = false,
+  showMainNav = false,
 }: {
   children: React.ReactNode;
   showBackToPortal?: boolean;
+  showMainNav?: boolean;
 }) {
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#030712] text-slate-100">
@@ -18,35 +21,38 @@ export function PortalShell({
       />
 
       <header className="relative z-10 border-b border-white/5 bg-[#030712]/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
-          <Link href="/portal" className="flex items-center gap-3">
-            <Image
-              src={LOGO_SRC}
-              alt="WEST COUNTY"
-              width={40}
-              height={40}
-              className="h-10 w-10"
-            />
-            <span className="text-sm font-bold tracking-[0.18em] text-white">
-              Klientská zóna
-            </span>
-          </Link>
-          <div className="flex items-center gap-3">
-            {showBackToPortal ? (
+        <div className="mx-auto flex max-w-4xl flex-col gap-3 px-4 py-4 sm:px-6">
+          <div className="flex items-center justify-between gap-4">
+            <Link href="/portal" className="flex items-center gap-3">
+              <Image
+                src={LOGO_SRC}
+                alt="WEST COUNTY"
+                width={40}
+                height={40}
+                className="h-10 w-10"
+              />
+              <span className="text-sm font-bold tracking-[0.18em] text-white">
+                Klientská zóna
+              </span>
+            </Link>
+            <div className="flex items-center gap-3">
+              {showBackToPortal ? (
+                <Link
+                  href="/portal"
+                  className="text-xs font-medium text-slate-400 transition hover:text-slate-200 sm:text-sm"
+                >
+                  ← Portál
+                </Link>
+              ) : null}
               <Link
-                href="/portal"
+                href="/"
                 className="text-xs font-medium text-slate-400 transition hover:text-slate-200 sm:text-sm"
               >
-                ← Portál
+                Veřejný web
               </Link>
-            ) : null}
-            <Link
-              href="/"
-              className="text-xs font-medium text-slate-400 transition hover:text-slate-200 sm:text-sm"
-            >
-              Veřejný web
-            </Link>
+            </div>
           </div>
+          {showMainNav ? <PortalNav /> : null}
         </div>
       </header>
 

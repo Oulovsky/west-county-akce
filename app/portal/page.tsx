@@ -126,7 +126,7 @@ export default async function PortalPage({
   }
 
   return (
-    <PortalShell>
+    <PortalShell showMainNav>
       <PortalCard title="Vítejte v klientské zóně">
         <p className="text-sm leading-relaxed text-slate-400">
           Přihlášen jako klient{" "}
@@ -142,6 +142,12 @@ export default async function PortalPage({
             className="rounded-xl border border-amber-500/40 bg-amber-500/15 px-4 py-3 text-sm font-semibold text-amber-50 transition hover:border-amber-500/60 hover:bg-amber-500/25"
           >
             Moje poptávky
+          </Link>
+          <Link
+            href="/portal/zakazky"
+            className="rounded-xl border border-blue-500/40 bg-blue-500/15 px-4 py-3 text-sm font-semibold text-blue-50 transition hover:border-blue-500/60 hover:bg-blue-500/25"
+          >
+            Moje zakázky
           </Link>
           <Link
             href="/portal/profil"

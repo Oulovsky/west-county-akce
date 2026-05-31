@@ -176,7 +176,7 @@ export default async function PortalPoptavkaDetailPage({
   })).filter((group) => group.rows.length > 0);
 
   return (
-    <PortalShell showBackToPortal>
+    <PortalShell showBackToPortal showMainNav>
       <PortalCard title="Detail poptávky">
         {detail.stav === "zamitnuta" && detail.zamitnuto_duvod ? (
           <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
