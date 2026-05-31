@@ -15,6 +15,7 @@ export const INTERNAL_INBOX_POPTAVKA_STAVY: readonly PoptavkaStav[] = [
   "ceka_na_schvaleni",
   "v_revizi",
   "schvalena",
+  "prevadena_do_zakazky",
   "zamitnuta",
 ] as const;
 
@@ -170,6 +171,7 @@ export function canInternalManagePoptavka(stav: PoptavkaStav) {
     stav === "ceka_na_schvaleni" ||
     stav === "v_revizi" ||
     stav === "schvalena" ||
+    stav === "prevadena_do_zakazky" ||
     stav === "zamitnuta"
   );
 }

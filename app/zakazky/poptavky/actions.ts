@@ -170,3 +170,28 @@ export async function updatePoptavkaInterniPoznamkaAction(formData: FormData) {
   revalidatePath(`/zakazky/poptavky/${poptavkaId}`);
   redirect(`/zakazky/poptavky/${poptavkaId}?saved=note`);
 }
+
+export async function convertPoptavkaToZakazkaAction(formData: FormData) {
+  const poptavkaId = String(formData.get("poptavka_id") ?? "").trim();
+
+  if (!poptavkaId) {
+    redirectWithError("/zakazky/poptavky", "missing_id");
+  }
+
+  const { supabase } = await requireAppAdminOrSef();
+  const { convertPoptavkaToZakazka } = await import(
+    "@/lib/client-portal/convert-poptavka-to-zakazka"
+  );
+
+  const result = await convertPoptavkaToZakazka(supabase, poptavkaId);
+
+  if (!result.ok) {
+    redirectWithError(`/zakazky/poptavky/${poptavkaId}`, result.error);
+  }
+
+  revalidatePath("/zakazky/poptavky");
+  revalidatePath(`/zakazky/poptavky/${poptavkaId}`);
+  revalidatePath(`/zakazky/${result.zakazkaId}`);
+  revalidatePath(`/portal/poptavka/${poptavkaId}`);
+  redirect(`/zakazky/poptavky/${poptavkaId}?saved=converted&zakazka=${result.zakazkaId}`);
+}

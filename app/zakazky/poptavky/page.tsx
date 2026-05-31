@@ -37,8 +37,8 @@ export default async function ZakazkyPoptavkyPage() {
         <div>
           <h1 className="text-3xl font-bold text-white">Poptávky klientů</h1>
           <p className="mt-2 text-sm text-slate-400">
-            Odeslané a zpracované klientské poptávky z portálu. Konverze na zakázku zatím není
-            součástí této fáze.
+            Odeslané a zpracované klientské poptávky z portálu. Schválené lze převést na interní
+            zakázku.
           </p>
         </div>
         <Link href="/zakazky" className="text-sm text-blue-300 hover:text-blue-200">

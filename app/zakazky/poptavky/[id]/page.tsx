@@ -12,6 +12,9 @@ import {
   technikaFromRecord,
 } from "@/lib/client-portal/poptavka-technika-form";
 import {
+  canConvertPoptavkaToZakazka,
+} from "@/lib/client-portal/convert-poptavka-to-zakazka";
+import {
   canInternalActOnPoptavka,
   loadInternalPoptavkaDetail,
 } from "@/lib/client-portal/poptavka-internal-server";
@@ -36,6 +39,7 @@ const SAVED_MESSAGES: Record<string, string> = {
   rejected: "Poptávka byla zamítnuta.",
   approved: "Poptávka byla schválena.",
   note: "Interní poznámka byla uložena.",
+  converted: "Interní zakázka byla vytvořena.",
 };
 
 export default async function ZakazkyPoptavkaDetailPage({
@@ -43,7 +47,7 @@ export default async function ZakazkyPoptavkaDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ saved?: string; error?: string }>;
+  searchParams?: Promise<{ saved?: string; error?: string; zakazka?: string }>;
 }) {
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
@@ -82,6 +86,9 @@ export default async function ZakazkyPoptavkaDetailPage({
 
   const savedKey = resolvedSearchParams?.saved;
   const canAct = canInternalActOnPoptavka(detail.stav);
+  const canConvert = canConvertPoptavkaToZakazka(detail);
+  const convertedZakazkaId =
+    detail.zakazka_id ?? resolvedSearchParams?.zakazka ?? null;
 
   return (
     <div className="space-y-6 p-6">
@@ -111,6 +118,14 @@ export default async function ZakazkyPoptavkaDetailPage({
       {savedKey && SAVED_MESSAGES[savedKey] ? (
         <p className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
           {SAVED_MESSAGES[savedKey]}
+          {savedKey === "converted" && convertedZakazkaId ? (
+            <>
+              {" "}
+              <Link href={`/zakazky/${convertedZakazkaId}`} className="font-semibold underline">
+                Otevřít zakázku
+              </Link>
+            </>
+          ) : null}
         </p>
       ) : null}
 
@@ -251,6 +266,8 @@ export default async function ZakazkyPoptavkaDetailPage({
         poptavkaId={detail.poptavka_id}
         stav={detail.stav}
         canAct={canAct}
+        canConvert={canConvert}
+        zakazkaId={convertedZakazkaId}
         errorCode={resolvedSearchParams?.error ?? null}
       />
     </div>

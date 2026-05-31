@@ -2,28 +2,38 @@
 
 import {
   approvePoptavkaAction,
+  convertPoptavkaToZakazkaAction,
   rejectPoptavkaAction,
   returnPoptavkaToRevisionAction,
   updatePoptavkaInterniPoznamkaAction,
 } from "@/app/zakazky/poptavky/actions";
 import type { PoptavkaStav } from "@/lib/client-portal/types";
+import Link from "next/link";
 
 const ERROR_MESSAGES: Record<string, string> = {
   missing_reason: "Vyplňte důvod nebo poznámku.",
   invalid_state: "Akce není pro aktuální stav poptávky dostupná.",
   save_failed: "Uložení se nezdařilo.",
   not_found: "Poptávka nenalezena.",
+  missing_klient: "Poptávka nemá přiřazeného klienta.",
+  missing_akce_datum: "Chybí termín akce pro vytvoření zakázky.",
+  create_failed: "Vytvoření zakázky se nezdařilo.",
+  link_failed: "Zakázka byla vytvořena, ale dokončení vazby selhalo. Zkuste akci znovu.",
 };
 
 export default function PoptavkaInboxActions({
   poptavkaId,
   stav,
   canAct,
+  canConvert,
+  zakazkaId,
   errorCode,
 }: {
   poptavkaId: string;
   stav: PoptavkaStav;
   canAct: boolean;
+  canConvert?: boolean;
+  zakazkaId?: string | null;
   errorCode?: string | null;
 }) {
   const inputClass =
@@ -37,6 +47,47 @@ export default function PoptavkaInboxActions({
         <p className="rounded-lg border border-red-500/30 bg-red-950/20 px-4 py-3 text-sm text-red-200">
           {ERROR_MESSAGES[errorCode]}
         </p>
+      ) : null}
+
+      {zakazkaId ? (
+        <div className="rounded-xl border border-blue-500/30 bg-blue-950/20 px-4 py-4 text-sm text-blue-100">
+          <div className="font-semibold text-white">Interní zakázka</div>
+          <p className="mt-1 text-slate-300">
+            Poptávka byla převedena do interní zakázky.
+          </p>
+          <Link
+            href={`/zakazky/${zakazkaId}`}
+            className="mt-3 inline-flex rounded-xl border border-blue-500/40 bg-blue-600/20 px-4 py-2 text-sm font-semibold text-blue-50 hover:bg-blue-600/30"
+          >
+            Otevřít zakázku →
+          </Link>
+        </div>
+      ) : null}
+
+      {canConvert ? (
+        <form
+          action={convertPoptavkaToZakazkaAction}
+          onSubmit={(event) => {
+            const confirmed = window.confirm(
+              "Vytvořit interní zakázku z této schválené poptávky? Převedou se údaje, setupy a technické podklady."
+            );
+            if (!confirmed) event.preventDefault();
+          }}
+          className="space-y-3 rounded-xl border border-blue-500/20 bg-blue-950/10 p-4"
+        >
+          <h3 className="font-semibold text-blue-100">Vytvořit zakázku</h3>
+          <input type="hidden" name="poptavka_id" value={poptavkaId} />
+          <p className="text-sm leading-relaxed text-slate-400">
+            Ze schválené poptávky vznikne interní zakázka s plánem techniky. Konkrétní skladové kusy
+            se neřadí — ty vzniknou až při scanování.
+          </p>
+          <button
+            type="submit"
+            className="rounded-xl border border-blue-500/40 bg-blue-600/20 px-4 py-2 text-sm font-semibold text-blue-50 hover:bg-blue-600/30"
+          >
+            Vytvořit zakázku
+          </button>
+        </form>
       ) : null}
 
       {!canAct ? (
@@ -101,7 +152,7 @@ export default function PoptavkaInboxActions({
             <h3 className="font-semibold text-emerald-100">Schválit</h3>
             <input type="hidden" name="poptavka_id" value={poptavkaId} />
             <p className="text-sm leading-relaxed text-slate-400">
-              Poptávka přejde do stavu schválená. Konverze na zakázku proběhne v další fázi.
+              Poptávka přejde do stavu schválená. Poté ji lze převést na interní zakázku.
             </p>
             <button
               type="submit"

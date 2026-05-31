@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { assertInternalWriteAccess, loadSessionRolePermissions } from "@/lib/auth/internal-role-access-server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { loadPoptavkaFotkyWithUrls } from "@/lib/client-portal/poptavka-fotky-server";
 import {
   formatQuestionnaireRiskCount,
   getQuestionnaireRiskLabel,
@@ -790,6 +791,7 @@ function getClientVerificationStatus({
   if (dotaznik?.stav === "pozadovan_vyjezd_technika" || dotaznik?.pozadovan_vyjezd_technika) {
     return "Požadován výjezd technika";
   }
+  if (dotaznik?.stav === "prevzato_z_poptavky") return "Převzato z klientské poptávky";
   if (risks.length > 0) return "Rizikové odpovědi";
   if (dotaznik?.stav === "vyplneno") return "Vyplněno klientem";
   if (dotaznik?.stav === "neni_potreba") return "Není potřeba";
@@ -1214,6 +1216,7 @@ function ClientTechnicalVerificationCard({
   dotaznik,
   photos,
   galleryPhotos,
+  poptavkaSource,
   message,
   hasSavedPlace,
   readOnly = false,
@@ -1225,6 +1228,11 @@ function ClientTechnicalVerificationCard({
   dotaznik: ClientVerificationDotaznikRow | null;
   photos: ClientVerificationPhotoRow[];
   galleryPhotos: QuestionnairePhotoGalleryItem[];
+  poptavkaSource?: {
+    id: string;
+    cislo: string;
+    galleryPhotos: QuestionnairePhotoGalleryItem[];
+  } | null;
   message: "sent" | "missing_email" | "missing_resend_key" | null;
   hasSavedPlace: boolean;
   readOnly?: boolean;
@@ -1252,6 +1260,16 @@ function ClientTechnicalVerificationCard({
           <div className="mt-1 text-lg font-black text-white">{statusLabel}</div>
         </div>
       </div>
+
+      {poptavkaSource ? (
+        <div className="rounded-xl border border-blue-500/30 bg-blue-950/20 px-4 py-3 text-sm text-blue-100">
+          Technické údaje a fotky byly převzaty z klientské poptávky{" "}
+          <a href={`/zakazky/poptavky/${poptavkaSource.id}`} className="font-semibold underline">
+            {poptavkaSource.cislo}
+          </a>
+          .
+        </div>
+      ) : null}
 
       {hasSavedPlace ? (
         <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">
@@ -1389,6 +1407,22 @@ function ClientTechnicalVerificationCard({
             photos={galleryPhotos}
             promoteConfig={mistoId ? { zakazkaId, mistoId } : null}
           />
+        </div>
+      ) : null}
+
+      {poptavkaSource && poptavkaSource.galleryPhotos.length > 0 ? (
+        <div className="space-y-3 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+          <div>
+            <div className="font-semibold text-white">Fotky z klientské poptávky</div>
+            <p className="mt-1 text-sm text-slate-400">
+              Původní fotky zůstávají u poptávky{" "}
+              <a href={`/zakazky/poptavky/${poptavkaSource.id}`} className="text-blue-300 hover:text-blue-200">
+                {poptavkaSource.cislo}
+              </a>
+              . Zde jsou jen pro rychlý náhled u zakázky.
+            </p>
+          </div>
+          <QuestionnairePhotoGallery photos={poptavkaSource.galleryPhotos} promoteConfig={null} />
         </div>
       ) : null}
 
@@ -2867,6 +2901,38 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
   }
 
   const clientVerificationLink = (linkRaw ?? null) as ClientVerificationLinkRow | null;
+
+  const zdrojPoptavkaId = (data as { zdroj_poptavka_id?: string | null }).zdroj_poptavka_id ?? null;
+  let poptavkaSource: {
+    id: string;
+    cislo: string;
+    galleryPhotos: QuestionnairePhotoGalleryItem[];
+  } | null = null;
+
+  if (zdrojPoptavkaId) {
+    const [{ data: poptavkaMeta }, poptavkaFotky] = await Promise.all([
+      supabase
+        .from("poptavky")
+        .select("cislo_poptavky")
+        .eq("poptavka_id", zdrojPoptavkaId)
+        .maybeSingle(),
+      loadPoptavkaFotkyWithUrls(supabase, zdrojPoptavkaId),
+    ]);
+
+    poptavkaSource = {
+      id: zdrojPoptavkaId,
+      cislo: (poptavkaMeta?.cislo_poptavky as string | undefined) ?? zdrojPoptavkaId,
+      galleryPhotos: poptavkaFotky.map((photo) => ({
+        id: photo.id,
+        signedUrl: photo.signedUrl,
+        typ: photo.typ,
+        popis: photo.popis,
+        originalFilename: photo.original_filename,
+        createdAt: photo.created_at,
+      })),
+    };
+  }
+
   const clientVerificationStatus = getClientVerificationStatus({
     link: clientVerificationLink,
     dotaznik,
@@ -3479,6 +3545,7 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
           dotaznik={dotaznik}
           photos={dotaznikPhotos}
           galleryPhotos={dotaznikGalleryPhotos}
+          poptavkaSource={poptavkaSource}
           message={technicalVerificationMessage}
           hasSavedPlace={Boolean(data.misto_id)}
           readOnly={readOnly}
