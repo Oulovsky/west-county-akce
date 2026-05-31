@@ -90,9 +90,8 @@ export default function PortalRegistraceClient() {
     <PortalShell>
       <PortalCard title="Registrace klienta">
         <p className="text-sm leading-relaxed text-slate-400">
-          Po registraci je váš klientský účet aktivní okamžitě. Můžete rovnou zadat
-          poptávku — schvaluje ji WEST COUNTY, ne samotná registrace. Do interního
-          systému se nedostanete, pouze do klientské zóny.
+          Po registraci je váš klientský účet aktivní okamžitě. Po zadání bude Vaše
+          poptávka odeslána ke schválení a budeme Vás kontaktovat.
         </p>
 
         {errorCode ? (
