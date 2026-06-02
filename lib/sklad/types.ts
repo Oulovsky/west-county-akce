@@ -170,6 +170,8 @@ export type SkladPolozkaRow = {
   pozice?: number | string | null;
   technicky_vlastnik_id?: string | null;
   technicky_vlastnik_nazev?: string | null;
+  /** Položka vytvořená pro obsah case — skrytá v hlavním katalogu. */
+  je_obsah_case?: boolean;
 };
 
 /** Skladový okruh / blok (přehled, dashboard). */

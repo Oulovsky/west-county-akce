@@ -5,11 +5,15 @@ import { SKLAD_RPC, SKLAD_TABLE } from "@/lib/sklad/constants";
 import {
   CASE_NESTING_FORBIDDEN_MESSAGE,
   isCaseJednotka,
-  normalizeSkladJednotkaKey,
 } from "@/lib/sklad/caseJednotka";
+import {
+  findMatchingCaseContentPolozka,
+  markPolozkaAsCaseContent,
+} from "@/lib/sklad/caseContentPolozka";
 import { toNumber } from "@/lib/sklad/helpers";
 import type { SkladPolozkaRow } from "@/lib/sklad/types";
 import { insertKusIntoCase, loadKusWithPolozka } from "@/lib/sklad/kusObsah";
+import { recountPolozkaCelkemKDispozici } from "@/lib/sklad/recountPolozkaCelkem";
 import { syncPolozkaKusyToCelkem } from "@/lib/sklad/syncPolozkaKusy";
 
 export type CreateCaseContentInput = {
@@ -62,35 +66,6 @@ export async function assertParentKusAllowsNesting(
   return parent;
 }
 
-async function findMatchingContentPolozka(
-  client: SupabaseClient,
-  input: {
-    nazev: string;
-    skladBlokId: string;
-    kategorieTechnikyId: string;
-    podkategorieTechnikyId: string | null;
-    jednotka: string;
-  }
-): Promise<SkladPolozkaRow | null> {
-  const { data, error } = await client.rpc(SKLAD_RPC.getSkladovePolozky);
-  if (error) throw new Error(error.message);
-
-  const targetJednotka = normalizeSkladJednotkaKey(input.jednotka);
-  const targetPodkategorie = input.podkategorieTechnikyId ?? null;
-  const targetNazev = input.nazev.trim();
-
-  const match = ((data ?? []) as SkladPolozkaRow[]).find((row) => {
-    if (row.nazev.trim() !== targetNazev) return false;
-    if (row.kategorie_techniky_id !== input.kategorieTechnikyId) return false;
-    if ((row.sklad_blok_id ?? null) !== input.skladBlokId) return false;
-    if ((row.podkategorie_techniky_id ?? null) !== targetPodkategorie) return false;
-    if (normalizeSkladJednotkaKey(row.jednotka) !== targetJednotka) return false;
-    return true;
-  });
-
-  return match ?? null;
-}
-
 async function createContentPolozka(
   client: SupabaseClient,
   input: {
@@ -122,6 +97,8 @@ async function createContentPolozka(
   if (!createdId) {
     throw new Error("Nepodařilo se vytvořit skladovou položku obsahu.");
   }
+
+  await markPolozkaAsCaseContent(client, createdId);
 
   const assignRes = await client.rpc(SKLAD_RPC.setSkladPolozkaBlok, {
     p_polozka_id: createdId,
@@ -157,7 +134,7 @@ export async function createCaseContent(
 
   const parent = await assertParentKusAllowsNesting(client, input.parentKusId);
 
-  let contentPolozka = await findMatchingContentPolozka(client, {
+  let contentPolozka = await findMatchingCaseContentPolozka(client, {
     nazev: input.nazev,
     skladBlokId: input.skladBlokId,
     kategorieTechnikyId: input.kategorieTechnikyId,
@@ -238,13 +215,7 @@ export async function createCaseContent(
     });
   }
 
-  await client
-    .from(SKLAD_TABLE.skladovePolozky)
-    .update({
-      celkem_k_dispozici: beforeCount + count,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("skladova_polozka_id", contentPolozkaId);
+  await recountPolozkaCelkemKDispozici(client, contentPolozkaId);
 
   return {
     parentKusId: parent.kus_id,

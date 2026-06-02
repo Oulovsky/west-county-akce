@@ -15,6 +15,7 @@ import {
   SKLAD_RPC,
   SKLAD_TABLE,
 } from "@/lib/sklad/constants";
+import { filterCatalogPolozky } from "@/lib/sklad/caseContentPolozka";
 import {
   enrichSpravaPolozkyWithPodkategorie,
   enrichSpravaPolozkyWithVlastnici,
@@ -246,13 +247,31 @@ export default function Page() {
 
       setVlastnici(vlastniciCatalog);
 
-      const { data: pozRows, error: pozErr } = await supabase
-        .from(SKLAD_TABLE.skladovePolozky)
-        .select("skladova_polozka_id, pozice");
+      const [
+        { data: pozRows, error: pozErr },
+        { data: obsahCaseRows, error: obsahCaseErr },
+      ] = await Promise.all([
+        supabase
+          .from(SKLAD_TABLE.skladovePolozky)
+          .select("skladova_polozka_id, pozice"),
+        supabase
+          .from(SKLAD_TABLE.skladovePolozky)
+          .select("skladova_polozka_id")
+          .eq("je_obsah_case", true),
+      ]);
 
       if (pozErr && !options?.silent) {
         alert(pozErr.message);
       }
+      if (obsahCaseErr && !options?.silent) {
+        alert(obsahCaseErr.message);
+      }
+
+      const obsahCaseIds = new Set<string>(
+        (obsahCaseRows ?? []).map(
+          (row: { skladova_polozka_id: string }) => row.skladova_polozka_id
+        )
+      );
 
       const pozMap = new Map<string, string | number | null>(
         (pozRows ?? []).map(
@@ -263,12 +282,15 @@ export default function Page() {
         )
       );
 
-      const rawItems = ((itemsRes.data ?? []) as SkladPolozkaRow[]).map(
-        (item) => ({
-          ...item,
-          pozice:
-            pozMap.get(item.skladova_polozka_id) ?? item.pozice ?? null,
-        })
+      const rawItems = filterCatalogPolozky(
+        ((itemsRes.data ?? []) as SkladPolozkaRow[]).map(
+          (item) => ({
+            ...item,
+            pozice:
+              pozMap.get(item.skladova_polozka_id) ?? item.pozice ?? null,
+          })
+        ),
+        obsahCaseIds
       );
 
       const enrichedPodkategorie = enrichSpravaPolozkyWithPodkategorie(

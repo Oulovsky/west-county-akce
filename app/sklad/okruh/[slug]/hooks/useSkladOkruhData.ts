@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { filterCatalogPolozky } from "@/lib/sklad/caseContentPolozka";
 import { SKLAD_TABLE } from "@/lib/sklad/constants";
 import {
   queryPoskozeniProPolozky,
@@ -28,13 +29,25 @@ export function useSkladOkruhData(blokId: string) {
 
     setLoading(true);
 
-    const [blokDetailRes, itemsRes] = await Promise.all([
+    const [blokDetailRes, itemsRes, obsahCaseRes] = await Promise.all([
       querySkladBlokDetail(supabase, blokId),
       querySkladovePolozky(supabase),
+      supabase
+        .from(SKLAD_TABLE.skladovePolozky)
+        .select("skladova_polozka_id")
+        .eq("je_obsah_case", true),
     ]);
 
     const loadedRows = (blokDetailRes.data ?? []) as SkladOkruhRow[];
-    const loadedItems = (itemsRes.data ?? []) as SkladOkruhItem[];
+    const obsahCaseIds = new Set<string>(
+      (obsahCaseRes.data ?? []).map(
+        (row: { skladova_polozka_id: string }) => row.skladova_polozka_id
+      )
+    );
+    const loadedItems = filterCatalogPolozky(
+      (itemsRes.data ?? []) as SkladOkruhItem[],
+      obsahCaseIds
+    );
 
     setRows(loadedRows);
     setAllItems(loadedItems);
