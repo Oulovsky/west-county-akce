@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { parseClientRegistrationSnapshot } from "@/lib/client-portal/registration-snapshot";
 
 export type KlientAccountStavLabel =
   | "bez účtu"
@@ -61,6 +62,7 @@ export type KlientDetailData = {
   }>;
   account_stav: KlientAccountStavLabel;
   registered_at: string | null;
+  jednatel: string | null;
 };
 
 function formatAdresa(row: {
@@ -105,6 +107,43 @@ function computeRegisteredAt(
 
   if (candidates.length === 0) return null;
   return candidates.sort()[0];
+}
+
+function formatAccountContactName(
+  jmeno: string | null,
+  prijmeni: string | null
+): string | null {
+  const name = [jmeno, prijmeni].filter(Boolean).join(" ").trim();
+  return name || null;
+}
+
+function resolveJednatel(
+  accounts: Array<{
+    jmeno: string | null;
+    prijmeni: string | null;
+    role: string;
+    stav: string;
+  }>,
+  registrations: Array<{ ares_snapshot: unknown }>
+): string | null {
+  const orderedAccounts = [
+    ...accounts.filter((row) => row.stav === "active" && row.role === "owner"),
+    ...accounts.filter((row) => row.stav === "active" && row.role !== "owner"),
+    ...accounts.filter((row) => row.stav !== "active"),
+  ];
+
+  for (const row of orderedAccounts) {
+    const name = formatAccountContactName(row.jmeno, row.prijmeni);
+    if (name) return name;
+  }
+
+  for (const row of registrations) {
+    const snapshot = parseClientRegistrationSnapshot(row.ares_snapshot);
+    const kontakt = snapshot?.form.kontakt_jmeno.trim();
+    if (kontakt) return kontakt;
+  }
+
+  return null;
 }
 
 async function loadPortalKlientIds(supabase: SupabaseClient) {
@@ -243,12 +282,13 @@ export async function loadInternalKlientDetail(
   ] = await Promise.all([
     supabase
       .from("client_accounts")
-      .select("klient_id, stav, created_at")
+      .select("klient_id, stav, created_at, jmeno, prijmeni, role")
       .eq("klient_id", klientId),
     supabase
       .from("client_registrations")
-      .select("klient_id, created_at, schvaleno_at")
-      .eq("klient_id", klientId),
+      .select("klient_id, created_at, schvaleno_at, ares_snapshot")
+      .eq("klient_id", klientId)
+      .order("created_at", { ascending: false }),
     supabase
       .from("poptavky")
       .select(
@@ -282,6 +322,17 @@ export async function loadInternalKlientDetail(
       registrationsRaw ?? [],
       accountsRaw ?? [],
       klientId
+    ),
+    jednatel: resolveJednatel(
+      (accountsRaw ?? []).map((row) => ({
+        jmeno: row.jmeno as string | null,
+        prijmeni: row.prijmeni as string | null,
+        role: row.role as string,
+        stav: row.stav as string,
+      })),
+      (registrationsRaw ?? []).map((row) => ({
+        ares_snapshot: row.ares_snapshot,
+      }))
     ),
   };
 }

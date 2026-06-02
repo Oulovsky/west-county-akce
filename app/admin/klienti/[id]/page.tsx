@@ -13,6 +13,20 @@ function formatDate(value: string | null) {
   }).format(new Date(value));
 }
 
+function displayValue(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : "—";
+}
+
+function DetailField({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <div className="text-sm leading-relaxed">
+      <span className="text-slate-500">{label}: </span>
+      <span className="text-slate-100">{displayValue(value)}</span>
+    </div>
+  );
+}
+
 export default async function AdminKlientDetailPage({
   params,
 }: {
@@ -55,10 +69,6 @@ export default async function AdminKlientDetailPage({
             Klient · {detail.account_stav}
           </div>
           <h1 className="mt-1 text-3xl font-bold text-white">{klient.nazev}</h1>
-          <p className="mt-2 text-slate-400">
-            {klient.ico ? `IČO ${klient.ico}` : "bez IČO"}
-            {klient.dic ? ` · DIČ ${klient.dic}` : ""}
-          </p>
         </div>
         <Link href="/admin/klienti" className="text-sm text-blue-300 hover:text-blue-200">
           ← Seznam klientů
@@ -67,32 +77,27 @@ export default async function AdminKlientDetailPage({
 
       <section className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
         <h2 className="text-lg font-semibold text-white">Firma / fakturační údaje</h2>
-        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-          <div>
-            <dt className="text-slate-500">E-mail firmy</dt>
-            <dd className="text-slate-100">{klient.email ?? "—"}</dd>
+        <div className="mt-5 grid gap-8 md:grid-cols-2 md:gap-10">
+          <div className="space-y-3">
+            <DetailField label="Jednatel" value={detail.jednatel} />
+            <DetailField
+              label="Adresa"
+              value={[klient.ulice, klient.mesto, klient.psc].filter(Boolean).join(", ")}
+            />
+            <DetailField label="IČO" value={klient.ico} />
+            <DetailField label="DIČ" value={klient.dic} />
           </div>
-          <div>
-            <dt className="text-slate-500">Telefon</dt>
-            <dd className="text-slate-100">{klient.telefon ?? "—"}</dd>
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-slate-400">Kontakt</p>
+            <DetailField label="Telefon" value={klient.telefon} />
+            <DetailField label="Email" value={klient.email} />
+            <DetailField label="Poznámka" value={klient.poznamka} />
+            <DetailField
+              label="Datum založení / registrace"
+              value={formatDate(detail.registered_at)}
+            />
           </div>
-          <div className="sm:col-span-2">
-            <dt className="text-slate-500">Adresa</dt>
-            <dd className="text-slate-100">
-              {[klient.ulice, klient.mesto, klient.psc].filter(Boolean).join(", ") || "—"}
-            </dd>
-          </div>
-          {klient.poznamka ? (
-            <div className="sm:col-span-2">
-              <dt className="text-slate-500">Poznámka</dt>
-              <dd className="whitespace-pre-wrap text-slate-100">{klient.poznamka}</dd>
-            </div>
-          ) : null}
-          <div>
-            <dt className="text-slate-500">Datum vytvoření / registrace</dt>
-            <dd className="text-slate-100">{formatDate(detail.registered_at)}</dd>
-          </div>
-        </dl>
+        </div>
       </section>
 
       <section className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
