@@ -50,7 +50,6 @@ export type KlientDetailData = {
     psc: string | null;
     poznamka: string | null;
     aktivni: boolean;
-    created_at: string;
   };
   accounts: KlientAccountRow[];
   poptavky: Array<{
@@ -149,9 +148,7 @@ export async function loadInternalKlientiList(
   ] = await Promise.all([
     supabase
       .from("klienti")
-      .select(
-        "klient_id, nazev, ico, dic, email, telefon, ulice, mesto, psc, created_at"
-      )
+      .select("klient_id, nazev, ico, dic, email, telefon, ulice, mesto, psc")
       .in("klient_id", klientIds)
       .order("nazev", { ascending: true }),
     supabase
@@ -243,7 +240,7 @@ export async function loadInternalKlientDetail(
   const { data: klient, error: klientError } = await supabase
     .from("klienti")
     .select(
-      "klient_id, nazev, ico, dic, email, telefon, ulice, mesto, psc, poznamka, aktivni, created_at"
+      "klient_id, nazev, ico, dic, email, telefon, ulice, mesto, psc, poznamka, aktivni"
     )
     .eq("klient_id", klientId)
     .maybeSingle();
