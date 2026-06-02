@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { assertInternalWriteAccess } from "@/lib/auth/internal-role-access-server";
+import { rethrowIfNextRedirect } from "@/lib/next/isRedirectError";
 import { createCaseContent } from "@/lib/sklad/createCaseContent";
 import { insertKusIntoCase, removeKusFromCase } from "@/lib/sklad/kusObsah";
 import { createClient } from "@/lib/supabase/server";
@@ -49,10 +50,12 @@ export async function insertKusIntoCaseAction(formData: FormData) {
   if (!childKusId) {
     redirectAfterObsahAction(parentKusId, returnPolozkaId, {
       error: "Vyberte kus ze seznamu nebo zadejte kus_id / naskenujte QR.",
+      keepInsertForm: true,
     });
   }
 
   const supabase = await createClient();
+  let errorMessage: string | null = null;
 
   try {
     await assertInternalWriteAccess(supabase);
@@ -75,12 +78,20 @@ export async function insertKusIntoCaseAction(formData: FormData) {
     if (returnPolozkaId) {
       revalidatePath(`/sklad/${returnPolozkaId}`);
     }
-
-    redirectAfterObsahAction(parentKusId, returnPolozkaId, { ok: "inserted" });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Vložení kusu do case se nezdařilo.";
-    redirectAfterObsahAction(parentKusId, returnPolozkaId, { error: message });
+    rethrowIfNextRedirect(error);
+    errorMessage =
+      error instanceof Error ? error.message : "Vložení kusu do case se nezdařilo.";
   }
+
+  if (errorMessage) {
+    redirectAfterObsahAction(parentKusId, returnPolozkaId, {
+      error: errorMessage,
+      keepInsertForm: true,
+    });
+  }
+
+  redirectAfterObsahAction(parentKusId, returnPolozkaId, { ok: "inserted" });
 }
 
 export async function removeKusFromCaseAction(formData: FormData) {
@@ -93,6 +104,7 @@ export async function removeKusFromCaseAction(formData: FormData) {
   }
 
   const supabase = await createClient();
+  let errorMessage: string | null = null;
 
   try {
     await assertInternalWriteAccess(supabase);
@@ -128,12 +140,17 @@ export async function removeKusFromCaseAction(formData: FormData) {
     if (returnPolozkaId) {
       revalidatePath(`/sklad/${returnPolozkaId}`);
     }
-
-    redirectAfterObsahAction(parentKusId, returnPolozkaId, { ok: "removed" });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Vyjití kusu z case se nezdařilo.";
-    redirectAfterObsahAction(parentKusId, returnPolozkaId, { error: message });
+    rethrowIfNextRedirect(error);
+    errorMessage =
+      error instanceof Error ? error.message : "Vyjití kusu z case se nezdařilo.";
   }
+
+  if (errorMessage) {
+    redirectAfterObsahAction(parentKusId, returnPolozkaId, { error: errorMessage });
+  }
+
+  redirectAfterObsahAction(parentKusId, returnPolozkaId, { ok: "removed" });
 }
 
 export async function createCaseContentAction(formData: FormData) {
@@ -166,6 +183,7 @@ export async function createCaseContentAction(formData: FormData) {
   }
 
   const supabase = await createClient();
+  let errorMessage: string | null = null;
 
   try {
     await assertInternalWriteAccess(supabase);
@@ -194,14 +212,20 @@ export async function createCaseContentAction(formData: FormData) {
     if (returnPolozkaId) {
       revalidatePath(`/sklad/${returnPolozkaId}`);
     }
-
-    redirectAfterObsahAction(parentKusId, returnPolozkaId, { ok: "created" });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Vytvoření a vložení obsahu do case se nezdařilo.";
+    rethrowIfNextRedirect(error);
+    errorMessage =
+      error instanceof Error
+        ? error.message
+        : "Vytvoření a vložení obsahu do case se nezdařilo.";
+  }
+
+  if (errorMessage) {
     redirectAfterObsahAction(parentKusId, returnPolozkaId, {
-      error: message,
+      error: errorMessage,
       keepInsertForm: true,
     });
   }
+
+  redirectAfterObsahAction(parentKusId, returnPolozkaId, { ok: "created" });
 }

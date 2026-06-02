@@ -103,11 +103,11 @@ export function SkladKusCaseTreePanel({
           </Link>
         </div>
 
-        {obsahMessage === "created" ? (
-          <p className="mt-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
-            Obsah byl vytvořen a vložen do case.
-          </p>
-        ) : null}
+          {obsahMessage === "created" ? (
+            <p className="mt-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
+              Obsah vytvořen a vložen do case.
+            </p>
+          ) : null}
         {obsahMessage === "removed" ? (
           <p className="mt-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
             Kus odebrán z case.
