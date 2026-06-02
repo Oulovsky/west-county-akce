@@ -1,4 +1,4 @@
-import { SkladKusObsahInlinePanel } from "@/components/sklad/SkladKusObsahInlinePanel";
+import { SkladKusCaseTreePanel } from "@/components/sklad/SkladKusCaseTreePanel";
 import { KusQrActionMenu } from "@/components/sklad/KusQrActionMenu";
 import {
   formatMoney,
@@ -8,13 +8,22 @@ import {
 } from "@/lib/sklad/helpers";
 import Link from "next/link";
 import {
-  formatKusObsahContainedHint,
   formatKusObsahParentHint,
   type SkladKusObsahChildOption,
   type SkladKusObsahChildRow,
   type SkladKusObsahKusSummary,
 } from "@/lib/sklad/kusObsah";
-import type { SkladDetailRow, SkladKusRow, SkladOdpisovePasmo, SkladPoskozeniRow } from "@/lib/sklad/types";
+import type {
+  SkladBlok,
+  SkladDetailRow,
+  SkladJednotka,
+  SkladKategorie,
+  SkladKusRow,
+  SkladOdpisovePasmo,
+  SkladPodkategorie,
+  SkladPoskozeniRow,
+  TechnickyVlastnik,
+} from "@/lib/sklad/types";
 import type { UpdateKusPoradiResult } from "../actions/updateKusPoradi";
 import { boxClassName, statusBoxClassName } from "../helpers/classNames";
 import { SKLAD_DETAIL_CENTER_CELL_CLASS_NAME } from "../helpers/tableLayout";
@@ -34,14 +43,28 @@ type SkladDetailKusRowProps = {
   updateKusPoradiAction: (
     formData: FormData
   ) => Promise<UpdateKusPoradiResult>;
+  isCasePolozka: boolean;
   obsahSummary?: SkladKusObsahKusSummary | null;
   activeChildren?: SkladKusObsahChildRow[];
   availableChildOptions?: SkladKusObsahChildOption[];
   openCaseKusId?: string | null;
+  obsahMode?: string | null;
   returnPolozkaId?: string;
   obsahMessage?: string | null;
   obsahError?: string | null;
   readOnly?: boolean;
+  formDefaults: {
+    skladBlokId: string | null;
+    kategorieTechnikyId: string | null;
+    podkategorieTechnikyId: string | null;
+    technickyVlastnikId: string | null;
+    jednotka: string;
+  };
+  bloky: SkladBlok[];
+  kategorie: SkladKategorie[];
+  podkategorie: SkladPodkategorie[];
+  jednotky: SkladJednotka[];
+  vlastnici: TechnickyVlastnik[];
 };
 
 export function SkladDetailKusRow({
@@ -52,188 +75,184 @@ export function SkladDetailKusRow({
   rowGridClassName,
   deleteKusAction,
   updateKusPoradiAction,
+  isCasePolozka,
   obsahSummary = null,
   activeChildren = [],
   availableChildOptions = [],
   openCaseKusId = null,
+  obsahMode = null,
   returnPolozkaId,
   obsahMessage = null,
   obsahError = null,
   readOnly = false,
+  formDefaults,
+  bloky,
+  kategorie,
+  podkategorie,
+  jednotky,
+  vlastnici,
 }: SkladDetailKusRowProps) {
   const stav = getKusStatus(kus, poskozeni);
   const centerCellClassName = SKLAD_DETAIL_CENTER_CELL_CLASS_NAME;
   const label = getSkladKusDisplayLabel(row.nazev, kus);
-  const containedCount = obsahSummary?.containedCount ?? activeChildren.length;
-  const containedHint = formatKusObsahContainedHint(containedCount);
   const parentPlacement = obsahSummary?.parentPlacement ?? null;
-  const isCaseOpen = openCaseKusId === kus.kus_id;
-  const showObsahMessages = isCaseOpen;
+  const isCaseExpanded = openCaseKusId === kus.kus_id;
+  const showInsertForm = isCaseExpanded && obsahMode === "insert";
+  const showObsahMessages = isCaseExpanded;
 
   return (
     <div key={kus.kus_id} className="rounded-xl border border-slate-800 bg-slate-950">
       <div className={rowGridClassName}>
-      <div className="flex min-w-0 items-start gap-1 px-1">
-        <SkladDetailKusPoradiField
-          skladovaPolozkaId={row.skladova_polozka_id}
-          kusId={kus.kus_id}
-          committedPoradi={kus.poradove_cislo}
-          updateKusPoradiAction={updateKusPoradiAction}
-          readOnly={readOnly}
-        />
+        <div className="flex min-w-0 items-start gap-1 px-1">
+          <SkladDetailKusPoradiField
+            skladovaPolozkaId={row.skladova_polozka_id}
+            kusId={kus.kus_id}
+            committedPoradi={kus.poradove_cislo}
+            updateKusPoradiAction={updateKusPoradiAction}
+            readOnly={readOnly}
+          />
 
-        <div className="min-w-0 flex-1">
-          <span className={[boxClassName(), "block truncate"].join(" ")} title={label}>
-            {label}
-          </span>
-          {containedHint ? (
-            <span className="mt-1 block text-[10px] font-semibold text-emerald-300/90">
-              {containedHint}
+          <div className="min-w-0 flex-1">
+            <span className={[boxClassName(), "block truncate"].join(" ")} title={label}>
+              {label}
             </span>
-          ) : null}
-          {parentPlacement ? (
-            <span className="mt-0.5 block text-[10px] font-semibold text-blue-300/90">
-              <Link
-                href={`/sklad/kus/${parentPlacement.parentKusId}`}
-                className="hover:text-blue-200"
-              >
-                {formatKusObsahParentHint(parentPlacement)}
-              </Link>
-            </span>
-          ) : null}
+            {!isCasePolozka && parentPlacement ? (
+              <span className="mt-1 block text-[10px] font-semibold text-blue-300/90">
+                <Link
+                  href={`/sklad/kus/${parentPlacement.parentKusId}`}
+                  className="hover:text-blue-200"
+                >
+                  {formatKusObsahParentHint(parentPlacement)}
+                </Link>
+              </span>
+            ) : null}
+          </div>
+
+          <KusQrActionMenu
+            kusId={kus.kus_id}
+            label={{
+              kusId: kus.kus_id,
+              itemName: row.nazev,
+              poradoveCislo: kus.poradove_cislo,
+              position: row.pozice,
+            }}
+            triggerClassName={QR_DETAIL_TRIGGER}
+            iconClassName="h-[18px] w-[18px]"
+          />
         </div>
 
-        <KusQrActionMenu
-          kusId={kus.kus_id}
-          label={{
-            kusId: kus.kus_id,
-            itemName: row.nazev,
-            poradoveCislo: kus.poradove_cislo,
-            position: row.pozice,
-          }}
-          triggerClassName={QR_DETAIL_TRIGGER}
-          iconClassName="h-[18px] w-[18px]"
-        />
-      </div>
+        <div className="flex items-center px-2">
+          <span className={boxClassName("truncate")} title={row.kategorie_nazev ?? "-"}>
+            {row.kategorie_nazev ?? "-"}
+          </span>
+        </div>
 
-      <div className="flex items-center px-2">
-        <span className={boxClassName("truncate")} title={row.kategorie_nazev ?? "-"}>
-          {row.kategorie_nazev ?? "-"}
-        </span>
-      </div>
+        <div className="flex items-center px-2">
+          <span className={boxClassName("truncate")} title={row.podkategorie_nazev ?? "-"}>
+            {row.podkategorie_nazev ?? "-"}
+          </span>
+        </div>
 
-      <div className="flex items-center px-2">
-        <span className={boxClassName("truncate")} title={row.podkategorie_nazev ?? "-"}>
-          {row.podkategorie_nazev ?? "-"}
-        </span>
-      </div>
+        <div className={centerCellClassName}>
+          <span className={boxClassName("justify-center text-center")}>
+            {formatNumber(row.pozice)}
+          </span>
+        </div>
 
-      <div className={centerCellClassName}>
-        <span className={boxClassName("justify-center text-center")}>
-          {formatNumber(row.pozice)}
-        </span>
-      </div>
+        <div className={centerCellClassName}>
+          <span className={boxClassName("justify-center text-center")}>1</span>
+        </div>
 
-      <div className={centerCellClassName}>
-        <span className={boxClassName("justify-center text-center")}>1</span>
-      </div>
+        <div className={centerCellClassName}>
+          <span
+            className={statusBoxClassName(
+              [
+                "justify-center text-center",
+                stav.blokovano
+                  ? "border-red-700 bg-red-950 text-red-200"
+                  : "border-emerald-700 bg-emerald-950 text-emerald-200",
+              ].join(" ")
+            )}
+          >
+            {stav.blokovano ? "1 ks" : "OK"}
+          </span>
+        </div>
 
-      <div className={centerCellClassName}>
-        <span
-          className={statusBoxClassName(
-            [
-              "justify-center text-center",
-              stav.blokovano
-                ? "border-red-700 bg-red-950 text-red-200"
-                : "border-emerald-700 bg-emerald-950 text-emerald-200",
-            ].join(" ")
-          )}
-        >
-          {stav.blokovano ? "1 ks" : "OK"}
-        </span>
-      </div>
+        <div className={centerCellClassName}>
+          <span
+            className={statusBoxClassName("justify-center text-center " + stav.className)}
+            title={stav.text}
+          >
+            {stav.pouzitelne}
+          </span>
+        </div>
 
-      <div className={centerCellClassName}>
-        <span
-          className={statusBoxClassName("justify-center text-center " + stav.className)}
-          title={stav.text}
-        >
-          {stav.pouzitelne}
-        </span>
-      </div>
+        <div className={centerCellClassName}>
+          <span className={boxClassName("justify-center text-center")}>{row.jednotka}</span>
+        </div>
 
-      <div className={centerCellClassName}>
-        <span className={boxClassName("justify-center text-center")}>{row.jednotka}</span>
-      </div>
+        <div className={centerCellClassName}>
+          <span className={boxClassName("justify-center text-center")}>
+            {formatMoney(row.interni_naklad)}
+          </span>
+        </div>
 
-      <div className={centerCellClassName}>
-        <span className={boxClassName("justify-center text-center")}>
-          {formatMoney(row.interni_naklad)}
-        </span>
-      </div>
+        <div className={centerCellClassName}>
+          <SkladKusAssetSummary kus={kus} odpisovaPasma={odpisovaPasma} />
+        </div>
 
-      <div className={centerCellClassName}>
-        <SkladKusAssetSummary kus={kus} odpisovaPasma={odpisovaPasma} />
-      </div>
+        <div className={centerCellClassName}>
+          <span
+            className={[
+              "flex min-h-9 w-full min-w-0 items-center justify-center rounded-lg border px-2 text-center text-[10px] font-semibold leading-tight",
+              stav.className,
+            ].join(" ")}
+            title={stav.text}
+          >
+            <span className="whitespace-normal break-words">{stav.text}</span>
+          </span>
+        </div>
 
-      <div className={centerCellClassName}>
-        <span
-          className={[
-            "flex min-h-9 w-full min-w-0 items-center justify-center rounded-lg border px-2 text-center text-[10px] font-semibold leading-tight",
-            stav.className,
-          ].join(" ")}
-          title={stav.text}
-        >
-          <span className="whitespace-normal break-words">{stav.text}</span>
-        </span>
-      </div>
-
-      <div className={centerCellClassName}>
-        {readOnly ? (
-          <span className="flex h-10 w-full items-center justify-center text-xs text-slate-500">—</span>
-        ) : (
-          <form action={deleteKusAction} className="w-full">
-            <input type="hidden" name="skladova_polozka_id" value={row.skladova_polozka_id} />
-            <input type="hidden" name="kus_id" value={kus.kus_id} />
-            <button
-              type="submit"
-              className="h-10 w-full rounded-lg border border-red-800 bg-red-950 px-2 text-xs font-semibold text-red-100 transition hover:bg-red-900"
-            >
-              Smazat
-            </button>
-          </form>
-        )}
-      </div>
-    </div>
-
-      <div className="flex flex-wrap items-center gap-2 border-t border-slate-800 px-3 py-2">
-        <details className="min-w-0 flex-1" open={isCaseOpen}>
-          <summary className="cursor-pointer list-none">
-            <span className="inline-flex min-h-9 items-center rounded-lg border border-emerald-700/80 bg-emerald-950/60 px-3 py-2 text-xs font-bold text-emerald-100 transition hover:bg-emerald-900/80">
-              {containedHint ? `${containedHint} · ` : ""}
-              Spravovat obsah case
+        <div className={centerCellClassName}>
+          {readOnly ? (
+            <span className="flex h-10 w-full items-center justify-center text-xs text-slate-500">
+              —
             </span>
-          </summary>
-          <div className="mt-3">
-            <SkladKusObsahInlinePanel
-              parentKusId={kus.kus_id}
-              parentDisplayLabel={label}
-              activeChildren={activeChildren}
-              availableOptions={availableChildOptions}
-              canEdit={!readOnly}
-              returnPolozkaId={returnPolozkaId}
-              obsahMessage={showObsahMessages ? obsahMessage : null}
-              obsahError={showObsahMessages ? obsahError : null}
-            />
-          </div>
-        </details>
-        <Link
-          href={`/sklad/kus/${kus.kus_id}`}
-          className="inline-flex min-h-9 items-center rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white"
-        >
-          Detail kusu
-        </Link>
+          ) : (
+            <form action={deleteKusAction} className="w-full">
+              <input type="hidden" name="skladova_polozka_id" value={row.skladova_polozka_id} />
+              <input type="hidden" name="kus_id" value={kus.kus_id} />
+              <button
+                type="submit"
+                className="h-10 w-full rounded-lg border border-red-800 bg-red-950 px-2 text-xs font-semibold text-red-100 transition hover:bg-red-900"
+              >
+                Smazat
+              </button>
+            </form>
+          )}
+        </div>
       </div>
+
+      {isCasePolozka && returnPolozkaId ? (
+        <SkladKusCaseTreePanel
+          parentKusId={kus.kus_id}
+          parentDisplayLabel={label}
+          activeChildren={activeChildren}
+          availableOptions={availableChildOptions}
+          canEdit={!readOnly}
+          returnPolozkaId={returnPolozkaId}
+          isExpanded={isCaseExpanded}
+          showInsertForm={showInsertForm}
+          obsahMessage={showObsahMessages ? obsahMessage : null}
+          obsahError={showObsahMessages ? obsahError : null}
+          formDefaults={formDefaults}
+          bloky={bloky}
+          kategorie={kategorie}
+          podkategorie={podkategorie}
+          jednotky={jednotky}
+          vlastnici={vlastnici}
+        />
+      ) : null}
 
       <details className="border-t border-slate-800 px-3 py-2">
         <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-blue-200 transition hover:text-blue-100">

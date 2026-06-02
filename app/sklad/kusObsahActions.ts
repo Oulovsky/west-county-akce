@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { assertInternalWriteAccess } from "@/lib/auth/internal-role-access-server";
+import { createCaseContent } from "@/lib/sklad/createCaseContent";
 import { insertKusIntoCase, removeKusFromCase } from "@/lib/sklad/kusObsah";
 import { createClient } from "@/lib/supabase/server";
 
@@ -15,11 +16,14 @@ function resolveChildKusId(formData: FormData) {
 function redirectAfterObsahAction(
   parentKusId: string,
   returnPolozkaId: string | null,
-  params: { ok?: string; error?: string }
+  params: { ok?: string; error?: string; keepInsertForm?: boolean }
 ) {
   const search = new URLSearchParams();
   if (returnPolozkaId) {
     search.set("obsahCase", parentKusId);
+    if (params.keepInsertForm) {
+      search.set("obsahMode", "insert");
+    }
   }
   if (params.ok) search.set("obsah", params.ok);
   if (params.error) search.set("obsahError", params.error);
@@ -129,5 +133,75 @@ export async function removeKusFromCaseAction(formData: FormData) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Vyjití kusu z case se nezdařilo.";
     redirectAfterObsahAction(parentKusId, returnPolozkaId, { error: message });
+  }
+}
+
+export async function createCaseContentAction(formData: FormData) {
+  const parentKusId = String(formData.get("parent_kus_id") ?? "").trim();
+  const returnPolozkaId = String(formData.get("return_polozka_id") ?? "").trim() || null;
+  const nazev = String(formData.get("nazev") ?? "").trim();
+  const skladBlokId = String(formData.get("sklad_blok_id") ?? "").trim();
+  const kategorieTechnikyId = String(formData.get("kategorie_techniky_id") ?? "").trim();
+  const podkategorieTechnikyId =
+    String(formData.get("podkategorie_techniky_id") ?? "").trim() || null;
+  const jednotka = String(formData.get("jednotka") ?? "").trim();
+  const technickyVlastnikId = String(formData.get("technicky_vlastnik_id") ?? "").trim();
+  const poznamka = String(formData.get("poznamka") ?? "").trim();
+  const countRaw = Number(String(formData.get("count") ?? "").trim());
+
+  if (!parentKusId) {
+    throw new Error("Chybí ID case.");
+  }
+  if (!nazev) {
+    redirectAfterObsahAction(parentKusId, returnPolozkaId, {
+      error: "Zadejte název obsahu.",
+      keepInsertForm: true,
+    });
+  }
+  if (!Number.isFinite(countRaw) || countRaw < 1) {
+    redirectAfterObsahAction(parentKusId, returnPolozkaId, {
+      error: "Počet kusů musí být alespoň 1.",
+      keepInsertForm: true,
+    });
+  }
+
+  const supabase = await createClient();
+
+  try {
+    await assertInternalWriteAccess(supabase);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const result = await createCaseContent(supabase, {
+      parentKusId,
+      nazev,
+      skladBlokId,
+      kategorieTechnikyId,
+      podkategorieTechnikyId,
+      jednotka,
+      technickyVlastnikId,
+      count: Math.floor(countRaw),
+      poznamka: poznamka || null,
+      userId: user?.id ?? null,
+    });
+
+    revalidatePath(`/sklad/kus/${parentKusId}`);
+    for (const childKusId of result.insertedKusIds) {
+      revalidatePath(`/sklad/kus/${childKusId}`);
+    }
+    revalidatePath(`/sklad/${result.contentPolozkaId}`);
+    if (returnPolozkaId) {
+      revalidatePath(`/sklad/${returnPolozkaId}`);
+    }
+
+    redirectAfterObsahAction(parentKusId, returnPolozkaId, { ok: "created" });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Vytvoření a vložení obsahu do case se nezdařilo.";
+    redirectAfterObsahAction(parentKusId, returnPolozkaId, {
+      error: message,
+      keepInsertForm: true,
+    });
   }
 }

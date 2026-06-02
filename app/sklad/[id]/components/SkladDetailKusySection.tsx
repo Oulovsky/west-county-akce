@@ -3,7 +3,17 @@ import type {
   SkladKusObsahChildRow,
   SkladKusObsahKusSummary,
 } from "@/lib/sklad/kusObsah";
-import type { SkladDetailRow, SkladKusRow, SkladOdpisovePasmo, SkladPoskozeniRow } from "@/lib/sklad/types";
+import type {
+  SkladBlok,
+  SkladDetailRow,
+  SkladJednotka,
+  SkladKategorie,
+  SkladKusRow,
+  SkladOdpisovePasmo,
+  SkladPodkategorie,
+  SkladPoskozeniRow,
+  TechnickyVlastnik,
+} from "@/lib/sklad/types";
 import type { UpdateKusPoradiResult } from "../actions/updateKusPoradi";
 import { skladDetailRowGridClassName } from "../helpers/tableLayout";
 import { SkladBulkLabelsButton } from "./SkladBulkLabelsButton";
@@ -24,10 +34,24 @@ type SkladDetailKusySectionProps = {
   childrenByParent?: Map<string, SkladKusObsahChildRow[]>;
   availableChildOptions?: SkladKusObsahChildOption[];
   openCaseKusId?: string | null;
+  obsahMode?: string | null;
   returnPolozkaId?: string;
   obsahMessage?: string | null;
   obsahError?: string | null;
   readOnly?: boolean;
+  isCasePolozka: boolean;
+  formDefaults: {
+    skladBlokId: string | null;
+    kategorieTechnikyId: string | null;
+    podkategorieTechnikyId: string | null;
+    technickyVlastnikId: string | null;
+    jednotka: string;
+  };
+  bloky: SkladBlok[];
+  kategorie: SkladKategorie[];
+  podkategorie: SkladPodkategorie[];
+  jednotky: SkladJednotka[];
+  vlastnici: TechnickyVlastnik[];
 };
 
 export function SkladDetailKusySection({
@@ -43,10 +67,18 @@ export function SkladDetailKusySection({
   childrenByParent,
   availableChildOptions = [],
   openCaseKusId = null,
+  obsahMode = null,
   returnPolozkaId,
   obsahMessage = null,
   obsahError = null,
   readOnly = false,
+  isCasePolozka,
+  formDefaults,
+  bloky,
+  kategorie,
+  podkategorie,
+  jednotky,
+  vlastnici,
 }: SkladDetailKusySectionProps) {
   const rowGridClassName = skladDetailRowGridClassName();
 
@@ -90,14 +122,22 @@ export function SkladDetailKusySection({
               rowGridClassName={rowGridClassName}
               deleteKusAction={deleteKusAction}
               updateKusPoradiAction={updateKusPoradiAction}
+              isCasePolozka={isCasePolozka}
               obsahSummary={obsahSummaries?.get(kus.kus_id) ?? null}
               activeChildren={childrenByParent?.get(kus.kus_id) ?? []}
               availableChildOptions={availableChildOptions}
               openCaseKusId={openCaseKusId}
+              obsahMode={obsahMode}
               returnPolozkaId={returnPolozkaId}
               obsahMessage={obsahMessage}
               obsahError={obsahError}
               readOnly={readOnly}
+              formDefaults={formDefaults}
+              bloky={bloky}
+              kategorie={kategorie}
+              podkategorie={podkategorie}
+              jednotky={jednotky}
+              vlastnici={vlastnici}
             />
           ))}
         </div>

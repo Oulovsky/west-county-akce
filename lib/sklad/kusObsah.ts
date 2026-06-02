@@ -1,7 +1,8 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { SKLAD_TABLE } from "@/lib/sklad/constants";
+import { CASE_NESTING_FORBIDDEN_MESSAGE, isCaseJednotka } from "@/lib/sklad/caseJednotka";
+import { SKLAD_RPC, SKLAD_TABLE } from "@/lib/sklad/constants";
 import { getSkladKusDisplayLabel } from "@/lib/sklad/helpers";
 import { formatSkladKusStav } from "@/lib/sklad/helpers";
 import { insertSkladKusHistorie } from "@/lib/sklad/kusHistorie";
@@ -366,7 +367,7 @@ export async function loadKusObsahSummariesForKusIds(
   return summary;
 }
 
-async function loadKusWithPolozka(
+export async function loadKusWithPolozka(
   client: SupabaseClient,
   kusId: string
 ): Promise<{
@@ -446,6 +447,26 @@ async function assertNoDirectCycle(
   }
 }
 
+async function assertParentKusAllowsNestingInline(
+  client: SupabaseClient,
+  parentKusId: string
+) {
+  const parent = await loadKusWithPolozka(client, parentKusId);
+  if (!parent) throw new Error("Case (parent kus) neexistuje.");
+
+  const { data, error } = await client.rpc(SKLAD_RPC.getSkladovaPolozkaDetail, {
+    p_skladova_polozka_id: parent.skladova_polozka_id,
+  });
+  if (error) throw new Error(error.message);
+
+  const jednotka = ((data ?? [])[0] as { jednotka?: string } | undefined)?.jednotka;
+  if (!isCaseJednotka(jednotka)) {
+    throw new Error(CASE_NESTING_FORBIDDEN_MESSAGE);
+  }
+
+  return parent;
+}
+
 export async function insertKusIntoCase(
   client: SupabaseClient,
   input: {
@@ -464,11 +485,10 @@ export async function insertKusIntoCase(
   }
 
   const [parent, child] = await Promise.all([
-    loadKusWithPolozka(client, parentKusId),
+    assertParentKusAllowsNestingInline(client, parentKusId),
     loadKusWithPolozka(client, childKusId),
   ]);
 
-  if (!parent) throw new Error("Case (parent kus) neexistuje.");
   if (!child) throw new Error("Vkládaný kus neexistuje.");
 
   await assertNoDirectCycle(client, parentKusId, childKusId);
@@ -548,7 +568,7 @@ export async function removeKusFromCase(
 }
 
 export function formatKusObsahParentHint(placement: SkladKusObsahParentPlacement): string {
-  return `v case: ${placement.displayLabel}`;
+  return `V case: ${placement.displayLabel}`;
 }
 
 export function formatKusObsahContainedHint(count: number): string | null {

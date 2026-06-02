@@ -4,6 +4,7 @@ import type {
   SkladKusObsahKusSummary,
 } from "@/lib/sklad/kusObsah";
 import type {
+  SkladBlok,
   SkladDetailRow,
   SkladJednotka,
   SkladKategorie,
@@ -11,6 +12,7 @@ import type {
   SkladOdpisovePasmo,
   SkladPodkategorie,
   SkladPoskozeniRow,
+  TechnickyVlastnik,
 } from "@/lib/sklad/types";
 import type { UpdateKusPoradiResult } from "../actions/updateKusPoradi";
 import {
@@ -43,10 +45,21 @@ type SkladDetailItemsTableProps = {
   childrenByParent?: Map<string, SkladKusObsahChildRow[]>;
   availableChildOptions?: SkladKusObsahChildOption[];
   openCaseKusId?: string | null;
+  obsahMode?: string | null;
   returnPolozkaId?: string;
   obsahMessage?: string | null;
   obsahError?: string | null;
   readOnly?: boolean;
+  isCasePolozka: boolean;
+  formDefaults: {
+    skladBlokId: string | null;
+    kategorieTechnikyId: string | null;
+    podkategorieTechnikyId: string | null;
+    technickyVlastnikId: string | null;
+    jednotka: string;
+  };
+  bloky: SkladBlok[];
+  vlastnici: TechnickyVlastnik[];
 };
 
 export function SkladDetailItemsTable({
@@ -69,10 +82,15 @@ export function SkladDetailItemsTable({
   childrenByParent,
   availableChildOptions = [],
   openCaseKusId = null,
+  obsahMode = null,
   returnPolozkaId,
   obsahMessage = null,
   obsahError = null,
   readOnly = false,
+  isCasePolozka,
+  formDefaults,
+  bloky,
+  vlastnici,
 }: SkladDetailItemsTableProps) {
   const editFormId = `upravit-polozku-${row.skladova_polozka_id}`;
   const rowGridClassName = skladDetailRowGridClassName();
@@ -113,10 +131,18 @@ export function SkladDetailItemsTable({
             childrenByParent={childrenByParent}
             availableChildOptions={availableChildOptions}
             openCaseKusId={openCaseKusId}
+            obsahMode={obsahMode}
             returnPolozkaId={returnPolozkaId}
             obsahMessage={obsahMessage}
             obsahError={obsahError}
             readOnly={readOnly}
+            isCasePolozka={isCasePolozka}
+            formDefaults={formDefaults}
+            bloky={bloky}
+            kategorie={kategorie}
+            podkategorie={podkategorie}
+            jednotky={jednotky}
+            vlastnici={vlastnici}
           />
         </details>
       </div>

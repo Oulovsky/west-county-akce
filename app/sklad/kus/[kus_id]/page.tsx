@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { loadSessionRolePermissions } from "@/lib/auth/internal-role-access-server";
 import { createClient } from "@/lib/supabase/server";
+import { isCaseJednotka } from "@/lib/sklad/caseJednotka";
 import {
   loadAvailableChildKusOptions,
   queryActiveChildrenInCase,
@@ -575,7 +576,9 @@ export default async function SkladKusDetailPage({ params, searchParams }: PageP
 
       <SkladKusObsahPanel
         kusId={kus.kus_id}
+        skladovaPolozkaId={row.skladova_polozka_id}
         parentDisplayLabel={label}
+        isCasePolozka={isCaseJednotka(row.jednotka)}
         activeChildren={activeChildren}
         parentPlacement={parentPlacement}
         availableOptions={availableChildOptions}

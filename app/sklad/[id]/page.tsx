@@ -11,21 +11,26 @@ import {
   sumBlokujiciPoskozeneKusy,
   toNumber,
 } from "@/lib/sklad/helpers";
+import { isCaseJednotka } from "@/lib/sklad/caseJednotka";
+import { SKLAD_RPC, SKLAD_TABLE } from "@/lib/sklad/constants";
 import {
   loadActiveChildrenByParentKusIds,
   loadAvailableChildKusOptions,
   loadKusObsahSummariesForKusIds,
 } from "@/lib/sklad/kusObsah";
 import type {
+  SkladBlok,
   SkladDetailRow,
   SkladJednotka,
   SkladKategorie,
   SkladKusRow,
   SkladOdpisovePasmo,
   SkladPodkategorie,
+  SkladPolozkaRow,
   SkladPoskozeniRow,
   SkladPrioritaOption,
   SkladTypPoskozeniOption,
+  TechnickyVlastnik,
 } from "@/lib/sklad/types";
 import {
   SkladDetailConfigError,
@@ -48,6 +53,7 @@ type PageProps = {
   searchParams?: Promise<{
     deleteError?: string;
     obsahCase?: string;
+    obsahMode?: string;
     obsah?: string;
     obsahError?: string;
   }>;
@@ -83,6 +89,7 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
     ? decodeURIComponent(resolvedSearchParams.deleteError)
     : null;
   const openCaseKusId = resolvedSearchParams?.obsahCase ?? null;
+  const obsahMode = resolvedSearchParams?.obsahMode ?? null;
   const obsahMessage = resolvedSearchParams?.obsah ?? null;
   const obsahError = resolvedSearchParams?.obsahError
     ? decodeURIComponent(resolvedSearchParams.obsahError)
@@ -264,6 +271,9 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
     { data: kategorieRaw, error: kategorieError },
     { data: podkategorieRaw, error: podkategorieError },
     { data: jednotkyRaw, error: jednotkyError },
+    { data: blokyRaw, error: blokyError },
+    { data: polozkyRaw, error: polozkyError },
+    { data: vlastniciRaw, error: vlastniciError },
   ] = await Promise.all([
     supabase.rpc("get_skladova_polozka_detail", {
       p_skladova_polozka_id: id,
@@ -271,18 +281,30 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
     supabase.rpc("get_kategorie_techniky_full"),
     supabase.rpc("get_podkategorie_techniky_full"),
     supabase.rpc("get_jednotky_skladu_full"),
+    supabase.rpc(SKLAD_RPC.getSkladBloky),
+    supabase.rpc(SKLAD_RPC.getSkladovePolozky),
+    supabase
+      .from(SKLAD_TABLE.technickyVlastnici)
+      .select("id, nazev, poradi, aktivni")
+      .eq("aktivni", true)
+      .order("poradi", { ascending: true })
+      .order("nazev", { ascending: true }),
   ]);
 
   if (error) {
     return <SkladDetailLoadError message={error.message} />;
   }
 
-  if (kategorieError || podkategorieError || jednotkyError) {
+  if (kategorieError || podkategorieError || jednotkyError || blokyError || polozkyError) {
     return (
       <SkladDetailConfigError
-        messages={[kategorieError?.message, podkategorieError?.message, jednotkyError?.message].filter(
-          Boolean
-        ) as string[]}
+        messages={[
+          kategorieError?.message,
+          podkategorieError?.message,
+          jednotkyError?.message,
+          blokyError?.message,
+          polozkyError?.message,
+        ].filter(Boolean) as string[]}
       />
     );
   }
@@ -296,6 +318,19 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
   const kategorie = (kategorieRaw ?? []) as SkladKategorie[];
   const podkategorie = (podkategorieRaw ?? []) as SkladPodkategorie[];
   const jednotky = (jednotkyRaw ?? []) as SkladJednotka[];
+  const bloky = (blokyRaw ?? []) as SkladBlok[];
+  const vlastnici = (vlastniciRaw ?? []) as TechnickyVlastnik[];
+  const polozkaMeta = ((polozkyRaw ?? []) as SkladPolozkaRow[]).find(
+    (item) => item.skladova_polozka_id === id
+  );
+  const isCasePolozka = isCaseJednotka(row.jednotka);
+  const formDefaults = {
+    skladBlokId: polozkaMeta?.sklad_blok_id ?? null,
+    kategorieTechnikyId: row.kategorie_techniky_id,
+    podkategorieTechnikyId: row.podkategorie_techniky_id,
+    technickyVlastnikId: polozkaMeta?.technicky_vlastnik_id ?? null,
+    jednotka: "ks",
+  };
 
   const [
     { data: kusyRaw, error: kusyError },
@@ -346,22 +381,6 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
   return (
     <div className="flex flex-col gap-5">
       {deleteErrorMessage ? <SkladDetailDeleteBlockedAlert message={deleteErrorMessage} /> : null}
-      {obsahMessage === "inserted" ? (
-        <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-          Kus byl vložen do case.
-        </p>
-      ) : null}
-      {obsahMessage === "removed" ? (
-        <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-          Kus byl vyjmut z case.
-        </p>
-      ) : null}
-      {obsahError ? (
-        <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-          {obsahError}
-        </p>
-      ) : null}
-
       <SkladDetailHeader
         skladovaPolozkaId={row.skladova_polozka_id}
         deleteAction={deletePolozkaAction}
@@ -388,10 +407,15 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
         childrenByParent={childrenByParent}
         availableChildOptions={availableChildOptions}
         openCaseKusId={openCaseKusId}
+        obsahMode={obsahMode}
         returnPolozkaId={id}
         obsahMessage={obsahMessage}
         obsahError={obsahError}
         readOnly={readOnly}
+        isCasePolozka={isCasePolozka}
+        formDefaults={formDefaults}
+        bloky={bloky}
+        vlastnici={vlastnici}
       />
 
       <div className="grid gap-5 2xl:grid-cols-[minmax(0,1.3fr)_minmax(420px,0.9fr)]">

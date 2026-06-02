@@ -9,7 +9,9 @@ import { formatDateTime } from "@/lib/sklad/helpers";
 
 type SkladKusObsahPanelProps = {
   kusId: string;
+  skladovaPolozkaId: string;
   parentDisplayLabel: string;
+  isCasePolozka: boolean;
   activeChildren: SkladKusObsahChildRow[];
   parentPlacement: SkladKusObsahParentPlacement | null;
   availableOptions: SkladKusObsahChildOption[];
@@ -20,7 +22,9 @@ type SkladKusObsahPanelProps = {
 
 export function SkladKusObsahPanel({
   kusId,
+  skladovaPolozkaId,
   parentDisplayLabel,
+  isCasePolozka,
   activeChildren,
   parentPlacement,
   availableOptions,
@@ -28,15 +32,27 @@ export function SkladKusObsahPanel({
   obsahMessage,
   obsahError,
 }: SkladKusObsahPanelProps) {
-  const showContainsSection = activeChildren.length > 0 || canEdit;
+  if (!isCasePolozka && !parentPlacement) {
+    return null;
+  }
 
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
       <div>
         <h2 className="text-xl font-black tracking-tight text-white">Obsah case / vnoření</h2>
         <p className="mt-1 text-sm text-slate-400">
-          Servisní detail kusu. Hlavní plnění case je na stránce skladové položky.
+          {isCasePolozka
+            ? "Hlavní plnění case je na stránce skladové položky — rozbalte case a použijte tlačítko Vložit."
+            : "Umístění kusu v case."}
         </p>
+        {isCasePolozka ? (
+          <Link
+            href={`/sklad/${skladovaPolozkaId}`}
+            className="mt-2 inline-flex text-sm font-semibold text-blue-300 hover:text-blue-200"
+          >
+            Otevřít položku a plnit case →
+          </Link>
+        ) : null}
       </div>
 
       {parentPlacement ? (
@@ -64,7 +80,7 @@ export function SkladKusObsahPanel({
         </div>
       ) : null}
 
-      {showContainsSection ? (
+      {isCasePolozka && (activeChildren.length > 0 || canEdit) ? (
         <div className="mt-5">
           <SkladKusObsahInlinePanel
             parentKusId={kusId}
@@ -76,11 +92,9 @@ export function SkladKusObsahPanel({
             obsahError={obsahError}
           />
         </div>
-      ) : (
-        <p className="mt-4 text-sm text-slate-500">
-          Tento kus není v case a zatím neobsahuje jiné kusy.
-        </p>
-      )}
+      ) : isCasePolozka ? (
+        <p className="mt-4 text-sm text-slate-500">Case zatím neobsahuje žádné kusy.</p>
+      ) : null}
     </section>
   );
 }
