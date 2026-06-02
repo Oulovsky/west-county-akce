@@ -5,6 +5,12 @@ import {
   getKusStatus,
   getSkladKusDisplayLabel,
 } from "@/lib/sklad/helpers";
+import Link from "next/link";
+import {
+  formatKusObsahContainedHint,
+  formatKusObsahParentHint,
+  type SkladKusObsahKusSummary,
+} from "@/lib/sklad/kusObsah";
 import type { SkladDetailRow, SkladKusRow, SkladOdpisovePasmo, SkladPoskozeniRow } from "@/lib/sklad/types";
 import type { UpdateKusPoradiResult } from "../actions/updateKusPoradi";
 import { boxClassName, statusBoxClassName } from "../helpers/classNames";
@@ -25,6 +31,7 @@ type SkladDetailKusRowProps = {
   updateKusPoradiAction: (
     formData: FormData
   ) => Promise<UpdateKusPoradiResult>;
+  obsahSummary?: SkladKusObsahKusSummary | null;
   readOnly?: boolean;
 };
 
@@ -36,11 +43,14 @@ export function SkladDetailKusRow({
   rowGridClassName,
   deleteKusAction,
   updateKusPoradiAction,
+  obsahSummary = null,
   readOnly = false,
 }: SkladDetailKusRowProps) {
   const stav = getKusStatus(kus, poskozeni);
   const centerCellClassName = SKLAD_DETAIL_CENTER_CELL_CLASS_NAME;
   const label = getSkladKusDisplayLabel(row.nazev, kus);
+  const containedHint = formatKusObsahContainedHint(obsahSummary?.containedCount ?? 0);
+  const parentPlacement = obsahSummary?.parentPlacement ?? null;
 
   return (
     <div key={kus.kus_id} className="rounded-xl border border-slate-800 bg-slate-950">
@@ -54,12 +64,26 @@ export function SkladDetailKusRow({
           readOnly={readOnly}
         />
 
-        <span
-          className={[boxClassName(), "min-w-0 flex-1 truncate"].join(" ")}
-          title={label}
-        >
-          {label}
-        </span>
+        <div className="min-w-0 flex-1">
+          <span className={[boxClassName(), "block truncate"].join(" ")} title={label}>
+            {label}
+          </span>
+          {containedHint ? (
+            <span className="mt-1 block text-[10px] font-semibold text-emerald-300/90">
+              {containedHint}
+            </span>
+          ) : null}
+          {parentPlacement ? (
+            <span className="mt-0.5 block text-[10px] font-semibold text-blue-300/90">
+              <Link
+                href={`/sklad/kus/${parentPlacement.parentKusId}`}
+                className="hover:text-blue-200"
+              >
+                {formatKusObsahParentHint(parentPlacement)}
+              </Link>
+            </span>
+          ) : null}
+        </div>
 
         <KusQrActionMenu
           kusId={kus.kus_id}

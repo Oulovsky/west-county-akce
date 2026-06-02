@@ -31,6 +31,10 @@ export function formatSkladKusHistorieTypAkce(
       return "Vyřazeno";
     case "servisni_poznamka":
       return "Servisní poznámka";
+    case "vlozeno_do_case":
+      return "Vloženo do case";
+    case "vyjmuto_z_case":
+      return "Vyňato z case";
     default:
       return typAkce?.trim() || "—";
   }

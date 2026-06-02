@@ -1,3 +1,4 @@
+import type { SkladKusObsahKusSummary } from "@/lib/sklad/kusObsah";
 import type {
   SkladDetailRow,
   SkladJednotka,
@@ -34,6 +35,7 @@ type SkladDetailItemsTableProps = {
   updateKusPoradiAction: (
     formData: FormData
   ) => Promise<UpdateKusPoradiResult>;
+  obsahSummaries?: Map<string, SkladKusObsahKusSummary>;
   readOnly?: boolean;
 };
 
@@ -53,6 +55,7 @@ export function SkladDetailItemsTable({
   addKusAction,
   deleteKusAction,
   updateKusPoradiAction,
+  obsahSummaries,
   readOnly = false,
 }: SkladDetailItemsTableProps) {
   const editFormId = `upravit-polozku-${row.skladova_polozka_id}`;
@@ -90,6 +93,7 @@ export function SkladDetailItemsTable({
             addKusAction={addKusAction}
             deleteKusAction={deleteKusAction}
             updateKusPoradiAction={updateKusPoradiAction}
+            obsahSummaries={obsahSummaries}
             readOnly={readOnly}
           />
         </details>

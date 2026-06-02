@@ -11,6 +11,7 @@ import {
   sumBlokujiciPoskozeneKusy,
   toNumber,
 } from "@/lib/sklad/helpers";
+import { loadKusObsahSummariesForKusIds } from "@/lib/sklad/kusObsah";
 import type {
   SkladDetailRow,
   SkladJednotka,
@@ -312,6 +313,10 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
   ]);
 
   const kusy = (kusyRaw ?? []) as SkladKusRow[];
+  const obsahSummaries = await loadKusObsahSummariesForKusIds(
+    supabase,
+    kusy.map((kus) => kus.kus_id)
+  );
   const poskozeni = (poskozeniRaw ?? []) as SkladPoskozeniRow[];
   const typyPoskozeni = (typyRaw ?? []) as SkladTypPoskozeniOption[];
   const priority = (priorityRaw ?? []) as SkladPrioritaOption[];
@@ -348,6 +353,7 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
         addKusAction={pridatKus}
         deleteKusAction={smazatKus}
         updateKusPoradiAction={updateKusPoradiAction}
+        obsahSummaries={obsahSummaries}
         readOnly={readOnly}
       />
 

@@ -1,3 +1,4 @@
+import type { SkladKusObsahKusSummary } from "@/lib/sklad/kusObsah";
 import type { SkladDetailRow, SkladKusRow, SkladOdpisovePasmo, SkladPoskozeniRow } from "@/lib/sklad/types";
 import type { UpdateKusPoradiResult } from "../actions/updateKusPoradi";
 import { skladDetailRowGridClassName } from "../helpers/tableLayout";
@@ -15,6 +16,7 @@ type SkladDetailKusySectionProps = {
   updateKusPoradiAction: (
     formData: FormData
   ) => Promise<UpdateKusPoradiResult>;
+  obsahSummaries?: Map<string, SkladKusObsahKusSummary>;
   readOnly?: boolean;
 };
 
@@ -27,6 +29,7 @@ export function SkladDetailKusySection({
   addKusAction,
   deleteKusAction,
   updateKusPoradiAction,
+  obsahSummaries,
   readOnly = false,
 }: SkladDetailKusySectionProps) {
   const rowGridClassName = skladDetailRowGridClassName();
@@ -71,6 +74,7 @@ export function SkladDetailKusySection({
               rowGridClassName={rowGridClassName}
               deleteKusAction={deleteKusAction}
               updateKusPoradiAction={updateKusPoradiAction}
+              obsahSummary={obsahSummaries?.get(kus.kus_id) ?? null}
               readOnly={readOnly}
             />
           ))}

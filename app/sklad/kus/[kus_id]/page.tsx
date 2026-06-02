@@ -1,6 +1,11 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { loadSessionRolePermissions } from "@/lib/auth/internal-role-access-server";
 import { createClient } from "@/lib/supabase/server";
+import {
+  queryActiveChildrenInCase,
+  queryActiveParentPlacement,
+} from "@/lib/sklad/kusObsah";
 import { SKLAD_KUS_SELECT_FIELDS, SKLAD_TABLE } from "@/lib/sklad/constants";
 import { calculateLinearDepreciation } from "@/lib/sklad/depreciation";
 import {
@@ -30,6 +35,7 @@ import {
   formatZakazkaKusZakazkaLabel,
   queryAktivniZakazkaKusu,
 } from "@/lib/sklad/zakazkaKusy";
+import { SkladKusObsahPanel } from "./SkladKusObsahPanel";
 import { SkladKusQuickActions } from "./SkladKusQuickActions";
 import {
   reportSkladKusDamageAction,
@@ -39,6 +45,7 @@ import {
 
 type PageProps = {
   params: Promise<{ kus_id: string }>;
+  searchParams?: Promise<{ obsah?: string; obsahError?: string }>;
 };
 
 function positionText(position: number | string | null | undefined): string {
@@ -183,9 +190,12 @@ function ServiceActionForm({
   );
 }
 
-export default async function SkladKusDetailPage({ params }: PageProps) {
+export default async function SkladKusDetailPage({ params, searchParams }: PageProps) {
   const { kus_id: kusId } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const supabase = await createClient();
+  const { perms } = await loadSessionRolePermissions(supabase);
+  const canEditSklad = perms.skladEditace;
 
   const { data: kusRaw, error: kusError } = await supabase
     .from(SKLAD_TABLE.skladPolozkyKusy)
@@ -256,6 +266,8 @@ export default async function SkladKusDetailPage({ params }: PageProps) {
     { data: historieRaw, error: historieError },
     { data: poskozeniRaw, error: poskozeniError },
     { data: odpisovaPasmaRaw, error: odpisovaPasmaError },
+    activeChildren,
+    parentPlacement,
   ] = await Promise.all([
     queryAktivniZakazkaKusu(supabase, kus.kus_id),
     querySkladKusHistorie(supabase, kus.kus_id),
@@ -271,6 +283,8 @@ export default async function SkladKusDetailPage({ params }: PageProps) {
       .order("aktivni", { ascending: false })
       .order("poradi", { ascending: true })
       .order("nazev", { ascending: true }),
+    queryActiveChildrenInCase(supabase, kus.kus_id),
+    queryActiveParentPlacement(supabase, kus.kus_id),
   ]);
   const assignment = (assignmentRaw ?? null) as SkladKusZakazkaAssignmentRow | null;
   const historie = (historieRaw ?? []) as unknown as SkladKusHistorieRow[];
@@ -554,6 +568,19 @@ export default async function SkladKusDetailPage({ params }: PageProps) {
       <SkladKusQuickActions
         assignmentId={assignment?.id ?? null}
         currentZakazkaKusStav={assignment?.stav ?? null}
+      />
+
+      <SkladKusObsahPanel
+        kusId={kus.kus_id}
+        activeChildren={activeChildren}
+        parentPlacement={parentPlacement}
+        canEdit={canEditSklad}
+        obsahMessage={resolvedSearchParams?.obsah ?? null}
+        obsahError={
+          resolvedSearchParams?.obsahError
+            ? decodeURIComponent(resolvedSearchParams.obsahError)
+            : null
+        }
       />
 
       <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">

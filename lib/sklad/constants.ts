@@ -64,6 +64,7 @@ export const SKLAD_RPC = {
 export const SKLAD_TABLE = {
   hlaseniPoskozeni: "hlaseni_poskozeni",
   skladKusHistorie: "sklad_kus_historie",
+  skladKusObsah: "sklad_kus_obsah",
   skladPolozkyKusy: "sklad_polozky_kusy",
   skladovePolozky: "skladove_polozky",
   skladBloky: "sklad_bloky",

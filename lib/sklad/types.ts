@@ -106,7 +106,9 @@ export type SkladKusHistorieTypAkce =
   | "ceka_na_kontrolu"
   | "zkontrolovano"
   | "vyrazeno"
-  | "servisni_poznamka";
+  | "servisni_poznamka"
+  | "vlozeno_do_case"
+  | "vyjmuto_z_case";
 
 export type SkladKusHistorieRow = {
   historie_id: string;
