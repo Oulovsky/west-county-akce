@@ -16,6 +16,26 @@ export function SkladDetailConfigError({ messages }: { messages: string[] }) {
   );
 }
 
+export function SkladDetailDeleteBlockedAlert({ message }: { message: string }) {
+  const lines = message.split("\n");
+
+  return (
+    <div
+      role="alert"
+      className="rounded-2xl border border-red-700/60 bg-red-950/50 px-4 py-4 text-red-100"
+    >
+      {lines.map((line, index) => (
+        <p
+          key={`${index}-${line}`}
+          className={index === 0 ? "text-sm font-semibold leading-relaxed" : "mt-1 text-sm text-red-200/90"}
+        >
+          {line}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 export function SkladDetailNotFound() {
   return (
     <div className="flex flex-col gap-4">

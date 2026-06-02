@@ -20,6 +20,7 @@ import type {
 } from "@/lib/sklad/types";
 import {
   SkladDetailConfigError,
+  SkladDetailDeleteBlockedAlert,
   SkladDetailLoadError,
   SkladDetailNotFound,
 } from "./components/SkladDetailAlerts";
@@ -31,9 +32,11 @@ import { SkladDetailItemsTable } from "./components/SkladDetailItemsTable";
 import { SkladDetailMetaSection } from "./components/SkladDetailMetaSection";
 import { SkladDetailReportDamageSection } from "./components/SkladDetailReportDamageSection";
 import { updateKusPoradiAction } from "./actions/updateKusPoradi";
+import { deletePolozkaAction } from "./actions/deletePolozka";
 
 type PageProps = {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ deleteError?: string }>;
 };
 
 async function prepocitatPocetKusu(skladovaPolozkaId: string) {
@@ -59,8 +62,12 @@ async function prepocitatPocetKusu(skladovaPolozkaId: string) {
   if (updateError) throw new Error(updateError.message);
 }
 
-export default async function SkladDetailPage({ params }: PageProps) {
+export default async function SkladDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const deleteErrorMessage = resolvedSearchParams?.deleteError
+    ? decodeURIComponent(resolvedSearchParams.deleteError)
+    : null;
   const supabase = await createClient();
 
   async function upravitPolozku(formData: FormData) {
@@ -191,29 +198,6 @@ export default async function SkladDetailPage({ params }: PageProps) {
     revalidatePath("/sklad/sprava");
   }
 
-  async function smazatPolozku(formData: FormData) {
-    "use server";
-
-    const supabase = await createClient();
-    const skladovaPolozkaId = String(formData.get("skladova_polozka_id") || "");
-
-    if (!skladovaPolozkaId) throw new Error("Chybí ID skladové položky.");
-
-    await supabase.from("hlaseni_poskozeni").delete().eq("skladova_polozka_id", skladovaPolozkaId);
-    await supabase.from("sklad_polozky_kusy").delete().eq("skladova_polozka_id", skladovaPolozkaId);
-
-    const { error } = await supabase
-      .from("skladove_polozky")
-      .delete()
-      .eq("skladova_polozka_id", skladovaPolozkaId);
-
-    if (error) throw new Error(error.message);
-
-    revalidatePath("/sklad");
-    revalidatePath("/sklad/sprava");
-    redirect("/sklad/sprava");
-  }
-
   async function nahlasitPoskozeni(formData: FormData) {
     "use server";
 
@@ -330,9 +314,11 @@ export default async function SkladDetailPage({ params }: PageProps) {
 
   return (
     <div className="flex flex-col gap-5">
+      {deleteErrorMessage ? <SkladDetailDeleteBlockedAlert message={deleteErrorMessage} /> : null}
+
       <SkladDetailHeader
         skladovaPolozkaId={row.skladova_polozka_id}
-        deleteAction={smazatPolozku}
+        deleteAction={deletePolozkaAction}
       />
 
       <SkladDetailItemsTable
