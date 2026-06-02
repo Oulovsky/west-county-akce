@@ -8,6 +8,8 @@ import {
 } from "@/lib/sklad/helpers";
 import Link from "next/link";
 import {
+  formatKusObsahContainedHint,
+  formatKusObsahContainedLabel,
   formatKusObsahParentHint,
   type SkladKusObsahChildOption,
   type SkladKusObsahChildRow,
@@ -30,8 +32,11 @@ import { SKLAD_DETAIL_CENTER_CELL_CLASS_NAME } from "../helpers/tableLayout";
 import { SkladKusAssetFields, SkladKusAssetSummary } from "./SkladKusAssetFields";
 import { SkladDetailKusPoradiField } from "./SkladDetailKusPoradiField";
 
-const QR_DETAIL_TRIGGER =
+const QR_TRIGGER =
   "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-950 text-slate-300 outline-none transition hover:border-slate-600 hover:bg-slate-900 hover:text-white focus-visible:ring-2 focus-visible:ring-blue-500/50";
+
+const TREE_CHEVRON =
+  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-emerald-800/60 bg-emerald-950/40 text-sm font-bold text-emerald-200 transition hover:border-emerald-600 hover:bg-emerald-900/60 hover:text-white";
 
 type SkladDetailKusRowProps = {
   kus: SkladKusRow;
@@ -96,14 +101,41 @@ export function SkladDetailKusRow({
   const centerCellClassName = SKLAD_DETAIL_CENTER_CELL_CLASS_NAME;
   const label = getSkladKusDisplayLabel(row.nazev, kus);
   const parentPlacement = obsahSummary?.parentPlacement ?? null;
-  const isCaseExpanded = openCaseKusId === kus.kus_id;
+  const containedCount = activeChildren.length;
+  const isCaseExpanded = isCasePolozka && openCaseKusId === kus.kus_id;
   const showInsertForm = isCaseExpanded && obsahMode === "insert";
   const showObsahMessages = isCaseExpanded;
+  const expandHref =
+    returnPolozkaId != null
+      ? `/sklad/${returnPolozkaId}?obsahCase=${kus.kus_id}`
+      : null;
+  const collapseHref = returnPolozkaId != null ? `/sklad/${returnPolozkaId}` : null;
+  const collapsedContainedHint =
+    formatKusObsahContainedHint(containedCount) ??
+    (isCasePolozka ? formatKusObsahContainedLabel(0).toLowerCase() : null);
 
   return (
-    <div key={kus.kus_id} className="rounded-xl border border-slate-800 bg-slate-950">
+    <div
+      className={[
+        "rounded-xl border bg-slate-950",
+        isCaseExpanded
+          ? "border-emerald-800/50 ring-1 ring-emerald-900/30"
+          : "border-slate-800",
+      ].join(" ")}
+    >
       <div className={rowGridClassName}>
         <div className="flex min-w-0 items-start gap-1 px-1">
+          {isCasePolozka && expandHref && collapseHref ? (
+            <Link
+              href={isCaseExpanded ? collapseHref : expandHref}
+              className={TREE_CHEVRON}
+              title={isCaseExpanded ? "Sbalit obsah case" : "Rozbalit obsah case"}
+              aria-expanded={isCaseExpanded}
+            >
+              {isCaseExpanded ? "▾" : "▸"}
+            </Link>
+          ) : null}
+
           <SkladDetailKusPoradiField
             skladovaPolozkaId={row.skladova_polozka_id}
             kusId={kus.kus_id}
@@ -116,6 +148,11 @@ export function SkladDetailKusRow({
             <span className={[boxClassName(), "block truncate"].join(" ")} title={label}>
               {label}
             </span>
+            {isCasePolozka && !isCaseExpanded && collapsedContainedHint ? (
+              <span className="mt-1 block text-[10px] font-semibold text-emerald-300/90">
+                {collapsedContainedHint}
+              </span>
+            ) : null}
             {!isCasePolozka && parentPlacement ? (
               <span className="mt-1 block text-[10px] font-semibold text-blue-300/90">
                 <Link
@@ -125,6 +162,14 @@ export function SkladDetailKusRow({
                   {formatKusObsahParentHint(parentPlacement)}
                 </Link>
               </span>
+            ) : null}
+            {isCasePolozka && !isCaseExpanded ? (
+              <Link
+                href={`/sklad/kus/${kus.kus_id}`}
+                className="mt-1 inline-flex text-[10px] font-semibold text-slate-400 hover:text-white"
+              >
+                Detail kusu
+              </Link>
             ) : null}
           </div>
 
@@ -136,8 +181,9 @@ export function SkladDetailKusRow({
               poradoveCislo: kus.poradove_cislo,
               position: row.pozice,
             }}
-            triggerClassName={QR_DETAIL_TRIGGER}
+            triggerClassName={QR_TRIGGER}
             iconClassName="h-[18px] w-[18px]"
+            hideDetailLink={isCasePolozka}
           />
         </div>
 
@@ -233,7 +279,7 @@ export function SkladDetailKusRow({
         </div>
       </div>
 
-      {isCasePolozka && returnPolozkaId ? (
+      {isCaseExpanded && returnPolozkaId ? (
         <SkladKusCaseTreePanel
           parentKusId={kus.kus_id}
           parentDisplayLabel={label}
@@ -241,7 +287,6 @@ export function SkladDetailKusRow({
           availableOptions={availableChildOptions}
           canEdit={!readOnly}
           returnPolozkaId={returnPolozkaId}
-          isExpanded={isCaseExpanded}
           showInsertForm={showInsertForm}
           obsahMessage={showObsahMessages ? obsahMessage : null}
           obsahError={showObsahMessages ? obsahError : null}

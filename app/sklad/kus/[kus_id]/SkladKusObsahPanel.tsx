@@ -32,6 +32,8 @@ export function SkladKusObsahPanel({
   obsahMessage,
   obsahError,
 }: SkladKusObsahPanelProps) {
+  const showServisniObsahPanel = !isCasePolozka && canEdit;
+
   if (!isCasePolozka && !parentPlacement) {
     return null;
   }
@@ -42,7 +44,7 @@ export function SkladKusObsahPanel({
         <h2 className="text-xl font-black tracking-tight text-white">Obsah case / vnoření</h2>
         <p className="mt-1 text-sm text-slate-400">
           {isCasePolozka
-            ? "Hlavní plnění case je na stránce skladové položky — rozbalte case a použijte tlačítko Vložit."
+            ? "Servisní detail. Hlavní plnění case je na stránce skladové položky — v seznamu kusů rozbalte case (▸) a použijte + Vložit."
             : "Umístění kusu v case."}
         </p>
         {isCasePolozka ? (
@@ -80,7 +82,27 @@ export function SkladKusObsahPanel({
         </div>
       ) : null}
 
-      {isCasePolozka && (activeChildren.length > 0 || canEdit) ? (
+      {isCasePolozka ? (
+        <div className="mt-5">
+          {activeChildren.length > 0 ? (
+            <ul className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+              {activeChildren.map((child) => (
+                <li key={child.obsahId} className="text-sm">
+                  <Link
+                    href={`/sklad/kus/${child.childKusId}`}
+                    className="font-semibold text-blue-300 hover:text-blue-200"
+                  >
+                    {child.displayLabel}
+                  </Link>
+                  <span className="ml-2 text-xs text-slate-500">{child.polozkaNazev}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-500">Case zatím neobsahuje žádné kusy.</p>
+          )}
+        </div>
+      ) : showServisniObsahPanel || activeChildren.length > 0 ? (
         <div className="mt-5">
           <SkladKusObsahInlinePanel
             parentKusId={kusId}
@@ -92,8 +114,6 @@ export function SkladKusObsahPanel({
             obsahError={obsahError}
           />
         </div>
-      ) : isCasePolozka ? (
-        <p className="mt-4 text-sm text-slate-500">Case zatím neobsahuje žádné kusy.</p>
       ) : null}
     </section>
   );

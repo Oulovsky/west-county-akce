@@ -18,6 +18,8 @@ type Props = {
   iconClassName?: string;
   /** Vzhled rozbalovací nabídky (vyšší z-index ve vnořeném scroll kontextu). */
   menuVariant?: "default" | "sprava";
+  /** Skrýt odkaz na detail kusu — detail má být mimo QR menu (např. /sklad/[id]). */
+  hideDetailLink?: boolean;
 };
 
 const MENU_WIDTH = 192;
@@ -30,6 +32,7 @@ export function KusQrActionMenu({
   triggerClassName,
   iconClassName,
   menuVariant = "default",
+  hideDetailLink = false,
 }: Props) {
   const menuId = useId();
   const [open, setOpen] = useState(false);
@@ -141,23 +144,25 @@ export function KusQrActionMenu({
         boxShadow: "0 24px 60px rgba(0, 0, 0, 0.75)",
       }}
     >
-      <Link
-        href={getSkladKusFuturePath(kusId)}
-        role="menuitem"
-        onClick={() => setOpen(false)}
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-slate-100 hover:bg-slate-800"
-      >
-        <svg
-          viewBox="0 0 20 20"
-          className="h-3.5 w-3.5 shrink-0"
-          fill="currentColor"
-          aria-hidden
+      {hideDetailLink ? null : (
+        <Link
+          href={getSkladKusFuturePath(kusId)}
+          role="menuitem"
+          onClick={() => setOpen(false)}
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-slate-100 hover:bg-slate-800"
         >
-          <path d="M11 3a1 1 0 1 0 0 2h2.586L7.293 11.293a1 1 0 1 0 1.414 1.414L15 6.414V9a1 1 0 1 0 2 0V4a1 1 0 0 0-1-1h-5z" />
-          <path d="M5 5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-3a1 1 0 1 0-2 0v3H5V7h3a1 1 0 0 0 0-2H5z" />
-        </svg>
-        <span>Otevřít detail kusu</span>
-      </Link>
+          <svg
+            viewBox="0 0 20 20"
+            className="h-3.5 w-3.5 shrink-0"
+            fill="currentColor"
+            aria-hidden
+          >
+            <path d="M11 3a1 1 0 1 0 0 2h2.586L7.293 11.293a1 1 0 1 0 1.414 1.414L15 6.414V9a1 1 0 1 0 2 0V4a1 1 0 0 0-1-1h-5z" />
+            <path d="M5 5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-3a1 1 0 1 0-2 0v3H5V7h3a1 1 0 0 0 0-2H5z" />
+          </svg>
+          <span>Otevřít detail kusu</span>
+        </Link>
+      )}
       <button
         type="button"
         role="menuitem"

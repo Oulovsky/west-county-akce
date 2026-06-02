@@ -112,6 +112,12 @@ export function SkladDetailKusySection({
         </div>
       ) : (
         <div className="grid gap-2">
+          {isCasePolozka ? (
+            <p className="mb-1 px-1 text-xs text-slate-500">
+              Položka typu case — rozbalte konkrétní case (▸) a vložte obsah přímo zde. QR menu
+              slouží jen pro štítky.
+            </p>
+          ) : null}
           {kusy.map((kus) => (
             <SkladDetailKusRow
               key={kus.kus_id}

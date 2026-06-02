@@ -576,3 +576,10 @@ export function formatKusObsahContainedHint(count: number): string | null {
   const suffix = count === 1 ? "kus" : count < 5 ? "kusy" : "kusů";
   return `obsahuje ${count} ${suffix}`;
 }
+
+/** Popisek obsahu case ve stromu — včetně nuly. */
+export function formatKusObsahContainedLabel(count: number): string {
+  if (count <= 0) return "Obsahuje 0 kusů";
+  const suffix = count === 1 ? "kus" : count < 5 ? "kusy" : "kusů";
+  return `Obsahuje ${count} ${suffix}`;
+}
