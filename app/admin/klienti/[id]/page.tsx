@@ -88,43 +88,11 @@ export default async function AdminKlientDetailPage({
               <dd className="whitespace-pre-wrap text-slate-100">{klient.poznamka}</dd>
             </div>
           ) : null}
-        </dl>
-      </section>
-
-      <section className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
-        <h2 className="text-lg font-semibold text-white">Klientské účty</h2>
-        {detail.accounts.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-500">Žádný portálový účet.</p>
-        ) : (
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="text-left text-slate-500">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Jméno</th>
-                  <th className="px-3 py-2 font-medium">E-mail</th>
-                  <th className="px-3 py-2 font-medium">Telefon</th>
-                  <th className="px-3 py-2 font-medium">Role</th>
-                  <th className="px-3 py-2 font-medium">Stav</th>
-                  <th className="px-3 py-2 font-medium">Vytvořeno</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detail.accounts.map((account) => (
-                  <tr key={account.account_id} className="border-t border-slate-800 text-slate-200">
-                    <td className="px-3 py-2">
-                      {[account.jmeno, account.prijmeni].filter(Boolean).join(" ") || "—"}
-                    </td>
-                    <td className="px-3 py-2">{account.email ?? "—"}</td>
-                    <td className="px-3 py-2">{account.telefon ?? "—"}</td>
-                    <td className="px-3 py-2">{account.role}</td>
-                    <td className="px-3 py-2">{account.stav}</td>
-                    <td className="px-3 py-2">{formatDate(account.created_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div>
+            <dt className="text-slate-500">Datum vytvoření / registrace</dt>
+            <dd className="text-slate-100">{formatDate(detail.registered_at)}</dd>
           </div>
-        )}
+        </dl>
       </section>
 
       <section className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">

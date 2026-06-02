@@ -1,7 +1,6 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 export type KlientAccountStavLabel =
   | "bez účtu"
@@ -24,19 +23,6 @@ export type KlientListRow = {
   registered_at: string | null;
 };
 
-export type KlientAccountRow = {
-  account_id: string;
-  user_id: string;
-  role: string;
-  stav: string;
-  jmeno: string | null;
-  prijmeni: string | null;
-  telefon: string | null;
-  email: string | null;
-  created_at: string;
-  schvaleno_at: string | null;
-};
-
 export type KlientDetailData = {
   klient: {
     klient_id: string;
@@ -51,7 +37,6 @@ export type KlientDetailData = {
     poznamka: string | null;
     aktivni: boolean;
   };
-  accounts: KlientAccountRow[];
   poptavky: Array<{
     poptavka_id: string;
     cislo_poptavky: string;
@@ -75,6 +60,7 @@ export type KlientDetailData = {
     aktivni: boolean;
   }>;
   account_stav: KlientAccountStavLabel;
+  registered_at: string | null;
 };
 
 function formatAdresa(row: {
@@ -95,25 +81,30 @@ function resolveAccountStav(
   return "bez účtu";
 }
 
-async function loadAuthEmailsByUserId(userIds: string[]) {
-  const map = new Map<string, string | null>();
-  if (userIds.length === 0) return map;
+function computeRegisteredAt(
+  registrations: Array<{
+    klient_id: string | null;
+    created_at: string;
+    schvaleno_at: string | null;
+  }>,
+  accounts: Array<{ klient_id: string | null; created_at: string }>,
+  klientId: string
+): string | null {
+  const candidates: string[] = [];
 
-  const admin = createAdminClient();
-  const uniqueIds = [...new Set(userIds)];
+  for (const row of registrations) {
+    if (row.klient_id !== klientId) continue;
+    const value = row.schvaleno_at ?? row.created_at;
+    if (value) candidates.push(value);
+  }
 
-  await Promise.all(
-    uniqueIds.map(async (userId) => {
-      const { data, error } = await admin.auth.admin.getUserById(userId);
-      if (error || !data.user) {
-        map.set(userId, null);
-        return;
-      }
-      map.set(userId, data.user.email ?? null);
-    })
-  );
+  for (const row of accounts) {
+    if (row.klient_id !== klientId) continue;
+    if (row.created_at) candidates.push(row.created_at);
+  }
 
-  return map;
+  if (candidates.length === 0) return null;
+  return candidates.sort()[0];
 }
 
 async function loadPortalKlientIds(supabase: SupabaseClient) {
@@ -188,22 +179,14 @@ export async function loadInternalKlientiList(
   const zakazkyCount = countByKlient(zakazkyRaw);
 
   const registeredAtByKlient = new Map<string, string>();
-  for (const row of registrationsRaw ?? []) {
-    if (!row.klient_id) continue;
-    const candidate = (row.schvaleno_at ?? row.created_at) as string;
-    const existing = registeredAtByKlient.get(row.klient_id as string);
-    if (!existing || candidate < existing) {
-      registeredAtByKlient.set(row.klient_id as string, candidate);
-    }
-  }
-  for (const [klientId, accounts] of accountsByKlient) {
-    const earliestAccount = accounts
-      .map((row) => row.created_at)
-      .sort()[0];
-    if (!earliestAccount) continue;
-    const existing = registeredAtByKlient.get(klientId);
-    if (!existing || earliestAccount < existing) {
-      registeredAtByKlient.set(klientId, earliestAccount);
+  for (const klientId of klientIds) {
+    const registeredAt = computeRegisteredAt(
+      registrationsRaw ?? [],
+      accountsRaw ?? [],
+      klientId
+    );
+    if (registeredAt) {
+      registeredAtByKlient.set(klientId, registeredAt);
     }
   }
 
@@ -253,17 +236,19 @@ export async function loadInternalKlientDetail(
 
   const [
     { data: accountsRaw },
+    { data: registrationsRaw },
     { data: poptavkyRaw },
     { data: zakazkyRaw },
     { data: mistaRaw },
   ] = await Promise.all([
     supabase
       .from("client_accounts")
-      .select(
-        "account_id, user_id, role, stav, jmeno, prijmeni, telefon, created_at, schvaleno_at"
-      )
-      .eq("klient_id", klientId)
-      .order("created_at", { ascending: true }),
+      .select("klient_id, stav, created_at")
+      .eq("klient_id", klientId),
+    supabase
+      .from("client_registrations")
+      .select("klient_id, created_at, schvaleno_at")
+      .eq("klient_id", klientId),
     supabase
       .from("poptavky")
       .select(
@@ -283,30 +268,20 @@ export async function loadInternalKlientDetail(
       .order("nazev", { ascending: true }),
   ]);
 
-  const accountsBase = accountsRaw ?? [];
-  const emailByUserId = await loadAuthEmailsByUserId(
-    accountsBase.map((row) => row.user_id as string)
-  );
-
-  const accounts: KlientAccountRow[] = accountsBase.map((row) => ({
-    account_id: row.account_id as string,
-    user_id: row.user_id as string,
-    role: row.role as string,
+  const accountsForStav = (accountsRaw ?? []).map((row) => ({
     stav: row.stav as string,
-    jmeno: row.jmeno as string | null,
-    prijmeni: row.prijmeni as string | null,
-    telefon: row.telefon as string | null,
-    email: emailByUserId.get(row.user_id as string) ?? null,
-    created_at: row.created_at as string,
-    schvaleno_at: row.schvaleno_at as string | null,
   }));
 
   return {
     klient: klient as KlientDetailData["klient"],
-    accounts,
     poptavky: (poptavkyRaw ?? []) as KlientDetailData["poptavky"],
     zakazky: (zakazkyRaw ?? []) as KlientDetailData["zakazky"],
     mista: (mistaRaw ?? []) as KlientDetailData["mista"],
-    account_stav: resolveAccountStav(accounts),
+    account_stav: resolveAccountStav(accountsForStav),
+    registered_at: computeRegisteredAt(
+      registrationsRaw ?? [],
+      accountsRaw ?? [],
+      klientId
+    ),
   };
 }
