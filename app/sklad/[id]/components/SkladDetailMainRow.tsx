@@ -27,6 +27,7 @@ type SkladDetailMainRowProps = {
   poskozeneKusy: number;
   pouzitelneKusy: number;
   updateAction: (formData: FormData) => Promise<void>;
+  readOnly?: boolean;
 };
 
 function podkategorieJeProKategorii(
@@ -53,6 +54,7 @@ export function SkladDetailMainRow({
   poskozeneKusy,
   pouzitelneKusy,
   updateAction,
+  readOnly = false,
 }: SkladDetailMainRowProps) {
   const centerCellClassName = SKLAD_DETAIL_CENTER_CELL_CLASS_NAME;
   const formRef = useRef<HTMLFormElement>(null);
@@ -84,12 +86,13 @@ export function SkladDetailMainRow({
   );
 
   const scheduleSubmit = useCallback(() => {
+    if (readOnly) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null;
       formRef.current?.requestSubmit();
     }, 0);
-  }, []);
+  }, [readOnly]);
 
   const onKategorieChange = (next: string) => {
     setKategorieId(next);
@@ -129,7 +132,8 @@ export function SkladDetailMainRow({
               form={editFormId}
               name="nazev"
               defaultValue={row.nazev}
-              onBlur={scheduleSubmit}
+              onBlur={readOnly ? undefined : scheduleSubmit}
+              disabled={readOnly}
               className={fieldClassName()}
             />
           </div>
@@ -138,6 +142,7 @@ export function SkladDetailMainRow({
             <select
               value={kategorieId}
               onChange={(e) => onKategorieChange(e.target.value)}
+              disabled={readOnly}
               className={fieldClassName()}
             >
               <option value="">Bez kategorie</option>
@@ -153,6 +158,7 @@ export function SkladDetailMainRow({
             <select
               value={podkategorieId}
               onChange={(e) => onPodkategorieChange(e.target.value)}
+              disabled={readOnly}
               className={fieldClassName()}
             >
               <option value="">Bez podkategorie</option>
@@ -170,7 +176,8 @@ export function SkladDetailMainRow({
               name="pozice"
               defaultValue={row.pozice ?? ""}
               inputMode="decimal"
-              onBlur={scheduleSubmit}
+              onBlur={readOnly ? undefined : scheduleSubmit}
+              disabled={readOnly}
               className={fieldClassName("text-center")}
             />
           </div>
@@ -211,7 +218,8 @@ export function SkladDetailMainRow({
               form={editFormId}
               name="jednotka"
               defaultValue={row.jednotka}
-              onChange={onJednotkaChange}
+              onChange={readOnly ? undefined : onJednotkaChange}
+              disabled={readOnly}
               className={fieldClassName("text-center")}
             >
               {jednotky.map((item) => (
@@ -228,7 +236,8 @@ export function SkladDetailMainRow({
               name="interni_naklad"
               defaultValue={row.interni_naklad ?? ""}
               inputMode="decimal"
-              onBlur={scheduleSubmit}
+              onBlur={readOnly ? undefined : scheduleSubmit}
+              disabled={readOnly}
               className={fieldClassName("text-center")}
             />
           </div>
@@ -251,13 +260,15 @@ export function SkladDetailMainRow({
           </div>
 
           <div className={centerCellClassName}>
-            <button
-              type="submit"
-              form={editFormId}
-              className="h-9 w-full rounded-lg border border-emerald-700 bg-emerald-900 px-1 text-xs font-semibold text-white transition hover:bg-emerald-800"
-            >
-              Uložit
-            </button>
+            {readOnly ? null : (
+              <button
+                type="submit"
+                form={editFormId}
+                className="h-9 w-full rounded-lg border border-emerald-700 bg-emerald-900 px-1 text-xs font-semibold text-white transition hover:bg-emerald-800"
+              >
+                Uložit
+              </button>
+            )}
           </div>
         </div>
       </div>

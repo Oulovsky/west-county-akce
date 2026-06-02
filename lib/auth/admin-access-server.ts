@@ -9,6 +9,8 @@ import {
   isAdminRole,
   normalizeAuthEmail,
 } from "@/lib/auth/admin-access";
+import { INTERNAL_WRITE_FORBIDDEN_MESSAGE } from "@/lib/auth/internal-role-access";
+import { isReadOnlyInternalRole } from "@/lib/roles";
 
 export type RequireAppAdminResult =
   | {
@@ -206,6 +208,63 @@ export async function verifyAppAdminOrSefPage(
   return { ok: true };
 }
 
+export async function verifyInternalKlientiReadPage(
+  supabase?: SupabaseClient
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const client = supabase ?? (await createClient());
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+
+  if (!user) {
+    return { ok: false, message: "Unauthorized" };
+  }
+
+  const { data: profile, error: profileError } = await client
+    .from("profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (profileError) {
+    return { ok: false, message: profileError.message };
+  }
+
+  const role = profile?.role ?? null;
+  if (role === "admin" || role === "sef" || role === "hdt") {
+    return { ok: true };
+  }
+
+  const email = normalizeAuthEmail(user.email);
+  if (!email) {
+    return { ok: false, message: "Forbidden" };
+  }
+
+  const systemCheck = await checkSystemAdminEmail(client, email);
+  if (systemCheck.error) {
+    return { ok: false, message: systemCheck.error };
+  }
+
+  if (hasAppAdminAccess(role, systemCheck.isSystemAdmin)) {
+    return { ok: true };
+  }
+
+  return { ok: false, message: "Forbidden" };
+}
+
+export async function verifyInternalPoptavkyReadPage(
+  supabase?: SupabaseClient
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  return verifyInternalKlientiReadPage(supabase);
+}
+
+export async function requireInternalWriteAdminOrSef(): Promise<{
+  supabase: SupabaseClient;
+  user: { id: string; email?: string | null };
+}> {
+  return requireAppAdminOrSef();
+}
+
 export async function requireAppAdminOrSef(): Promise<{
   supabase: SupabaseClient;
   user: { id: string; email?: string | null };
@@ -243,13 +302,17 @@ export async function requireAppAdminOrSef(): Promise<{
     return { supabase, user };
   }
 
+  if (isReadOnlyInternalRole(profile.role)) {
+    throw new Error(INTERNAL_WRITE_FORBIDDEN_MESSAGE);
+  }
+
   const systemCheck = await checkSystemAdminEmail(supabase, email);
   if (systemCheck.error) {
     throw new Error(systemCheck.error);
   }
 
   if (!hasAppAdminOrSefAccess(profile.role, systemCheck.isSystemAdmin)) {
-    throw new Error("Forbidden");
+    throw new Error(INTERNAL_WRITE_FORBIDDEN_MESSAGE);
   }
 
   return { supabase, user };

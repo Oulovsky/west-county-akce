@@ -1,6 +1,7 @@
 import Link from "next/link";
 import PoptavkaFotkyClient from "@/components/portal/PoptavkaFotkyClient";
-import { verifyAppAdminOrSefPage } from "@/lib/auth/admin-access-server";
+import { verifyInternalPoptavkyReadPage } from "@/lib/auth/admin-access-server";
+import { loadSessionRolePermissions } from "@/lib/auth/internal-role-access-server";
 import { POPTAVKA_STAV_LABELS, SETUP_OBLAST_LABELS } from "@/lib/client-portal/labels";
 import {
   formatPoptavkaDateRange,
@@ -64,7 +65,11 @@ export default async function ZakazkyPoptavkaDetailPage({
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
 
   const supabase = await createClient();
-  const access = await verifyAppAdminOrSefPage(supabase);
+  const [{ perms }, access] = await Promise.all([
+    loadSessionRolePermissions(supabase),
+    verifyInternalPoptavkyReadPage(supabase),
+  ]);
+  const readOnly = !perms.zakazkyEditace;
 
   if (!access.ok) {
     return (
@@ -286,15 +291,17 @@ export default async function ZakazkyPoptavkaDetailPage({
       <PoptavkaInterniPoznamkaForm
         poptavkaId={detail.poptavka_id}
         defaultValue={detail.interni_poznamka ?? ""}
+        readOnly={readOnly}
       />
 
       <PoptavkaInboxActions
         poptavkaId={detail.poptavka_id}
         stav={detail.stav}
-        canAct={canAct}
-        canConvert={canConvert}
+        canAct={canAct && !readOnly}
+        canConvert={canConvert && !readOnly}
         zakazkaId={convertedZakazkaId}
         errorCode={resolvedSearchParams?.error ?? null}
+        readOnly={readOnly}
       />
     </div>
   );

@@ -1,11 +1,13 @@
 type SkladDetailHeaderProps = {
   skladovaPolozkaId: string;
   deleteAction: (formData: FormData) => Promise<void>;
+  readOnly?: boolean;
 };
 
 export function SkladDetailHeader({
   skladovaPolozkaId,
   deleteAction,
+  readOnly = false,
 }: SkladDetailHeaderProps) {
   return (
     <div className="flex items-center justify-between gap-3">
@@ -18,15 +20,17 @@ export function SkladDetailHeader({
         </button>
       </form>
 
-      <form action={deleteAction}>
-        <input type="hidden" name="skladova_polozka_id" value={skladovaPolozkaId} />
-        <button
-          type="submit"
-          className="rounded-xl border border-red-700 bg-red-950 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-900"
-        >
-          Smazat hlavní položku
-        </button>
-      </form>
+      {readOnly ? null : (
+        <form action={deleteAction}>
+          <input type="hidden" name="skladova_polozka_id" value={skladovaPolozkaId} />
+          <button
+            type="submit"
+            className="rounded-xl border border-red-700 bg-red-950 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-900"
+          >
+            Smazat hlavní položku
+          </button>
+        </form>
+      )}
     </div>
   );
 }

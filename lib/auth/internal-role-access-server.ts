@@ -3,10 +3,13 @@ import {
   isReadOnlyInternalRole,
   type RolePermissions,
 } from "@/lib/roles";
+import { INTERNAL_WRITE_FORBIDDEN_MESSAGE } from "@/lib/auth/internal-role-access";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+export { INTERNAL_WRITE_FORBIDDEN_MESSAGE } from "@/lib/auth/internal-role-access";
+
 export class ForbiddenReadOnlyRoleError extends Error {
-  constructor(message = "Forbidden: read-only role") {
+  constructor(message = INTERNAL_WRITE_FORBIDDEN_MESSAGE) {
     super(message);
     this.name = "ForbiddenReadOnlyRoleError";
   }

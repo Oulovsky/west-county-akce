@@ -10,6 +10,7 @@ type SkladDetailReportDamageSectionProps = {
   typyError: { message: string } | null;
   priorityError: { message: string } | null;
   reportAction: (formData: FormData) => Promise<void>;
+  readOnly?: boolean;
 };
 
 export function SkladDetailReportDamageSection({
@@ -21,7 +22,10 @@ export function SkladDetailReportDamageSection({
   typyError,
   priorityError,
   reportAction,
+  readOnly = false,
 }: SkladDetailReportDamageSectionProps) {
+  if (readOnly) return null;
+
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
       <h2 className="mb-4 text-lg font-semibold text-white">Nahlásit poškození</h2>

@@ -34,6 +34,7 @@ type SkladDetailItemsTableProps = {
   updateKusPoradiAction: (
     formData: FormData
   ) => Promise<UpdateKusPoradiResult>;
+  readOnly?: boolean;
 };
 
 export function SkladDetailItemsTable({
@@ -52,6 +53,7 @@ export function SkladDetailItemsTable({
   addKusAction,
   deleteKusAction,
   updateKusPoradiAction,
+  readOnly = false,
 }: SkladDetailItemsTableProps) {
   const editFormId = `upravit-polozku-${row.skladova_polozka_id}`;
   const rowGridClassName = skladDetailRowGridClassName();
@@ -75,6 +77,7 @@ export function SkladDetailItemsTable({
               poskozeneKusy={poskozeneKusy}
               pouzitelneKusy={pouzitelneKusy}
               updateAction={updateAction}
+              readOnly={readOnly}
             />
           </summary>
 
@@ -87,6 +90,7 @@ export function SkladDetailItemsTable({
             addKusAction={addKusAction}
             deleteKusAction={deleteKusAction}
             updateKusPoradiAction={updateKusPoradiAction}
+            readOnly={readOnly}
           />
         </details>
       </div>

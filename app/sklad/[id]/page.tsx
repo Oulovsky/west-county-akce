@@ -1,5 +1,9 @@
 ﻿import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import {
+  assertInternalWriteAccess,
+  loadSessionRolePermissions,
+} from "@/lib/auth/internal-role-access-server";
 import { createClient } from "@/lib/supabase/server";
 import {
   computeCelkemKusu,
@@ -69,11 +73,14 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
     ? decodeURIComponent(resolvedSearchParams.deleteError)
     : null;
   const supabase = await createClient();
+  const { perms } = await loadSessionRolePermissions(supabase);
+  const readOnly = !perms.skladEditace;
 
   async function upravitPolozku(formData: FormData) {
     "use server";
 
     const supabase = await createClient();
+    await assertInternalWriteAccess(supabase);
 
     const skladovaPolozkaId = String(formData.get("skladova_polozka_id") || "");
     const nazev = String(formData.get("nazev") || "").trim();
@@ -135,6 +142,7 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
     "use server";
 
     const supabase = await createClient();
+    await assertInternalWriteAccess(supabase);
     const skladovaPolozkaId = String(formData.get("skladova_polozka_id") || "");
     const nazev = String(formData.get("nazev") || "Kus").trim();
 
@@ -172,6 +180,7 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
     "use server";
 
     const supabase = await createClient();
+    await assertInternalWriteAccess(supabase);
     const skladovaPolozkaId = String(formData.get("skladova_polozka_id") || "");
     const kusId = String(formData.get("kus_id") || "");
 
@@ -202,6 +211,7 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
     "use server";
 
     const supabase = await createClient();
+    await assertInternalWriteAccess(supabase);
 
     const skladovaPolozkaId = String(formData.get("skladova_polozka_id") || "");
     const kusId = String(formData.get("kus_id") || "");
@@ -319,6 +329,7 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
       <SkladDetailHeader
         skladovaPolozkaId={row.skladova_polozka_id}
         deleteAction={deletePolozkaAction}
+        readOnly={readOnly}
       />
 
       <SkladDetailItemsTable
@@ -337,6 +348,7 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
         addKusAction={pridatKus}
         deleteKusAction={smazatKus}
         updateKusPoradiAction={updateKusPoradiAction}
+        readOnly={readOnly}
       />
 
       <div className="grid gap-5 2xl:grid-cols-[minmax(0,1.3fr)_minmax(420px,0.9fr)]">
@@ -369,6 +381,7 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
             typyError={typyError}
             priorityError={priorityError}
             reportAction={nahlasitPoskozeni}
+            readOnly={readOnly}
           />
 
           <SkladDetailMetaSection row={row} />

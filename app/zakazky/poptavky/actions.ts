@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { requireAppAdminOrSef } from "@/lib/auth/admin-access-server";
+import { requireInternalWriteAdminOrSef } from "@/lib/auth/admin-access-server";
 import {
   getPortalAppBaseUrl,
   sendPoptavkaRevisionEmail,
@@ -29,7 +29,7 @@ export async function returnPoptavkaToRevisionAction(formData: FormData) {
     redirectWithError(`/zakazky/poptavky/${poptavkaId}`, "missing_reason");
   }
 
-  const { supabase } = await requireAppAdminOrSef();
+  const { supabase } = await requireInternalWriteAdminOrSef();
   const detail = await loadInternalPoptavkaDetail(supabase, poptavkaId);
 
   if (!detail) {
@@ -86,7 +86,7 @@ export async function rejectPoptavkaAction(formData: FormData) {
     redirectWithError(`/zakazky/poptavky/${poptavkaId}`, "missing_reason");
   }
 
-  const { supabase } = await requireAppAdminOrSef();
+  const { supabase } = await requireInternalWriteAdminOrSef();
   const detail = await loadInternalPoptavkaDetail(supabase, poptavkaId);
 
   if (!detail) {
@@ -126,7 +126,7 @@ export async function approvePoptavkaAction(formData: FormData) {
     redirectWithError("/zakazky/poptavky", "missing_id");
   }
 
-  const { supabase, user } = await requireAppAdminOrSef();
+  const { supabase, user } = await requireInternalWriteAdminOrSef();
   const detail = await loadInternalPoptavkaDetail(supabase, poptavkaId);
 
   if (!detail) {
@@ -167,7 +167,7 @@ export async function updatePoptavkaInterniPoznamkaAction(formData: FormData) {
     redirectWithError("/zakazky/poptavky", "missing_id");
   }
 
-  const { supabase } = await requireAppAdminOrSef();
+  const { supabase } = await requireInternalWriteAdminOrSef();
   const detail = await loadInternalPoptavkaDetail(supabase, poptavkaId);
 
   if (!detail) {
@@ -197,7 +197,7 @@ export async function convertPoptavkaToZakazkaAction(formData: FormData) {
     redirectWithError("/zakazky/poptavky", "missing_id");
   }
 
-  const { supabase } = await requireAppAdminOrSef();
+  const { supabase } = await requireInternalWriteAdminOrSef();
   const { convertPoptavkaToZakazka } = await import(
     "@/lib/client-portal/convert-poptavka-to-zakazka"
   );

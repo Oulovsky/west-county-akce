@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { resolveAppAdminAccess, resolveAppAdminOrSefAccess } from "@/lib/auth/admin-access";
+import { resolveAppAdminAccess } from "@/lib/auth/admin-access";
 import { useProfileRole } from "@/lib/auth/use-profile-role";
 import { subscribeNotificationsUnreadChanged } from "@/lib/notifications/unread-count-sync";
 import { supabase } from "@/lib/supabase";
@@ -60,7 +60,6 @@ export default function SidebarNav() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [pendingPoptavkyCount, setPendingPoptavkyCount] = useState(0);
   const [showAdmin, setShowAdmin] = useState(false);
-  const [showPoptavkyInbox, setShowPoptavkyInbox] = useState(false);
   const { nav } = useProfileRole();
 
   useEffect(() => {
@@ -72,18 +71,13 @@ export default function SidebarNav() {
       } = await supabase.auth.getUser();
       if (!user) {
         setShowAdmin(false);
-        setShowPoptavkyInbox(false);
         setPendingPoptavkyCount(0);
         return;
       }
 
-      const [isAdmin, canManagePoptavky] = await Promise.all([
-        resolveAppAdminAccess(supabase, user.id, user.email),
-        resolveAppAdminOrSefAccess(supabase, user.id, user.email),
-      ]);
+      const isAdmin = await resolveAppAdminAccess(supabase, user.id, user.email);
       if (!active) return;
       setShowAdmin(isAdmin);
-      setShowPoptavkyInbox(canManagePoptavky);
 
       const queries = [
         supabase
@@ -94,7 +88,7 @@ export default function SidebarNav() {
           .is("dismissed_at", null),
       ];
 
-      if (canManagePoptavky) {
+      if (nav.showPoptavkyInbox) {
         queries.push(
           supabase
             .from("poptavky")
@@ -111,7 +105,7 @@ export default function SidebarNav() {
         setUnreadCount(notificationsResult.count ?? 0);
       }
 
-      if (canManagePoptavky && pendingPoptavkyResult && !pendingPoptavkyResult.error) {
+      if (nav.showPoptavkyInbox && pendingPoptavkyResult && !pendingPoptavkyResult.error) {
         setPendingPoptavkyCount(pendingPoptavkyResult.count ?? 0);
       } else {
         setPendingPoptavkyCount(0);
@@ -126,7 +120,7 @@ export default function SidebarNav() {
       window.clearInterval(interval);
       unsubscribe();
     };
-  }, [pathname]);
+  }, [pathname, nav.showPoptavkyInbox]);
 
   if (pathname.startsWith("/dotaznik/")) {
     return null;
@@ -163,10 +157,14 @@ export default function SidebarNav() {
         </NavLink>
       ) : null}
 
-      {showPoptavkyInbox ? (
+      {nav.showPoptavkyInbox ? (
         <NavLink href="/zakazky/poptavky" badgeCount={pendingPoptavkyCount}>
           Poptávky
         </NavLink>
+      ) : null}
+
+      {nav.showKlienti ? (
+        <NavLink href="/admin/klienti">Klienti</NavLink>
       ) : null}
 
       {nav.showMista ? (

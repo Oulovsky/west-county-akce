@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { verifyAppAdminOrSefPage } from "@/lib/auth/admin-access-server";
+import { verifyInternalPoptavkyReadPage } from "@/lib/auth/admin-access-server";
 import { POPTAVKA_STAV_LABELS } from "@/lib/client-portal/labels";
 import { formatPoptavkaDateRange } from "@/lib/client-portal/poptavka-form";
 import {
@@ -21,7 +21,7 @@ function formatOdeslano(value: string | null) {
 
 export default async function ZakazkyPoptavkyPage() {
   const supabase = await createClient();
-  const access = await verifyAppAdminOrSefPage(supabase);
+  const access = await verifyInternalPoptavkyReadPage(supabase);
 
   if (!access.ok) {
     return (

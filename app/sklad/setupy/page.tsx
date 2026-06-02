@@ -3,6 +3,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import {
+  assertInternalWriteAccess,
+  loadSessionRolePermissions,
+} from "@/lib/auth/internal-role-access-server";
 import { createClient } from "@/lib/supabase/server";
 
 type SetupRow = {
@@ -40,6 +44,7 @@ export default async function SkladSetupyPage() {
     if (!Number.isFinite(poradi)) throw new Error("Pořadí musí být číslo.");
 
     const supabase = await createClient();
+    await assertInternalWriteAccess(supabase);
     const { data, error } = await supabase
       .from("setupy")
       .insert({
@@ -69,6 +74,7 @@ export default async function SkladSetupyPage() {
     if (!Number.isFinite(poradi)) throw new Error("Pořadí musí být číslo.");
 
     const supabase = await createClient();
+    await assertInternalWriteAccess(supabase);
     const { error } = await supabase
       .from("setupy")
       .update({
@@ -93,6 +99,7 @@ export default async function SkladSetupyPage() {
     if (!setupId) throw new Error("Chybí setup_id.");
 
     const supabase = await createClient();
+    await assertInternalWriteAccess(supabase);
     const { error } = await supabase
       .from("setupy")
       .update({ aktivni })
@@ -105,6 +112,9 @@ export default async function SkladSetupyPage() {
   }
 
   const supabase = await createClient();
+  const { perms } = await loadSessionRolePermissions(supabase);
+  const readOnly = !perms.skladEditace;
+
   const [{ data: setupyRaw, error: setupyError }, { data: polozkyRaw, error: polozkyError }] =
     await Promise.all([
       supabase
@@ -150,6 +160,13 @@ export default async function SkladSetupyPage() {
         </Link>
       </div>
 
+      {readOnly ? (
+        <p className="mb-4 rounded-xl border border-slate-700 bg-slate-900/60 px-4 py-3 text-sm text-slate-400">
+          Režim pouze pro čtení — úpravy setupů nejsou dostupné.
+        </p>
+      ) : null}
+
+      {readOnly ? null : (
       <Card>
         <h2 className="text-xl font-black text-white">Nový setup</h2>
         <form action={createSetup} className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_120px_auto]">
@@ -179,6 +196,7 @@ export default async function SkladSetupyPage() {
           </button>
         </form>
       </Card>
+      )}
 
       <div className="mt-6 grid gap-4">
         {setupy.length === 0 ? (
@@ -205,6 +223,14 @@ export default async function SkladSetupyPage() {
                       </span>
                     </div>
 
+                    {readOnly ? (
+                      <div className="mt-4 space-y-2">
+                        <h3 className="text-lg font-bold text-white">{setup.nazev}</h3>
+                        {setup.popis ? (
+                          <p className="text-sm text-slate-400">{setup.popis}</p>
+                        ) : null}
+                      </div>
+                    ) : (
                     <form action={updateSetup} className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_120px_auto]">
                       <input type="hidden" name="setup_id" value={setup.setup_id} />
                       <input
@@ -233,6 +259,8 @@ export default async function SkladSetupyPage() {
                         Uložit
                       </button>
                     </form>
+                    )}
+
                   </div>
 
                   <div className="flex flex-col gap-3">
@@ -242,6 +270,7 @@ export default async function SkladSetupyPage() {
                     >
                       Otevřít detail
                     </Link>
+                    {readOnly ? null : (
                     <form action={toggleSetup}>
                       <input type="hidden" name="setup_id" value={setup.setup_id} />
                       <input
@@ -256,6 +285,7 @@ export default async function SkladSetupyPage() {
                         {setup.aktivni ? "Deaktivovat" : "Aktivovat"}
                       </button>
                     </form>
+                    )}
                   </div>
                 </div>
               </Card>

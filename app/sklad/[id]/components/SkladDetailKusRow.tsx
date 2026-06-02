@@ -25,6 +25,7 @@ type SkladDetailKusRowProps = {
   updateKusPoradiAction: (
     formData: FormData
   ) => Promise<UpdateKusPoradiResult>;
+  readOnly?: boolean;
 };
 
 export function SkladDetailKusRow({
@@ -35,6 +36,7 @@ export function SkladDetailKusRow({
   rowGridClassName,
   deleteKusAction,
   updateKusPoradiAction,
+  readOnly = false,
 }: SkladDetailKusRowProps) {
   const stav = getKusStatus(kus, poskozeni);
   const centerCellClassName = SKLAD_DETAIL_CENTER_CELL_CLASS_NAME;
@@ -49,6 +51,7 @@ export function SkladDetailKusRow({
           kusId={kus.kus_id}
           committedPoradi={kus.poradove_cislo}
           updateKusPoradiAction={updateKusPoradiAction}
+          readOnly={readOnly}
         />
 
         <span
@@ -144,16 +147,20 @@ export function SkladDetailKusRow({
       </div>
 
       <div className={centerCellClassName}>
-        <form action={deleteKusAction} className="w-full">
-          <input type="hidden" name="skladova_polozka_id" value={row.skladova_polozka_id} />
-          <input type="hidden" name="kus_id" value={kus.kus_id} />
-          <button
-            type="submit"
-            className="h-10 w-full rounded-lg border border-red-800 bg-red-950 px-2 text-xs font-semibold text-red-100 transition hover:bg-red-900"
-          >
-            Smazat
-          </button>
-        </form>
+        {readOnly ? (
+          <span className="flex h-10 w-full items-center justify-center text-xs text-slate-500">—</span>
+        ) : (
+          <form action={deleteKusAction} className="w-full">
+            <input type="hidden" name="skladova_polozka_id" value={row.skladova_polozka_id} />
+            <input type="hidden" name="kus_id" value={kus.kus_id} />
+            <button
+              type="submit"
+              className="h-10 w-full rounded-lg border border-red-800 bg-red-950 px-2 text-xs font-semibold text-red-100 transition hover:bg-red-900"
+            >
+              Smazat
+            </button>
+          </form>
+        )}
       </div>
     </div>
       <details className="border-t border-slate-800 px-3 py-2">

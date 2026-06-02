@@ -28,6 +28,7 @@ export default function PoptavkaInboxActions({
   canConvert,
   zakazkaId,
   errorCode,
+  readOnly = false,
 }: {
   poptavkaId: string;
   stav: PoptavkaStav;
@@ -35,7 +36,25 @@ export default function PoptavkaInboxActions({
   canConvert?: boolean;
   zakazkaId?: string | null;
   errorCode?: string | null;
+  readOnly?: boolean;
 }) {
+  if (readOnly) {
+    return zakazkaId ? (
+      <section className="space-y-6 rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
+        <h2 className="text-xl font-semibold text-white">Interní zakázka</h2>
+        <div className="rounded-xl border border-blue-500/30 bg-blue-950/20 px-4 py-4 text-sm text-blue-100">
+          <p className="text-slate-300">Poptávka byla převedena do interní zakázky.</p>
+          <Link
+            href={`/zakazky/${zakazkaId}`}
+            className="mt-3 inline-flex rounded-xl border border-blue-500/40 bg-blue-600/20 px-4 py-2 text-sm font-semibold text-blue-50 hover:bg-blue-600/30"
+          >
+            Otevřít zakázku →
+          </Link>
+        </div>
+      </section>
+    ) : null;
+  }
+
   const inputClass =
     "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none ring-blue-500/40 focus:ring-2";
 
@@ -170,12 +189,24 @@ export default function PoptavkaInboxActions({
 export function PoptavkaInterniPoznamkaForm({
   poptavkaId,
   defaultValue,
+  readOnly = false,
 }: {
   poptavkaId: string;
   defaultValue: string;
+  readOnly?: boolean;
 }) {
   const inputClass =
     "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none ring-blue-500/40 focus:ring-2";
+
+  if (readOnly) {
+    if (!defaultValue.trim()) return null;
+    return (
+      <section className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
+        <h2 className="text-xl font-semibold text-white">Interní poznámka</h2>
+        <p className="mt-4 whitespace-pre-wrap text-sm text-slate-300">{defaultValue}</p>
+      </section>
+    );
+  }
 
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">

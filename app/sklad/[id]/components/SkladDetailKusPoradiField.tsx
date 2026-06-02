@@ -11,6 +11,7 @@ type Props = {
   updateKusPoradiAction: (
     formData: FormData
   ) => Promise<UpdateKusPoradiResult>;
+  readOnly?: boolean;
 };
 
 export function SkladDetailKusPoradiField({
@@ -18,6 +19,7 @@ export function SkladDetailKusPoradiField({
   kusId,
   committedPoradi,
   updateKusPoradiAction,
+  readOnly = false,
 }: Props) {
   const router = useRouter();
   const [draft, setDraft] = useState(String(committedPoradi));
@@ -61,6 +63,14 @@ export function SkladDetailKusPoradiField({
     committedRef.current = n;
     router.refresh();
   }, [draft, kusId, router, skladovaPolozkaId, updateKusPoradiAction]);
+
+  if (readOnly) {
+    return (
+      <span className="flex h-12 w-[4.25rem] shrink-0 items-center justify-center rounded-xl border border-slate-800 bg-slate-950 text-sm font-semibold text-slate-200">
+        {committedPoradi}
+      </span>
+    );
+  }
 
   return (
     <div className="flex shrink-0 flex-col items-stretch gap-0.5">
