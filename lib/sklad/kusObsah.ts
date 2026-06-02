@@ -3,8 +3,10 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { SKLAD_TABLE } from "@/lib/sklad/constants";
 import { getSkladKusDisplayLabel } from "@/lib/sklad/helpers";
+import { formatSkladKusStav } from "@/lib/sklad/helpers";
 import { insertSkladKusHistorie } from "@/lib/sklad/kusHistorie";
 import type { SkladKusRow } from "@/lib/sklad/types";
+import { ZAKAZKA_KUS_ACTIVE_STAVY } from "@/lib/sklad/zakazkaKusy";
 
 export const SKLAD_KUS_OBSAH_TABLE = SKLAD_TABLE.skladKusObsah;
 
@@ -42,6 +44,17 @@ export type SkladKusObsahKusSummary = {
   containedCount: number;
   parentPlacement: SkladKusObsahParentPlacement | null;
 };
+
+export type SkladKusObsahChildOption = {
+  kusId: string;
+  displayLabel: string;
+  polozkaNazev: string;
+  stav: string;
+  stavLabel: string;
+};
+
+const UNAVAILABLE_KUS_STAVY = ["vyrazeno", "odpis"] as const;
+const AVAILABLE_KUS_OPTIONS_LIMIT = 400;
 
 type ObsahKusJoinRow = {
   kus_id: string;
@@ -177,6 +190,131 @@ export async function getActiveContainedPieces(
   parentKusId: string
 ): Promise<SkladKusObsahChildRow[]> {
   return queryActiveChildrenInCase(client, parentKusId);
+}
+
+export async function loadActiveChildrenByParentKusIds(
+  client: SupabaseClient,
+  parentKusIds: string[]
+): Promise<Map<string, SkladKusObsahChildRow[]>> {
+  const map = new Map<string, SkladKusObsahChildRow[]>();
+  if (parentKusIds.length === 0) return map;
+
+  for (const parentKusId of parentKusIds) {
+    map.set(parentKusId, []);
+  }
+
+  const { data, error } = await client
+    .from(SKLAD_KUS_OBSAH_TABLE)
+    .select(OBSah_CHILD_SELECT)
+    .in("parent_kus_id", parentKusIds)
+    .is("vyjmuto_at", null)
+    .order("vlozeno_at", { ascending: true });
+
+  if (error) throw new Error(error.message);
+
+  for (const row of (data ?? []) as unknown as ObsahChildDbRow[]) {
+    const mapped = mapChildRow(row);
+    if (!mapped) continue;
+    const parentId = row.parent_kus_id;
+    const list = map.get(parentId) ?? [];
+    list.push(mapped);
+    map.set(parentId, list);
+  }
+
+  return map;
+}
+
+export async function loadAvailableChildKusOptions(
+  client: SupabaseClient,
+  input?: { search?: string; limit?: number }
+): Promise<SkladKusObsahChildOption[]> {
+  const search = input?.search?.trim().toLowerCase() ?? "";
+  const limit = input?.limit ?? AVAILABLE_KUS_OPTIONS_LIMIT;
+
+  const [{ data: inCaseRows, error: inCaseError }, { data: onZakazkaRows, error: onZakazkaError }] =
+    await Promise.all([
+      client
+        .from(SKLAD_KUS_OBSAH_TABLE)
+        .select("child_kus_id")
+        .is("vyjmuto_at", null),
+      client
+        .from(SKLAD_TABLE.zakazkaKusy)
+        .select("kus_id")
+        .in("stav", [...ZAKAZKA_KUS_ACTIVE_STAVY]),
+    ]);
+
+  if (inCaseError) throw new Error(inCaseError.message);
+  if (onZakazkaError) throw new Error(onZakazkaError.message);
+
+  const excludedKusIds = new Set<string>();
+  for (const row of inCaseRows ?? []) {
+    if (row.child_kus_id) excludedKusIds.add(row.child_kus_id as string);
+  }
+  for (const row of onZakazkaRows ?? []) {
+    if (row.kus_id) excludedKusIds.add(row.kus_id as string);
+  }
+
+  const { data: kusyRaw, error: kusyError } = await client
+    .from(SKLAD_TABLE.skladPolozkyKusy)
+    .select(
+      "kus_id, evidencni_cislo, poradove_cislo, stav, aktivni, polozka:skladove_polozky(nazev)"
+    )
+    .eq("aktivni", true)
+    .order("poradove_cislo", { ascending: true })
+    .limit(limit * 2);
+
+  if (kusyError) throw new Error(kusyError.message);
+
+  const options: SkladKusObsahChildOption[] = [];
+
+  for (const row of kusyRaw ?? []) {
+    const kusId = row.kus_id as string;
+    const stav = row.stav as string;
+    if (!row.aktivni) continue;
+    if (UNAVAILABLE_KUS_STAVY.includes(stav as (typeof UNAVAILABLE_KUS_STAVY)[number])) continue;
+    if (excludedKusIds.has(kusId)) continue;
+
+    const polozkaNazev = unwrapPolozkaNazev(
+      (row as { polozka: { nazev: string } | { nazev: string }[] | null }).polozka
+    );
+    const displayLabel = getSkladKusDisplayLabel(polozkaNazev, {
+      poradove_cislo: row.poradove_cislo as number,
+      evidencni_cislo: row.evidencni_cislo as string | null,
+    });
+    const optionLabel = `${displayLabel} — ${formatSkladKusStav(stav)}`;
+
+    if (search) {
+      const haystack = `${polozkaNazev} ${displayLabel} ${row.evidencni_cislo ?? ""}`.toLowerCase();
+      if (!haystack.includes(search)) continue;
+    }
+
+    options.push({
+      kusId,
+      displayLabel,
+      polozkaNazev,
+      stav,
+      stavLabel: formatSkladKusStav(stav),
+    });
+
+    if (options.length >= limit) break;
+  }
+
+  options.sort((a, b) =>
+    `${a.polozkaNazev} ${a.displayLabel}`.localeCompare(`${b.polozkaNazev} ${b.displayLabel}`, "cs")
+  );
+
+  return options;
+}
+
+export function filterChildOptionsForParent(
+  options: SkladKusObsahChildOption[],
+  parentKusId: string,
+  activeChildren: SkladKusObsahChildRow[]
+): SkladKusObsahChildOption[] {
+  const alreadyInside = new Set(activeChildren.map((row) => row.childKusId));
+  return options.filter(
+    (option) => option.kusId !== parentKusId && !alreadyInside.has(option.kusId)
+  );
 }
 
 export async function loadKusObsahSummariesForKusIds(

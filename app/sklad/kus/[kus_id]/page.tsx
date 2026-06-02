@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { loadSessionRolePermissions } from "@/lib/auth/internal-role-access-server";
 import { createClient } from "@/lib/supabase/server";
 import {
+  loadAvailableChildKusOptions,
   queryActiveChildrenInCase,
   queryActiveParentPlacement,
 } from "@/lib/sklad/kusObsah";
@@ -268,6 +269,7 @@ export default async function SkladKusDetailPage({ params, searchParams }: PageP
     { data: odpisovaPasmaRaw, error: odpisovaPasmaError },
     activeChildren,
     parentPlacement,
+    availableChildOptions,
   ] = await Promise.all([
     queryAktivniZakazkaKusu(supabase, kus.kus_id),
     querySkladKusHistorie(supabase, kus.kus_id),
@@ -285,6 +287,7 @@ export default async function SkladKusDetailPage({ params, searchParams }: PageP
       .order("nazev", { ascending: true }),
     queryActiveChildrenInCase(supabase, kus.kus_id),
     queryActiveParentPlacement(supabase, kus.kus_id),
+    loadAvailableChildKusOptions(supabase),
   ]);
   const assignment = (assignmentRaw ?? null) as SkladKusZakazkaAssignmentRow | null;
   const historie = (historieRaw ?? []) as unknown as SkladKusHistorieRow[];
@@ -572,8 +575,10 @@ export default async function SkladKusDetailPage({ params, searchParams }: PageP
 
       <SkladKusObsahPanel
         kusId={kus.kus_id}
+        parentDisplayLabel={label}
         activeChildren={activeChildren}
         parentPlacement={parentPlacement}
+        availableOptions={availableChildOptions}
         canEdit={canEditSklad}
         obsahMessage={resolvedSearchParams?.obsah ?? null}
         obsahError={
@@ -698,6 +703,12 @@ export default async function SkladKusDetailPage({ params, searchParams }: PageP
       </section>
 
       <div className="flex flex-wrap gap-3">
+        <Link
+          href={`/sklad/${row.skladova_polozka_id}?obsahCase=${kus.kus_id}`}
+          className="rounded-xl border border-emerald-700 bg-emerald-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+        >
+          Spravovat obsah na položce
+        </Link>
         <Link
           href={`/sklad/${row.skladova_polozka_id}`}
           className="rounded-xl border border-amber-700 bg-amber-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-700"

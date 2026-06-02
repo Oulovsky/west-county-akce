@@ -11,7 +11,11 @@ import {
   sumBlokujiciPoskozeneKusy,
   toNumber,
 } from "@/lib/sklad/helpers";
-import { loadKusObsahSummariesForKusIds } from "@/lib/sklad/kusObsah";
+import {
+  loadActiveChildrenByParentKusIds,
+  loadAvailableChildKusOptions,
+  loadKusObsahSummariesForKusIds,
+} from "@/lib/sklad/kusObsah";
 import type {
   SkladDetailRow,
   SkladJednotka,
@@ -41,7 +45,12 @@ import { deletePolozkaAction } from "./actions/deletePolozka";
 
 type PageProps = {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ deleteError?: string }>;
+  searchParams?: Promise<{
+    deleteError?: string;
+    obsahCase?: string;
+    obsah?: string;
+    obsahError?: string;
+  }>;
 };
 
 async function prepocitatPocetKusu(skladovaPolozkaId: string) {
@@ -72,6 +81,11 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const deleteErrorMessage = resolvedSearchParams?.deleteError
     ? decodeURIComponent(resolvedSearchParams.deleteError)
+    : null;
+  const openCaseKusId = resolvedSearchParams?.obsahCase ?? null;
+  const obsahMessage = resolvedSearchParams?.obsah ?? null;
+  const obsahError = resolvedSearchParams?.obsahError
+    ? decodeURIComponent(resolvedSearchParams.obsahError)
     : null;
   const supabase = await createClient();
   const { perms } = await loadSessionRolePermissions(supabase);
@@ -313,10 +327,12 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
   ]);
 
   const kusy = (kusyRaw ?? []) as SkladKusRow[];
-  const obsahSummaries = await loadKusObsahSummariesForKusIds(
-    supabase,
-    kusy.map((kus) => kus.kus_id)
-  );
+  const kusIds = kusy.map((kus) => kus.kus_id);
+  const [obsahSummaries, childrenByParent, availableChildOptions] = await Promise.all([
+    loadKusObsahSummariesForKusIds(supabase, kusIds),
+    loadActiveChildrenByParentKusIds(supabase, kusIds),
+    loadAvailableChildKusOptions(supabase),
+  ]);
   const poskozeni = (poskozeniRaw ?? []) as SkladPoskozeniRow[];
   const typyPoskozeni = (typyRaw ?? []) as SkladTypPoskozeniOption[];
   const priority = (priorityRaw ?? []) as SkladPrioritaOption[];
@@ -330,6 +346,21 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
   return (
     <div className="flex flex-col gap-5">
       {deleteErrorMessage ? <SkladDetailDeleteBlockedAlert message={deleteErrorMessage} /> : null}
+      {obsahMessage === "inserted" ? (
+        <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+          Kus byl vložen do case.
+        </p>
+      ) : null}
+      {obsahMessage === "removed" ? (
+        <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+          Kus byl vyjmut z case.
+        </p>
+      ) : null}
+      {obsahError ? (
+        <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+          {obsahError}
+        </p>
+      ) : null}
 
       <SkladDetailHeader
         skladovaPolozkaId={row.skladova_polozka_id}
@@ -354,6 +385,12 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
         deleteKusAction={smazatKus}
         updateKusPoradiAction={updateKusPoradiAction}
         obsahSummaries={obsahSummaries}
+        childrenByParent={childrenByParent}
+        availableChildOptions={availableChildOptions}
+        openCaseKusId={openCaseKusId}
+        returnPolozkaId={id}
+        obsahMessage={obsahMessage}
+        obsahError={obsahError}
         readOnly={readOnly}
       />
 
