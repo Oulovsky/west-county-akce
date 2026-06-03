@@ -1436,8 +1436,6 @@ function SpravaPageBody() {
               autoExpandKusy={isObsahPolozka}
               openCaseKusId={isObsahPolozka ? openCaseKusId : null}
               obsahMode={isObsahPolozka ? obsahMode : null}
-              obsahMessage={isObsahPolozka ? obsahMessage : null}
-              obsahError={isObsahPolozka ? obsahError : null}
               caseObsahFormDefaults={{
                 skladBlokId: i.sklad_blok_id ?? null,
                 kategorieTechnikyId: i.kategorie_techniky_id ?? null,

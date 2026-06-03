@@ -1,3 +1,4 @@
+import { SubmitButton } from "@/components/ui/SubmitButton";
 import type {
   SkladKusObsahChildOption,
   SkladKusObsahChildRow,
@@ -36,8 +37,6 @@ type SkladDetailKusySectionProps = {
   openCaseKusId?: string | null;
   obsahMode?: string | null;
   returnPolozkaId?: string;
-  obsahMessage?: string | null;
-  obsahError?: string | null;
   readOnly?: boolean;
   isCasePolozka: boolean;
   formDefaults: {
@@ -69,8 +68,6 @@ export function SkladDetailKusySection({
   openCaseKusId = null,
   obsahMode = null,
   returnPolozkaId,
-  obsahMessage = null,
-  obsahError = null,
   readOnly = false,
   isCasePolozka,
   formDefaults,
@@ -92,12 +89,12 @@ export function SkladDetailKusySection({
           <form action={addKusAction}>
             <input type="hidden" name="skladova_polozka_id" value={row.skladova_polozka_id} />
             <input type="hidden" name="nazev" value={row.nazev} />
-            <button
-              type="submit"
-              className="rounded-xl border border-blue-700 bg-blue-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800"
+            <SubmitButton
+              pendingText="Přidávám…"
+              className="rounded-xl border border-blue-700 bg-blue-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:hover:bg-blue-900"
             >
               + Přidat kus
-            </button>
+            </SubmitButton>
           </form>
         )}
       </div>
@@ -135,8 +132,6 @@ export function SkladDetailKusySection({
               openCaseKusId={openCaseKusId}
               obsahMode={obsahMode}
               returnPolozkaId={returnPolozkaId}
-              obsahMessage={obsahMessage}
-              obsahError={obsahError}
               readOnly={readOnly}
               formDefaults={formDefaults}
               bloky={bloky}

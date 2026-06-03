@@ -1,6 +1,7 @@
 "use client";
 
 import { KusQrActionMenu } from "@/components/sklad/KusQrActionMenu";
+import { SubmitButton } from "@/components/ui/SubmitButton";
 import { formatMoney } from "@/app/sklad/sprava/components/formatMoney";
 import { formatNumber } from "@/app/sklad/sprava/components/formatNumber";
 import { spravaTableGridStyle } from "@/app/sklad/sprava/components/spravaTableLayout";
@@ -215,12 +216,12 @@ export function SpravaCaseObsahChildRow({
               <input type="hidden" name="return_polozka_id" value={returnPolozkaId} />
               <input type="hidden" name="return_to" value={returnTo} />
               <input type="hidden" name="obsah_id" value={child.obsahId} />
-              <button
-                type="submit"
-                className="flex h-8 w-full min-w-0 items-center justify-center rounded-md border border-amber-700/90 bg-amber-950 px-1.5 text-[10px] font-semibold text-amber-100 transition hover:bg-amber-900"
+              <SubmitButton
+                pendingText="Odebírám…"
+                className="flex h-8 w-full min-w-0 items-center justify-center rounded-md border border-amber-700/90 bg-amber-950 px-1.5 text-[10px] font-semibold text-amber-100 transition hover:bg-amber-900 disabled:hover:bg-amber-950"
               >
                 Odebrat
-              </button>
+              </SubmitButton>
             </form>
           ) : (
             <span style={tableMutedBoxRight} className="text-[11px]">

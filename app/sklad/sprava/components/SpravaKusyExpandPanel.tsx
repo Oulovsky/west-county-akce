@@ -93,8 +93,6 @@ type Props = {
   readOnly?: boolean;
   openCaseKusId?: string | null;
   obsahMode?: string | null;
-  obsahMessage?: string | null;
-  obsahError?: string | null;
   formDefaults: CaseObsahFormDefaults;
   bloky: SkladBlok[];
   kategorie: SkladKategorie[];
@@ -148,8 +146,6 @@ function SpravaExpandKusRow({
   onUpdated,
   openCaseKusId,
   obsahMode,
-  obsahMessage,
-  obsahError,
   activeChildren,
   availableChildOptions,
   canEditObsah,
@@ -171,8 +167,6 @@ function SpravaExpandKusRow({
   onUpdated: () => Promise<void>;
   openCaseKusId: string | null;
   obsahMode: string | null;
-  obsahMessage: string | null;
-  obsahError: string | null;
   activeChildren: SkladKusObsahChildRow[];
   availableChildOptions: SkladKusObsahChildOption[];
   canEditObsah: boolean;
@@ -246,7 +240,7 @@ function SpravaExpandKusRow({
   const labelTitle = `${label} · ${stavHint}`;
   const isCaseExpanded = isCasePolozka && openCaseKusId === kus.kus_id;
   const showInsertForm = isCaseExpanded && obsahMode === "insert";
-  const showObsahMessages = isCaseExpanded;
+  const showUrlFlash = isCaseExpanded;
   const caseExpandHref = buildSpravaObsahHref(skladovaPolozkaId, kus.kus_id);
   const caseCollapseHref = buildSpravaPolozkaHref(skladovaPolozkaId);
 
@@ -457,8 +451,7 @@ function SpravaExpandKusRow({
           returnTo="sprava"
           layout="sprava"
           showInsertForm={showInsertForm}
-          obsahMessage={showObsahMessages ? obsahMessage : null}
-          obsahError={showObsahMessages ? obsahError : null}
+          showUrlFlash={showUrlFlash}
           assignmentsByChildKusId={childAssignmentsByKusId}
           formDefaults={formDefaults}
           bloky={bloky}
@@ -483,8 +476,6 @@ export function SpravaKusyExpandPanel({
   readOnly = false,
   openCaseKusId = null,
   obsahMode = null,
-  obsahMessage = null,
-  obsahError = null,
   formDefaults,
   bloky,
   kategorie,
@@ -745,8 +736,6 @@ export function SpravaKusyExpandPanel({
                   onUpdated={refreshAfterPoradi}
                   openCaseKusId={openCaseKusId}
                   obsahMode={obsahMode}
-                  obsahMessage={obsahMessage}
-                  obsahError={obsahError}
                   activeChildren={childrenByParentKusId.get(kus.kus_id) ?? []}
                   availableChildOptions={availableChildOptions}
                   canEditObsah={!readOnly}

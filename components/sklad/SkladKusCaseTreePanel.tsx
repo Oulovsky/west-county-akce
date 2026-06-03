@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { ObsahUrlFlash } from "@/components/sklad/ObsahUrlFlash";
 import { SkladCaseContentCreateForm } from "@/components/sklad/SkladCaseContentCreateForm";
 import { SkladKusObsahChildPicker } from "@/components/sklad/SkladKusObsahChildPicker";
 import { SpravaCaseObsahChildRow } from "@/components/sklad/SpravaCaseObsahChildRow";
+import { SubmitButton } from "@/components/ui/SubmitButton";
 import {
   insertKusIntoCaseAction,
   removeKusFromCaseAction,
@@ -39,8 +41,7 @@ type SkladKusCaseTreePanelProps = {
   returnTo?: SpravaObsahReturnTo;
   layout?: "sprava" | "detail";
   showInsertForm: boolean;
-  obsahMessage?: string | null;
-  obsahError?: string | null;
+  showUrlFlash?: boolean;
   assignmentsByChildKusId?: Record<string, SkladKusZakazkaAssignmentRow>;
   formDefaults: {
     skladBlokId: string | null;
@@ -106,12 +107,12 @@ function DetailChildList({
               <input type="hidden" name="return_polozka_id" value={returnPolozkaId} />
               <input type="hidden" name="return_to" value={returnTo} />
               <input type="hidden" name="obsah_id" value={child.obsahId} />
-              <button
-                type="submit"
-                className="rounded-lg border border-amber-700/90 bg-amber-950 px-3 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-900"
+              <SubmitButton
+                pendingText="Odebírám…"
+                className="rounded-lg border border-amber-700/90 bg-amber-950 px-3 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-900 disabled:hover:bg-amber-950"
               >
                 Odebrat
-              </button>
+              </SubmitButton>
             </form>
           ) : null}
         </li>
@@ -130,8 +131,7 @@ export function SkladKusCaseTreePanel({
   returnTo = "polozka",
   layout = "detail",
   showInsertForm,
-  obsahMessage,
-  obsahError,
+  showUrlFlash = false,
   assignmentsByChildKusId = {},
   formDefaults,
   bloky,
@@ -180,26 +180,7 @@ export function SkladKusCaseTreePanel({
         </Link>
       </div>
 
-      {obsahMessage === "created" ? (
-        <p className="mt-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
-          Obsah vytvořen a vložen do case.
-        </p>
-      ) : null}
-      {obsahMessage === "inserted" ? (
-        <p className="mt-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
-          Kus vložen do case.
-        </p>
-      ) : null}
-      {obsahMessage === "removed" ? (
-        <p className="mt-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
-          Kus odebrán z case.
-        </p>
-      ) : null}
-      {obsahError ? (
-        <p className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-100">
-          {obsahError}
-        </p>
-      ) : null}
+      {showUrlFlash ? <ObsahUrlFlash className="mt-2" /> : null}
     </>
   );
 
@@ -244,12 +225,12 @@ export function SkladKusCaseTreePanel({
           </label>
 
           <div className="lg:col-span-2">
-            <button
-              type="submit"
-              className="min-h-10 w-full rounded-xl border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-700"
+            <SubmitButton
+              pendingText="Vkládám…"
+              className="min-h-10 w-full rounded-xl border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-700 disabled:hover:bg-slate-800"
             >
               Vložit existující kus
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </details>

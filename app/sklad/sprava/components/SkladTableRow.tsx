@@ -73,8 +73,6 @@ type Props = {
   autoExpandKusy?: boolean;
   openCaseKusId?: string | null;
   obsahMode?: string | null;
-  obsahMessage?: string | null;
-  obsahError?: string | null;
   caseObsahFormDefaults: CaseObsahFormDefaults;
   draft: Draft;
   bloky: SkladBlok[];
@@ -124,8 +122,6 @@ export function SkladTableRow({
   autoExpandKusy = false,
   openCaseKusId = null,
   obsahMode = null,
-  obsahMessage = null,
-  obsahError = null,
   caseObsahFormDefaults,
   draft,
   bloky,
@@ -522,8 +518,6 @@ export function SkladTableRow({
           readOnly={readOnly}
           openCaseKusId={openCaseKusId}
           obsahMode={obsahMode}
-          obsahMessage={obsahMessage}
-          obsahError={obsahError}
           formDefaults={caseObsahFormDefaults}
           bloky={bloky}
           kategorie={allKategorie}

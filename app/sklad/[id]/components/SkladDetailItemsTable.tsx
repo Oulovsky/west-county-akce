@@ -47,8 +47,6 @@ type SkladDetailItemsTableProps = {
   openCaseKusId?: string | null;
   obsahMode?: string | null;
   returnPolozkaId?: string;
-  obsahMessage?: string | null;
-  obsahError?: string | null;
   readOnly?: boolean;
   isCasePolozka: boolean;
   formDefaults: {
@@ -84,8 +82,6 @@ export function SkladDetailItemsTable({
   openCaseKusId = null,
   obsahMode = null,
   returnPolozkaId,
-  obsahMessage = null,
-  obsahError = null,
   readOnly = false,
   isCasePolozka,
   formDefaults,
@@ -133,8 +129,6 @@ export function SkladDetailItemsTable({
             openCaseKusId={openCaseKusId}
             obsahMode={obsahMode}
             returnPolozkaId={returnPolozkaId}
-            obsahMessage={obsahMessage}
-            obsahError={obsahError}
             readOnly={readOnly}
             isCasePolozka={isCasePolozka}
             formDefaults={formDefaults}

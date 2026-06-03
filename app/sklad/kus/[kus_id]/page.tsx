@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { Suspense } from "react";
+import { ObsahUrlFlash } from "@/components/sklad/ObsahUrlFlash";
 import { loadSessionRolePermissions } from "@/lib/auth/internal-role-access-server";
 import { createClient } from "@/lib/supabase/server";
 import { isCaseJednotka } from "@/lib/sklad/caseJednotka";
@@ -37,13 +39,11 @@ import {
   formatZakazkaKusZakazkaLabel,
   queryAktivniZakazkaKusu,
 } from "@/lib/sklad/zakazkaKusy";
+import { SkladKusAssetValueForm } from "@/components/sklad/SkladKusAssetValueForm";
+import { SkladKusReportDamageForm } from "@/components/sklad/SkladKusReportDamageForm";
+import { SkladKusServiceStateForm } from "@/components/sklad/SkladKusServiceStateForm";
 import { SkladKusObsahPanel } from "./SkladKusObsahPanel";
 import { SkladKusQuickActions } from "./SkladKusQuickActions";
-import {
-  reportSkladKusDamageAction,
-  updateSkladKusAssetValueAction,
-  updateSkladKusServiceStateAction,
-} from "./actions";
 
 type PageProps = {
   params: Promise<{ kus_id: string }>;
@@ -156,41 +156,13 @@ function getUnifiedKusStateLabel({
   return "Skladem";
 }
 
-function ServiceActionForm({
-  kusId,
-  action,
-  label,
-  notePlaceholder,
-  danger = false,
-}: {
-  kusId: string;
-  action: string;
-  label: string;
-  notePlaceholder: string;
-  danger?: boolean;
-}) {
-  return (
-    <form action={updateSkladKusServiceStateAction} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-      <input type="hidden" name="kus_id" value={kusId} />
-      <input type="hidden" name="action" value={action} />
-      <textarea
-        name="note"
-        rows={2}
-        placeholder={notePlaceholder}
-        className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
-      />
-      <button
-        type="submit"
-        className={[
-          "mt-2 min-h-12 w-full rounded-xl px-4 py-3 text-sm font-black text-white transition",
-          danger ? "bg-red-700 hover:bg-red-600" : "bg-blue-700 hover:bg-blue-600",
-        ].join(" ")}
-      >
-        {label}
-      </button>
-    </form>
-  );
-}
+const SERVICE_ACTION_PENDING: Record<string, string> = {
+  block: "Ukládám…",
+  repair: "Ukládám…",
+  return_service: "Ukládám…",
+  checked: "Ukládám…",
+  retire: "Mažu…",
+};
 
 export default async function SkladKusDetailPage({ params, searchParams }: PageProps) {
   const { kus_id: kusId } = await params;
@@ -312,6 +284,10 @@ export default async function SkladKusDetailPage({ params, searchParams }: PageP
 
   return (
     <div className="page-shell flex w-full flex-col gap-4">
+      <Suspense fallback={null}>
+        <ObsahUrlFlash />
+      </Suspense>
+
       <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-xl">
         <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           Detail naskenovaného kusu
@@ -394,50 +370,7 @@ export default async function SkladKusDetailPage({ params, searchParams }: PageP
           </SummaryRow>
         </div>
 
-        <form action={updateSkladKusAssetValueAction} className="mt-4 grid gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-3 sm:grid-cols-2">
-          <input type="hidden" name="kus_id" value={kus.kus_id} />
-          <label className="block text-sm font-semibold text-slate-200">
-            Pořizovací hodnota / hodnota kusu
-            <input
-              name="porizovaci_hodnota"
-              defaultValue={kus.porizovaci_hodnota ?? ""}
-              inputMode="decimal"
-              className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
-            />
-          </label>
-          <label className="block text-sm font-semibold text-slate-200">
-            Datum pořízení
-            <input
-              name="datum_porizeni"
-              type="date"
-              defaultValue={kus.datum_porizeni ?? ""}
-              className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
-            />
-          </label>
-          <label className="block text-sm font-semibold text-slate-200">
-            Odpisové pásmo
-            <select
-              name="odpisove_pasmo_id"
-              defaultValue={kus.odpisove_pasmo_id ?? ""}
-              className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
-            >
-              <option value="">Bez odpisového pásma</option>
-              {odpisovaPasma.map((pasmo) => (
-                <option key={pasmo.odpisove_pasmo_id} value={pasmo.odpisove_pasmo_id}>
-                  {pasmo.nazev} · {pasmo.pocet_mesicu} měsíců{pasmo.aktivni ? "" : " · neaktivní"}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="flex items-end">
-            <button
-              type="submit"
-              className="min-h-11 w-full rounded-xl bg-blue-700 px-4 py-2 text-sm font-black text-white transition hover:bg-blue-600"
-            >
-              Uložit hodnotu kusu
-            </button>
-          </div>
-        </form>
+        <SkladKusAssetValueForm kus={kus} odpisovaPasma={odpisovaPasma} />
 
         {odpisovaPasmaError ? (
           <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-100">
@@ -583,12 +516,6 @@ export default async function SkladKusDetailPage({ params, searchParams }: PageP
         parentPlacement={parentPlacement}
         availableOptions={availableChildOptions}
         canEdit={canEditSklad}
-        obsahMessage={resolvedSearchParams?.obsah ?? null}
-        obsahError={
-          resolvedSearchParams?.obsahError
-            ? decodeURIComponent(resolvedSearchParams.obsahError)
-            : null
-        }
       />
 
       <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
@@ -601,61 +528,46 @@ export default async function SkladKusDetailPage({ params, searchParams }: PageP
           </p>
         </div>
 
-        <form action={reportSkladKusDamageAction} className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3">
-          <input type="hidden" name="kus_id" value={kus.kus_id} />
-          <input type="hidden" name="skladova_polozka_id" value={kus.skladova_polozka_id} />
-          <label className="text-sm font-semibold text-amber-100">
-            Nahlásit poškození
-            <textarea
-              name="note"
-              required
-              rows={3}
-              placeholder="Co je poškozené? Kdy a jak se to zjistilo?"
-              className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
-            />
-          </label>
-          <label className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-amber-100">
-            <input type="checkbox" name="blocks_use" value="true" className="h-4 w-4" />
-            Blokuje použití
-          </label>
-          <button
-            type="submit"
-            className="mt-3 min-h-12 w-full rounded-xl bg-amber-700 px-4 py-3 text-sm font-black text-white transition hover:bg-amber-600"
-          >
-            Nahlásit poškození
-          </button>
-        </form>
+        <SkladKusReportDamageForm
+          kusId={kus.kus_id}
+          skladovaPolozkaId={kus.skladova_polozka_id}
+        />
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <ServiceActionForm
+          <SkladKusServiceStateForm
             kusId={kus.kus_id}
             action="block"
             label="Označit jako blokované"
+            pendingText={SERVICE_ACTION_PENDING.block}
             notePlaceholder="Proč se kus nesmí naložit?"
             danger
           />
-          <ServiceActionForm
+          <SkladKusServiceStateForm
             kusId={kus.kus_id}
             action="repair"
             label="Poslat do opravy"
+            pendingText={SERVICE_ACTION_PENDING.repair}
             notePlaceholder="Co se má opravit?"
           />
-          <ServiceActionForm
+          <SkladKusServiceStateForm
             kusId={kus.kus_id}
             action="return_service"
             label="Vrátit ze servisu"
+            pendingText={SERVICE_ACTION_PENDING.return_service}
             notePlaceholder="Co servis provedl? Kus půjde na kontrolu."
           />
-          <ServiceActionForm
+          <SkladKusServiceStateForm
             kusId={kus.kus_id}
             action="checked"
             label="Označit jako zkontrolované"
+            pendingText={SERVICE_ACTION_PENDING.checked}
             notePlaceholder="Výsledek kontroly"
           />
-          <ServiceActionForm
+          <SkladKusServiceStateForm
             kusId={kus.kus_id}
             action="retire"
             label="Vyřadit kus"
+            pendingText="Vyřazuji…"
             notePlaceholder="Důvod vyřazení"
             danger
           />

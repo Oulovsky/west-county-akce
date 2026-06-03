@@ -16,8 +16,6 @@ type SkladKusObsahPanelProps = {
   parentPlacement: SkladKusObsahParentPlacement | null;
   availableOptions: SkladKusObsahChildOption[];
   canEdit: boolean;
-  obsahMessage?: string | null;
-  obsahError?: string | null;
 };
 
 export function SkladKusObsahPanel({
@@ -29,8 +27,6 @@ export function SkladKusObsahPanel({
   parentPlacement,
   availableOptions,
   canEdit,
-  obsahMessage,
-  obsahError,
 }: SkladKusObsahPanelProps) {
   const showServisniObsahPanel = !isCasePolozka && canEdit;
 
@@ -110,8 +106,6 @@ export function SkladKusObsahPanel({
             activeChildren={activeChildren}
             availableOptions={availableOptions}
             canEdit={canEdit}
-            obsahMessage={obsahMessage}
-            obsahError={obsahError}
           />
         </div>
       ) : null}

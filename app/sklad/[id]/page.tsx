@@ -1,5 +1,7 @@
 ﻿import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
+import { ObsahUrlFlash } from "@/components/sklad/ObsahUrlFlash";
 import {
   assertInternalWriteAccess,
   loadSessionRolePermissions,
@@ -412,6 +414,16 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
         readOnly={readOnly}
       />
 
+      <Suspense fallback={null}>
+        <ObsahUrlFlash className="rounded-xl" />
+      </Suspense>
+
+      {obsahDataError ? (
+        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-100" role="alert">
+          {obsahDataError}
+        </p>
+      ) : null}
+
       <SkladDetailItemsTable
         row={row}
         kategorie={kategorie}
@@ -434,8 +446,6 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
         openCaseKusId={openCaseKusId}
         obsahMode={obsahMode}
         returnPolozkaId={id}
-        obsahMessage={obsahMessage}
-        obsahError={obsahError ?? obsahDataError}
         readOnly={readOnly}
         isCasePolozka={isCasePolozka}
         formDefaults={formDefaults}

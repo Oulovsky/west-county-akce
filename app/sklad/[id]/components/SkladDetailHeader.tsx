@@ -1,3 +1,5 @@
+import { SubmitButton } from "@/components/ui/SubmitButton";
+
 type SkladDetailHeaderProps = {
   skladovaPolozkaId: string;
   deleteAction: (formData: FormData) => Promise<void>;
@@ -23,12 +25,12 @@ export function SkladDetailHeader({
       {readOnly ? null : (
         <form action={deleteAction}>
           <input type="hidden" name="skladova_polozka_id" value={skladovaPolozkaId} />
-          <button
-            type="submit"
-            className="rounded-xl border border-red-700 bg-red-950 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-900"
+          <SubmitButton
+            pendingText="Mažu…"
+            className="rounded-xl border border-red-700 bg-red-950 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-900 disabled:hover:bg-red-950"
           >
             Smazat hlavní položku
-          </button>
+          </SubmitButton>
         </form>
       )}
     </div>

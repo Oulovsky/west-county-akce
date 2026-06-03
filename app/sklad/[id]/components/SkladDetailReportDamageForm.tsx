@@ -1,3 +1,4 @@
+import { SubmitButton } from "@/components/ui/SubmitButton";
 import { getSkladKusDisplayLabel, slugifyCz } from "@/lib/sklad/helpers";
 import type {
   SkladKusRow,
@@ -108,12 +109,12 @@ export function SkladDetailReportDamageForm({
       </div>
 
       <div className="flex justify-end">
-        <button
-          type="submit"
-          className="inline-flex items-center justify-center rounded-xl border border-amber-700 bg-amber-800 px-4 py-3 text-sm font-semibold text-white transition hover:bg-amber-700"
+        <SubmitButton
+          pendingText="Ukládám…"
+          className="inline-flex items-center justify-center rounded-xl border border-amber-700 bg-amber-800 px-4 py-3 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:hover:bg-amber-800"
         >
           Nahlásit poškození
-        </button>
+        </SubmitButton>
       </div>
     </form>
   );

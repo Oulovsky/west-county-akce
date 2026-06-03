@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { createCaseContentAction } from "@/app/sklad/kusObsahActions";
+import { SubmitButton } from "@/components/ui/SubmitButton";
 import type { SpravaObsahReturnTo } from "@/lib/sklad/spravaObsahUrl";
 import type { SkladJednotka, SkladKategorie, SkladPodkategorie } from "@/lib/sklad/types";
 import type { SkladBlok } from "@/lib/sklad/types";
@@ -192,12 +193,12 @@ export function SkladCaseContentCreateForm({
         <input name="poznamka" className={inputClass} />
       </label>
 
-      <button
-        type="submit"
-        className="min-h-11 w-full rounded-xl bg-blue-700 px-4 py-2 text-sm font-black text-white transition hover:bg-blue-600"
+      <SubmitButton
+        pendingText="Vytvářím…"
+        className="min-h-11 w-full rounded-xl bg-blue-700 px-4 py-2 text-sm font-black text-white transition hover:bg-blue-600 disabled:hover:bg-blue-700"
       >
         Vytvořit a vložit
-      </button>
+      </SubmitButton>
     </form>
   );
 }

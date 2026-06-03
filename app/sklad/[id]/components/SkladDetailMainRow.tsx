@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SubmitButton } from "@/components/ui/SubmitButton";
 import { formatNumber } from "@/lib/sklad/helpers";
 import type {
   SkladDetailRow,
@@ -112,24 +113,22 @@ export function SkladDetailMainRow({
   };
 
   return (
-    <>
-      <form
-        ref={formRef}
-        id={editFormId}
-        action={updateAction}
-        key={`${row.skladova_polozka_id}-${row.kategorie_techniky_id ?? "bez"}-${row.podkategorie_techniky_id ?? "bez"}-${row.pozice ?? "bez"}-${row.upraveno_dne}`}
-      >
-        <input type="hidden" name="skladova_polozka_id" value={row.skladova_polozka_id} />
-        <input type="hidden" name="celkem_k_dispozici" value={celkemKusu} />
-        <input type="hidden" name="kategorie_techniky_id" value={kategorieId} />
-        <input type="hidden" name="podkategorie_techniky_id" value={podkategorieId} />
-      </form>
+    <form
+      ref={formRef}
+      id={editFormId}
+      action={updateAction}
+      className="contents"
+      key={`${row.skladova_polozka_id}-${row.kategorie_techniky_id ?? "bez"}-${row.podkategorie_techniky_id ?? "bez"}-${row.pozice ?? "bez"}-${row.upraveno_dne}`}
+    >
+      <input type="hidden" name="skladova_polozka_id" value={row.skladova_polozka_id} />
+      <input type="hidden" name="celkem_k_dispozici" value={celkemKusu} />
+      <input type="hidden" name="kategorie_techniky_id" value={kategorieId} />
+      <input type="hidden" name="podkategorie_techniky_id" value={podkategorieId} />
 
       <div className="bg-slate-950/30 px-3 py-3">
         <div className={rowGridClassName}>
           <div className="flex min-w-0 items-center px-1">
             <input
-              form={editFormId}
               name="nazev"
               defaultValue={row.nazev}
               onBlur={readOnly ? undefined : scheduleSubmit}
@@ -172,7 +171,6 @@ export function SkladDetailMainRow({
 
           <div className={centerCellClassName}>
             <input
-              form={editFormId}
               name="pozice"
               defaultValue={row.pozice ?? ""}
               inputMode="decimal"
@@ -215,7 +213,6 @@ export function SkladDetailMainRow({
 
           <div className={centerCellClassName}>
             <select
-              form={editFormId}
               name="jednotka"
               defaultValue={row.jednotka}
               onChange={readOnly ? undefined : onJednotkaChange}
@@ -232,7 +229,6 @@ export function SkladDetailMainRow({
 
           <div className={centerCellClassName}>
             <input
-              form={editFormId}
               name="interni_naklad"
               defaultValue={row.interni_naklad ?? ""}
               inputMode="decimal"
@@ -261,17 +257,16 @@ export function SkladDetailMainRow({
 
           <div className={centerCellClassName}>
             {readOnly ? null : (
-              <button
-                type="submit"
-                form={editFormId}
-                className="h-9 w-full rounded-lg border border-emerald-700 bg-emerald-900 px-1 text-xs font-semibold text-white transition hover:bg-emerald-800"
+              <SubmitButton
+                pendingText="Ukládám…"
+                className="h-9 w-full rounded-lg border border-emerald-700 bg-emerald-900 px-1 text-xs font-semibold text-white transition hover:bg-emerald-800 disabled:hover:bg-emerald-900"
               >
                 Uložit
-              </button>
+              </SubmitButton>
             )}
           </div>
         </div>
       </div>
-    </>
+    </form>
   );
 }

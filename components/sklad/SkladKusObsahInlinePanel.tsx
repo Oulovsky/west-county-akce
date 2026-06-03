@@ -1,5 +1,9 @@
+"use client";
+
 import Link from "next/link";
+import { ObsahUrlFlash } from "@/components/sklad/ObsahUrlFlash";
 import { SkladKusObsahChildPicker } from "@/components/sklad/SkladKusObsahChildPicker";
+import { SubmitButton } from "@/components/ui/SubmitButton";
 import {
   insertKusIntoCaseAction,
   removeKusFromCaseAction,
@@ -9,7 +13,7 @@ import {
   filterChildOptionsForParent,
   type SkladKusObsahChildOption,
   type SkladKusObsahChildRow,
-} from "@/lib/sklad/kusObsah";
+} from "@/lib/sklad/kusObsahRead";
 
 type SkladKusObsahInlinePanelProps = {
   parentKusId: string;
@@ -18,8 +22,7 @@ type SkladKusObsahInlinePanelProps = {
   availableOptions: SkladKusObsahChildOption[];
   canEdit: boolean;
   returnPolozkaId?: string | null;
-  obsahMessage?: string | null;
-  obsahError?: string | null;
+  showUrlFlash?: boolean;
 };
 
 export function SkladKusObsahInlinePanel({
@@ -29,8 +32,7 @@ export function SkladKusObsahInlinePanel({
   availableOptions,
   canEdit,
   returnPolozkaId = null,
-  obsahMessage,
-  obsahError,
+  showUrlFlash = true,
 }: SkladKusObsahInlinePanelProps) {
   const pickerOptions = filterChildOptionsForParent(
     availableOptions,
@@ -48,21 +50,7 @@ export function SkladKusObsahInlinePanel({
         </p>
       </div>
 
-      {obsahMessage === "inserted" ? (
-        <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
-          Kus byl vložen do case.
-        </p>
-      ) : null}
-      {obsahMessage === "removed" ? (
-        <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
-          Kus byl vyjmut z case.
-        </p>
-      ) : null}
-      {obsahError ? (
-        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-100">
-          {obsahError}
-        </p>
-      ) : null}
+      {showUrlFlash ? <ObsahUrlFlash /> : null}
 
       {activeChildren.length === 0 ? (
         <p className="text-sm text-slate-500">Case zatím neobsahuje žádné kusy.</p>
@@ -105,12 +93,12 @@ export function SkladKusObsahInlinePanel({
                           <input type="hidden" name="return_polozka_id" value={returnPolozkaId} />
                         ) : null}
                         <input type="hidden" name="obsah_id" value={child.obsahId} />
-                        <button
-                          type="submit"
-                          className="rounded-lg border border-amber-700 bg-amber-900 px-3 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-800"
+                        <SubmitButton
+                          pendingText="Odebírám…"
+                          className="rounded-lg border border-amber-700 bg-amber-900 px-3 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-800 disabled:hover:bg-amber-900"
                         >
                           Vyjmout
-                        </button>
+                        </SubmitButton>
                       </form>
                     </td>
                   ) : null}
@@ -162,12 +150,12 @@ export function SkladKusObsahInlinePanel({
           </label>
 
           <div className="lg:col-span-2">
-            <button
-              type="submit"
-              className="min-h-11 w-full rounded-xl bg-blue-700 px-4 py-2 text-sm font-black text-white transition hover:bg-blue-600"
+            <SubmitButton
+              pendingText="Vkládám…"
+              className="min-h-11 w-full rounded-xl bg-blue-700 px-4 py-2 text-sm font-black text-white transition hover:bg-blue-600 disabled:hover:bg-blue-700"
             >
               Vložit do case
-            </button>
+            </SubmitButton>
           </div>
         </form>
       ) : (

@@ -7,6 +7,7 @@ import {
   getSkladKusDisplayLabel,
 } from "@/lib/sklad/helpers";
 import Link from "next/link";
+import { SubmitButton } from "@/components/ui/SubmitButton";
 import {
   formatKusObsahContainedHint,
   formatKusObsahContainedLabel,
@@ -55,8 +56,6 @@ type SkladDetailKusRowProps = {
   openCaseKusId?: string | null;
   obsahMode?: string | null;
   returnPolozkaId?: string;
-  obsahMessage?: string | null;
-  obsahError?: string | null;
   readOnly?: boolean;
   formDefaults: {
     skladBlokId: string | null;
@@ -87,8 +86,6 @@ export function SkladDetailKusRow({
   openCaseKusId = null,
   obsahMode = null,
   returnPolozkaId,
-  obsahMessage = null,
-  obsahError = null,
   readOnly = false,
   formDefaults,
   bloky,
@@ -268,12 +265,12 @@ export function SkladDetailKusRow({
             <form action={deleteKusAction} className="w-full">
               <input type="hidden" name="skladova_polozka_id" value={row.skladova_polozka_id} />
               <input type="hidden" name="kus_id" value={kus.kus_id} />
-              <button
-                type="submit"
-                className="h-10 w-full rounded-lg border border-red-800 bg-red-950 px-2 text-xs font-semibold text-red-100 transition hover:bg-red-900"
+              <SubmitButton
+                pendingText="Mažu…"
+                className="h-10 w-full rounded-lg border border-red-800 bg-red-950 px-2 text-xs font-semibold text-red-100 transition hover:bg-red-900 disabled:hover:bg-red-950"
               >
                 Smazat
-              </button>
+              </SubmitButton>
             </form>
           )}
         </div>
@@ -288,8 +285,7 @@ export function SkladDetailKusRow({
           canEdit={!readOnly}
           returnPolozkaId={returnPolozkaId}
           showInsertForm={showInsertForm}
-          obsahMessage={showObsahMessages ? obsahMessage : null}
-          obsahError={showObsahMessages ? obsahError : null}
+          showUrlFlash={showObsahMessages}
           formDefaults={formDefaults}
           bloky={bloky}
           kategorie={kategorie}
