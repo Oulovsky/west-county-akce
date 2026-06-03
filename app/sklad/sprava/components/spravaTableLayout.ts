@@ -15,7 +15,7 @@ export const SPRAVA_TABLE_COLUMN_WIDTHS = [
   76, // Poškozené
   68, // Jednotka
   84, // Cena pro akce
-  64, // Detail
+  96, // Detail / akce (kus + child ve stromu case)
 ] as const;
 
 export const SPRAVA_TABLE_MIN_WIDTH = SPRAVA_TABLE_COLUMN_WIDTHS.reduce(

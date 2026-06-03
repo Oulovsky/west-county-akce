@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { KusQrActionMenu } from "@/components/sklad/KusQrActionMenu";
 import { SubmitButton } from "@/components/ui/SubmitButton";
+import { getSkladKusFuturePath } from "@/lib/sklad/kusLabels";
 import { formatMoney } from "@/app/sklad/sprava/components/formatMoney";
 import { formatNumber } from "@/app/sklad/sprava/components/formatNumber";
 import { spravaTableGridStyle } from "@/app/sklad/sprava/components/spravaTableLayout";
@@ -28,7 +30,10 @@ import {
 } from "@/app/sklad/sprava/components/styles";
 
 const SPRAVA_QR_TRIGGER =
-  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-600 bg-slate-950 text-slate-300 outline-none transition hover:border-slate-500 hover:bg-slate-900 hover:text-white focus-visible:ring-2 focus-visible:ring-blue-500/60";
+  "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-600 bg-slate-950 text-slate-300 outline-none transition hover:border-slate-500 hover:bg-slate-900 hover:text-white focus-visible:ring-2 focus-visible:ring-blue-500/60";
+
+const CHILD_DETAIL_LINK_CLASS =
+  "inline-flex h-7 shrink-0 items-center justify-center rounded-md border border-slate-600 bg-slate-900 px-1.5 text-[10px] font-semibold text-slate-200 transition hover:border-slate-500 hover:bg-slate-800 hover:text-white";
 
 const CHILD_SUBROW_GRID_CLASS = "grid items-start px-2 py-1 text-xs text-slate-300";
 
@@ -93,20 +98,6 @@ export function SpravaCaseObsahChildRow({
           >
             {child.displayLabel}
           </span>
-          <KusQrActionMenu
-            kusId={child.childKusId}
-            label={{
-              kusId: child.childKusId,
-              itemName: child.polozkaNazev,
-              poradoveCislo: child.poradoveCislo,
-              position: child.polozkaPozice,
-              sector: child.blokNazev,
-            }}
-            triggerClassName={SPRAVA_QR_TRIGGER}
-            iconClassName="h-[18px] w-[18px]"
-            menuVariant="sprava"
-            hideDetailLink
-          />
         </div>
 
         <div className="flex min-h-8 min-w-0 items-center px-1 pt-0.5">
@@ -209,25 +200,42 @@ export function SpravaCaseObsahChildRow({
           </span>
         </div>
 
-        <div className="flex min-h-8 items-center justify-center px-1 pt-0.5">
+        <div className="flex min-h-8 w-full min-w-0 items-center justify-center gap-0.5 px-0.5 pt-0.5">
+          <Link
+            href={getSkladKusFuturePath(child.childKusId)}
+            className={CHILD_DETAIL_LINK_CLASS}
+            title={`Detail kusu ${child.displayLabel}`}
+          >
+            Detail
+          </Link>
+          <KusQrActionMenu
+            kusId={child.childKusId}
+            label={{
+              kusId: child.childKusId,
+              itemName: child.polozkaNazev,
+              poradoveCislo: child.poradoveCislo,
+              position: child.polozkaPozice,
+              sector: child.blokNazev,
+            }}
+            triggerClassName={SPRAVA_QR_TRIGGER}
+            iconClassName="h-3.5 w-3.5"
+            menuVariant="sprava"
+            hideDetailLink
+          />
           {canEdit ? (
-            <form action={removeKusFromCaseAction} className="w-full">
+            <form action={removeKusFromCaseAction} className="min-w-0 flex-1">
               <input type="hidden" name="parent_kus_id" value={parentKusId} />
               <input type="hidden" name="return_polozka_id" value={returnPolozkaId} />
               <input type="hidden" name="return_to" value={returnTo} />
               <input type="hidden" name="obsah_id" value={child.obsahId} />
               <SubmitButton
                 pendingText="Odebírám…"
-                className="flex h-8 w-full min-w-0 items-center justify-center rounded-md border border-amber-700/90 bg-amber-950 px-1.5 text-[10px] font-semibold text-amber-100 transition hover:bg-amber-900 disabled:hover:bg-amber-950"
+                className="flex h-7 w-full min-w-0 items-center justify-center rounded-md border border-amber-700/90 bg-amber-950 px-1 text-[10px] font-semibold text-amber-100 transition hover:bg-amber-900 disabled:hover:bg-amber-950"
               >
                 Odebrat
               </SubmitButton>
             </form>
-          ) : (
-            <span style={tableMutedBoxRight} className="text-[11px]">
-              {SKLAD_EMPTY_LABEL_EM}
-            </span>
-          )}
+          ) : null}
         </div>
       </div>
     </li>
