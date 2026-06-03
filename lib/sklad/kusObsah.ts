@@ -8,27 +8,21 @@ import { formatSkladKusStav } from "@/lib/sklad/helpers";
 import { insertSkladKusHistorie } from "@/lib/sklad/kusHistorie";
 import type { SkladKusRow } from "@/lib/sklad/types";
 import { ZAKAZKA_KUS_ACTIVE_STAVY } from "@/lib/sklad/zakazkaKusy";
+import {
+  mapObsahChildRow,
+  type SkladKusObsahChildOption,
+  type SkladKusObsahChildRow,
+} from "@/lib/sklad/kusObsahRead";
+
+export type { SkladKusObsahChildRow, SkladKusObsahChildOption };
 
 export const SKLAD_KUS_OBSAH_TABLE = SKLAD_TABLE.skladKusObsah;
 
 const OBSah_CHILD_SELECT =
-  "id, parent_kus_id, child_kus_id, pozice, poznamka, vlozeno_at, child:sklad_polozky_kusy!sklad_kus_obsah_child_kus_id_fkey(kus_id, evidencni_cislo, poradove_cislo, stav, skladova_polozka_id, polozka:skladove_polozky(nazev))" as const;
+  "id, parent_kus_id, child_kus_id, pozice, poznamka, vlozeno_at, child:sklad_polozky_kusy!sklad_kus_obsah_child_kus_id_fkey(kus_id, evidencni_cislo, poradove_cislo, stav, skladova_polozka_id, polozka:skladove_polozky(nazev, pozice, sklad_blok_id, kategorie_techniky_id, podkategorie_techniky_id, technicky_vlastnik_id, jednotka_id, interni_naklad, fakturacni_cena))" as const;
 
 const OBSah_PARENT_SELECT =
   "id, parent_kus_id, child_kus_id, pozice, poznamka, vlozeno_at, parent:sklad_polozky_kusy!sklad_kus_obsah_parent_kus_id_fkey(kus_id, evidencni_cislo, poradove_cislo, stav, skladova_polozka_id, polozka:skladove_polozky(nazev))" as const;
-
-export type SkladKusObsahChildRow = {
-  obsahId: string;
-  childKusId: string;
-  pozice: string | null;
-  poznamka: string | null;
-  vlozenoAt: string;
-  evidencniCislo: string | null;
-  poradoveCislo: number;
-  stav: string;
-  polozkaNazev: string;
-  displayLabel: string;
-};
 
 export type SkladKusObsahParentPlacement = {
   obsahId: string;
@@ -44,14 +38,6 @@ export type SkladKusObsahParentPlacement = {
 export type SkladKusObsahKusSummary = {
   containedCount: number;
   parentPlacement: SkladKusObsahParentPlacement | null;
-};
-
-export type SkladKusObsahChildOption = {
-  kusId: string;
-  displayLabel: string;
-  polozkaNazev: string;
-  stav: string;
-  stavLabel: string;
 };
 
 const UNAVAILABLE_KUS_STAVY = ["vyrazeno", "odpis"] as const;
@@ -102,31 +88,6 @@ function unwrapPolozkaNazev(
   return polozka.nazev?.trim() || "—";
 }
 
-function mapChildRow(row: ObsahChildDbRow): SkladKusObsahChildRow | null {
-  const child = unwrapKusJoin(row.child);
-  if (!child) return null;
-
-  const polozkaNazev = unwrapPolozkaNazev(child.polozka);
-  const kusLike = {
-    kus_id: child.kus_id,
-    poradove_cislo: child.poradove_cislo,
-    evidencni_cislo: child.evidencni_cislo,
-  } as Pick<SkladKusRow, "kus_id" | "poradove_cislo" | "evidencni_cislo">;
-
-  return {
-    obsahId: row.id,
-    childKusId: child.kus_id,
-    pozice: row.pozice,
-    poznamka: row.poznamka,
-    vlozenoAt: row.vlozeno_at,
-    evidencniCislo: child.evidencni_cislo,
-    poradoveCislo: child.poradove_cislo,
-    stav: child.stav,
-    polozkaNazev,
-    displayLabel: getSkladKusDisplayLabel(polozkaNazev, kusLike),
-  };
-}
-
 function mapParentPlacement(row: ObsahParentDbRow): SkladKusObsahParentPlacement | null {
   const parent = unwrapKusJoin(row.parent);
   if (!parent) return null;
@@ -163,8 +124,8 @@ export async function queryActiveChildrenInCase(
 
   if (error) throw new Error(error.message);
 
-  return ((data ?? []) as unknown as ObsahChildDbRow[])
-    .map(mapChildRow)
+  return ((data ?? []) as unknown as Parameters<typeof mapObsahChildRow>[0][])
+    .map(mapObsahChildRow)
     .filter((row): row is SkladKusObsahChildRow => row != null);
 }
 
@@ -213,8 +174,8 @@ export async function loadActiveChildrenByParentKusIds(
 
   if (error) throw new Error(error.message);
 
-  for (const row of (data ?? []) as unknown as ObsahChildDbRow[]) {
-    const mapped = mapChildRow(row);
+  for (const row of (data ?? []) as unknown as Parameters<typeof mapObsahChildRow>[0][]) {
+    const mapped = mapObsahChildRow(row);
     if (!mapped) continue;
     const parentId = row.parent_kus_id;
     const list = map.get(parentId) ?? [];

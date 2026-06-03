@@ -510,6 +510,7 @@ export function SkladTableRow({
             blok_nazev: item.blok_nazev,
             kategorie_nazev: item.kategorie_nazev,
             podkategorie_nazev: item.podkategorie_nazev,
+            technicky_vlastnik_nazev: item.technicky_vlastnik_nazev,
             pozice: item.pozice,
             jednotka: item.jednotka,
             interni_naklad: item.interni_naklad,

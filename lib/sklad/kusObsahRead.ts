@@ -7,11 +7,12 @@ import { ZAKAZKA_KUS_ACTIVE_STAVY } from "@/lib/sklad/zakazkaKusy";
 export const SKLAD_KUS_OBSAH_TABLE = SKLAD_TABLE.skladKusObsah;
 
 const OBSah_CHILD_SELECT =
-  "id, parent_kus_id, child_kus_id, pozice, poznamka, vlozeno_at, child:sklad_polozky_kusy!sklad_kus_obsah_child_kus_id_fkey(kus_id, evidencni_cislo, poradove_cislo, stav, skladova_polozka_id, polozka:skladove_polozky(nazev))" as const;
+  "id, parent_kus_id, child_kus_id, pozice, poznamka, vlozeno_at, child:sklad_polozky_kusy!sklad_kus_obsah_child_kus_id_fkey(kus_id, evidencni_cislo, poradove_cislo, stav, skladova_polozka_id, polozka:skladove_polozky(nazev, pozice, sklad_blok_id, kategorie_techniky_id, podkategorie_techniky_id, technicky_vlastnik_id, jednotka_id, interni_naklad, fakturacni_cena))" as const;
 
 export type SkladKusObsahChildRow = {
   obsahId: string;
   childKusId: string;
+  skladovaPolozkaId: string;
   pozice: string | null;
   poznamka: string | null;
   vlozenoAt: string;
@@ -20,6 +21,20 @@ export type SkladKusObsahChildRow = {
   stav: string;
   polozkaNazev: string;
   displayLabel: string;
+  polozkaPozice: number | string | null;
+  skladBlokId: string | null;
+  kategorieTechnikyId: string | null;
+  podkategorieTechnikyId: string | null;
+  technickyVlastnikId: string | null;
+  jednotkaId: string | null;
+  interniNaklad: number | string | null;
+  fakturacniCena: number | string | null;
+  blokNazev?: string | null;
+  kategorieNazev?: string | null;
+  podkategorieNazev?: string | null;
+  technickyVlastnikNazev?: string | null;
+  jednotka?: string | null;
+  cenaAkce?: number | null;
 };
 
 export type SkladKusObsahChildOption = {
@@ -30,12 +45,25 @@ export type SkladKusObsahChildOption = {
   stavLabel: string;
 };
 
+type ObsahPolozkaJoinRow = {
+  nazev: string;
+  pozice: number | string | null;
+  sklad_blok_id: string | null;
+  kategorie_techniky_id: string | null;
+  podkategorie_techniky_id: string | null;
+  technicky_vlastnik_id: string | null;
+  jednotka_id: string | null;
+  interni_naklad: number | string | null;
+  fakturacni_cena: number | string | null;
+};
+
 type ObsahKusJoinRow = {
   kus_id: string;
   evidencni_cislo: string | null;
   poradove_cislo: number;
   stav: string;
-  polozka: { nazev: string } | { nazev: string }[] | null;
+  skladova_polozka_id: string;
+  polozka: ObsahPolozkaJoinRow | ObsahPolozkaJoinRow[] | null;
 };
 
 type ObsahChildDbRow = {
@@ -56,22 +84,24 @@ function unwrapKusJoin(
   return value;
 }
 
-function unwrapPolozkaNazev(
-  polozka: { nazev: string } | { nazev: string }[] | null | undefined
-): string {
-  if (!polozka) return "—";
-  if (Array.isArray(polozka)) return polozka[0]?.nazev?.trim() || "—";
-  return polozka.nazev?.trim() || "—";
+function unwrapPolozkaJoin(
+  polozka: ObsahPolozkaJoinRow | ObsahPolozkaJoinRow[] | null | undefined
+): ObsahPolozkaJoinRow | null {
+  if (!polozka) return null;
+  if (Array.isArray(polozka)) return polozka[0] ?? null;
+  return polozka;
 }
 
-function mapChildRow(row: ObsahChildDbRow): SkladKusObsahChildRow | null {
+export function mapObsahChildRow(row: ObsahChildDbRow): SkladKusObsahChildRow | null {
   const child = unwrapKusJoin(row.child);
   if (!child) return null;
 
-  const polozkaNazev = unwrapPolozkaNazev(child.polozka);
+  const polozka = unwrapPolozkaJoin(child.polozka);
+  const polozkaNazev = polozka?.nazev?.trim() || "—";
   return {
     obsahId: row.id,
     childKusId: child.kus_id,
+    skladovaPolozkaId: child.skladova_polozka_id,
     pozice: row.pozice,
     poznamka: row.poznamka,
     vlozenoAt: row.vlozeno_at,
@@ -83,6 +113,14 @@ function mapChildRow(row: ObsahChildDbRow): SkladKusObsahChildRow | null {
       poradove_cislo: child.poradove_cislo,
       evidencni_cislo: child.evidencni_cislo,
     }),
+    polozkaPozice: polozka?.pozice ?? null,
+    skladBlokId: polozka?.sklad_blok_id ?? null,
+    kategorieTechnikyId: polozka?.kategorie_techniky_id ?? null,
+    podkategorieTechnikyId: polozka?.podkategorie_techniky_id ?? null,
+    technickyVlastnikId: polozka?.technicky_vlastnik_id ?? null,
+    jednotkaId: polozka?.jednotka_id ?? null,
+    interniNaklad: polozka?.interni_naklad ?? null,
+    fakturacniCena: polozka?.fakturacni_cena ?? null,
   };
 }
 
@@ -100,7 +138,7 @@ export async function queryActiveChildrenInCase(
   if (error) throw new Error(error.message);
 
   return ((data ?? []) as unknown as ObsahChildDbRow[])
-    .map(mapChildRow)
+    .map(mapObsahChildRow)
     .filter((row): row is SkladKusObsahChildRow => row != null);
 }
 
@@ -125,7 +163,7 @@ export async function loadActiveChildrenByParentKusIds(
   if (error) throw new Error(error.message);
 
   for (const row of (data ?? []) as unknown as ObsahChildDbRow[]) {
-    const mapped = mapChildRow(row);
+    const mapped = mapObsahChildRow(row);
     if (!mapped) continue;
     const list = map.get(row.parent_kus_id) ?? [];
     list.push(mapped);
@@ -185,9 +223,11 @@ export async function loadAvailableChildKusOptions(
     if (UNAVAILABLE_KUS_STAVY.includes(stav as (typeof UNAVAILABLE_KUS_STAVY)[number])) continue;
     if (excludedKusIds.has(kusId)) continue;
 
-    const polozkaNazev = unwrapPolozkaNazev(
-      (row as { polozka: { nazev: string } | { nazev: string }[] | null }).polozka
+    const polozka = unwrapPolozkaJoin(
+      (row as unknown as { polozka: ObsahPolozkaJoinRow | ObsahPolozkaJoinRow[] | null })
+        .polozka
     );
+    const polozkaNazev = polozka?.nazev?.trim() || "—";
     const displayLabel = getSkladKusDisplayLabel(polozkaNazev, {
       poradove_cislo: row.poradove_cislo as number,
       evidencni_cislo: row.evidencni_cislo as string | null,
