@@ -27,7 +27,6 @@ export function enrichObsahChildRows(
   const podkategorieNazevById = new Map(
     catalogs.podkategorie.map((row) => [row.podkategorie_techniky_id, row.nazev])
   );
-  const jednotkaNazevById = new Map(catalogs.jednotky.map((row) => [row.jednotka_id, row.nazev]));
   const vlastnikNazevById = new Map(catalogs.vlastnici.map((row) => [row.id, row.nazev]));
 
   return children.map((child) => {
@@ -39,9 +38,6 @@ export function enrichObsahChildRows(
       : null;
     const podkategorieNazev = child.podkategorieTechnikyId
       ? (podkategorieNazevById.get(child.podkategorieTechnikyId) ?? null)
-      : null;
-    const jednotka = child.jednotkaId
-      ? (jednotkaNazevById.get(child.jednotkaId) ?? null)
       : null;
     const technickyVlastnikNazev = child.technickyVlastnikId
       ? (vlastnikNazevById.get(child.technickyVlastnikId) ?? null)
@@ -58,7 +54,7 @@ export function enrichObsahChildRows(
       blokNazev,
       kategorieNazev,
       podkategorieNazev,
-      jednotka,
+      jednotka: child.jednotka?.trim() || null,
       technickyVlastnikNazev,
       cenaAkce,
     };

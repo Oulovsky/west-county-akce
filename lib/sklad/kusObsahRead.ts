@@ -11,7 +11,7 @@ const OBSah_LINK_SELECT =
   "id, parent_kus_id, child_kus_id, pozice, poznamka, vlozeno_at" as const;
 
 const POLOZKA_META_SELECT =
-  "skladova_polozka_id, nazev, pozice, sklad_blok_id, kategorie_techniky_id, podkategorie_techniky_id, technicky_vlastnik_id, jednotka_id, interni_naklad, fakturacni_cena" as const;
+  "skladova_polozka_id, nazev, pozice, sklad_blok_id, kategorie_techniky_id, podkategorie_techniky_id, technicky_vlastnik_id, jednotka, interni_naklad, fakturacni_cena" as const;
 
 export type SkladKusObsahChildRow = {
   obsahId: string;
@@ -30,7 +30,6 @@ export type SkladKusObsahChildRow = {
   kategorieTechnikyId: string | null;
   podkategorieTechnikyId: string | null;
   technickyVlastnikId: string | null;
-  jednotkaId: string | null;
   interniNaklad: number | string | null;
   fakturacniCena: number | string | null;
   blokNazev?: string | null;
@@ -56,7 +55,7 @@ type ObsahPolozkaJoinRow = {
   kategorie_techniky_id: string | null;
   podkategorie_techniky_id: string | null;
   technicky_vlastnik_id: string | null;
-  jednotka_id: string | null;
+  jednotka: string | null;
   interni_naklad: number | string | null;
   fakturacni_cena: number | string | null;
 };
@@ -125,7 +124,7 @@ function mapObsahLinkWithKusMeta(
     kategorieTechnikyId: polozka?.kategorie_techniky_id ?? null,
     podkategorieTechnikyId: polozka?.podkategorie_techniky_id ?? null,
     technickyVlastnikId: polozka?.technicky_vlastnik_id ?? null,
-    jednotkaId: polozka?.jednotka_id ?? null,
+    jednotka: polozka?.jednotka?.trim() || null,
     interniNaklad: polozka?.interni_naklad ?? null,
     fakturacniCena: polozka?.fakturacni_cena ?? null,
   };
