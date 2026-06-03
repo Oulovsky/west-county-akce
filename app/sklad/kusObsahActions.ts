@@ -17,6 +17,7 @@ function resolveChildKusId(formData: FormData) {
 function redirectAfterObsahAction(
   parentKusId: string,
   returnPolozkaId: string | null,
+  returnTo: "sprava" | "polozka",
   params: { ok?: string; error?: string; keepInsertForm?: boolean }
 ) {
   const search = new URLSearchParams();
@@ -30,6 +31,12 @@ function redirectAfterObsahAction(
   if (params.error) search.set("obsahError", params.error);
   const query = search.toString();
 
+  if (returnTo === "sprava" && returnPolozkaId) {
+    search.set("obsahPolozka", returnPolozkaId);
+    const spravaQuery = search.toString();
+    redirect(`/sklad/sprava${spravaQuery ? `?${spravaQuery}` : ""}`);
+  }
+
   if (returnPolozkaId) {
     redirect(`/sklad/${returnPolozkaId}${query ? `?${query}` : ""}`);
   }
@@ -37,9 +44,15 @@ function redirectAfterObsahAction(
   redirect(`/sklad/kus/${parentKusId}${query ? `?${query}` : ""}`);
 }
 
+function resolveReturnTo(formData: FormData): "sprava" | "polozka" {
+  const raw = String(formData.get("return_to") ?? "polozka").trim();
+  return raw === "sprava" ? "sprava" : "polozka";
+}
+
 export async function insertKusIntoCaseAction(formData: FormData) {
   const parentKusId = String(formData.get("parent_kus_id") ?? "").trim();
   const returnPolozkaId = String(formData.get("return_polozka_id") ?? "").trim() || null;
+  const returnTo = resolveReturnTo(formData);
   const childKusId = resolveChildKusId(formData);
   const pozice = String(formData.get("pozice") ?? "").trim();
   const poznamka = String(formData.get("poznamka") ?? "").trim();
@@ -48,7 +61,7 @@ export async function insertKusIntoCaseAction(formData: FormData) {
     throw new Error("Chybí ID case.");
   }
   if (!childKusId) {
-    redirectAfterObsahAction(parentKusId, returnPolozkaId, {
+    redirectAfterObsahAction(parentKusId, returnPolozkaId, returnTo, {
       error: "Vyberte kus ze seznamu nebo zadejte kus_id / naskenujte QR.",
       keepInsertForm: true,
     });
@@ -78,6 +91,9 @@ export async function insertKusIntoCaseAction(formData: FormData) {
     if (returnPolozkaId) {
       revalidatePath(`/sklad/${returnPolozkaId}`);
     }
+    if (returnTo === "sprava") {
+      revalidatePath("/sklad/sprava");
+    }
   } catch (error) {
     rethrowIfNextRedirect(error);
     errorMessage =
@@ -85,18 +101,19 @@ export async function insertKusIntoCaseAction(formData: FormData) {
   }
 
   if (errorMessage) {
-    redirectAfterObsahAction(parentKusId, returnPolozkaId, {
+    redirectAfterObsahAction(parentKusId, returnPolozkaId, returnTo, {
       error: errorMessage,
       keepInsertForm: true,
     });
   }
 
-  redirectAfterObsahAction(parentKusId, returnPolozkaId, { ok: "inserted" });
+  redirectAfterObsahAction(parentKusId, returnPolozkaId, returnTo, { ok: "inserted" });
 }
 
 export async function removeKusFromCaseAction(formData: FormData) {
   const parentKusId = String(formData.get("parent_kus_id") ?? "").trim();
   const returnPolozkaId = String(formData.get("return_polozka_id") ?? "").trim() || null;
+  const returnTo = resolveReturnTo(formData);
   const obsahId = String(formData.get("obsah_id") ?? "").trim();
 
   if (!parentKusId || !obsahId) {
@@ -140,6 +157,9 @@ export async function removeKusFromCaseAction(formData: FormData) {
     if (returnPolozkaId) {
       revalidatePath(`/sklad/${returnPolozkaId}`);
     }
+    if (returnTo === "sprava") {
+      revalidatePath("/sklad/sprava");
+    }
   } catch (error) {
     rethrowIfNextRedirect(error);
     errorMessage =
@@ -147,15 +167,16 @@ export async function removeKusFromCaseAction(formData: FormData) {
   }
 
   if (errorMessage) {
-    redirectAfterObsahAction(parentKusId, returnPolozkaId, { error: errorMessage });
+    redirectAfterObsahAction(parentKusId, returnPolozkaId, returnTo, { error: errorMessage });
   }
 
-  redirectAfterObsahAction(parentKusId, returnPolozkaId, { ok: "removed" });
+  redirectAfterObsahAction(parentKusId, returnPolozkaId, returnTo, { ok: "removed" });
 }
 
 export async function createCaseContentAction(formData: FormData) {
   const parentKusId = String(formData.get("parent_kus_id") ?? "").trim();
   const returnPolozkaId = String(formData.get("return_polozka_id") ?? "").trim() || null;
+  const returnTo = resolveReturnTo(formData);
   const nazev = String(formData.get("nazev") ?? "").trim();
   const skladBlokId = String(formData.get("sklad_blok_id") ?? "").trim();
   const kategorieTechnikyId = String(formData.get("kategorie_techniky_id") ?? "").trim();
@@ -170,13 +191,13 @@ export async function createCaseContentAction(formData: FormData) {
     throw new Error("Chybí ID case.");
   }
   if (!nazev) {
-    redirectAfterObsahAction(parentKusId, returnPolozkaId, {
+    redirectAfterObsahAction(parentKusId, returnPolozkaId, returnTo, {
       error: "Zadejte název obsahu.",
       keepInsertForm: true,
     });
   }
   if (!Number.isFinite(countRaw) || countRaw < 1) {
-    redirectAfterObsahAction(parentKusId, returnPolozkaId, {
+    redirectAfterObsahAction(parentKusId, returnPolozkaId, returnTo, {
       error: "Počet kusů musí být alespoň 1.",
       keepInsertForm: true,
     });
@@ -212,6 +233,7 @@ export async function createCaseContentAction(formData: FormData) {
     if (returnPolozkaId) {
       revalidatePath(`/sklad/${returnPolozkaId}`);
     }
+    revalidatePath("/sklad/sprava");
   } catch (error) {
     rethrowIfNextRedirect(error);
     errorMessage =
@@ -221,11 +243,11 @@ export async function createCaseContentAction(formData: FormData) {
   }
 
   if (errorMessage) {
-    redirectAfterObsahAction(parentKusId, returnPolozkaId, {
+    redirectAfterObsahAction(parentKusId, returnPolozkaId, returnTo, {
       error: errorMessage,
       keepInsertForm: true,
     });
   }
 
-  redirectAfterObsahAction(parentKusId, returnPolozkaId, { ok: "created" });
+  redirectAfterObsahAction(parentKusId, returnPolozkaId, returnTo, { ok: "created" });
 }

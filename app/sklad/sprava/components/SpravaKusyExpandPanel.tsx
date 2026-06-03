@@ -2,7 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { SkladKusCaseTreePanel } from "@/components/sklad/SkladKusCaseTreePanel";
 import { KusQrActionMenu } from "@/components/sklad/KusQrActionMenu";
+import { isCaseJednotka } from "@/lib/sklad/caseJednotka";
+import {
+  loadActiveChildrenByParentKusIds,
+  loadAvailableChildKusOptions,
+  type SkladKusObsahChildOption,
+  type SkladKusObsahChildRow,
+} from "@/lib/sklad/kusObsahRead";
+import {
+  buildSpravaObsahHref,
+  buildSpravaPolozkaHref,
+} from "@/lib/sklad/spravaObsahUrl";
 import {
   SKLAD_EMPTY_LABEL,
   SKLAD_EMPTY_LABEL_EM,
@@ -22,9 +34,14 @@ import {
 import { querySkladPolozkyKusyForPolozka } from "@/lib/sklad/queries";
 import { buildSkladKusEvidencniCislo } from "@/lib/sklad/syncPolozkaKusy";
 import type {
+  SkladBlok,
+  SkladJednotka,
+  SkladKategorie,
   SkladKusRow,
   SkladKusZakazkaAssignmentRow,
+  SkladPodkategorie,
   SkladPolozkaRow,
+  TechnickyVlastnik,
 } from "@/lib/sklad/types";
 import {
   formatZakazkaKusStav,
@@ -52,17 +69,40 @@ export type SpravaKusyInheritedColumns = Pick<
   | "interni_naklad"
 >;
 
+type CaseObsahFormDefaults = {
+  skladBlokId: string | null;
+  kategorieTechnikyId: string | null;
+  podkategorieTechnikyId: string | null;
+  technickyVlastnikId: string | null;
+  jednotka: string;
+};
+
 type Props = {
   skladovaPolozkaId: string;
   polozkaNazev: string;
+  polozkaJednotka: string | null;
   celkemKDispozici: number;
   inherited: SpravaKusyInheritedColumns;
   /** Zvýšení po uložení řádku — znovu načte kusy v rozbaleném panelu. */
   reloadToken?: number;
+  readOnly?: boolean;
+  openCaseKusId?: string | null;
+  obsahMode?: string | null;
+  obsahMessage?: string | null;
+  obsahError?: string | null;
+  formDefaults: CaseObsahFormDefaults;
+  bloky: SkladBlok[];
+  kategorie: SkladKategorie[];
+  podkategorie: SkladPodkategorie[];
+  jednotky: SkladJednotka[];
+  vlastnici: TechnickyVlastnik[];
 };
 
 const SPRAVA_QR_TRIGGER =
   "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-600 bg-slate-950 text-slate-300 outline-none transition hover:border-slate-500 hover:bg-slate-900 hover:text-white focus-visible:ring-2 focus-visible:ring-blue-500/60";
+
+const CASE_TREE_CHEVRON =
+  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-emerald-800/60 bg-emerald-950/40 text-xs font-bold text-emerald-200 transition hover:border-emerald-600 hover:bg-emerald-900/60 hover:text-white";
 
 const KUS_SUBROW_GRID_CLASS = "grid items-start px-2 py-1 text-xs text-slate-300";
 
@@ -95,17 +135,47 @@ function kusPoskozeneCell(kus: SkladKusRow): number {
 function SpravaExpandKusRow({
   kus,
   polozkaNazev,
+  skladovaPolozkaId,
+  isCasePolozka,
   siblingKusy,
   inherited,
   assignment,
   onUpdated,
+  openCaseKusId,
+  obsahMode,
+  obsahMessage,
+  obsahError,
+  activeChildren,
+  availableChildOptions,
+  canEditObsah,
+  formDefaults,
+  bloky,
+  kategorie,
+  podkategorie,
+  jednotky,
+  vlastnici,
 }: {
   kus: SkladKusRow;
   polozkaNazev: string;
+  skladovaPolozkaId: string;
+  isCasePolozka: boolean;
   siblingKusy: SkladKusRow[];
   inherited: SpravaKusyInheritedColumns;
   assignment: SkladKusZakazkaAssignmentRow | null;
   onUpdated: () => Promise<void>;
+  openCaseKusId: string | null;
+  obsahMode: string | null;
+  obsahMessage: string | null;
+  obsahError: string | null;
+  activeChildren: SkladKusObsahChildRow[];
+  availableChildOptions: SkladKusObsahChildOption[];
+  canEditObsah: boolean;
+  formDefaults: CaseObsahFormDefaults;
+  bloky: SkladBlok[];
+  kategorie: SkladKategorie[];
+  podkategorie: SkladPodkategorie[];
+  jednotky: SkladJednotka[];
+  vlastnici: TechnickyVlastnik[];
 }) {
   const [poradiDraft, setPoradiDraft] = useState(() => String(kus.poradove_cislo));
   const [error, setError] = useState<string | null>(null);
@@ -167,6 +237,11 @@ function SpravaExpandKusRow({
   const label = getSpravaKusDisplayLabel(polozkaNazev, kus);
   const stavHint = formatSkladKusStav(kus.stav);
   const labelTitle = `${label} · ${stavHint}`;
+  const isCaseExpanded = isCasePolozka && openCaseKusId === kus.kus_id;
+  const showInsertForm = isCaseExpanded && obsahMode === "insert";
+  const showObsahMessages = isCaseExpanded;
+  const caseExpandHref = buildSpravaObsahHref(skladovaPolozkaId, kus.kus_id);
+  const caseCollapseHref = buildSpravaPolozkaHref(skladovaPolozkaId);
 
   const skladem = kusSklademCell(kus);
   const naZakazkach = assignment ? 1 : kusNaZakazkachCell(kus);
@@ -178,11 +253,27 @@ function SpravaExpandKusRow({
     : "Kus není přiřazen k aktivní zakázce.";
 
   return (
-    <li className={kus.aktivni ? "" : "opacity-60"}>
+    <li
+      className={[
+        kus.aktivni ? "" : "opacity-60",
+        isCaseExpanded ? "ring-1 ring-inset ring-emerald-900/40" : "",
+      ].join(" ")}
+    >
       <div className={KUS_SUBROW_GRID_CLASS} style={spravaTableGridStyle}>
         <div className="sticky left-0 z-10 flex min-h-8 min-w-0 flex-col gap-0.5 bg-slate-950/95 pr-1 pt-0.5">
           <div className="flex min-h-8 min-w-0 items-center gap-1.5">
-            <span className="inline-block h-8 w-8 shrink-0" aria-hidden />
+            {isCasePolozka ? (
+              <Link
+                href={isCaseExpanded ? caseCollapseHref : caseExpandHref}
+                className={CASE_TREE_CHEVRON}
+                title={isCaseExpanded ? "Sbalit obsah case" : "Rozbalit obsah case"}
+                aria-expanded={isCaseExpanded}
+              >
+                {isCaseExpanded ? "▾" : "▸"}
+              </Link>
+            ) : (
+              <span className="inline-block h-8 w-8 shrink-0" aria-hidden />
+            )}
             <input
               type="number"
               min={1}
@@ -219,6 +310,7 @@ function SpravaExpandKusRow({
               triggerClassName={SPRAVA_QR_TRIGGER}
               iconClassName="h-[18px] w-[18px]"
               menuVariant="sprava"
+              hideDetailLink={isCasePolozka}
             />
           </div>
           {error ? (
@@ -336,6 +428,27 @@ function SpravaExpandKusRow({
           )}
         </div>
       </div>
+
+      {isCaseExpanded ? (
+        <SkladKusCaseTreePanel
+          parentKusId={kus.kus_id}
+          parentDisplayLabel={label}
+          activeChildren={activeChildren}
+          availableOptions={availableChildOptions}
+          canEdit={canEditObsah}
+          returnPolozkaId={skladovaPolozkaId}
+          returnTo="sprava"
+          showInsertForm={showInsertForm}
+          obsahMessage={showObsahMessages ? obsahMessage : null}
+          obsahError={showObsahMessages ? obsahError : null}
+          formDefaults={formDefaults}
+          bloky={bloky}
+          kategorie={kategorie}
+          podkategorie={podkategorie}
+          jednotky={jednotky}
+          vlastnici={vlastnici}
+        />
+      ) : null}
     </li>
   );
 }
@@ -343,15 +456,35 @@ function SpravaExpandKusRow({
 export function SpravaKusyExpandPanel({
   skladovaPolozkaId,
   polozkaNazev,
+  polozkaJednotka,
   celkemKDispozici,
   inherited,
   reloadToken = 0,
+  readOnly = false,
+  openCaseKusId = null,
+  obsahMode = null,
+  obsahMessage = null,
+  obsahError = null,
+  formDefaults,
+  bloky,
+  kategorie,
+  podkategorie,
+  jednotky,
+  vlastnici,
 }: Props) {
   const celkem = toNumber(celkemKDispozici);
+  const isCasePolozka = isCaseJednotka(polozkaJednotka);
   const [kusy, setKusy] = useState<SkladKusRow[] | null>(null);
   const [assignmentsByKusId, setAssignmentsByKusId] = useState<
     Record<string, SkladKusZakazkaAssignmentRow>
   >({});
+  const [childrenByParentKusId, setChildrenByParentKusId] = useState<
+    Map<string, SkladKusObsahChildRow[]>
+  >(new Map());
+  const [availableChildOptions, setAvailableChildOptions] = useState<
+    SkladKusObsahChildOption[]
+  >([]);
+  const [obsahLoading, setObsahLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -415,6 +548,43 @@ export function SpravaKusyExpandPanel({
     };
   }, [kusy]);
 
+  useEffect(() => {
+    if (!isCasePolozka || !kusy || kusy.length === 0) {
+      setChildrenByParentKusId(new Map());
+      setAvailableChildOptions([]);
+      return;
+    }
+
+    let alive = true;
+    const parentIds = kusy.map((kus) => kus.kus_id);
+
+    async function loadObsah() {
+      setObsahLoading(true);
+      try {
+        const [childrenMap, options] = await Promise.all([
+          loadActiveChildrenByParentKusIds(supabase, parentIds),
+          loadAvailableChildKusOptions(supabase),
+        ]);
+        if (!alive) return;
+        setChildrenByParentKusId(childrenMap);
+        setAvailableChildOptions(options);
+      } catch (loadError) {
+        if (!alive) return;
+        console.error(loadError);
+        setChildrenByParentKusId(new Map());
+        setAvailableChildOptions([]);
+      } finally {
+        if (alive) setObsahLoading(false);
+      }
+    }
+
+    void loadObsah();
+
+    return () => {
+      alive = false;
+    };
+  }, [isCasePolozka, kusy, reloadToken]);
+
   const refreshAfterPoradi = useCallback(async () => {
     const { data, error: fetchError } = await querySkladPolozkyKusyForPolozka(
       supabase,
@@ -442,7 +612,7 @@ export function SpravaKusyExpandPanel({
           Kusy
         </div>
 
-        {loading ? (
+        {loading || (isCasePolozka && obsahLoading && !kusy) ? (
           <p className="px-2 py-1 text-xs text-slate-500">Načítám kusy…</p>
         ) : error ? (
           <p className="px-2 py-1 text-xs text-red-300">{error}</p>
@@ -461,10 +631,25 @@ export function SpravaKusyExpandPanel({
                   key={kus.kus_id}
                   kus={kus}
                   polozkaNazev={polozkaNazev}
+                  skladovaPolozkaId={skladovaPolozkaId}
+                  isCasePolozka={isCasePolozka}
                   siblingKusy={kusy}
                   inherited={inherited}
                   assignment={assignmentsByKusId[kus.kus_id] ?? null}
                   onUpdated={refreshAfterPoradi}
+                  openCaseKusId={openCaseKusId}
+                  obsahMode={obsahMode}
+                  obsahMessage={obsahMessage}
+                  obsahError={obsahError}
+                  activeChildren={childrenByParentKusId.get(kus.kus_id) ?? []}
+                  availableChildOptions={availableChildOptions}
+                  canEditObsah={!readOnly}
+                  formDefaults={formDefaults}
+                  bloky={bloky}
+                  kategorie={kategorie}
+                  podkategorie={podkategorie}
+                  jednotky={jednotky}
+                  vlastnici={vlastnici}
                 />
               ))}
             </ul>

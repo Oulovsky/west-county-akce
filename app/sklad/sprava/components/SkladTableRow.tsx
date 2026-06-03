@@ -55,18 +55,34 @@ type Draft = {
   naklad: string;
 };
 
+type CaseObsahFormDefaults = {
+  skladBlokId: string | null;
+  kategorieTechnikyId: string | null;
+  podkategorieTechnikyId: string | null;
+  technickyVlastnikId: string | null;
+  jednotka: string;
+};
+
 type Props = {
   item: SkladPolozkaRow;
   isEditing: boolean;
   isSaving: boolean;
   isHighlight: boolean;
   kusyReloadToken?: number;
+  autoExpandKusy?: boolean;
+  openCaseKusId?: string | null;
+  obsahMode?: string | null;
+  obsahMessage?: string | null;
+  obsahError?: string | null;
+  caseObsahFormDefaults: CaseObsahFormDefaults;
   draft: Draft;
   bloky: SkladBlok[];
   jednotky: SkladJednotka[];
   vlastnici: TechnickyVlastnik[];
   kategorieOptions: SkladKategorie[];
   podkategorieOptions: SkladPodkategorie[];
+  allKategorie: SkladKategorie[];
+  allPodkategorie: SkladPodkategorie[];
   onStartEdit: () => void;
   onUpdateZaklad: (
     kategorieId: string | null,
@@ -103,12 +119,20 @@ export function SkladTableRow({
   isSaving,
   isHighlight,
   kusyReloadToken = 0,
+  autoExpandKusy = false,
+  openCaseKusId = null,
+  obsahMode = null,
+  obsahMessage = null,
+  obsahError = null,
+  caseObsahFormDefaults,
   draft,
   bloky,
   jednotky,
   vlastnici,
   kategorieOptions,
   podkategorieOptions,
+  allKategorie,
+  allPodkategorie,
   onStartEdit,
   onUpdateZaklad,
   onUpdateVlastnik,
@@ -117,7 +141,13 @@ export function SkladTableRow({
   onKeyDown,
   readOnly = false,
 }: Props) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(autoExpandKusy);
+
+  useLayoutEffect(() => {
+    if (autoExpandKusy) {
+      setIsExpanded(true);
+    }
+  }, [autoExpandKusy, item.skladova_polozka_id]);
 
   const pendingEditFocus = useRef<EditFocusTarget | null>(null);
   const nazevInputRef = useRef<HTMLInputElement>(null);
@@ -474,6 +504,7 @@ export function SkladTableRow({
         <SpravaKusyExpandPanel
           skladovaPolozkaId={item.skladova_polozka_id}
           polozkaNazev={item.nazev}
+          polozkaJednotka={item.jednotka}
           celkemKDispozici={item.celkem_k_dispozici}
           inherited={{
             blok_nazev: item.blok_nazev,
@@ -484,6 +515,17 @@ export function SkladTableRow({
             interni_naklad: item.interni_naklad,
           }}
           reloadToken={kusyReloadToken}
+          readOnly={readOnly}
+          openCaseKusId={openCaseKusId}
+          obsahMode={obsahMode}
+          obsahMessage={obsahMessage}
+          obsahError={obsahError}
+          formDefaults={caseObsahFormDefaults}
+          bloky={bloky}
+          kategorie={allKategorie}
+          podkategorie={allPodkategorie}
+          jednotky={jednotky}
+          vlastnici={vlastnici}
         />
       ) : null}
     </div>

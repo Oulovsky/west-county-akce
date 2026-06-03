@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { SkladCaseContentCreateForm } from "@/components/sklad/SkladCaseContentCreateForm";
 import { SkladKusObsahChildPicker } from "@/components/sklad/SkladKusObsahChildPicker";
@@ -10,7 +12,12 @@ import {
   formatKusObsahContainedLabel,
   type SkladKusObsahChildOption,
   type SkladKusObsahChildRow,
-} from "@/lib/sklad/kusObsah";
+} from "@/lib/sklad/kusObsahRead";
+import {
+  buildPolozkaObsahHref,
+  buildSpravaObsahHref,
+  type SpravaObsahReturnTo,
+} from "@/lib/sklad/spravaObsahUrl";
 import type {
   SkladBlok,
   SkladJednotka,
@@ -26,6 +33,7 @@ type SkladKusCaseTreePanelProps = {
   availableOptions: SkladKusObsahChildOption[];
   canEdit: boolean;
   returnPolozkaId: string;
+  returnTo?: SpravaObsahReturnTo;
   showInsertForm: boolean;
   obsahMessage?: string | null;
   obsahError?: string | null;
@@ -43,6 +51,18 @@ type SkladKusCaseTreePanelProps = {
   vlastnici: TechnickyVlastnik[];
 };
 
+function buildObsahHref(
+  returnTo: SpravaObsahReturnTo,
+  returnPolozkaId: string,
+  parentKusId: string,
+  opts?: { insert?: boolean }
+): string {
+  if (returnTo === "sprava") {
+    return buildSpravaObsahHref(returnPolozkaId, parentKusId, opts);
+  }
+  return buildPolozkaObsahHref(returnPolozkaId, parentKusId, opts);
+}
+
 export function SkladKusCaseTreePanel({
   parentKusId,
   parentDisplayLabel,
@@ -50,6 +70,7 @@ export function SkladKusCaseTreePanel({
   availableOptions,
   canEdit,
   returnPolozkaId,
+  returnTo = "polozka",
   showInsertForm,
   obsahMessage,
   obsahError,
@@ -66,8 +87,10 @@ export function SkladKusCaseTreePanel({
     parentKusId,
     activeChildren
   );
-  const expandHref = `/sklad/${returnPolozkaId}?obsahCase=${parentKusId}`;
-  const insertHref = `/sklad/${returnPolozkaId}?obsahCase=${parentKusId}&obsahMode=insert`;
+  const expandHref = buildObsahHref(returnTo, returnPolozkaId, parentKusId);
+  const insertHref = buildObsahHref(returnTo, returnPolozkaId, parentKusId, {
+    insert: true,
+  });
 
   return (
     <div
@@ -103,11 +126,16 @@ export function SkladKusCaseTreePanel({
           </Link>
         </div>
 
-          {obsahMessage === "created" ? (
-            <p className="mt-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
-              Obsah vytvořen a vložen do case.
-            </p>
-          ) : null}
+        {obsahMessage === "created" ? (
+          <p className="mt-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
+            Obsah vytvořen a vložen do case.
+          </p>
+        ) : null}
+        {obsahMessage === "inserted" ? (
+          <p className="mt-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
+            Kus vložen do case.
+          </p>
+        ) : null}
         {obsahMessage === "removed" ? (
           <p className="mt-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
             Kus odebrán z case.
@@ -138,6 +166,7 @@ export function SkladKusCaseTreePanel({
                   <form action={removeKusFromCaseAction} className="shrink-0">
                     <input type="hidden" name="parent_kus_id" value={parentKusId} />
                     <input type="hidden" name="return_polozka_id" value={returnPolozkaId} />
+                    <input type="hidden" name="return_to" value={returnTo} />
                     <input type="hidden" name="obsah_id" value={child.obsahId} />
                     <button
                       type="submit"
@@ -159,6 +188,7 @@ export function SkladKusCaseTreePanel({
             <SkladCaseContentCreateForm
               parentKusId={parentKusId}
               returnPolozkaId={returnPolozkaId}
+              returnTo={returnTo}
               parentCaseLabel={parentDisplayLabel}
               defaults={formDefaults}
               bloky={bloky}
@@ -178,6 +208,7 @@ export function SkladKusCaseTreePanel({
               >
                 <input type="hidden" name="parent_kus_id" value={parentKusId} />
                 <input type="hidden" name="return_polozka_id" value={returnPolozkaId} />
+                <input type="hidden" name="return_to" value={returnTo} />
 
                 <div className="lg:col-span-2">
                   <SkladKusObsahChildPicker options={pickerOptions} />

@@ -1,6 +1,7 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useProfileRole } from "@/lib/auth/use-profile-role";
 import { SpravaInventoryFilters } from "./components/SpravaInventoryFilters";
 import { supabase } from "@/lib/supabase";
@@ -61,7 +62,14 @@ type RpcErrorResult = {
   error: { message: string } | null;
 };
 
-export default function Page() {
+function SpravaPageBody() {
+  const searchParams = useSearchParams();
+  const obsahPolozkaId = searchParams.get("obsahPolozka");
+  const openCaseKusId = searchParams.get("obsahCase");
+  const obsahMode = searchParams.get("obsahMode");
+  const obsahMessage = searchParams.get("obsah");
+  const obsahError = searchParams.get("obsahError");
+
   const { nav } = useProfileRole();
   const readOnly = nav.readOnly;
   const [items, setItems] = useState<SkladPolozkaRow[]>([]);
@@ -110,6 +118,11 @@ export default function Page() {
       [polozkaId]: (prev[polozkaId] ?? 0) + 1,
     }));
   }, []);
+
+  useEffect(() => {
+    if (!obsahPolozkaId || !obsahMessage) return;
+    bumpKusyReload(obsahPolozkaId);
+  }, [obsahPolozkaId, obsahMessage, bumpKusyReload]);
 
   const applyKusySyncAfterCelkemSave = useCallback(
     async (polozkaId: string, nazev: string, celkem: number) => {
@@ -1398,6 +1411,8 @@ export default function Page() {
             i.kategorie_techniky_id
           );
 
+            const isObsahPolozka = obsahPolozkaId === i.skladova_polozka_id;
+
             return (
               <SkladTableRow
               key={i.skladova_polozka_id}
@@ -1406,12 +1421,26 @@ export default function Page() {
               isSaving={isSaving}
               isHighlight={isHighlight}
               kusyReloadToken={kusyReloadById[i.skladova_polozka_id] ?? 0}
+              autoExpandKusy={isObsahPolozka}
+              openCaseKusId={isObsahPolozka ? openCaseKusId : null}
+              obsahMode={isObsahPolozka ? obsahMode : null}
+              obsahMessage={isObsahPolozka ? obsahMessage : null}
+              obsahError={isObsahPolozka ? obsahError : null}
+              caseObsahFormDefaults={{
+                skladBlokId: i.sklad_blok_id ?? null,
+                kategorieTechnikyId: i.kategorie_techniky_id ?? null,
+                podkategorieTechnikyId: i.podkategorie_techniky_id ?? null,
+                technickyVlastnikId: i.technicky_vlastnik_id ?? null,
+                jednotka: "ks",
+              }}
               draft={draft}
               bloky={bloky}
               jednotky={jednotky}
               vlastnici={vlastnici}
               kategorieOptions={kategorieOptions}
               podkategorieOptions={podkategorieOptions}
+              allKategorie={kategorie}
+              allPodkategorie={podkategorie}
               onStartEdit={() => {
                 if (readOnly) return;
                 startEdit(i);
@@ -1444,5 +1473,17 @@ export default function Page() {
         </SkladTable>
       </section>
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense
+      fallback={
+        <div className="py-10 text-center text-sm text-slate-400">Načítám správu skladu…</div>
+      }
+    >
+      <SpravaPageBody />
+    </Suspense>
   );
 }

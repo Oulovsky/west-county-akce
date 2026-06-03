@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { createCaseContentAction } from "@/app/sklad/kusObsahActions";
+import type { SpravaObsahReturnTo } from "@/lib/sklad/spravaObsahUrl";
 import type { SkladJednotka, SkladKategorie, SkladPodkategorie } from "@/lib/sklad/types";
 import type { SkladBlok } from "@/lib/sklad/types";
 import type { TechnickyVlastnik } from "@/lib/sklad/types";
@@ -9,6 +10,7 @@ import type { TechnickyVlastnik } from "@/lib/sklad/types";
 type SkladCaseContentCreateFormProps = {
   parentKusId: string;
   returnPolozkaId: string;
+  returnTo?: SpravaObsahReturnTo;
   parentCaseLabel: string;
   defaults: {
     skladBlokId: string | null;
@@ -27,6 +29,7 @@ type SkladCaseContentCreateFormProps = {
 export function SkladCaseContentCreateForm({
   parentKusId,
   returnPolozkaId,
+  returnTo = "polozka",
   parentCaseLabel,
   defaults,
   bloky,
@@ -64,6 +67,7 @@ export function SkladCaseContentCreateForm({
     >
       <input type="hidden" name="parent_kus_id" value={parentKusId} />
       <input type="hidden" name="return_polozka_id" value={returnPolozkaId} />
+      <input type="hidden" name="return_to" value={returnTo} />
 
       <div>
         <h4 className="text-sm font-black text-white">Zadat nový obsah</h4>
