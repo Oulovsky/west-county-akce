@@ -69,6 +69,7 @@ type Props = {
   isSaving: boolean;
   isHighlight: boolean;
   kusyReloadToken?: number;
+  obsahReloadKey?: string;
   autoExpandKusy?: boolean;
   openCaseKusId?: string | null;
   obsahMode?: string | null;
@@ -119,6 +120,7 @@ export function SkladTableRow({
   isSaving,
   isHighlight,
   kusyReloadToken = 0,
+  obsahReloadKey = "",
   autoExpandKusy = false,
   openCaseKusId = null,
   obsahMode = null,
@@ -516,6 +518,7 @@ export function SkladTableRow({
             interni_naklad: item.interni_naklad,
           }}
           reloadToken={kusyReloadToken}
+          obsahReloadKey={obsahReloadKey}
           readOnly={readOnly}
           openCaseKusId={openCaseKusId}
           obsahMode={obsahMode}

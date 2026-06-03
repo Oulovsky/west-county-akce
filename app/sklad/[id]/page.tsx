@@ -17,6 +17,9 @@ import {
   loadActiveChildrenByParentKusIds,
   loadAvailableChildKusOptions,
   loadKusObsahSummariesForKusIds,
+  type SkladKusObsahChildOption,
+  type SkladKusObsahChildRow,
+  type SkladKusObsahKusSummary,
 } from "@/lib/sklad/kusObsah";
 import type {
   SkladBlok,
@@ -363,11 +366,33 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
 
   const kusy = (kusyRaw ?? []) as SkladKusRow[];
   const kusIds = kusy.map((kus) => kus.kus_id);
-  const [obsahSummaries, childrenByParent, availableChildOptions] = await Promise.all([
-    loadKusObsahSummariesForKusIds(supabase, kusIds),
-    loadActiveChildrenByParentKusIds(supabase, kusIds),
-    loadAvailableChildKusOptions(supabase),
-  ]);
+
+  let obsahSummaries = new Map<string, SkladKusObsahKusSummary>();
+  let childrenByParent = new Map<string, SkladKusObsahChildRow[]>();
+  let availableChildOptions: SkladKusObsahChildOption[] = [];
+  let obsahDataError: string | null = null;
+
+  if (isCasePolozka && kusIds.length > 0) {
+    try {
+      [obsahSummaries, childrenByParent, availableChildOptions] = await Promise.all([
+        loadKusObsahSummariesForKusIds(supabase, kusIds),
+        loadActiveChildrenByParentKusIds(supabase, kusIds),
+        loadAvailableChildKusOptions(supabase),
+      ]);
+    } catch (loadError) {
+      obsahDataError =
+        loadError instanceof Error
+          ? loadError.message
+          : "Načtení obsahu case se nezdařilo.";
+      obsahSummaries = new Map();
+      childrenByParent = new Map();
+      for (const kusId of kusIds) {
+        obsahSummaries.set(kusId, { containedCount: 0, parentPlacement: null });
+        childrenByParent.set(kusId, []);
+      }
+      availableChildOptions = [];
+    }
+  }
   const poskozeni = (poskozeniRaw ?? []) as SkladPoskozeniRow[];
   const typyPoskozeni = (typyRaw ?? []) as SkladTypPoskozeniOption[];
   const priority = (priorityRaw ?? []) as SkladPrioritaOption[];
@@ -410,7 +435,7 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
         obsahMode={obsahMode}
         returnPolozkaId={id}
         obsahMessage={obsahMessage}
-        obsahError={obsahError}
+        obsahError={obsahError ?? obsahDataError}
         readOnly={readOnly}
         isCasePolozka={isCasePolozka}
         formDefaults={formDefaults}

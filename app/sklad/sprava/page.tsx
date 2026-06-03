@@ -119,6 +119,17 @@ function SpravaPageBody() {
     }));
   }, []);
 
+  const obsahReloadKey = useMemo(
+    () =>
+      [
+        obsahPolozkaId ?? "",
+        openCaseKusId ?? "",
+        obsahMessage ?? "",
+        obsahError ?? "",
+      ].join(":"),
+    [obsahPolozkaId, openCaseKusId, obsahMessage, obsahError]
+  );
+
   useEffect(() => {
     if (!obsahPolozkaId || !obsahMessage) return;
     bumpKusyReload(obsahPolozkaId);
@@ -1421,6 +1432,7 @@ function SpravaPageBody() {
               isSaving={isSaving}
               isHighlight={isHighlight}
               kusyReloadToken={kusyReloadById[i.skladova_polozka_id] ?? 0}
+              obsahReloadKey={isObsahPolozka ? obsahReloadKey : ""}
               autoExpandKusy={isObsahPolozka}
               openCaseKusId={isObsahPolozka ? openCaseKusId : null}
               obsahMode={isObsahPolozka ? obsahMode : null}

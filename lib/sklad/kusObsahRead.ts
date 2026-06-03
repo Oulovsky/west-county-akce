@@ -6,8 +6,12 @@ import { ZAKAZKA_KUS_ACTIVE_STAVY } from "@/lib/sklad/zakazkaKusy";
 
 export const SKLAD_KUS_OBSAH_TABLE = SKLAD_TABLE.skladKusObsah;
 
-const OBSah_CHILD_SELECT =
-  "id, parent_kus_id, child_kus_id, pozice, poznamka, vlozeno_at, child:sklad_polozky_kusy!sklad_kus_obsah_child_kus_id_fkey(kus_id, evidencni_cislo, poradove_cislo, stav, skladova_polozka_id, polozka:skladove_polozky(nazev, pozice, sklad_blok_id, kategorie_techniky_id, podkategorie_techniky_id, technicky_vlastnik_id, jednotka_id, interni_naklad, fakturacni_cena))" as const;
+/** Bez vnořeného joinu — spolehlivé pro klienta i server. */
+const OBSah_LINK_SELECT =
+  "id, parent_kus_id, child_kus_id, pozice, poznamka, vlozeno_at" as const;
+
+const POLOZKA_META_SELECT =
+  "skladova_polozka_id, nazev, pozice, sklad_blok_id, kategorie_techniky_id, podkategorie_techniky_id, technicky_vlastnik_id, jednotka_id, interni_naklad, fakturacni_cena" as const;
 
 export type SkladKusObsahChildRow = {
   obsahId: string;
@@ -66,13 +70,16 @@ type ObsahKusJoinRow = {
   polozka: ObsahPolozkaJoinRow | ObsahPolozkaJoinRow[] | null;
 };
 
-type ObsahChildDbRow = {
+type ObsahLinkDbRow = {
   id: string;
   parent_kus_id: string;
   child_kus_id: string;
   pozice: string | null;
   poznamka: string | null;
   vlozeno_at: string;
+};
+
+type ObsahChildDbRow = ObsahLinkDbRow & {
   child: ObsahKusJoinRow | ObsahKusJoinRow[] | null;
 };
 
@@ -92,19 +99,19 @@ function unwrapPolozkaJoin(
   return polozka;
 }
 
-export function mapObsahChildRow(row: ObsahChildDbRow): SkladKusObsahChildRow | null {
-  const child = unwrapKusJoin(row.child);
-  if (!child) return null;
-
-  const polozka = unwrapPolozkaJoin(child.polozka);
+function mapObsahLinkWithKusMeta(
+  link: ObsahLinkDbRow,
+  child: ObsahKusJoinRow,
+  polozka: ObsahPolozkaJoinRow | null
+): SkladKusObsahChildRow {
   const polozkaNazev = polozka?.nazev?.trim() || "—";
   return {
-    obsahId: row.id,
+    obsahId: link.id,
     childKusId: child.kus_id,
     skladovaPolozkaId: child.skladova_polozka_id,
-    pozice: row.pozice,
-    poznamka: row.poznamka,
-    vlozenoAt: row.vlozeno_at,
+    pozice: link.pozice,
+    poznamka: link.poznamka,
+    vlozenoAt: link.vlozeno_at,
     evidencniCislo: child.evidencni_cislo,
     poradoveCislo: child.poradove_cislo,
     stav: child.stav,
@@ -124,22 +131,132 @@ export function mapObsahChildRow(row: ObsahChildDbRow): SkladKusObsahChildRow | 
   };
 }
 
+/** @deprecated Prefer mapObsahLinkWithKusMeta — zachováno pro server embed fallback. */
+export function mapObsahChildRow(row: ObsahChildDbRow): SkladKusObsahChildRow | null {
+  const child = unwrapKusJoin(row.child);
+  if (!child) return null;
+  const polozka = unwrapPolozkaJoin(child.polozka);
+  return mapObsahLinkWithKusMeta(row, child, polozka);
+}
+
+async function loadKusMetaByIds(
+  client: SupabaseClient,
+  childKusIds: string[]
+): Promise<Map<string, { kus: ObsahKusJoinRow; polozka: ObsahPolozkaJoinRow | null }>> {
+  const map = new Map<string, { kus: ObsahKusJoinRow; polozka: ObsahPolozkaJoinRow | null }>();
+  if (childKusIds.length === 0) return map;
+
+  const { data: kusyRaw, error: kusyError } = await client
+    .from(SKLAD_TABLE.skladPolozkyKusy)
+    .select("kus_id, evidencni_cislo, poradove_cislo, stav, skladova_polozka_id")
+    .in("kus_id", childKusIds);
+
+  if (kusyError) throw new Error(kusyError.message);
+
+  const polozkaIds = [
+    ...new Set(
+      (kusyRaw ?? [])
+        .map((row) => row.skladova_polozka_id as string)
+        .filter(Boolean)
+    ),
+  ];
+
+  const polozkaById = new Map<string, ObsahPolozkaJoinRow>();
+  if (polozkaIds.length > 0) {
+    const { data: polozkyRaw, error: polozkyError } = await client
+      .from(SKLAD_TABLE.skladovePolozky)
+      .select(POLOZKA_META_SELECT)
+      .in("skladova_polozka_id", polozkaIds);
+
+    if (polozkyError) throw new Error(polozkyError.message);
+
+    for (const row of (polozkyRaw ?? []) as unknown as (ObsahPolozkaJoinRow & {
+      skladova_polozka_id: string;
+    })[]) {
+      polozkaById.set(row.skladova_polozka_id, row);
+    }
+  }
+
+  for (const row of kusyRaw ?? []) {
+    const kusId = row.kus_id as string;
+    const polozkaId = row.skladova_polozka_id as string;
+    map.set(kusId, {
+      kus: {
+        kus_id: kusId,
+        evidencni_cislo: row.evidencni_cislo as string | null,
+        poradove_cislo: row.poradove_cislo as number,
+        stav: row.stav as string,
+        skladova_polozka_id: polozkaId,
+        polozka: null,
+      },
+      polozka: polozkaById.get(polozkaId) ?? null,
+    });
+  }
+
+  return map;
+}
+
+async function loadActiveObsahLinks(
+  client: SupabaseClient,
+  filter: { parentKusId: string } | { parentKusIds: string[] }
+): Promise<ObsahLinkDbRow[]> {
+  let query = client
+    .from(SKLAD_KUS_OBSAH_TABLE)
+    .select(OBSah_LINK_SELECT)
+    .is("vyjmuto_at", null)
+    .order("vlozeno_at", { ascending: true });
+
+  if ("parentKusId" in filter) {
+    query = query.eq("parent_kus_id", filter.parentKusId);
+  } else {
+    if (filter.parentKusIds.length === 0) return [];
+    query = query.in("parent_kus_id", filter.parentKusIds);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ObsahLinkDbRow[];
+}
+
+async function mapObsahLinksToChildRows(
+  client: SupabaseClient,
+  links: ObsahLinkDbRow[]
+): Promise<SkladKusObsahChildRow[]> {
+  if (links.length === 0) return [];
+
+  const childKusIds = [...new Set(links.map((row) => row.child_kus_id))];
+  const kusMetaById = await loadKusMetaByIds(client, childKusIds);
+
+  const rows: SkladKusObsahChildRow[] = [];
+  for (const link of links) {
+    const meta = kusMetaById.get(link.child_kus_id);
+    if (!meta) continue;
+    rows.push(mapObsahLinkWithKusMeta(link, meta.kus, meta.polozka));
+  }
+
+  return rows;
+}
+
+export async function countActiveObsahForParent(
+  client: SupabaseClient,
+  parentKusId: string
+): Promise<number> {
+  const { count, error } = await client
+    .from(SKLAD_KUS_OBSAH_TABLE)
+    .select("id", { count: "exact", head: true })
+    .eq("parent_kus_id", parentKusId)
+    .is("vyjmuto_at", null);
+
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
 export async function queryActiveChildrenInCase(
   client: SupabaseClient,
   parentKusId: string
 ): Promise<SkladKusObsahChildRow[]> {
-  const { data, error } = await client
-    .from(SKLAD_KUS_OBSAH_TABLE)
-    .select(OBSah_CHILD_SELECT)
-    .eq("parent_kus_id", parentKusId)
-    .is("vyjmuto_at", null)
-    .order("vlozeno_at", { ascending: true });
-
-  if (error) throw new Error(error.message);
-
-  return ((data ?? []) as unknown as ObsahChildDbRow[])
-    .map(mapObsahChildRow)
-    .filter((row): row is SkladKusObsahChildRow => row != null);
+  const links = await loadActiveObsahLinks(client, { parentKusId });
+  return mapObsahLinksToChildRows(client, links);
 }
 
 export async function loadActiveChildrenByParentKusIds(
@@ -153,21 +270,19 @@ export async function loadActiveChildrenByParentKusIds(
     map.set(parentKusId, []);
   }
 
-  const { data, error } = await client
-    .from(SKLAD_KUS_OBSAH_TABLE)
-    .select(OBSah_CHILD_SELECT)
-    .in("parent_kus_id", parentKusIds)
-    .is("vyjmuto_at", null)
-    .order("vlozeno_at", { ascending: true });
+  const links = await loadActiveObsahLinks(client, { parentKusIds });
+  if (links.length === 0) return map;
 
-  if (error) throw new Error(error.message);
+  const childKusIds = [...new Set(links.map((row) => row.child_kus_id))];
+  const kusMetaById = await loadKusMetaByIds(client, childKusIds);
 
-  for (const row of (data ?? []) as unknown as ObsahChildDbRow[]) {
-    const mapped = mapObsahChildRow(row);
-    if (!mapped) continue;
-    const list = map.get(row.parent_kus_id) ?? [];
+  for (const link of links) {
+    const meta = kusMetaById.get(link.child_kus_id);
+    if (!meta) continue;
+    const mapped = mapObsahLinkWithKusMeta(link, meta.kus, meta.polozka);
+    const list = map.get(link.parent_kus_id) ?? [];
     list.push(mapped);
-    map.set(row.parent_kus_id, list);
+    map.set(link.parent_kus_id, list);
   }
 
   return map;

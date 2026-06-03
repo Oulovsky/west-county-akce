@@ -9,7 +9,9 @@ import { insertSkladKusHistorie } from "@/lib/sklad/kusHistorie";
 import type { SkladKusRow } from "@/lib/sklad/types";
 import { ZAKAZKA_KUS_ACTIVE_STAVY } from "@/lib/sklad/zakazkaKusy";
 import {
-  mapObsahChildRow,
+  countActiveObsahForParent,
+  loadActiveChildrenByParentKusIds as loadActiveChildrenByParentKusIdsRead,
+  queryActiveChildrenInCase as queryActiveChildrenInCaseRead,
   type SkladKusObsahChildOption,
   type SkladKusObsahChildRow,
 } from "@/lib/sklad/kusObsahRead";
@@ -17,9 +19,6 @@ import {
 export type { SkladKusObsahChildRow, SkladKusObsahChildOption };
 
 export const SKLAD_KUS_OBSAH_TABLE = SKLAD_TABLE.skladKusObsah;
-
-const OBSah_CHILD_SELECT =
-  "id, parent_kus_id, child_kus_id, pozice, poznamka, vlozeno_at, child:sklad_polozky_kusy!sklad_kus_obsah_child_kus_id_fkey(kus_id, evidencni_cislo, poradove_cislo, stav, skladova_polozka_id, polozka:skladove_polozky(nazev, pozice, sklad_blok_id, kategorie_techniky_id, podkategorie_techniky_id, technicky_vlastnik_id, jednotka_id, interni_naklad, fakturacni_cena))" as const;
 
 const OBSah_PARENT_SELECT =
   "id, parent_kus_id, child_kus_id, pozice, poznamka, vlozeno_at, parent:sklad_polozky_kusy!sklad_kus_obsah_parent_kus_id_fkey(kus_id, evidencni_cislo, poradove_cislo, stav, skladova_polozka_id, polozka:skladove_polozky(nazev))" as const;
@@ -115,18 +114,7 @@ export async function queryActiveChildrenInCase(
   client: SupabaseClient,
   parentKusId: string
 ): Promise<SkladKusObsahChildRow[]> {
-  const { data, error } = await client
-    .from(SKLAD_KUS_OBSAH_TABLE)
-    .select(OBSah_CHILD_SELECT)
-    .eq("parent_kus_id", parentKusId)
-    .is("vyjmuto_at", null)
-    .order("vlozeno_at", { ascending: true });
-
-  if (error) throw new Error(error.message);
-
-  return ((data ?? []) as unknown as Parameters<typeof mapObsahChildRow>[0][])
-    .map(mapObsahChildRow)
-    .filter((row): row is SkladKusObsahChildRow => row != null);
+  return queryActiveChildrenInCaseRead(client, parentKusId);
 }
 
 export async function queryActiveParentPlacement(
@@ -158,32 +146,7 @@ export async function loadActiveChildrenByParentKusIds(
   client: SupabaseClient,
   parentKusIds: string[]
 ): Promise<Map<string, SkladKusObsahChildRow[]>> {
-  const map = new Map<string, SkladKusObsahChildRow[]>();
-  if (parentKusIds.length === 0) return map;
-
-  for (const parentKusId of parentKusIds) {
-    map.set(parentKusId, []);
-  }
-
-  const { data, error } = await client
-    .from(SKLAD_KUS_OBSAH_TABLE)
-    .select(OBSah_CHILD_SELECT)
-    .in("parent_kus_id", parentKusIds)
-    .is("vyjmuto_at", null)
-    .order("vlozeno_at", { ascending: true });
-
-  if (error) throw new Error(error.message);
-
-  for (const row of (data ?? []) as unknown as Parameters<typeof mapObsahChildRow>[0][]) {
-    const mapped = mapObsahChildRow(row);
-    if (!mapped) continue;
-    const parentId = row.parent_kus_id;
-    const list = map.get(parentId) ?? [];
-    list.push(mapped);
-    map.set(parentId, list);
-  }
-
-  return map;
+  return loadActiveChildrenByParentKusIdsRead(client, parentKusIds);
 }
 
 export async function loadAvailableChildKusOptions(

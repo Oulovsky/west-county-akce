@@ -88,6 +88,8 @@ type Props = {
   inherited: SpravaKusyInheritedColumns;
   /** Zvýšení po uložení řádku — znovu načte kusy v rozbaleném panelu. */
   reloadToken?: number;
+  /** Změna po redirectu z vložení obsahu case — znovu načte strom. */
+  obsahReloadKey?: string;
   readOnly?: boolean;
   openCaseKusId?: string | null;
   obsahMode?: string | null;
@@ -477,6 +479,7 @@ export function SpravaKusyExpandPanel({
   celkemKDispozici,
   inherited,
   reloadToken = 0,
+  obsahReloadKey = "",
   readOnly = false,
   openCaseKusId = null,
   obsahMode = null,
@@ -505,6 +508,7 @@ export function SpravaKusyExpandPanel({
     SkladKusObsahChildOption[]
   >([]);
   const [obsahLoading, setObsahLoading] = useState(false);
+  const [obsahLoadError, setObsahLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -580,6 +584,7 @@ export function SpravaKusyExpandPanel({
 
     async function loadObsah() {
       setObsahLoading(true);
+      setObsahLoadError(null);
       try {
         const [childrenMap, options] = await Promise.all([
           loadActiveChildrenByParentKusIds(supabase, parentIds),
@@ -603,7 +608,11 @@ export function SpravaKusyExpandPanel({
         setAvailableChildOptions(options);
       } catch (loadError) {
         if (!alive) return;
-        console.error(loadError);
+        const message =
+          loadError instanceof Error
+            ? loadError.message
+            : "Načtení obsahu case se nezdařilo.";
+        setObsahLoadError(message);
         setChildrenByParentKusId(new Map());
         setAvailableChildOptions([]);
       } finally {
@@ -616,7 +625,17 @@ export function SpravaKusyExpandPanel({
     return () => {
       alive = false;
     };
-  }, [isCasePolozka, kusy, reloadToken, bloky, kategorie, podkategorie, jednotky, vlastnici]);
+  }, [
+    isCasePolozka,
+    kusy,
+    reloadToken,
+    obsahReloadKey,
+    bloky,
+    kategorie,
+    podkategorie,
+    jednotky,
+    vlastnici,
+  ]);
 
   useEffect(() => {
     if (!isCasePolozka) {
@@ -692,6 +711,12 @@ export function SpravaKusyExpandPanel({
         <div className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
           Kusy
         </div>
+
+        {obsahLoadError ? (
+          <p className="mb-1 px-2 text-xs text-red-300" role="alert">
+            {obsahLoadError}
+          </p>
+        ) : null}
 
         {loading || (isCasePolozka && obsahLoading && !kusy) ? (
           <p className="px-2 py-1 text-xs text-slate-500">Načítám kusy…</p>

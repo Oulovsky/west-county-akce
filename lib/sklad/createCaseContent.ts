@@ -13,6 +13,7 @@ import {
 import { toNumber } from "@/lib/sklad/helpers";
 import type { SkladPolozkaRow } from "@/lib/sklad/types";
 import { insertKusIntoCase, loadKusWithPolozka } from "@/lib/sklad/kusObsah";
+import { countActiveObsahForParent } from "@/lib/sklad/kusObsahRead";
 import { recountPolozkaCelkemKDispozici } from "@/lib/sklad/recountPolozkaCelkem";
 import { syncPolozkaKusyToCelkem } from "@/lib/sklad/syncPolozkaKusy";
 
@@ -206,21 +207,49 @@ export async function createCaseContent(
     throw new Error("Nepodařilo se načíst nově vytvořené kusy pro vložení do case.");
   }
 
+  const obsahCountBefore = await countActiveObsahForParent(client, input.parentKusId);
+
+  const linkedKusIds: string[] = [];
   for (const childKusId of insertedKusIds) {
     await insertKusIntoCase(client, {
-      parentKusId: parent.kus_id,
+      parentKusId: input.parentKusId,
       childKusId,
       poznamka: input.poznamka,
       userId: input.userId,
     });
+    linkedKusIds.push(childKusId);
+  }
+
+  const obsahCountAfter = await countActiveObsahForParent(client, input.parentKusId);
+  if (obsahCountAfter < obsahCountBefore + linkedKusIds.length) {
+    throw new Error(
+      `Vazby do case se nepodařilo uložit (v case je ${obsahCountAfter} kusů, očekáváno alespoň ${obsahCountBefore + linkedKusIds.length}).`
+    );
+  }
+
+  const { data: verifyLinks, error: verifyError } = await client
+    .from(SKLAD_TABLE.skladKusObsah)
+    .select("child_kus_id")
+    .eq("parent_kus_id", input.parentKusId)
+    .in("child_kus_id", linkedKusIds)
+    .is("vyjmuto_at", null);
+
+  if (verifyError) throw new Error(verifyError.message);
+
+  const verifiedIds = new Set((verifyLinks ?? []).map((row) => row.child_kus_id as string));
+  const missing = linkedKusIds.filter((kusId) => !verifiedIds.has(kusId));
+  if (missing.length > 0) {
+    throw new Error(
+      `Některé kusy nejsou v case (${missing.length} chybí). Obsah nebyl kompletně vložen.`
+    );
   }
 
   await recountPolozkaCelkemKDispozici(client, contentPolozkaId);
 
   return {
-    parentKusId: parent.kus_id,
+    parentKusId: input.parentKusId,
     contentPolozkaId,
     createdKusCount: count,
-    insertedKusIds,
+    insertedKusIds: linkedKusIds,
   };
 }
