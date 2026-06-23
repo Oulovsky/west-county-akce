@@ -317,10 +317,10 @@ export function SkladScanClient() {
       </section>
 
       <Link
-        href="/sklad/sprava"
+        href="/sklad"
         className="inline-flex items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
       >
-        Zpět do správy skladu
+        Zpět do skladu
       </Link>
     </div>
   );

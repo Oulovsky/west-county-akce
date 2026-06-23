@@ -273,7 +273,7 @@ export async function queryDostupneKusyProVlozeniDoCase(
   return { data: options, error: null };
 }
 
-/** Katalog pro /sklad/sprava. */
+/** Katalog pro /sklad (pracovní seznam položek). */
 export function querySpravaKatalog(client: SkladSupabaseClient) {
   return Promise.all([
     querySkladovePolozky(client),

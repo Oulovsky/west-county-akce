@@ -161,7 +161,8 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
 
     revalidatePath(`/sklad/${skladovaPolozkaId}`);
     revalidatePath("/sklad");
-    revalidatePath("/sklad/sprava");
+    revalidatePath("/sklad");
+  revalidatePath("/sklad/sprava");
     redirect(`/sklad/${skladovaPolozkaId}`);
   }
 
@@ -200,7 +201,8 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
 
     revalidatePath(`/sklad/${skladovaPolozkaId}`);
     revalidatePath("/sklad");
-    revalidatePath("/sklad/sprava");
+    revalidatePath("/sklad");
+  revalidatePath("/sklad/sprava");
   }
 
   async function smazatKus(formData: FormData) {
@@ -231,7 +233,8 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
 
     revalidatePath(`/sklad/${skladovaPolozkaId}`);
     revalidatePath("/sklad");
-    revalidatePath("/sklad/sprava");
+    revalidatePath("/sklad");
+  revalidatePath("/sklad/sprava");
   }
 
   async function nahlasitPoskozeni(formData: FormData) {
@@ -266,7 +269,8 @@ export default async function SkladDetailPage({ params, searchParams }: PageProp
 
     revalidatePath(`/sklad/${skladovaPolozkaId}`);
     revalidatePath("/sklad");
-    revalidatePath("/sklad/sprava");
+    revalidatePath("/sklad");
+  revalidatePath("/sklad/sprava");
     revalidatePath("/sklad/poskozeni");
     revalidatePath("/sklad/statistika");
   }

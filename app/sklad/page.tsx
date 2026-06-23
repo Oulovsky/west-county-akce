@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { SkladPolozkyPage } from "./components/SkladPolozkyPage";
 
 export default function Page() {
-  redirect("/sklad/sprava");
+  return <SkladPolozkyPage />;
 }

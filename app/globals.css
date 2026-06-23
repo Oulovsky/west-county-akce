@@ -6,7 +6,7 @@
   --mobile-bottom-nav-height: 5.5rem;
   --mobile-workflow-bar-height: 4.25rem;
   /* Výška pevné horní části správy skladu (toolbar + filtry + panel) pro scroll oblasti tabulky */
-  --sprava-sklad-workspace-top: 20rem;
+  --sprava-sklad-workspace-top: 11rem;
 }
 
 @theme inline {

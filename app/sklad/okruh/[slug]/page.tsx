@@ -258,8 +258,8 @@ export default function SkladOkruhDetailPage() {
         </div>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Link href="/sklad/sprava" style={btnStyle}>
-            Zpět na správu skladu
+          <Link href="/sklad" style={btnStyle}>
+            Položky skladu
           </Link>
 
           <Link href="/sklad/poskozeni" style={dangerBtnStyle}>

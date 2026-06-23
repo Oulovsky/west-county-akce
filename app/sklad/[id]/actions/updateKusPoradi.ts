@@ -94,6 +94,7 @@ export async function updateKusPoradiAction(
 
   revalidatePath(`/sklad/${skladovaPolozkaId}`);
   revalidatePath("/sklad");
+  revalidatePath("/sklad");
   revalidatePath("/sklad/sprava");
 
   return { ok: true };

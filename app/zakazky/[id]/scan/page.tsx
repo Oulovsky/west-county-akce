@@ -776,7 +776,8 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
     revalidatePath(`/zakazky/${id}/scan`);
     revalidatePath(`/zakazky/${id}/technika`);
     revalidatePath(`/sklad/kus/${kus.kus_id}`);
-    revalidatePath("/sklad/sprava");
+    revalidatePath("/sklad");
+  revalidatePath("/sklad/sprava");
 
     return {
       ok: true,
@@ -965,7 +966,8 @@ export default async function ZakazkaLoadingScanPage({ params }: PageProps) {
     revalidatePath(`/zakazky/${id}/scan`);
     revalidatePath(`/zakazky/${id}/technika`);
     revalidatePath(`/sklad/kus/${kus.kus_id}`);
-    revalidatePath("/sklad/sprava");
+    revalidatePath("/sklad");
+  revalidatePath("/sklad/sprava");
 
     return {
       ok: true,

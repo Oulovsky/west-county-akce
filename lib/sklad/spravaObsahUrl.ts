@@ -3,7 +3,7 @@ export type SpravaObsahReturnTo = "sprava" | "polozka";
 export function buildSpravaPolozkaHref(returnPolozkaId: string): string {
   const search = new URLSearchParams();
   search.set("obsahPolozka", returnPolozkaId);
-  return `/sklad/sprava?${search.toString()}`;
+  return `/sklad?${search.toString()}`;
 }
 
 export function buildSpravaObsahHref(
@@ -17,7 +17,7 @@ export function buildSpravaObsahHref(
   if (opts?.insert) {
     search.set("obsahMode", "insert");
   }
-  return `/sklad/sprava?${search.toString()}`;
+  return `/sklad?${search.toString()}`;
 }
 
 export function buildPolozkaObsahHref(

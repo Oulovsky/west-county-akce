@@ -125,6 +125,7 @@ export async function updateSkladKusServiceStateAction(formData: FormData) {
 
   revalidatePath(`/sklad/kus/${kusId}`);
   revalidatePath(`/sklad/${kus.skladova_polozka_id}`);
+  revalidatePath("/sklad");
   revalidatePath("/sklad/sprava");
   revalidatePath("/sklad/servis");
 }
@@ -158,6 +159,7 @@ export async function updateSkladKusAssetValueAction(formData: FormData) {
 
   revalidatePath(`/sklad/kus/${kusId}`);
   revalidatePath(`/sklad/${kus.skladova_polozka_id}`);
+  revalidatePath("/sklad");
   revalidatePath("/sklad/sprava");
 }
 
@@ -216,6 +218,7 @@ export async function reportSkladKusDamageAction(formData: FormData) {
 
   revalidatePath(`/sklad/kus/${kusId}`);
   revalidatePath(`/sklad/${skladovaPolozkaId}`);
+  revalidatePath("/sklad");
   revalidatePath("/sklad/sprava");
   revalidatePath("/sklad/servis");
 }

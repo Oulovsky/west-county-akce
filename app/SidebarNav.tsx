@@ -174,15 +174,14 @@ export default function SidebarNav() {
       ) : null}
 
       {nav.showSkladSprava ? (
-        <NavLink href="/sklad/sprava" exact>
-          Správa skladu
-        </NavLink>
-      ) : null}
-
-      {nav.showSkladSetupy ? (
-        <NavLink href="/sklad/setupy">
-          Setupy
-        </NavLink>
+        <>
+          <NavLink href="/sklad" exact>
+            Sklad
+          </NavLink>
+          <NavLink href="/sklad/sprava" exact>
+            Správa skladu
+          </NavLink>
+        </>
       ) : null}
 
       {showAdmin ? (

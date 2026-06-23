@@ -180,6 +180,7 @@ export async function cancelZakazkaAction(formData: FormData) {
   revalidatePath("/moje");
   revalidatePath("/kalendar");
   revalidatePath("/kalendar/lide");
+  revalidatePath("/sklad");
   revalidatePath("/sklad/sprava");
 
   redirect(`/zakazky/${zakazkaId}`);

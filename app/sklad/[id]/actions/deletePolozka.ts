@@ -22,7 +22,7 @@ export async function deletePolozkaAction(formData: FormData) {
   const skladovaPolozkaId = String(formData.get("skladova_polozka_id") || "").trim();
 
   if (!skladovaPolozkaId) {
-    redirect("/sklad/sprava?deleteError=missing_id");
+    redirect("/sklad?deleteError=missing_id");
   }
 
   const { reasons, checkError } = await getSkladovaPolozkaDeleteBlockers(
@@ -99,6 +99,7 @@ export async function deletePolozkaAction(formData: FormData) {
   }
 
   revalidatePath("/sklad");
+  revalidatePath("/sklad");
   revalidatePath("/sklad/sprava");
-  redirect("/sklad/sprava");
+  redirect("/sklad");
 }

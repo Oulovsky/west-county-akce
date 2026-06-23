@@ -74,6 +74,7 @@ async function updateDepreciationBandAction(formData: FormData) {
 
   if (error) throw new Error(error.message);
   revalidatePath("/sklad/konfigurace/odpisova-pasma");
+  revalidatePath("/sklad");
   revalidatePath("/sklad/sprava");
 }
 

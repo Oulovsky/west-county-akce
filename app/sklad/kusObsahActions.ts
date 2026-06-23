@@ -34,7 +34,7 @@ function redirectAfterObsahAction(
   if (returnTo === "sprava" && returnPolozkaId) {
     search.set("obsahPolozka", returnPolozkaId);
     const spravaQuery = search.toString();
-    redirect(`/sklad/sprava${spravaQuery ? `?${spravaQuery}` : ""}`);
+    redirect(`/sklad${spravaQuery ? `?${spravaQuery}` : ""}`);
   }
 
   if (returnPolozkaId) {
@@ -92,7 +92,8 @@ export async function insertKusIntoCaseAction(formData: FormData) {
       revalidatePath(`/sklad/${returnPolozkaId}`);
     }
     if (returnTo === "sprava") {
-      revalidatePath("/sklad/sprava");
+      revalidatePath("/sklad");
+  revalidatePath("/sklad/sprava");
     }
   } catch (error) {
     rethrowIfNextRedirect(error);
@@ -158,7 +159,8 @@ export async function removeKusFromCaseAction(formData: FormData) {
       revalidatePath(`/sklad/${returnPolozkaId}`);
     }
     if (returnTo === "sprava") {
-      revalidatePath("/sklad/sprava");
+      revalidatePath("/sklad");
+  revalidatePath("/sklad/sprava");
     }
   } catch (error) {
     rethrowIfNextRedirect(error);
@@ -233,7 +235,8 @@ export async function createCaseContentAction(formData: FormData) {
     if (returnPolozkaId) {
       revalidatePath(`/sklad/${returnPolozkaId}`);
     }
-    revalidatePath("/sklad/sprava");
+    revalidatePath("/sklad");
+  revalidatePath("/sklad/sprava");
   } catch (error) {
     rethrowIfNextRedirect(error);
     errorMessage =
