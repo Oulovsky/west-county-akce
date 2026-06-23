@@ -515,12 +515,6 @@ export function SkladTableRow({
             </span>
           )}
         </div>
-
-        <div className={SPRAVA_TABLE_CELL_CENTER}>
-          <span style={tableMutedBoxRight} className="text-[11px]">
-            —
-          </span>
-        </div>
       </div>
 
       {isExpanded ? (

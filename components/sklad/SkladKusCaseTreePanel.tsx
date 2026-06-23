@@ -172,12 +172,14 @@ export function SkladKusCaseTreePanel({
             </Link>
           )
         ) : null}
-        <Link
-          href={`/sklad/kus/${parentKusId}`}
-          className="inline-flex min-h-8 items-center rounded-lg border border-slate-600 bg-slate-900 px-3 text-xs font-semibold text-slate-200 hover:border-slate-500 hover:text-white"
-        >
-          Detail kusu
-        </Link>
+        {layout !== "sprava" ? (
+          <Link
+            href={`/sklad/kus/${parentKusId}`}
+            className="inline-flex min-h-8 items-center rounded-lg border border-slate-600 bg-slate-900 px-3 text-xs font-semibold text-slate-200 hover:border-slate-500 hover:text-white"
+          >
+            Detail kusu
+          </Link>
+        ) : null}
       </div>
 
       {showUrlFlash ? <ObsahUrlFlash className="mt-2" /> : null}
@@ -265,6 +267,7 @@ export function SkladKusCaseTreePanel({
                 key={child.obsahId}
                 child={child}
                 parentKusId={parentKusId}
+                parentCaseLabel={parentDisplayLabel}
                 returnPolozkaId={returnPolozkaId}
                 returnTo={returnTo}
                 canEdit={canEdit}

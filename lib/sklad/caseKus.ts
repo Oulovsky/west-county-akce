@@ -105,3 +105,25 @@ export function buildSpravaVybranyKus(
     parentCaseLabel,
   };
 }
+
+/** Child kus vložený v case (řádek stromu ve správě). */
+export function buildSpravaVybranyKusFromObsahChild(
+  child: {
+    childKusId: string;
+    skladovaPolozkaId: string;
+    polozkaNazev: string;
+    displayLabel: string;
+  },
+  parentCaseKusId: string,
+  parentCaseLabel: string
+): SpravaVybranyKus {
+  return {
+    kusId: child.childKusId,
+    label: child.displayLabel,
+    skladovaPolozkaId: child.skladovaPolozkaId,
+    polozkaNazev: child.polozkaNazev,
+    kind: "child_v_case",
+    parentCaseKusId,
+    parentCaseLabel,
+  };
+}

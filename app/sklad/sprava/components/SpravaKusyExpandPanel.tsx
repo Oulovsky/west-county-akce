@@ -435,22 +435,6 @@ function SpravaExpandKusRow({
             {formatMoney(inherited.interni_naklad)}
           </span>
         </div>
-
-        <div className="flex min-h-8 items-center justify-center px-1 pt-0.5">
-          {assignment ? (
-            <Link
-              href={`/zakazky/${assignment.zakazka_id}`}
-              className="flex h-8 w-full min-w-0 items-center justify-center truncate rounded-md border border-blue-700 bg-blue-950 px-1.5 text-[10px] font-semibold text-blue-100"
-              title={assignmentTitle}
-            >
-              {assignmentLabel}
-            </Link>
-          ) : (
-            <span style={tableMutedBoxRight} className="text-[11px]">
-              {SKLAD_EMPTY_LABEL_EM}
-            </span>
-          )}
-        </div>
       </div>
 
       {isCaseExpanded ? (

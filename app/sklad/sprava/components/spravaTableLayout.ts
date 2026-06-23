@@ -15,7 +15,6 @@ export const SPRAVA_TABLE_COLUMN_WIDTHS = [
   76, // Poškozené
   68, // Jednotka
   84, // Cena pro akce
-  96, // Detail / akce (kus + child ve stromu case)
 ] as const;
 
 export const SPRAVA_TABLE_MIN_WIDTH = SPRAVA_TABLE_COLUMN_WIDTHS.reduce(
@@ -36,6 +35,10 @@ export const SPRAVA_TABLE_ROW_CLASS =
 
 export const SPRAVA_TABLE_HEADER_CLASS =
   "grid border-b border-slate-700 bg-slate-900/95 py-1 text-[9px] font-semibold uppercase tracking-normal text-slate-300 items-center min-h-[2.5rem]";
+
+/** Hlavička sloupců ve scrollovatelném katalogu — zůstane nahoře v oblasti scrollu. */
+export const SPRAVA_TABLE_HEADER_STICKY_CLASS =
+  "sticky top-0 z-20 shadow-[0_4px_14px_rgba(0,0,0,0.35)]";
 
 export const SPRAVA_TABLE_CHEVRON_SPACER = "h-8 w-8 shrink-0";
 

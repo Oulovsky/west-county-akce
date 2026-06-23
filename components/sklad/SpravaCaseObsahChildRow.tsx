@@ -1,9 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { KusQrActionMenu } from "@/components/sklad/KusQrActionMenu";
-import { SubmitButton } from "@/components/ui/SubmitButton";
-import { getSkladKusFuturePath } from "@/lib/sklad/kusLabels";
+import { useSpravaKusSelection } from "@/app/sklad/sprava/components/SpravaKusSelectionContext";
 import { formatMoney } from "@/app/sklad/sprava/components/formatMoney";
 import { formatNumber } from "@/app/sklad/sprava/components/formatNumber";
 import { spravaTableGridStyle } from "@/app/sklad/sprava/components/spravaTableLayout";
@@ -13,6 +10,7 @@ import {
   SKLAD_SPRAVA_HINT_FYZICKY_NA_ZAKAZKACH,
   SKLAD_SPRAVA_HINT_NA_ZAKAZKACH,
 } from "@/lib/sklad/constants";
+import { buildSpravaVybranyKusFromObsahChild } from "@/lib/sklad/caseKus";
 import { formatSkladKusStav } from "@/lib/sklad/helpers";
 import type { SkladKusObsahChildRow } from "@/lib/sklad/kusObsahRead";
 import type { SkladKusZakazkaAssignmentRow } from "@/lib/sklad/types";
@@ -20,7 +18,6 @@ import {
   formatZakazkaKusStav,
   formatZakazkaKusZakazkaLabel,
 } from "@/lib/sklad/zakazkaKusy";
-import { removeKusFromCaseAction } from "@/app/sklad/kusObsahActions";
 import type { SpravaObsahReturnTo } from "@/lib/sklad/spravaObsahUrl";
 import {
   tableDangerBoxRight,
@@ -28,12 +25,6 @@ import {
   tableValueBoxLeft,
   tableValueBoxRight,
 } from "@/app/sklad/sprava/components/styles";
-
-const SPRAVA_QR_TRIGGER =
-  "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-600 bg-slate-950 text-slate-300 outline-none transition hover:border-slate-500 hover:bg-slate-900 hover:text-white focus-visible:ring-2 focus-visible:ring-blue-500/60";
-
-const CHILD_DETAIL_LINK_CLASS =
-  "inline-flex h-7 shrink-0 items-center justify-center rounded-md border border-slate-600 bg-slate-900 px-1.5 text-[10px] font-semibold text-slate-200 transition hover:border-slate-500 hover:bg-slate-800 hover:text-white";
 
 const CHILD_SUBROW_GRID_CLASS = "grid items-start px-2 py-1 text-xs text-slate-300";
 
@@ -62,6 +53,7 @@ function kusPoskozeneCell(stav: string): number {
 type Props = {
   child: SkladKusObsahChildRow;
   parentKusId: string;
+  parentCaseLabel: string;
   returnPolozkaId: string;
   returnTo: SpravaObsahReturnTo;
   canEdit: boolean;
@@ -71,27 +63,46 @@ type Props = {
 export function SpravaCaseObsahChildRow({
   child,
   parentKusId,
-  returnPolozkaId,
-  returnTo,
+  parentCaseLabel,
+  returnPolozkaId: _returnPolozkaId,
+  returnTo: _returnTo,
   canEdit,
   assignment,
 }: Props) {
+  const { isKusSelected, toggleKus } = useSpravaKusSelection();
+  const vybranyKus = buildSpravaVybranyKusFromObsahChild(
+    child,
+    parentKusId,
+    parentCaseLabel
+  );
+  const checked = isKusSelected(child.childKusId);
+
   const labelTitle = `${child.displayLabel} · ${formatSkladKusStav(child.stav)}`;
   const skladem = assignment ? 0 : kusSklademCell(child.stav);
   const naZakazkach = assignment ? 1 : kusNaZakazkachCell(child.stav);
   const fyzickyNaZakazkach = assignment ? 1 : 0;
   const poskozene = kusPoskozeneCell(child.stav);
-  const assignmentLabel = formatZakazkaKusZakazkaLabel(assignment);
   const assignmentTitle = assignment
-    ? `${assignmentLabel} · ${formatZakazkaKusStav(assignment.stav)}`
+    ? `${formatZakazkaKusZakazkaLabel(assignment)} · ${formatZakazkaKusStav(assignment.stav)}`
     : "Kus není přiřazen k aktivní zakázce.";
 
   return (
     <li className="border-t border-slate-800/60" role="listitem">
       <div className={CHILD_SUBROW_GRID_CLASS} style={spravaTableGridStyle}>
         <div className="sticky left-0 z-10 flex min-h-8 min-w-0 items-center gap-1 bg-slate-950/95 pr-1 pt-0.5">
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={() => toggleKus(vybranyKus)}
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`Vybrat ${child.displayLabel}`}
+            className="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-950 text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500/60 disabled:opacity-50"
+          />
           <span className="inline-block h-8 w-8 shrink-0" aria-hidden />
-          <span className="inline-block h-8 w-4 shrink-0 border-l-2 border-emerald-700/50" aria-hidden />
+          <span
+            className="inline-block h-8 w-4 shrink-0 border-l-2 border-emerald-700/50"
+            aria-hidden
+          />
           <span
             className="min-w-0 flex-1 truncate pl-0.5 font-medium text-slate-200"
             title={labelTitle}
@@ -198,44 +209,6 @@ export function SpravaCaseObsahChildRow({
           <span style={tableValueBoxRight} className="truncate text-[11px]">
             {formatMoney(child.cenaAkce)}
           </span>
-        </div>
-
-        <div className="flex min-h-8 w-full min-w-0 items-center justify-center gap-0.5 px-0.5 pt-0.5">
-          <Link
-            href={getSkladKusFuturePath(child.childKusId)}
-            className={CHILD_DETAIL_LINK_CLASS}
-            title={`Detail kusu ${child.displayLabel}`}
-          >
-            Detail
-          </Link>
-          <KusQrActionMenu
-            kusId={child.childKusId}
-            label={{
-              kusId: child.childKusId,
-              itemName: child.polozkaNazev,
-              poradoveCislo: child.poradoveCislo,
-              position: child.polozkaPozice,
-              sector: child.blokNazev,
-            }}
-            triggerClassName={SPRAVA_QR_TRIGGER}
-            iconClassName="h-3.5 w-3.5"
-            menuVariant="sprava"
-            hideDetailLink
-          />
-          {canEdit ? (
-            <form action={removeKusFromCaseAction} className="min-w-0 flex-1">
-              <input type="hidden" name="parent_kus_id" value={parentKusId} />
-              <input type="hidden" name="return_polozka_id" value={returnPolozkaId} />
-              <input type="hidden" name="return_to" value={returnTo} />
-              <input type="hidden" name="obsah_id" value={child.obsahId} />
-              <SubmitButton
-                pendingText="Odebírám…"
-                className="flex h-7 w-full min-w-0 items-center justify-center rounded-md border border-amber-700/90 bg-amber-950 px-1 text-[10px] font-semibold text-amber-100 transition hover:bg-amber-900 disabled:hover:bg-amber-950"
-              >
-                Odebrat
-              </SubmitButton>
-            </form>
-          ) : null}
         </div>
       </div>
     </li>
