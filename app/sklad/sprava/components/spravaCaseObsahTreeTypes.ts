@@ -38,6 +38,57 @@ export type ObsahChildPolozkaAppliedFields = {
   jednotka?: string | null;
 };
 
+export function applyPolozkaFieldsToFormDefaults(
+  prev: CaseObsahFormDefaults,
+  fields: ObsahChildPolozkaAppliedFields
+): CaseObsahFormDefaults {
+  return {
+    skladBlokId:
+      fields.skladBlokId !== undefined ? fields.skladBlokId : prev.skladBlokId,
+    kategorieTechnikyId:
+      fields.kategorieTechnikyId !== undefined
+        ? fields.kategorieTechnikyId
+        : prev.kategorieTechnikyId,
+    podkategorieTechnikyId:
+      fields.podkategorieTechnikyId !== undefined
+        ? fields.podkategorieTechnikyId
+        : prev.podkategorieTechnikyId,
+    technickyVlastnikId:
+      fields.technickyVlastnikId !== undefined
+        ? fields.technickyVlastnikId
+        : prev.technickyVlastnikId,
+    jednotka:
+      fields.jednotka !== undefined
+        ? (fields.jednotka ?? prev.jednotka)
+        : prev.jednotka,
+  };
+}
+
+export function applyPolozkaFieldsToInheritedLabels<
+  T extends {
+    blok_nazev?: string | null;
+    kategorie_nazev?: string | null;
+    podkategorie_nazev?: string | null;
+    technicky_vlastnik_nazev?: string | null;
+    jednotka?: string | null;
+  },
+>(prev: T, fields: ObsahChildPolozkaAppliedFields): T {
+  return {
+    ...prev,
+    ...(fields.blokNazev !== undefined ? { blok_nazev: fields.blokNazev } : {}),
+    ...(fields.kategorieNazev !== undefined
+      ? { kategorie_nazev: fields.kategorieNazev }
+      : {}),
+    ...(fields.podkategorieNazev !== undefined
+      ? { podkategorie_nazev: fields.podkategorieNazev }
+      : {}),
+    ...(fields.technickyVlastnikNazev !== undefined
+      ? { technicky_vlastnik_nazev: fields.technickyVlastnikNazev }
+      : {}),
+    ...(fields.jednotka !== undefined ? { jednotka: fields.jednotka } : {}),
+  };
+}
+
 export type SpravaObsahPolozkaUpdaters = {
   savingPolozkaId: string | null;
   onUpdateZaklad: (

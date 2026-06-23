@@ -1509,7 +1509,7 @@ export function SkladPolozkyCatalog() {
                 kategorieTechnikyId: i.kategorie_techniky_id ?? null,
                 podkategorieTechnikyId: i.podkategorie_techniky_id ?? null,
                 technickyVlastnikId: i.technicky_vlastnik_id ?? null,
-                jednotka: "ks",
+                jednotka: i.jednotka ?? SKLAD_DEFAULT_JEDNOTKA,
               }}
               draft={draft}
               bloky={bloky}

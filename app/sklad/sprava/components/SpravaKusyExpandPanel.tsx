@@ -25,7 +25,15 @@ import type {
   SpravaObsahPolozkaUpdaters,
 } from "./spravaCaseObsahTreeTypes";
 import { applyObsahChildPolozkaFields } from "./spravaCaseObsahTreeTypes";
+import {
+  applyPolozkaFieldsToFormDefaults,
+  applyPolozkaFieldsToInheritedLabels,
+} from "./spravaCaseObsahTreeTypes";
 import { SpravaObsahExpandControl } from "./SpravaObsahExpandControl";
+import {
+  SpravaPolozkaInlineJednotkaSelect,
+  SpravaPolozkaInlineSelects,
+} from "./SpravaPolozkaInlineSelects";
 import {
   SKLAD_EMPTY_LABEL,
   SKLAD_EMPTY_LABEL_EM,
@@ -159,6 +167,8 @@ function SpravaExpandKusRow({
   isCasePolozka,
   siblingKusy,
   inherited,
+  polozkaFields,
+  readOnly,
   assignment,
   onUpdated,
   activeChildren,
@@ -170,6 +180,8 @@ function SpravaExpandKusRow({
   isCasePolozka: boolean;
   siblingKusy: SkladKusRow[];
   inherited: SpravaKusyInheritedColumns;
+  polozkaFields: CaseObsahFormDefaults;
+  readOnly: boolean;
   assignment: SkladKusZakazkaAssignmentRow | null;
   onUpdated: () => Promise<void>;
   activeChildren: SkladKusObsahChildRow[];
@@ -314,45 +326,27 @@ function SpravaExpandKusRow({
           ) : null}
         </div>
 
-        <div className={SPRAVA_TABLE_INHERITED_CELL}>
-          <span
-            style={tableValueBoxLeft}
-            className="truncate text-[11px]"
-            title={inheritedBoxText(inherited.blok_nazev)}
-          >
-            {inheritedBoxText(inherited.blok_nazev)}
-          </span>
-        </div>
-
-        <div className={SPRAVA_TABLE_INHERITED_CELL}>
-          <span
-            style={tableValueBoxLeft}
-            className="truncate text-[11px]"
-            title={inheritedBoxText(inherited.kategorie_nazev)}
-          >
-            {inheritedBoxText(inherited.kategorie_nazev)}
-          </span>
-        </div>
-
-        <div className={SPRAVA_TABLE_INHERITED_CELL}>
-          <span
-            style={tableValueBoxLeft}
-            className="truncate text-[11px]"
-            title={inheritedBoxText(inherited.podkategorie_nazev)}
-          >
-            {inheritedBoxText(inherited.podkategorie_nazev)}
-          </span>
-        </div>
-
-        <div className={SPRAVA_TABLE_INHERITED_CELL}>
-          <span
-            style={tableValueBoxLeft}
-            className="truncate text-[11px]"
-            title={inheritedBoxText(inherited.technicky_vlastnik_nazev)}
-          >
-            {inheritedBoxText(inherited.technicky_vlastnik_nazev)}
-          </span>
-        </div>
+        <SpravaPolozkaInlineSelects
+          polozkaId={skladovaPolozkaId}
+          fields={{
+            skladBlokId: polozkaFields.skladBlokId,
+            kategorieTechnikyId: polozkaFields.kategorieTechnikyId,
+            podkategorieTechnikyId: polozkaFields.podkategorieTechnikyId,
+            technickyVlastnikId: polozkaFields.technickyVlastnikId,
+            technickyVlastnikNazev: inherited.technicky_vlastnik_nazev,
+            jednotka: polozkaFields.jednotka,
+          }}
+          labels={{
+            blokNazev: inherited.blok_nazev,
+            kategorieNazev: inherited.kategorie_nazev,
+            podkategorieNazev: inherited.podkategorie_nazev,
+            technickyVlastnikNazev: inherited.technicky_vlastnik_nazev,
+          }}
+          polozkaUpdaters={obsahTree.polozkaUpdaters}
+          bloky={obsahTree.bloky}
+          vlastnici={obsahTree.vlastnici}
+          readOnly={readOnly || !obsahTree.canEditObsah}
+        />
 
         <div className="flex min-h-8 items-center justify-center px-1 pt-0.5 text-center">
           <span style={tableValueBoxRight} className="truncate text-[11px]">
@@ -401,9 +395,12 @@ function SpravaExpandKusRow({
         </div>
 
         <div className="flex min-h-8 w-full min-w-0 items-center justify-center px-1 pt-0.5">
-          <span style={tableValueBoxLeft} className="truncate text-[11px]">
-            {inherited.jednotka ?? SKLAD_EMPTY_LABEL}
-          </span>
+          <SpravaPolozkaInlineJednotkaSelect
+            polozkaId={skladovaPolozkaId}
+            jednotka={polozkaFields.jednotka}
+            polozkaUpdaters={obsahTree.polozkaUpdaters}
+            readOnly={readOnly || !obsahTree.canEditObsah}
+          />
         </div>
 
         <div className="flex min-h-8 items-center justify-center px-1 pt-0.5 text-center">
@@ -489,6 +486,13 @@ export function SpravaKusyExpandPanel({
   }, [openCaseKusId]);
 
   const [insertFormKusId, setInsertFormKusId] = useState<string | null>(null);
+  const [liveFormDefaults, setLiveFormDefaults] = useState(formDefaults);
+  const [liveInherited, setLiveInherited] = useState(inherited);
+
+  useEffect(() => {
+    setLiveFormDefaults(formDefaults);
+    setLiveInherited(inherited);
+  }, [formDefaults, inherited]);
 
   useEffect(() => {
     if (obsahMode === "insert" && openCaseKusId) {
@@ -826,33 +830,54 @@ export function SpravaKusyExpandPanel({
     []
   );
 
+  const patchParentPolozkaFields = useCallback(
+    (polozkaId: string, fields: ObsahChildPolozkaAppliedFields) => {
+      if (polozkaId !== skladovaPolozkaId) return;
+      setLiveFormDefaults((prev) => applyPolozkaFieldsToFormDefaults(prev, fields));
+      setLiveInherited((prev) => applyPolozkaFieldsToInheritedLabels(prev, fields));
+    },
+    [skladovaPolozkaId]
+  );
+
   const wrappedObsahPolozkaUpdaters = useMemo<
     SpravaObsahPolozkaUpdaters | undefined
   >(() => {
     if (!obsahPolozkaUpdaters || readOnly) return undefined;
 
+    const wrapApplied = (
+      polozkaId: string,
+      fields: ObsahChildPolozkaAppliedFields,
+      onApplied?: (fields: ObsahChildPolozkaAppliedFields) => void
+    ) => {
+      patchObsahChildPolozka(polozkaId, fields);
+      patchParentPolozkaFields(polozkaId, fields);
+      onApplied?.(fields);
+    };
+
     return {
       ...obsahPolozkaUpdaters,
       onUpdateZaklad: (polozkaId, patch, onApplied) => {
         obsahPolozkaUpdaters.onUpdateZaklad(polozkaId, patch, (fields) => {
-          patchObsahChildPolozka(polozkaId, fields);
-          onApplied?.(fields);
+          wrapApplied(polozkaId, fields, onApplied);
         });
       },
       onUpdateVlastnik: (polozkaId, vlastnikId, onApplied) => {
         obsahPolozkaUpdaters.onUpdateVlastnik(polozkaId, vlastnikId, (fields) => {
-          patchObsahChildPolozka(polozkaId, fields);
-          onApplied?.(fields);
+          wrapApplied(polozkaId, fields, onApplied);
         });
       },
       onUpdateJednotka: (polozkaId, value, onApplied) => {
         obsahPolozkaUpdaters.onUpdateJednotka(polozkaId, value, (fields) => {
-          patchObsahChildPolozka(polozkaId, fields);
-          onApplied?.(fields);
+          wrapApplied(polozkaId, fields, onApplied);
         });
       },
     };
-  }, [obsahPolozkaUpdaters, patchObsahChildPolozka, readOnly]);
+  }, [
+    obsahPolozkaUpdaters,
+    patchObsahChildPolozka,
+    patchParentPolozkaFields,
+    readOnly,
+  ]);
 
   const obsahTree: SpravaCaseObsahTreeBindings = {
     expandedKusIds,
@@ -867,7 +892,7 @@ export function SpravaKusyExpandPanel({
     obsahMode,
     insertFormKusId,
     onToggleInsertForm: toggleInsertForm,
-    formDefaults,
+    formDefaults: liveFormDefaults,
     bloky,
     kategorie,
     podkategorie,
@@ -915,7 +940,9 @@ export function SpravaKusyExpandPanel({
                   skladovaPolozkaId={skladovaPolozkaId}
                   isCasePolozka={isCasePolozka}
                   siblingKusy={kusy}
-                  inherited={inherited}
+                  inherited={liveInherited}
+                  polozkaFields={liveFormDefaults}
+                  readOnly={readOnly}
                   assignment={assignmentsByKusId[kus.kus_id] ?? null}
                   onUpdated={refreshAfterPoradi}
                   activeChildren={childrenByParentKusId.get(kus.kus_id) ?? []}

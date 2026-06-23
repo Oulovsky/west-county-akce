@@ -1,11 +1,13 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useMemo } from "react";
-import { SelectWithQuickCreate } from "@/app/sklad/sprava/components/SelectWithQuickCreate";
 import { SkladKusCaseTreePanel } from "@/components/sklad/SkladKusCaseTreePanel";
 import { useSpravaKusSelection } from "@/app/sklad/sprava/components/SpravaKusSelectionContext";
 import { SpravaObsahExpandControl } from "@/app/sklad/sprava/components/SpravaObsahExpandControl";
+import {
+  SpravaPolozkaInlineJednotkaSelect,
+  SpravaPolozkaInlineSelects,
+} from "@/app/sklad/sprava/components/SpravaPolozkaInlineSelects";
 import { formatMoney } from "@/app/sklad/sprava/components/formatMoney";
 import { formatNumber } from "@/app/sklad/sprava/components/formatNumber";
 import type { SpravaCaseObsahTreeBindings } from "@/app/sklad/sprava/components/spravaCaseObsahTreeTypes";
@@ -15,17 +17,13 @@ import {
   SPRAVA_CASE_CHILD_STICKY_BG_CLASS,
   SPRAVA_CASE_EXPANDED_BLOCK_CLASS,
   SPRAVA_TABLE_BODY_SUBROW_GRID,
-  SPRAVA_TABLE_INHERITED_CELL,
 } from "@/app/sklad/sprava/components/spravaTableLayout";
 import {
-  tableSelectStyle,
-  tableValueBoxLeft,
   tableValueBoxRight,
   tableMutedBoxRight,
   tableDangerBoxRight,
 } from "@/app/sklad/sprava/components/styles";
 import {
-  SKLAD_EMPTY_LABEL,
   SKLAD_EMPTY_LABEL_EM,
   SKLAD_SPRAVA_HINT_FYZICKY_NA_ZAKAZKACH,
   SKLAD_SPRAVA_HINT_NA_ZAKAZKACH,
@@ -39,11 +37,6 @@ import {
   formatZakazkaKusZakazkaLabel,
 } from "@/lib/sklad/zakazkaKusy";
 import type { SpravaObsahReturnTo } from "@/lib/sklad/spravaObsahUrl";
-
-function inheritedBoxText(value: string | null | undefined): string {
-  const t = value?.trim();
-  return t ? t : SKLAD_EMPTY_LABEL_EM;
-}
 
 function kusSklademCell(stav: string): number {
   const s = stav?.trim();
@@ -97,23 +90,8 @@ export function SpravaCaseObsahChildRow({
   );
   const checked = isKusSelected(child.childKusId);
 
-  const polozkaUpdaters = obsahTree.polozkaUpdaters;
-  const canEditFields = canEdit && obsahTree.canEditObsah && !!polozkaUpdaters;
-  const isSaving =
-    polozkaUpdaters?.savingPolozkaId === child.skladovaPolozkaId;
-
-  const podkategorieOptions = useMemo(
-    () =>
-      polozkaUpdaters?.getPodkategorieOptions(child.podkategorieTechnikyId) ??
-      [],
-    [child.podkategorieTechnikyId, polozkaUpdaters]
-  );
-
-  const jednotkaOptions = useMemo(
-    () =>
-      polozkaUpdaters?.getJednotkaOptions(child.jednotka) ?? [],
-    [child.jednotka, polozkaUpdaters]
-  );
+  const readOnly = !canEdit || !obsahTree.canEditObsah;
+  const polozkaId = child.skladovaPolozkaId;
 
   const labelTitle = `${child.displayLabel} · ${formatSkladKusStav(child.stav)}`;
   const skladem = assignment ? 0 : kusSklademCell(child.stav);
@@ -130,8 +108,6 @@ export function SpravaCaseObsahChildRow({
   const showInsertForm = obsahTree.insertFormKusId === child.childKusId;
   const showUrlFlash =
     isObsahExpanded && obsahTree.openCaseKusId === child.childKusId;
-
-  const polozkaId = child.skladovaPolozkaId;
 
   return (
     <li
@@ -172,149 +148,27 @@ export function SpravaCaseObsahChildRow({
           </span>
         </div>
 
-        <div className={SPRAVA_TABLE_INHERITED_CELL}>
-          {canEditFields ? (
-            <SelectWithQuickCreate
-              variant="table"
-              showQuickCreate={false}
-              value={child.skladBlokId ?? ""}
-              disabled={isSaving}
-              onChange={(value) =>
-                polozkaUpdaters.onUpdateZaklad(polozkaId, {
-                  blokId: value || null,
-                })
-              }
-              selectStyle={tableSelectStyle}
-              selectClassName="min-w-0 w-full truncate text-center text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
-              placeholder="Nepřiřazeno"
-              options={obsahTree.bloky.map((b) => ({
-                value: b.sklad_blok_id,
-                label: b.nazev,
-              }))}
-            />
-          ) : (
-            <span
-              style={tableValueBoxLeft}
-              className="truncate text-[11px]"
-              title={inheritedBoxText(child.blokNazev)}
-            >
-              {inheritedBoxText(child.blokNazev)}
-            </span>
-          )}
-        </div>
-
-        <div className={SPRAVA_TABLE_INHERITED_CELL}>
-          {canEditFields ? (
-            <SelectWithQuickCreate
-              variant="table"
-              showQuickCreate={false}
-              value={child.kategorieTechnikyId ?? ""}
-              disabled={isSaving}
-              onChange={(value) =>
-                polozkaUpdaters.onUpdateZaklad(polozkaId, {
-                  kategorieId: value || null,
-                })
-              }
-              selectStyle={tableSelectStyle}
-              selectClassName="min-w-0 w-full truncate text-center text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
-              placeholder="Bez kategorie"
-              options={polozkaUpdaters.kategorieOptions.map((k) => ({
-                value: k.kategorie_techniky_id,
-                label: k.nazev,
-              }))}
-            />
-          ) : (
-            <span
-              style={tableValueBoxLeft}
-              className="truncate text-[11px]"
-              title={inheritedBoxText(child.kategorieNazev)}
-            >
-              {inheritedBoxText(child.kategorieNazev)}
-            </span>
-          )}
-        </div>
-
-        <div className={SPRAVA_TABLE_INHERITED_CELL}>
-          {canEditFields ? (
-            <SelectWithQuickCreate
-              variant="table"
-              showQuickCreate={false}
-              value={child.podkategorieTechnikyId ?? ""}
-              disabled={isSaving}
-              onChange={(value) =>
-                polozkaUpdaters.onUpdateZaklad(polozkaId, {
-                  podkategorieId: value || null,
-                })
-              }
-              selectStyle={tableSelectStyle}
-              selectClassName="min-w-0 w-full truncate text-center text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
-              placeholder="Bez podkategorie"
-              options={podkategorieOptions.map((p) => ({
-                value: p.podkategorie_techniky_id,
-                label: p.nazev,
-              }))}
-            />
-          ) : (
-            <span
-              style={tableValueBoxLeft}
-              className="truncate text-[11px]"
-              title={inheritedBoxText(child.podkategorieNazev)}
-            >
-              {inheritedBoxText(child.podkategorieNazev)}
-            </span>
-          )}
-        </div>
-
-        <div className={SPRAVA_TABLE_INHERITED_CELL}>
-          {canEditFields ? (
-            <select
-              value={child.technickyVlastnikId ?? ""}
-              disabled={isSaving}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (value) polozkaUpdaters.onUpdateVlastnik(polozkaId, value);
-              }}
-              style={tableSelectStyle}
-              className="min-w-0 w-full truncate text-center text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
-              title="Vlastník techniky"
-            >
-              {(child.technickyVlastnikId &&
-              !obsahTree.vlastnici.some(
-                (v) => v.id === child.technickyVlastnikId && v.aktivni
-              )
-                ? [
-                    {
-                      id: child.technickyVlastnikId,
-                      nazev:
-                        child.technickyVlastnikNazev ?? "Neznámý vlastník",
-                      aktivni: false,
-                    },
-                  ]
-                : []
-              ).map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.nazev}
-                  {!v.aktivni ? " (neaktivní)" : ""}
-                </option>
-              ))}
-              {obsahTree.vlastnici
-                .filter((v) => v.aktivni)
-                .map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.nazev}
-                  </option>
-                ))}
-            </select>
-          ) : (
-            <span
-              style={tableValueBoxLeft}
-              className="truncate text-[11px]"
-              title={inheritedBoxText(child.technickyVlastnikNazev)}
-            >
-              {inheritedBoxText(child.technickyVlastnikNazev)}
-            </span>
-          )}
-        </div>
+        <SpravaPolozkaInlineSelects
+          polozkaId={polozkaId}
+          fields={{
+            skladBlokId: child.skladBlokId,
+            kategorieTechnikyId: child.kategorieTechnikyId,
+            podkategorieTechnikyId: child.podkategorieTechnikyId,
+            technickyVlastnikId: child.technickyVlastnikId,
+            technickyVlastnikNazev: child.technickyVlastnikNazev,
+            jednotka: child.jednotka ?? null,
+          }}
+          labels={{
+            blokNazev: child.blokNazev,
+            kategorieNazev: child.kategorieNazev,
+            podkategorieNazev: child.podkategorieNazev,
+            technickyVlastnikNazev: child.technickyVlastnikNazev,
+          }}
+          polozkaUpdaters={obsahTree.polozkaUpdaters}
+          bloky={obsahTree.bloky}
+          vlastnici={obsahTree.vlastnici}
+          readOnly={readOnly}
+        />
 
         <div className="flex min-h-8 items-center justify-center px-1 pt-0.5 text-center">
           <span style={tableValueBoxRight} className="truncate text-[11px]">
@@ -365,28 +219,12 @@ export function SpravaCaseObsahChildRow({
         </div>
 
         <div className="flex min-h-8 w-full min-w-0 items-center justify-center px-1 pt-0.5">
-          {canEditFields ? (
-            <SelectWithQuickCreate
-              variant="table"
-              showQuickCreate={false}
-              value={child.jednotka ?? ""}
-              disabled={isSaving}
-              onChange={(value) =>
-                polozkaUpdaters.onUpdateJednotka(polozkaId, value)
-              }
-              selectStyle={tableSelectStyle}
-              selectClassName="min-w-0 w-full truncate text-center text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
-              placeholder="Jednotka"
-              options={jednotkaOptions.map((j) => ({
-                value: j.nazev,
-                label: j.nazev,
-              }))}
-            />
-          ) : (
-            <span style={tableValueBoxLeft} className="truncate text-[11px]">
-              {child.jednotka ?? SKLAD_EMPTY_LABEL}
-            </span>
-          )}
+          <SpravaPolozkaInlineJednotkaSelect
+            polozkaId={polozkaId}
+            jednotka={child.jednotka ?? null}
+            polozkaUpdaters={obsahTree.polozkaUpdaters}
+            readOnly={readOnly}
+          />
         </div>
 
         <div className="flex min-h-8 items-center justify-center px-1 pt-0.5 text-center">
