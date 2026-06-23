@@ -105,14 +105,8 @@ export function SpravaCaseObsahChildRow({
 
   const nestedChildren =
     obsahTree.childrenByParentKusId.get(child.childKusId) ?? [];
-  const hasChildContent =
-    (obsahTree.childCountsByKusId.get(child.childKusId) ?? nestedChildren.length) >
-    0;
   const isObsahExpanded = obsahTree.expandedKusIds.has(child.childKusId);
-  const showInsertForm =
-    isObsahExpanded &&
-    obsahTree.obsahMode === "insert" &&
-    obsahTree.openCaseKusId === child.childKusId;
+  const showInsertForm = obsahTree.insertFormKusId === child.childKusId;
   const showUrlFlash =
     isObsahExpanded && obsahTree.openCaseKusId === child.childKusId;
 
@@ -143,7 +137,6 @@ export function SpravaCaseObsahChildRow({
             className="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-950 text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500/60 disabled:opacity-50"
           />
           <SpravaObsahExpandControl
-            hasChildContent={hasChildContent}
             isExpanded={isObsahExpanded}
             onToggle={() => obsahTree.onToggleExpand(child.childKusId)}
             label={child.displayLabel}

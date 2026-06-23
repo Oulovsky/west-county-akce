@@ -31,6 +31,8 @@ export type SpravaCaseObsahTreeBindings = {
   returnPolozkaId: string;
   openCaseKusId: string | null;
   obsahMode: string | null;
+  insertFormKusId: string | null;
+  onToggleInsertForm: (kusId: string) => void;
   formDefaults: CaseObsahFormDefaults;
   bloky: SkladBlok[];
   kategorie: SkladKategorie[];

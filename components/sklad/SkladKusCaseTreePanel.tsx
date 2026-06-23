@@ -201,6 +201,7 @@ export function SkladKusCaseTreePanel({
   const resolvedPodkategorie = obsahTree?.podkategorie ?? podkategorie;
   const resolvedJednotky = obsahTree?.jednotky ?? jednotky;
   const resolvedVlastnici = obsahTree?.vlastnici ?? vlastnici;
+  const tableScroll = useSpravaTableScroll();
 
   const containedLabel = formatKusObsahContainedLabel(activeChildren.length);
   const pickerOptions = filterChildOptionsForParent(
@@ -218,20 +219,58 @@ export function SkladKusCaseTreePanel({
   });
 
   const toolbarIndentClass = depth <= 0 ? "pl-10" : "pl-16";
+  const resolvedShowInsertForm = obsahTree
+    ? obsahTree.insertFormKusId === parentKusId
+    : showInsertForm;
+
+  function handleSpravaInsertToggle() {
+    if (!obsahTree) return;
+
+    const apply = () => {
+      if (!resolvedShowInsertForm && !obsahTree.expandedKusIds.has(parentKusId)) {
+        obsahTree.onToggleExpand(parentKusId, depth === 0);
+      }
+      obsahTree.onToggleInsertForm(parentKusId);
+    };
+
+    if (tableScroll) {
+      tableScroll.runPreservingScroll(apply);
+    } else {
+      apply();
+    }
+  }
 
   const toolbar = (
     <>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold text-emerald-300/95">{containedLabel}</span>
         {resolvedCanEdit ? (
-          showInsertForm ? (
-            <ObsahToolbarNav
-              href={expandHref}
-              returnTo={returnTo}
-              className="inline-flex min-h-8 items-center rounded-lg border border-slate-600 bg-slate-900 px-3 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+          resolvedShowInsertForm ? (
+            layout === "sprava" && obsahTree ? (
+              <button
+                type="button"
+                onClick={handleSpravaInsertToggle}
+                className="inline-flex min-h-8 items-center rounded-lg border border-slate-600 bg-slate-900 px-3 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+              >
+                Zavřít formulář
+              </button>
+            ) : (
+              <ObsahToolbarNav
+                href={expandHref}
+                returnTo={returnTo}
+                className="inline-flex min-h-8 items-center rounded-lg border border-slate-600 bg-slate-900 px-3 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+              >
+                Zavřít formulář
+              </ObsahToolbarNav>
+            )
+          ) : layout === "sprava" && obsahTree ? (
+            <button
+              type="button"
+              onClick={handleSpravaInsertToggle}
+              className="inline-flex min-h-8 items-center rounded-lg border border-blue-600 bg-blue-800 px-3 text-xs font-bold text-white hover:bg-blue-700"
             >
-              Zavřít formulář
-            </ObsahToolbarNav>
+              + Vložit
+            </button>
           ) : (
             <ObsahToolbarNav
               href={insertHref}
@@ -256,8 +295,8 @@ export function SkladKusCaseTreePanel({
     </>
   );
 
-  const insertForms = resolvedCanEdit && showInsertForm ? (
-    <div className="mt-4 space-y-4">
+  const createNewContentForm =
+    resolvedCanEdit && resolvedShowInsertForm ? (
       <SkladCaseContentCreateForm
         parentKusId={parentKusId}
         returnPolozkaId={resolvedReturnPolozkaId}
@@ -270,7 +309,10 @@ export function SkladKusCaseTreePanel({
         jednotky={resolvedJednotky}
         vlastnici={resolvedVlastnici}
       />
+    ) : null;
 
+  const servisniInsertForm =
+    layout !== "sprava" && resolvedCanEdit && resolvedShowInsertForm ? (
       <details className="rounded-xl border border-slate-800 bg-slate-950/50">
         <summary className="cursor-pointer px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">
           Vložit existující kus (servisní)
@@ -306,8 +348,15 @@ export function SkladKusCaseTreePanel({
           </div>
         </form>
       </details>
-    </div>
-  ) : null;
+    ) : null;
+
+  const insertForms =
+    createNewContentForm || servisniInsertForm ? (
+      <div className="mt-4 space-y-4">
+        {createNewContentForm}
+        {servisniInsertForm}
+      </div>
+    ) : null;
 
   if (layout === "sprava") {
     if (!obsahTree) {

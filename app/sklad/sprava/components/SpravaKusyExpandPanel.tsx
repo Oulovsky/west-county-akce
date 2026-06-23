@@ -230,13 +230,9 @@ function SpravaExpandKusRow({
   const checked = isKusSelected(kus.kus_id);
   const stavHint = formatSkladKusStav(kus.stav);
   const labelTitle = `${label} · ${stavHint}`;
-  const hasChildContent =
-    (obsahTree.childCountsByKusId.get(kus.kus_id) ?? activeChildren.length) > 0;
   const isObsahExpanded = obsahTree.expandedKusIds.has(kus.kus_id);
   const showInsertForm =
-    isObsahExpanded &&
-    obsahTree.obsahMode === "insert" &&
-    obsahTree.openCaseKusId === kus.kus_id;
+    isObsahExpanded && obsahTree.insertFormKusId === kus.kus_id;
   const showUrlFlash = isObsahExpanded && obsahTree.openCaseKusId === kus.kus_id;
 
   const skladem = kusSklademCell(kus);
@@ -267,7 +263,6 @@ function SpravaExpandKusRow({
             />
             {isCasePolozka ? (
               <SpravaObsahExpandControl
-                hasChildContent={hasChildContent}
                 isExpanded={isObsahExpanded}
                 onToggle={() => obsahTree.onToggleExpand(kus.kus_id, true)}
                 label={label}
@@ -482,6 +477,29 @@ export function SpravaKusyExpandPanel({
       return next;
     });
   }, [openCaseKusId]);
+
+  const [insertFormKusId, setInsertFormKusId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (obsahMode === "insert" && openCaseKusId) {
+      setInsertFormKusId(openCaseKusId);
+    }
+  }, [obsahMode, openCaseKusId]);
+
+  const toggleInsertForm = useCallback(
+    (kusId: string) => {
+      const apply = () => {
+        setInsertFormKusId((prev) => (prev === kusId ? null : kusId));
+      };
+
+      if (tableScroll) {
+        tableScroll.runPreservingScroll(apply);
+      } else {
+        apply();
+      }
+    },
+    [tableScroll]
+  );
 
   const mergeChildCounts = useCallback((incoming: Map<string, number>) => {
     setChildCountsByKusId((prev) => {
@@ -789,6 +807,8 @@ export function SpravaKusyExpandPanel({
     returnPolozkaId: skladovaPolozkaId,
     openCaseKusId,
     obsahMode,
+    insertFormKusId,
+    onToggleInsertForm: toggleInsertForm,
     formDefaults,
     bloky,
     kategorie,

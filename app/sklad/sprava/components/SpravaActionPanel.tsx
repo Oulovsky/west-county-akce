@@ -11,7 +11,6 @@ import {
 import type { SpravaVybranaPolozka, SpravaVybranyKus } from "@/lib/sklad/types";
 import { supabase } from "@/lib/supabase";
 import { useSpravaKusSelection } from "./SpravaKusSelectionContext";
-import { SpravaVlozitKusDoCaseModal } from "./SpravaVlozitKusDoCaseModal";
 
 const PANEL_BTN =
   "inline-flex items-center justify-center rounded-lg border px-3 py-2 text-sm font-semibold transition outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 disabled:cursor-not-allowed disabled:opacity-45";
@@ -27,7 +26,6 @@ type PanelActions = {
   showQr: boolean;
   qrDisabled: boolean;
   showPridatKus: boolean;
-  showVlozit: boolean;
   showVyjmout: boolean;
   showSmazat: boolean;
 };
@@ -44,7 +42,6 @@ function computeKusPanelActions(
       showQr: false,
       qrDisabled: true,
       showPridatKus: false,
-      showVlozit: false,
       showVyjmout: false,
       showSmazat: false,
     };
@@ -60,7 +57,6 @@ function computeKusPanelActions(
       showQr: true,
       qrDisabled: false,
       showPridatKus: k.kind === "bezny" || k.kind === "case",
-      showVlozit: k.kind === "case",
       showVyjmout: k.kind === "child_v_case",
       showSmazat: true,
     };
@@ -76,7 +72,6 @@ function computeKusPanelActions(
     showQr: true,
     qrDisabled: true,
     showPridatKus: false,
-    showVlozit: false,
     showVyjmout: allChild,
     showSmazat: true,
   };
@@ -93,7 +88,6 @@ function computePolozkaPanelActions(
     showQr: false,
     qrDisabled: true,
     showPridatKus: true,
-    showVlozit: false,
     showVyjmout: false,
     showSmazat: false,
   };
@@ -114,7 +108,6 @@ export function SpravaActionPanel({ onAddPolozka, onAddCase }: Props) {
   } = useSpravaKusSelection();
 
   const [busy, setBusy] = useState(false);
-  const [vlozitOpen, setVlozitOpen] = useState(false);
 
   const actions = useMemo(() => {
     if (selectedPolozka) {
@@ -343,17 +336,6 @@ export function SpravaActionPanel({ onAddPolozka, onAddCase }: Props) {
                   </button>
                 ) : null}
 
-                {actions.showVlozit && singleKus ? (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => setVlozitOpen(true)}
-                    className={PANEL_BTN_NEUTRAL}
-                  >
-                    Vložit kus do case
-                  </button>
-                ) : null}
-
                 {actions.showVyjmout ? (
                   <button
                     type="button"
@@ -389,20 +371,6 @@ export function SpravaActionPanel({ onAddPolozka, onAddCase }: Props) {
           </div>
         </div>
       </section>
-
-      {singleKus && singleKus.kind === "case" ? (
-        <SpravaVlozitKusDoCaseModal
-          open={vlozitOpen}
-          onClose={() => setVlozitOpen(false)}
-          parentCaseKusId={singleKus.kusId}
-          parentCaseLabel={singleKus.label}
-          onSuccess={() => {
-            setVlozitOpen(false);
-            clearSelection();
-            onAfterKusMutation();
-          }}
-        />
-      ) : null}
     </>
   );
 }
