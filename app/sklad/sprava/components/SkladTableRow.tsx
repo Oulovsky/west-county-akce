@@ -17,6 +17,7 @@ import { SelectWithQuickCreate } from "./SelectWithQuickCreate";
 import { SpravaKusyExpandPanel } from "./SpravaKusyExpandPanel";
 import { isPolozkaCase } from "@/lib/sklad/caseKus";
 import { useSpravaKusSelection } from "./SpravaKusSelectionContext";
+import { useSpravaTableScroll } from "./SpravaTableScrollContext";
 import {
   SPRAVA_TABLE_CELL,
   SPRAVA_TABLE_CELL_CENTER,
@@ -147,6 +148,7 @@ export function SkladTableRow({
     isPolozkaSelected,
     togglePolozka,
   } = useSpravaKusSelection();
+  const tableScroll = useSpravaTableScroll();
 
   const polozkaChecked = isPolozkaSelected(item.skladova_polozka_id);
   const polozkaJeCase = isPolozkaCase(
@@ -231,7 +233,12 @@ export function SkladTableRow({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              setIsExpanded((prev) => !prev);
+              const toggle = () => setIsExpanded((prev) => !prev);
+              if (tableScroll) {
+                tableScroll.runPreservingScroll(toggle);
+              } else {
+                toggle();
+              }
             }}
             className="flex h-8 w-8 shrink-0 items-center justify-center self-center rounded-md border border-slate-700 bg-slate-900 text-slate-400 outline-none transition hover:border-slate-600 hover:text-white focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/60"
             aria-expanded={isExpanded}

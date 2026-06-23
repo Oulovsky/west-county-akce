@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { ObsahUrlFlash } from "@/components/sklad/ObsahUrlFlash";
+import { useSpravaTableScroll } from "@/app/sklad/sprava/components/SpravaTableScrollContext";
 import { SkladCaseContentCreateForm } from "@/components/sklad/SkladCaseContentCreateForm";
 import { SkladKusObsahChildPicker } from "@/components/sklad/SkladKusObsahChildPicker";
 import { SpravaCaseObsahChildRow } from "@/components/sklad/SpravaCaseObsahChildRow";
@@ -67,6 +69,38 @@ function buildObsahHref(
     return buildSpravaObsahHref(returnPolozkaId, parentKusId, opts);
   }
   return buildPolozkaObsahHref(returnPolozkaId, parentKusId, opts);
+}
+
+function ObsahToolbarNav({
+  href,
+  className,
+  children,
+  returnTo,
+}: {
+  href: string;
+  className: string;
+  children: ReactNode;
+  returnTo: SpravaObsahReturnTo;
+}) {
+  const tableScroll = useSpravaTableScroll();
+
+  if (returnTo === "sprava" && tableScroll) {
+    return (
+      <button
+        type="button"
+        onClick={() => tableScroll.navigateObsah(href)}
+        className={className}
+      >
+        {children}
+      </button>
+    );
+  }
+
+  return (
+    <Link href={href} className={className} scroll={false}>
+      {children}
+    </Link>
+  );
 }
 
 function DetailChildList({
@@ -157,19 +191,21 @@ export function SkladKusCaseTreePanel({
         <span className="text-xs font-semibold text-emerald-300/95">{containedLabel}</span>
         {canEdit ? (
           showInsertForm ? (
-            <Link
+            <ObsahToolbarNav
               href={expandHref}
+              returnTo={returnTo}
               className="inline-flex min-h-8 items-center rounded-lg border border-slate-600 bg-slate-900 px-3 text-xs font-semibold text-slate-300 hover:bg-slate-800"
             >
               Zavřít formulář
-            </Link>
+            </ObsahToolbarNav>
           ) : (
-            <Link
+            <ObsahToolbarNav
               href={insertHref}
+              returnTo={returnTo}
               className="inline-flex min-h-8 items-center rounded-lg border border-blue-600 bg-blue-800 px-3 text-xs font-bold text-white hover:bg-blue-700"
             >
               + Vložit
-            </Link>
+            </ObsahToolbarNav>
           )
         ) : null}
         {layout !== "sprava" ? (

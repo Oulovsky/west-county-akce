@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { SkladKusCaseTreePanel } from "@/components/sklad/SkladKusCaseTreePanel";
 import { isCaseJednotka } from "@/lib/sklad/caseJednotka";
 import { buildSpravaVybranyKus } from "@/lib/sklad/caseKus";
@@ -52,6 +51,7 @@ import {
 } from "@/lib/sklad/zakazkaKusy";
 import { supabase } from "@/lib/supabase";
 import { useSpravaKusSelection } from "./SpravaKusSelectionContext";
+import { useSpravaTableScroll } from "./SpravaTableScrollContext";
 import { formatMoney } from "./formatMoney";
 import { formatNumber } from "./formatNumber";
 import { spravaTableGridStyle } from "./spravaTableLayout";
@@ -198,6 +198,7 @@ function SpravaExpandKusRow({
   vlastnici: TechnickyVlastnik[];
 }) {
   const { caseMetadata, isKusSelected, toggleKus } = useSpravaKusSelection();
+  const tableScroll = useSpravaTableScroll();
   const [poradiDraft, setPoradiDraft] = useState(() => String(kus.poradove_cislo));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -291,14 +292,18 @@ function SpravaExpandKusRow({
               label={label}
             />
             {isCasePolozka ? (
-              <Link
-                href={isCaseExpanded ? caseCollapseHref : caseExpandHref}
+              <button
+                type="button"
+                onClick={() => {
+                  const href = isCaseExpanded ? caseCollapseHref : caseExpandHref;
+                  tableScroll?.navigateObsah(href);
+                }}
                 className={CASE_TREE_CHEVRON}
                 title={isCaseExpanded ? "Sbalit obsah case" : "Rozbalit obsah case"}
                 aria-expanded={isCaseExpanded}
               >
                 {isCaseExpanded ? "▾" : "▸"}
-              </Link>
+              </button>
             ) : (
               <span className="inline-block h-8 w-8 shrink-0" aria-hidden />
             )}
