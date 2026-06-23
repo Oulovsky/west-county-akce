@@ -59,7 +59,7 @@ export async function findMatchingCaseContentPolozka(
   input: {
     nazev: string;
     skladBlokId: string;
-    kategorieTechnikyId: string;
+    kategorieTechnikyId: string | null;
     podkategorieTechnikyId: string | null;
     jednotka: string;
   }
@@ -77,7 +77,7 @@ export async function findMatchingCaseContentPolozka(
   const match = ((rpcData ?? []) as SkladPolozkaRow[]).find((row) => {
     if (!obsahCaseIds.has(row.skladova_polozka_id)) return false;
     if (row.nazev.trim() !== targetNazev) return false;
-    if (row.kategorie_techniky_id !== input.kategorieTechnikyId) return false;
+    if ((row.kategorie_techniky_id ?? null) !== (input.kategorieTechnikyId ?? null)) return false;
     if ((row.sklad_blok_id ?? null) !== input.skladBlokId) return false;
     if ((row.podkategorie_techniky_id ?? null) !== targetPodkategorie) return false;
     if (normalizeSkladJednotkaKey(row.jednotka) !== targetJednotka) return false;

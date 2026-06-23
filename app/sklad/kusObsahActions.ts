@@ -181,7 +181,8 @@ export async function createCaseContentAction(formData: FormData) {
   const returnTo = resolveReturnTo(formData);
   const nazev = String(formData.get("nazev") ?? "").trim();
   const skladBlokId = String(formData.get("sklad_blok_id") ?? "").trim();
-  const kategorieTechnikyId = String(formData.get("kategorie_techniky_id") ?? "").trim();
+  const kategorieTechnikyId =
+    String(formData.get("kategorie_techniky_id") ?? "").trim() || null;
   const podkategorieTechnikyId =
     String(formData.get("podkategorie_techniky_id") ?? "").trim() || null;
   const jednotka = String(formData.get("jednotka") ?? "").trim();

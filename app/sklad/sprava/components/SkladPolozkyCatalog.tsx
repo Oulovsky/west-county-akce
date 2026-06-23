@@ -28,6 +28,10 @@ import {
 } from "@/lib/sklad/constants";
 import { filterCatalogPolozky } from "@/lib/sklad/caseContentPolozka";
 import {
+  listActiveKategorie,
+  listPodkategorieForKategorie,
+} from "@/lib/sklad/kategorieCatalog";
+import {
   enrichSpravaPolozkyWithPodkategorie,
   enrichSpravaPolozkyWithVlastnici,
   filterSpravaInventoryItems,
@@ -602,34 +606,15 @@ export function SkladPolozkyCatalog() {
     };
   }, [load, reloadCatalog]);
 
-  const getKategorieOptions = useCallback(
-    (blokId: string | null) => {
-      if (blokId) {
-        const assignedToBlock = kategorie.filter(
-          (k) => k.sklad_blok_id === blokId
-        );
-
-        if (assignedToBlock.length > 0) {
-          return assignedToBlock;
-        }
-      }
-
-      return kategorie.filter((k) => k.sklad_blok_id === null);
-    },
-    [kategorie]
-  );
-
   const getPodkategorieOptions = useCallback(
-    (kategorieId: string | null) => {
-      if (!kategorieId) return [];
-      return podkategorie.filter((p) => p.kategorie_techniky_id === kategorieId);
-    },
+    (kategorieId: string | null) =>
+      listPodkategorieForKategorie(podkategorie, kategorieId),
     [podkategorie]
   );
 
   const newKategorieOptions = useMemo(
-    () => getKategorieOptions(newBlokId || null),
-    [getKategorieOptions, newBlokId]
+    () => listActiveKategorie(kategorie),
+    [kategorie]
   );
 
   const newPodkategorieOptions = useMemo(
@@ -652,14 +637,7 @@ export function SkladPolozkyCatalog() {
       const catalogOk = await reloadCatalog();
       if (!catalogOk) return { error: "Nepodařilo se načíst katalog." };
 
-      const { data: kategorieData } = await queryKategorieTechnikyFull(supabase);
-      const firstKategorieId =
-        ((kategorieData ?? []) as SkladKategorie[]).find(
-          (k) => k.sklad_blok_id === result.value
-        )?.kategorie_techniky_id ?? "";
-
       setNewBlokId(result.value);
-      setNewKategorieId(firstKategorieId);
       setNewPodkategorieId("");
 
       return {};
@@ -748,11 +726,8 @@ export function SkladPolozkyCatalog() {
   function resetAddForm() {
     const firstBlokId = bloky[0]?.sklad_blok_id ?? "";
 
-    const firstKategorieId =
-      getKategorieOptions(firstBlokId || null)[0]?.kategorie_techniky_id ?? "";
-
     setNewBlokId(firstBlokId);
-    setNewKategorieId(firstKategorieId);
+    setNewKategorieId("");
     setNewPodkategorieId("");
     setNewNazev("");
     setNewKusy("1");
@@ -1014,22 +989,11 @@ export function SkladPolozkyCatalog() {
     return () => window.removeEventListener("keydown", handleGlobalEnter);
   }, [editingId, saveEdit]);
 
-  function resolveKategorieForBlokChange(
-    targetBlokId: string | null,
-    previousKategorieId: string | null
-  ): string | null {
-    if (!targetBlokId) return previousKategorieId;
-
-    const options = getKategorieOptions(targetBlokId);
-    if (
-      previousKategorieId &&
-      options.some((k) => k.kategorie_techniky_id === previousKategorieId)
-    ) {
-      return previousKategorieId;
-    }
-
-    return options[0]?.kategorie_techniky_id ?? previousKategorieId;
-  }
+  type ZakladPatch = {
+    kategorieId?: string | null;
+    podkategorieId?: string | null;
+    blokId?: string | null;
+  };
 
   async function updateVlastnik(id: string, vlastnikId: string) {
     const oldItem = items.find((item) => item.skladova_polozka_id === id);
@@ -1062,50 +1026,27 @@ export function SkladPolozkyCatalog() {
     }
   }
 
-  async function updateZaklad(
-    id: string,
-    kategorieId: string | null,
-    podkategorieId: string | null,
-    blokId: string | null,
-    labelOverrides?: {
-      kategorieNazev?: string | null;
-      podkategorieNazev?: string | null;
-      blokNazev?: string | null;
-    }
-  ) {
+  async function updateZaklad(id: string, patch: ZakladPatch) {
     const previous = items;
     const oldItem = items.find((item) => item.skladova_polozka_id === id);
     if (!oldItem) return;
 
-    const isBlokOnlyChange =
-      kategorieId === null &&
-      podkategorieId === null &&
-      blokId !== oldItem.sklad_blok_id;
+    let finalBlokId =
+      patch.blokId !== undefined ? patch.blokId : oldItem.sklad_blok_id;
+    let finalKategorieId =
+      patch.kategorieId !== undefined
+        ? patch.kategorieId
+        : oldItem.kategorie_techniky_id;
+    let finalPodkategorieId =
+      patch.podkategorieId !== undefined
+        ? patch.podkategorieId
+        : oldItem.podkategorie_techniky_id;
 
-    const isKategorieChange =
-      kategorieId !== null && kategorieId !== oldItem.kategorie_techniky_id;
-
-    const isPodkategorieChange =
-      !isBlokOnlyChange &&
-      !isKategorieChange &&
-      podkategorieId !== oldItem.podkategorie_techniky_id;
-
-    const finalBlokId = isBlokOnlyChange ? blokId : (blokId ?? oldItem.sklad_blok_id);
-
-    let finalKategorieId = oldItem.kategorie_techniky_id;
-    if (isKategorieChange) {
-      finalKategorieId = kategorieId;
-    } else if (isBlokOnlyChange) {
-      finalKategorieId = resolveKategorieForBlokChange(
-        blokId,
-        oldItem.kategorie_techniky_id
-      );
-    }
-
-    let finalPodkategorieId = oldItem.podkategorie_techniky_id;
-    if (isPodkategorieChange) {
-      finalPodkategorieId = podkategorieId;
-    } else if (isKategorieChange || isBlokOnlyChange) {
+    if (
+      patch.kategorieId !== undefined &&
+      patch.kategorieId !== oldItem.kategorie_techniky_id &&
+      patch.podkategorieId === undefined
+    ) {
       finalPodkategorieId = null;
     }
 
@@ -1119,20 +1060,22 @@ export function SkladPolozkyCatalog() {
     if (!zakladChanged && !podkategorieChanged) return;
 
     const novaKategorie =
-      labelOverrides?.kategorieNazev ??
-      kategorie.find((k) => k.kategorie_techniky_id === finalKategorieId)?.nazev ??
-      null;
+      finalKategorieId === null
+        ? null
+        : (kategorie.find((k) => k.kategorie_techniky_id === finalKategorieId)
+            ?.nazev ?? null);
 
     const novaPodkategorie =
-      labelOverrides?.podkategorieNazev ??
-      podkategorie.find((p) => p.podkategorie_techniky_id === finalPodkategorieId)
-        ?.nazev ??
-      null;
+      finalPodkategorieId === null
+        ? null
+        : (podkategorie.find(
+            (p) => p.podkategorie_techniky_id === finalPodkategorieId
+          )?.nazev ?? null);
 
     const novyBlok =
-      labelOverrides?.blokNazev ??
-      bloky.find((b) => b.sklad_blok_id === finalBlokId)?.nazev ??
-      null;
+      finalBlokId === null
+        ? null
+        : (bloky.find((b) => b.sklad_blok_id === finalBlokId)?.nazev ?? null);
 
     setSavingId(id);
 
@@ -1153,13 +1096,6 @@ export function SkladPolozkyCatalog() {
     );
 
     if (zakladChanged) {
-      if (!finalKategorieId) {
-        setSavingId(null);
-        setItems(previous);
-        alert("Kategorie je povinná — vyber kategorii v rámci okruhu.");
-        return;
-      }
-
       const { error } = await supabase.rpc(SKLAD_RPC.updateSkladovaPolozkaZaklad, {
         p_id: id,
         p_kategorie_techniky_id: finalKategorieId,
@@ -1175,13 +1111,6 @@ export function SkladPolozkyCatalog() {
     }
 
     if (podkategorieChanged) {
-      if (!finalKategorieId) {
-        setSavingId(null);
-        setItems(previous);
-        alert("Kategorie je povinná — podkategorii lze uložit až po přiřazení kategorie.");
-        return;
-      }
-
       const { error } = await supabase.rpc(SKLAD_RPC.updateSkladovaPolozka, {
         p_skladova_polozka_id: id,
         p_nazev: oldItem.nazev,
@@ -1233,11 +1162,6 @@ export function SkladPolozkyCatalog() {
       return;
     }
 
-    if (!newKategorieId) {
-      alert("Vyber kategorii.");
-      return;
-    }
-
     if (!newNazev.trim()) {
       alert("Název je povinný.");
       return;
@@ -1262,7 +1186,7 @@ export function SkladPolozkyCatalog() {
 
     const createRes = await supabase.rpc("create_skladova_polozka", {
       p_nazev: newNazev.trim(),
-      p_kategorie_techniky_id: newKategorieId,
+      p_kategorie_techniky_id: newKategorieId || null,
       p_podkategorie_techniky_id: newPodkategorieId || null,
       p_jednotka: newJednotka.trim(),
       p_celkem_k_dispozici: parsedKusy,
@@ -1383,14 +1307,7 @@ export function SkladPolozkyCatalog() {
         bloky={bloky}
         jednotky={jednotky}
         newBlokId={newBlokId}
-        setNewBlokId={(blokId) => {
-          const firstKategorieId =
-            getKategorieOptions(blokId || null)[0]?.kategorie_techniky_id ?? "";
-
-          setNewBlokId(blokId);
-          setNewKategorieId(firstKategorieId);
-          setNewPodkategorieId("");
-        }}
+        setNewBlokId={setNewBlokId}
         newKategorieId={newKategorieId}
         setNewKategorieId={setNewKategorieId}
         newPodkategorieId={newPodkategorieId}
@@ -1422,7 +1339,7 @@ export function SkladPolozkyCatalog() {
           const isSaving = savingId === i.skladova_polozka_id;
           const isHighlight = highlightId === i.skladova_polozka_id;
 
-          const kategorieOptions = getKategorieOptions(i.sklad_blok_id);
+          const kategorieOptions = listActiveKategorie(kategorie);
           const podkategorieOptions = getPodkategorieOptions(
             i.kategorie_techniky_id
           );
@@ -1466,13 +1383,8 @@ export function SkladPolozkyCatalog() {
               onUpdateVlastnik={(vlastnikId) =>
                 updateVlastnik(i.skladova_polozka_id, vlastnikId)
               }
-              onUpdateZaklad={(kategorieId, podkategorieId, blokId) =>
-                updateZaklad(
-                  i.skladova_polozka_id,
-                  kategorieId,
-                  podkategorieId,
-                  blokId
-                )
+              onUpdateZaklad={(patch) =>
+                updateZaklad(i.skladova_polozka_id, patch)
               }
               onDraftChange={setDraft}
               onCommitJednotka={

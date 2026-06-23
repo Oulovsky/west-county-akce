@@ -112,8 +112,8 @@ export function AddItemModal({
                 setNewKategorieId(value);
                 setNewPodkategorieId("");
               }}
-              placeholder="Vyber kategorii"
-              disabled={isCreating || !newBlokId}
+              placeholder="Bez kategorie"
+              disabled={isCreating}
               selectClassName={modalSelectClass}
               options={newKategorieOptions.map((k) => ({
                 value: k.kategorie_techniky_id,

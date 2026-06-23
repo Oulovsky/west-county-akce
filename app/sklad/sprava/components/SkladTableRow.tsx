@@ -67,6 +67,12 @@ type CaseObsahFormDefaults = {
   jednotka: string;
 };
 
+type ZakladPatch = {
+  kategorieId?: string | null;
+  podkategorieId?: string | null;
+  blokId?: string | null;
+};
+
 type Props = {
   item: SkladPolozkaRow;
   isEditing: boolean;
@@ -88,11 +94,7 @@ type Props = {
   allPodkategorie: SkladPodkategorie[];
   onCatalogConfigChanged?: () => void | Promise<void>;
   onStartEdit: () => void;
-  onUpdateZaklad: (
-    kategorieId: string | null,
-    podkategorieId: string | null,
-    blokId: string | null
-  ) => void;
+  onUpdateZaklad: (patch: ZakladPatch) => void;
   onUpdateVlastnik: (vlastnikId: string) => void;
   onDraftChange: Dispatch<SetStateAction<Draft>>;
   /** Called after jednotka select change — persists immediately (správa table). */
@@ -283,7 +285,7 @@ export function SkladTableRow({
             showQuickCreate={false}
             value={item.sklad_blok_id ?? ""}
             disabled={isSaving || readOnly}
-            onChange={(value) => onUpdateZaklad(null, null, value || null)}
+            onChange={(value) => onUpdateZaklad({ blokId: value || null })}
             selectStyle={tableSelectStyle}
             selectClassName="min-w-0 w-full truncate text-center text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
             placeholder="Nepřiřazeno"
@@ -299,10 +301,8 @@ export function SkladTableRow({
             variant="table"
             showQuickCreate={false}
             value={item.kategorie_techniky_id ?? ""}
-            disabled={isSaving || !item.sklad_blok_id}
-            onChange={(value) =>
-              onUpdateZaklad(value || null, null, item.sklad_blok_id)
-            }
+            disabled={isSaving || readOnly}
+            onChange={(value) => onUpdateZaklad({ kategorieId: value || null })}
             selectStyle={tableSelectStyle}
             selectClassName="min-w-0 w-full truncate text-center text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
             placeholder="Bez kategorie"
@@ -320,11 +320,7 @@ export function SkladTableRow({
             value={item.podkategorie_techniky_id ?? ""}
             disabled={isSaving || !item.kategorie_techniky_id}
             onChange={(value) =>
-              onUpdateZaklad(
-                item.kategorie_techniky_id,
-                value || null,
-                item.sklad_blok_id
-              )
+              onUpdateZaklad({ podkategorieId: value || null })
             }
             selectStyle={tableSelectStyle}
             selectClassName="min-w-0 w-full truncate text-center text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"

@@ -21,7 +21,7 @@ export type CreateCaseContentInput = {
   parentKusId: string;
   nazev: string;
   skladBlokId: string;
-  kategorieTechnikyId: string;
+  kategorieTechnikyId: string | null;
   podkategorieTechnikyId: string | null;
   jednotka: string;
   technickyVlastnikId: string;
@@ -72,7 +72,7 @@ async function createContentPolozka(
   input: {
     nazev: string;
     skladBlokId: string;
-    kategorieTechnikyId: string;
+    kategorieTechnikyId: string | null;
     podkategorieTechnikyId: string | null;
     jednotka: string;
     technickyVlastnikId: string;
@@ -129,7 +129,6 @@ export async function createCaseContent(
 
   if (!input.nazev.trim()) throw new Error("Název položky je povinný.");
   if (!input.skladBlokId) throw new Error("Okruh je povinný.");
-  if (!input.kategorieTechnikyId) throw new Error("Kategorie je povinná.");
   if (!input.jednotka.trim()) throw new Error("Jednotka je povinná.");
   if (!input.technickyVlastnikId) throw new Error("Vlastník je povinný.");
 

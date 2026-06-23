@@ -5,6 +5,10 @@ import { SelectWithQuickCreate } from "@/app/sklad/sprava/components/SelectWithQ
 import { createCaseContentAction } from "@/app/sklad/kusObsahActions";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { useSkladInlineConfigQuickCreate } from "@/lib/sklad/hooks/useSkladInlineConfigQuickCreate";
+import {
+  listActiveKategorie,
+  listPodkategorieForKategorie,
+} from "@/lib/sklad/kategorieCatalog";
 import type { SpravaObsahReturnTo } from "@/lib/sklad/spravaObsahUrl";
 import type { SkladJednotka, SkladKategorie, SkladPodkategorie } from "@/lib/sklad/types";
 import type { SkladBlok } from "@/lib/sklad/types";
@@ -79,14 +83,12 @@ export function SkladCaseContentCreateForm({
   });
 
   const kategorieOptions = useMemo(
-    () =>
-      kategorieList.filter((row) => (row.sklad_blok_id ?? null) === (blokId || null)),
-    [kategorieList, blokId]
+    () => listActiveKategorie(kategorieList),
+    [kategorieList]
   );
 
   const podkategorieOptions = useMemo(
-    () =>
-      podkategorieList.filter((row) => row.kategorie_techniky_id === kategorieId),
+    () => listPodkategorieForKategorie(podkategorieList, kategorieId || null),
     [podkategorieList, kategorieId]
   );
 
@@ -126,8 +128,6 @@ export function SkladCaseContentCreateForm({
               required
               onChange={(value) => {
                 setBlokId(value);
-                setKategorieId("");
-                setPodkategorieId("");
               }}
               placeholder="Vyberte okruh"
               selectClassName={selectClass}
@@ -144,18 +144,16 @@ export function SkladCaseContentCreateForm({
         </div>
 
         <div className="block text-sm font-semibold text-slate-200">
-          Kategorie *
+          Kategorie
           <div className="mt-2 flex min-w-0 items-center">
             <SelectWithQuickCreate
               name="kategorie_techniky_id"
               value={kategorieId}
-              required
               onChange={(value) => {
                 setKategorieId(value);
                 setPodkategorieId("");
               }}
-              placeholder="Vyberte kategorii"
-              disabled={!blokId}
+              placeholder="Bez kategorie"
               selectClassName={selectClass}
               variant="form"
               options={kategorieOptions.map((row) => ({
@@ -178,7 +176,7 @@ export function SkladCaseContentCreateForm({
               name="podkategorie_techniky_id"
               value={podkategorieId}
               onChange={setPodkategorieId}
-              placeholder="—"
+              placeholder="Bez podkategorie"
               disabled={!kategorieId}
               selectClassName={selectClass}
               variant="form"
