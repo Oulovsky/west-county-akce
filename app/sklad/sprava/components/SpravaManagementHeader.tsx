@@ -2,18 +2,14 @@
 
 import Link from "next/link";
 
-const primaryCtaClass =
-  "inline-flex items-center justify-center rounded-xl border border-blue-500 bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-950/30 transition hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400";
-
 const secondaryCtaClass =
   "inline-flex items-center justify-center rounded-xl border border-slate-600 bg-slate-900 px-5 py-3 text-sm font-bold text-slate-100 shadow-lg shadow-black/20 transition hover:border-slate-500 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400";
 
 type Props = {
-  onAddClick: () => void;
   readOnly?: boolean;
 };
 
-export function SpravaManagementHeader({ onAddClick, readOnly = false }: Props) {
+export function SpravaManagementHeader({ readOnly = false }: Props) {
   return (
     <header className="rounded-2xl border border-blue-900/40 bg-gradient-to-br from-slate-900/90 via-slate-950 to-slate-950 p-6 shadow-[0_8px_32px_rgba(0,0,0,0.25)]">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
@@ -30,14 +26,11 @@ export function SpravaManagementHeader({ onAddClick, readOnly = false }: Props) 
         </div>
 
         {readOnly ? null : (
-        <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
-          <Link href="/sklad/scan" className={secondaryCtaClass}>
-            Skenovat QR
-          </Link>
-          <button type="button" onClick={onAddClick} className={primaryCtaClass}>
-            + Přidat položku
-          </button>
-        </div>
+          <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+            <Link href="/sklad/scan" className={secondaryCtaClass}>
+              Skenovat QR
+            </Link>
+          </div>
         )}
       </div>
     </header>

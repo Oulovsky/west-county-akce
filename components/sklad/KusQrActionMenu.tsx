@@ -12,6 +12,8 @@ import {
 type Props = {
   kusId: string;
   label?: SkladKusLabelPayload;
+  /** Text na spouštěcím tlačítku (výchozí ikona QR). */
+  triggerLabel?: string;
   /** Nahradí výchozí styly spouštěcího tlačítka (např. výška jako u buněk tabulky). */
   triggerClassName?: string;
   /** Velikost QR ikony uvnitř tlačítka (výchozí kompaktní). */
@@ -29,6 +31,7 @@ const VIEWPORT_PADDING = 8;
 export function KusQrActionMenu({
   kusId,
   label,
+  triggerLabel,
   triggerClassName,
   iconClassName,
   menuVariant = "default",
@@ -209,14 +212,18 @@ export function KusQrActionMenu({
           "inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-600 bg-slate-900 text-slate-300 outline-none transition hover:border-slate-500 hover:bg-slate-800 hover:text-white focus-visible:ring-2 focus-visible:ring-blue-500/60"
         }
       >
-        <svg
-          viewBox="0 0 24 24"
-          className={iconClassName ?? "h-3.5 w-3.5"}
-          fill="currentColor"
-          aria-hidden
-        >
-          <path d="M3 3h6v6H3V3zm2 2v2h2V5H5zm8-2h6v6h-6V3zm2 2v2h2V5h-2zM3 13h6v6H3v-6zm2 2v2h2v-2H5zm13-2h2v2h-2v-2zm-4 4h2v2h-2v-2zm4 0h2v6h-6v-2h4v-4zm-8 4h2v2H9v-2zm4 0h4v2h-4v-2z" />
-        </svg>
+        {triggerLabel ? (
+          <span>{triggerLabel}</span>
+        ) : (
+          <svg
+            viewBox="0 0 24 24"
+            className={iconClassName ?? "h-3.5 w-3.5"}
+            fill="currentColor"
+            aria-hidden
+          >
+            <path d="M3 3h6v6H3V3zm2 2v2h2V5H5zm8-2h6v6h-6V3zm2 2v2h2V5h-2zM3 13h6v6H3v-6zm2 2v2h2v-2H5zm13-2h2v2h-2v-2zm-4 4h2v2h-2v-2zm4 0h2v6h-6v-2h4v-4zm-8 4h2v2H9v-2zm4 0h4v2h-4v-2z" />
+          </svg>
+        )}
       </button>
 
       {mounted && menu ? createPortal(menu, document.body) : null}

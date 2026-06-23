@@ -124,6 +124,44 @@ export type SkladKusHistorieRow = {
   } | null;
 };
 
+/** Aktivní vazba child kusu v case (tabulka sklad_kus_obsah). */
+export type SkladKusObsahRow = {
+  obsah_id: string;
+  parent_case_kus_id: string;
+  child_kus_id: string;
+  vlozeno_at?: string | null;
+  vyjmuto_at?: string | null;
+  vyjmul_user_id?: string | null;
+};
+
+export type SpravaKusKind = "bezny" | "case" | "child_v_case";
+
+/** Vybraný kus ve správě skladu — pro akční panel. */
+export type SpravaVybranyKus = {
+  kusId: string;
+  label: string;
+  skladovaPolozkaId: string;
+  polozkaNazev: string;
+  kind: SpravaKusKind;
+  parentCaseKusId?: string;
+  parentCaseLabel?: string;
+};
+
+/** Vybraná skladová položka (řádek katalogu, ne konkrétní kus). */
+export type SpravaVybranaPolozka = {
+  skladovaPolozkaId: string;
+  nazev: string;
+  isCase: boolean;
+};
+
+/** Kus dostupný pro vložení do case (volný, není v jiném case). */
+export type SpravaDostupnyKusOption = {
+  kusId: string;
+  label: string;
+  skladovaPolozkaId: string;
+  polozkaNazev: string;
+};
+
 /** Hlášení poškození — detail, okruh, centrální přehled. */
 export type SkladPoskozeniRow = {
   poskozeni_id: string;

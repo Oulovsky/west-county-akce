@@ -4,7 +4,14 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useSearchParams } from "next/navigation";
 import { useProfileRole } from "@/lib/auth/use-profile-role";
 import { SpravaInventoryFilters } from "./components/SpravaInventoryFilters";
+import { SpravaActionPanel } from "./components/SpravaActionPanel";
+import {
+  SpravaKusSelectionProvider,
+  useSpravaKusSelection,
+} from "./components/SpravaKusSelectionContext";
 import { supabase } from "@/lib/supabase";
+import { isPolozkaObsahCase } from "@/lib/sklad/caseKus";
+import { nastavitPolozkaJeCase } from "@/lib/sklad/spravaKusActions";
 import { SkladToolbar } from "./components/SkladToolbar";
 import { SkladStats } from "./components/SkladStats";
 import { AddItemModal } from "./components/AddItemModal";
@@ -35,6 +42,7 @@ import {
   queryPodkategorieTechnikyFull,
   querySkladBloky,
   querySkladovePolozkyPodkategorie,
+  querySpravaCaseMetadata,
   querySpravaKatalog,
   queryTechnickyVlastniciFull,
 } from "@/lib/sklad/queries";
@@ -62,6 +70,8 @@ type RpcErrorResult = {
   error: { message: string } | null;
 };
 
+type AddItemMode = "polozka" | "case";
+
 function SpravaPageBody() {
   const searchParams = useSearchParams();
   const obsahPolozkaId = searchParams.get("obsahPolozka");
@@ -72,6 +82,8 @@ function SpravaPageBody() {
 
   const { nav } = useProfileRole();
   const readOnly = nav.readOnly;
+  const { caseMetadata, setCaseMetadata, registerAfterKusMutation } =
+    useSpravaKusSelection();
   const [items, setItems] = useState<SkladPolozkaRow[]>([]);
   const [kategorie, setKategorie] = useState<SkladKategorie[]>([]);
   const [podkategorie, setPodkategorie] = useState<SkladPodkategorie[]>([]);
@@ -98,6 +110,7 @@ function SpravaPageBody() {
     useState<SpravaInventoryFiltersState>(SPRAVA_INVENTORY_FILTERS_EMPTY);
 
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [addItemMode, setAddItemMode] = useState<AddItemMode>("polozka");
   const [isCreating, setIsCreating] = useState(false);
   const [newNazev, setNewNazev] = useState("");
   const [newKusy, setNewKusy] = useState("1");
@@ -134,6 +147,15 @@ function SpravaPageBody() {
     if (!obsahPolozkaId || !obsahMessage) return;
     bumpKusyReload(obsahPolozkaId);
   }, [obsahPolozkaId, obsahMessage, bumpKusyReload]);
+
+  const refreshCaseMetadata = useCallback(async () => {
+    const { data } = await querySpravaCaseMetadata(supabase);
+    setCaseMetadata(data);
+  }, [setCaseMetadata]);
+
+  useEffect(() => {
+    void refreshCaseMetadata();
+  }, [refreshCaseMetadata]);
 
   const applyKusySyncAfterCelkemSave = useCallback(
     async (polozkaId: string, nazev: string, celkem: number) => {
@@ -498,6 +520,13 @@ function SpravaPageBody() {
   }, [load, reloadCatalog]);
 
   useEffect(() => {
+    registerAfterKusMutation(() => {
+      void load({ silent: true });
+      void refreshCaseMetadata();
+    });
+  }, [load, refreshCaseMetadata, registerAfterKusMutation]);
+
+  useEffect(() => {
     const channels = [
       supabase
         .channel(SKLAD_REALTIME_CHANNEL.spravaKategorie)
@@ -713,7 +742,8 @@ function SpravaPageBody() {
     setNewNaklad("");
   }
 
-  function openAddModal() {
+  function openAddModal(mode: AddItemMode = "polozka") {
+    setAddItemMode(mode);
     resetAddForm();
     setIsAddOpen(true);
   }
@@ -1263,6 +1293,17 @@ function SpravaPageBody() {
       parsedKusy
     );
 
+    if (addItemMode === "case") {
+      const caseRes = await nastavitPolozkaJeCase(supabase, createdId, true);
+      if (!caseRes.ok) {
+        alert(
+          `Položka byla vytvořena, ale nepodařilo se ji označit jako case: ${caseRes.error}`
+        );
+      }
+    }
+
+    await refreshCaseMetadata();
+
     setIsCreating(false);
     setIsAddOpen(false);
     await load();
@@ -1312,18 +1353,26 @@ function SpravaPageBody() {
     0
   );
 
+  const catalogItems = useMemo(
+    () =>
+      items.filter(
+        (item) =>
+          !isPolozkaObsahCase(
+            item.skladova_polozka_id,
+            caseMetadata.polozkaFlags
+          )
+      ),
+    [items, caseMetadata.polozkaFlags]
+  );
+
   const filteredItems = useMemo(
-    () => filterSpravaInventoryItems(items, inventoryFilters),
-    [items, inventoryFilters]
+    () => filterSpravaInventoryItems(catalogItems, inventoryFilters),
+    [catalogItems, inventoryFilters]
   );
 
   return (
     <div className="flex flex-col gap-6">
-      <SkladToolbar
-        onAddClick={openAddModal}
-        totalPoskozene={totalPoskozene}
-        readOnly={readOnly}
-      />
+      <SkladToolbar totalPoskozene={totalPoskozene} readOnly={readOnly} />
 
       <section
         aria-labelledby="sprava-polozky-heading"
@@ -1368,10 +1417,16 @@ function SpravaPageBody() {
           bloky={bloky}
           kategorie={kategorie}
           filteredCount={filteredItems.length}
-          totalCount={items.length}
+          totalCount={catalogItems.length}
+        />
+
+        <SpravaActionPanel
+          onAddPolozka={() => openAddModal("polozka")}
+          onAddCase={() => openAddModal("case")}
         />
 
         <AddItemModal
+        mode={addItemMode}
         open={isAddOpen}
         onClose={closeAddModal}
         onSave={handleCreateItem}
@@ -1406,6 +1461,10 @@ function SpravaPageBody() {
         onQuickCreatePodkategorie={handleQuickCreatePodkategorie}
         />
 
+        <div
+          className="min-h-[280px] max-h-[calc(100dvh-var(--sprava-sklad-workspace-top,20rem))] overflow-y-auto overscroll-y-contain rounded-2xl border border-slate-800/80 bg-slate-950/30"
+          aria-label="Scrollovatelný katalog skladu"
+        >
         <SkladTable loading={loading}>
           {!loading && filteredItems.length === 0 ? (
             <div className="border-t border-slate-800 px-4 py-10 text-center text-sm text-slate-400">
@@ -1481,6 +1540,7 @@ function SpravaPageBody() {
             );
           })}
         </SkladTable>
+        </div>
       </section>
     </div>
   );
@@ -1488,12 +1548,16 @@ function SpravaPageBody() {
 
 export default function Page() {
   return (
-    <Suspense
-      fallback={
-        <div className="py-10 text-center text-sm text-slate-400">Načítám správu skladu…</div>
-      }
-    >
-      <SpravaPageBody />
-    </Suspense>
+    <SpravaKusSelectionProvider>
+      <Suspense
+        fallback={
+          <div className="py-10 text-center text-sm text-slate-400">
+            Načítám správu skladu…
+          </div>
+        }
+      >
+        <SpravaPageBody />
+      </Suspense>
+    </SpravaKusSelectionProvider>
   );
 }

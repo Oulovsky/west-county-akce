@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { SkladKusCaseTreePanel } from "@/components/sklad/SkladKusCaseTreePanel";
-import { KusQrActionMenu } from "@/components/sklad/KusQrActionMenu";
 import { isCaseJednotka } from "@/lib/sklad/caseJednotka";
+import { buildSpravaVybranyKus } from "@/lib/sklad/caseKus";
 import {
   loadActiveChildrenByParentKusIds,
   loadAvailableChildKusOptions,
@@ -51,6 +51,7 @@ import {
   queryAktivniZakazkyKusu,
 } from "@/lib/sklad/zakazkaKusy";
 import { supabase } from "@/lib/supabase";
+import { useSpravaKusSelection } from "./SpravaKusSelectionContext";
 import { formatMoney } from "./formatMoney";
 import { formatNumber } from "./formatNumber";
 import { spravaTableGridStyle } from "./spravaTableLayout";
@@ -101,13 +102,31 @@ type Props = {
   vlastnici: TechnickyVlastnik[];
 };
 
-const SPRAVA_QR_TRIGGER =
-  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-600 bg-slate-950 text-slate-300 outline-none transition hover:border-slate-500 hover:bg-slate-900 hover:text-white focus-visible:ring-2 focus-visible:ring-blue-500/60";
-
 const CASE_TREE_CHEVRON =
   "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-emerald-800/60 bg-emerald-950/40 text-xs font-bold text-emerald-200 transition hover:border-emerald-600 hover:bg-emerald-900/60 hover:text-white";
 
 const KUS_SUBROW_GRID_CLASS = "grid items-start px-2 py-1 text-xs text-slate-300";
+
+function SpravaKusCheckbox({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+}) {
+  return (
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      onClick={(e) => e.stopPropagation()}
+      aria-label={`Vybrat ${label}`}
+      className="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-950 text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500/60"
+    />
+  );
+}
 
 /** Hodnota ve čtecích boxech správy — prázdná buňka jako „—“. */
 function inheritedBoxText(value: string | null | undefined): string {
@@ -178,6 +197,7 @@ function SpravaExpandKusRow({
   jednotky: SkladJednotka[];
   vlastnici: TechnickyVlastnik[];
 }) {
+  const { caseMetadata, isKusSelected, toggleKus } = useSpravaKusSelection();
   const [poradiDraft, setPoradiDraft] = useState(() => String(kus.poradove_cislo));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -236,6 +256,8 @@ function SpravaExpandKusRow({
   }
 
   const label = getSpravaKusDisplayLabel(polozkaNazev, kus);
+  const vybranyKus = buildSpravaVybranyKus(kus, polozkaNazev, caseMetadata);
+  const checked = isKusSelected(kus.kus_id);
   const stavHint = formatSkladKusStav(kus.stav);
   const labelTitle = `${label} · ${stavHint}`;
   const isCaseExpanded = isCasePolozka && openCaseKusId === kus.kus_id;
@@ -263,6 +285,11 @@ function SpravaExpandKusRow({
       <div className={KUS_SUBROW_GRID_CLASS} style={spravaTableGridStyle}>
         <div className="sticky left-0 z-10 flex min-h-8 min-w-0 flex-col gap-0.5 bg-slate-950/95 pr-1 pt-0.5">
           <div className="flex min-h-8 min-w-0 items-center gap-1.5">
+            <SpravaKusCheckbox
+              checked={checked}
+              onChange={() => toggleKus(vybranyKus)}
+              label={label}
+            />
             {isCasePolozka ? (
               <Link
                 href={isCaseExpanded ? caseCollapseHref : caseExpandHref}
@@ -299,20 +326,6 @@ function SpravaExpandKusRow({
             >
               {label}
             </span>
-            <KusQrActionMenu
-              kusId={kus.kus_id}
-              label={{
-                kusId: kus.kus_id,
-                itemName: polozkaNazev,
-                poradoveCislo: kus.poradove_cislo,
-                position: inherited.pozice,
-                sector: inherited.blok_nazev,
-              }}
-              triggerClassName={SPRAVA_QR_TRIGGER}
-              iconClassName="h-[18px] w-[18px]"
-              menuVariant="sprava"
-              hideDetailLink={isCasePolozka}
-            />
           </div>
           {error ? (
             <p

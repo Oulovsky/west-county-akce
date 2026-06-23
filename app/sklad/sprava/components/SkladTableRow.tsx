@@ -15,6 +15,8 @@ import { formatNumber } from "./formatNumber";
 import { toNumber } from "./toNumber";
 import { SelectWithQuickCreate } from "./SelectWithQuickCreate";
 import { SpravaKusyExpandPanel } from "./SpravaKusyExpandPanel";
+import { isPolozkaCase } from "@/lib/sklad/caseKus";
+import { useSpravaKusSelection } from "./SpravaKusSelectionContext";
 import {
   SPRAVA_TABLE_CELL,
   SPRAVA_TABLE_CELL_CENTER,
@@ -140,6 +142,18 @@ export function SkladTableRow({
   readOnly = false,
 }: Props) {
   const [isExpanded, setIsExpanded] = useState(autoExpandKusy);
+  const {
+    caseMetadata,
+    isPolozkaSelected,
+    togglePolozka,
+  } = useSpravaKusSelection();
+
+  const polozkaChecked = isPolozkaSelected(item.skladova_polozka_id);
+  const polozkaJeCase = isPolozkaCase(
+    item.skladova_polozka_id,
+    item.nazev,
+    caseMetadata.polozkaFlags
+  );
 
   useLayoutEffect(() => {
     if (autoExpandKusy) {
@@ -199,6 +213,20 @@ export function SkladTableRow({
           className={SPRAVA_TABLE_CELL_STICKY}
           style={{ cursor: readOnly || isEditing ? "default" : "pointer" }}
         >
+          <input
+            type="checkbox"
+            checked={polozkaChecked}
+            onChange={() =>
+              togglePolozka({
+                skladovaPolozkaId: item.skladova_polozka_id,
+                nazev: item.nazev,
+                isCase: polozkaJeCase,
+              })
+            }
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`Vybrat položku ${item.nazev}`}
+            className="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-950 text-blue-600 focus:ring-blue-500/50"
+          />
           <button
             type="button"
             onClick={(e) => {
@@ -489,12 +517,9 @@ export function SkladTableRow({
         </div>
 
         <div className={SPRAVA_TABLE_CELL_CENTER}>
-          <Link
-            href={`/sklad/${item.skladova_polozka_id}`}
-            className="inline-flex h-8 max-h-8 w-full min-w-0 items-center justify-center rounded-md border border-amber-700 bg-amber-800 px-2 py-0 text-xs font-semibold leading-none text-white outline-none transition hover:bg-amber-700 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-500/70"
-          >
-            Detail
-          </Link>
+          <span style={tableMutedBoxRight} className="text-[11px]">
+            —
+          </span>
         </div>
       </div>
 

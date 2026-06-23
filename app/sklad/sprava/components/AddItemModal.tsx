@@ -14,7 +14,10 @@ const modalSelectClass =
 
 type QuickCreateHandler = (name: string) => Promise<{ error?: string } | void>;
 
+type AddItemMode = "polozka" | "case";
+
 type Props = {
+  mode?: AddItemMode;
   open: boolean;
   onClose: () => void;
   onSave: () => void;
@@ -43,6 +46,7 @@ type Props = {
 };
 
 export function AddItemModal({
+  mode = "polozka",
   open,
   onClose,
   onSave,
@@ -73,7 +77,7 @@ export function AddItemModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Přidat položku"
+      title={mode === "case" ? "Přidat case" : "Přidat položku"}
       widthClassName="max-w-3xl"
     >
       <div className="grid gap-4">
