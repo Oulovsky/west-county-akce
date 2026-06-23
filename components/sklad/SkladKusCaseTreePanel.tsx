@@ -308,6 +308,7 @@ export function SkladKusCaseTreePanel({
         podkategorie={resolvedPodkategorie}
         jednotky={resolvedJednotky}
         vlastnici={resolvedVlastnici}
+        onCatalogConfigChanged={obsahTree?.onCatalogConfigChanged}
       />
     ) : null;
 

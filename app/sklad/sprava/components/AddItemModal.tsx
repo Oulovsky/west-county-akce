@@ -43,6 +43,7 @@ type Props = {
   onQuickCreateBlok: QuickCreateHandler;
   onQuickCreateKategorie: QuickCreateHandler;
   onQuickCreatePodkategorie: QuickCreateHandler;
+  onQuickCreateJednotka: QuickCreateHandler;
 };
 
 export function AddItemModal({
@@ -72,6 +73,7 @@ export function AddItemModal({
   onQuickCreateBlok,
   onQuickCreateKategorie,
   onQuickCreatePodkategorie,
+  onQuickCreateJednotka,
 }: Props) {
   return (
     <Modal
@@ -94,7 +96,7 @@ export function AddItemModal({
               value: b.sklad_blok_id,
               label: b.nazev,
             }))}
-            quickCreateTitle="Nový okruh"
+            quickCreateTitle="Přidat okruh"
             quickCreatePlaceholder="Název okruhu"
             onQuickCreate={onQuickCreateBlok}
           />
@@ -117,7 +119,7 @@ export function AddItemModal({
                 value: k.kategorie_techniky_id,
                 label: k.nazev,
               }))}
-              quickCreateTitle="Nová kategorie"
+              quickCreateTitle="Přidat kategorii"
               quickCreatePlaceholder="Název kategorie"
               quickCreateDisabled={!newBlokId}
               quickCreateDisabledTitle="Nejdřív vyber okruh"
@@ -138,7 +140,7 @@ export function AddItemModal({
                 value: p.podkategorie_techniky_id,
                 label: p.nazev,
               }))}
-              quickCreateTitle="Nová podkategorie"
+              quickCreateTitle="Přidat podkategorii"
               quickCreatePlaceholder="Název podkategorie"
               quickCreateDisabled={!newKategorieId}
               quickCreateDisabledTitle="Nejdřív vyber kategorii"
@@ -177,12 +179,14 @@ export function AddItemModal({
               value={newJednotka}
               onChange={setNewJednotka}
               disabled={isCreating}
-              showQuickCreate={false}
               selectClassName={modalSelectClass}
               options={jednotky.map((j) => ({
                 value: j.nazev,
                 label: j.nazev,
               }))}
+              quickCreateTitle="Přidat jednotku"
+              quickCreatePlaceholder="Název jednotky"
+              onQuickCreate={onQuickCreateJednotka}
             />
           </div>
         </div>

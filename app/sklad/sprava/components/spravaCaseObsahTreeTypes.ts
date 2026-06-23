@@ -39,4 +39,5 @@ export type SpravaCaseObsahTreeBindings = {
   podkategorie: SkladPodkategorie[];
   jednotky: SkladJednotka[];
   vlastnici: TechnickyVlastnik[];
+  onCatalogConfigChanged?: () => void | Promise<void>;
 };

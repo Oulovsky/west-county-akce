@@ -34,6 +34,7 @@ import {
   toNumber,
 } from "@/lib/sklad/helpers";
 import {
+  createInlineJednotka,
   createInlineKategorie,
   createInlinePodkategorie,
   createInlineSkladBlok,
@@ -730,6 +731,20 @@ export function SkladPolozkyCatalog() {
     [newKategorieId, reloadCatalog]
   );
 
+  const handleQuickCreateJednotka = useCallback(
+    async (nazev: string) => {
+      const result = await createInlineJednotka(supabase, nazev);
+      if (!result.ok) return inlineCreateError(result);
+
+      const catalogOk = await reloadCatalog();
+      if (!catalogOk) return { error: "Nepodařilo se načíst katalog." };
+
+      setNewJednotka(result.value);
+      return {};
+    },
+    [reloadCatalog]
+  );
+
   function resetAddForm() {
     const firstBlokId = bloky[0]?.sklad_blok_id ?? "";
 
@@ -1393,6 +1408,7 @@ export function SkladPolozkyCatalog() {
         onQuickCreateBlok={handleQuickCreateBlok}
         onQuickCreateKategorie={handleQuickCreateKategorie}
         onQuickCreatePodkategorie={handleQuickCreatePodkategorie}
+        onQuickCreateJednotka={handleQuickCreateJednotka}
         />
 
         <SkladTable loading={loading}>
@@ -1440,6 +1456,9 @@ export function SkladPolozkyCatalog() {
               podkategorieOptions={podkategorieOptions}
               allKategorie={kategorie}
               allPodkategorie={podkategorie}
+              onCatalogConfigChanged={() => {
+                void reloadCatalog();
+              }}
               onStartEdit={() => {
                 if (readOnly) return;
                 startEdit(i);

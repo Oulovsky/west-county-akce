@@ -95,6 +95,7 @@ type Props = {
   podkategorie: SkladPodkategorie[];
   jednotky: SkladJednotka[];
   vlastnici: TechnickyVlastnik[];
+  onCatalogConfigChanged?: () => void | Promise<void>;
 };
 
 function SpravaKusCheckbox({
@@ -438,6 +439,7 @@ export function SpravaKusyExpandPanel({
   podkategorie,
   jednotky,
   vlastnici,
+  onCatalogConfigChanged,
 }: Props) {
   const celkem = toNumber(celkemKDispozici);
   const isCasePolozka = isCaseJednotka(polozkaJednotka);
@@ -815,6 +817,7 @@ export function SpravaKusyExpandPanel({
     podkategorie,
     jednotky,
     vlastnici,
+    onCatalogConfigChanged,
   };
 
   return (

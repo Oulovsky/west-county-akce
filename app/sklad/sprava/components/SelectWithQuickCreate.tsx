@@ -10,6 +10,9 @@ const plusButtonClassDefault =
 const plusButtonClassTable =
   "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-600 bg-slate-900 text-sm font-bold leading-none text-slate-300 transition hover:border-slate-500 hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50";
 
+const plusButtonClassForm =
+  "flex h-[42px] w-9 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-950 text-base font-bold leading-none text-slate-300 transition hover:border-slate-500 hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30";
+
 type Option = {
   value: string;
   label: string;
@@ -20,6 +23,7 @@ type Props = {
   onChange: (value: string) => void;
   options: Option[];
   disabled?: boolean;
+  required?: boolean;
   placeholder?: string;
   selectStyle?: CSSProperties;
   selectClassName?: string;
@@ -32,7 +36,9 @@ type Props = {
   onQuickCreate?: (name: string) => Promise<{ error?: string } | void>;
   children?: ReactNode;
   /** Kompaktní varianta pro řádky tabulky správy. */
-  variant?: "default" | "table";
+  variant?: "default" | "table" | "form";
+  /** HTML name pro odeslání ve formuláři (server action). */
+  name?: string;
 };
 
 export function SelectWithQuickCreate({
@@ -40,6 +46,7 @@ export function SelectWithQuickCreate({
   onChange,
   options,
   disabled = false,
+  required = false,
   placeholder,
   selectStyle,
   selectClassName,
@@ -51,10 +58,16 @@ export function SelectWithQuickCreate({
   onQuickCreate = async () => {},
   children,
   variant = "default",
+  name,
 }: Props) {
   const plusButtonClass =
-    variant === "table" ? plusButtonClassTable : plusButtonClassDefault;
-  const wrapperGap = variant === "table" ? "gap-0.5" : "gap-1";
+    variant === "table"
+      ? plusButtonClassTable
+      : variant === "form"
+        ? plusButtonClassForm
+        : plusButtonClassDefault;
+  const wrapperGap =
+    variant === "table" ? "gap-0.5" : variant === "form" ? "gap-1.5" : "gap-1";
   const baseSelectClass =
     selectClassName ??
     (variant === "table"
@@ -92,7 +105,9 @@ export function SelectWithQuickCreate({
         }
       >
         <select
+          name={name}
           value={value}
+          required={required}
           disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
           style={selectStyle}

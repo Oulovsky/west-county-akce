@@ -86,6 +86,7 @@ type Props = {
   podkategorieOptions: SkladPodkategorie[];
   allKategorie: SkladKategorie[];
   allPodkategorie: SkladPodkategorie[];
+  onCatalogConfigChanged?: () => void | Promise<void>;
   onStartEdit: () => void;
   onUpdateZaklad: (
     kategorieId: string | null,
@@ -135,6 +136,7 @@ export function SkladTableRow({
   podkategorieOptions,
   allKategorie,
   allPodkategorie,
+  onCatalogConfigChanged,
   onStartEdit,
   onUpdateZaklad,
   onUpdateVlastnik,
@@ -555,6 +557,7 @@ export function SkladTableRow({
           podkategorie={allPodkategorie}
           jednotky={jednotky}
           vlastnici={vlastnici}
+          onCatalogConfigChanged={onCatalogConfigChanged}
         />
       ) : null}
     </div>

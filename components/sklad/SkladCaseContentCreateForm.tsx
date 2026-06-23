@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { SelectWithQuickCreate } from "@/app/sklad/sprava/components/SelectWithQuickCreate";
 import { createCaseContentAction } from "@/app/sklad/kusObsahActions";
 import { SubmitButton } from "@/components/ui/SubmitButton";
+import { useSkladInlineConfigQuickCreate } from "@/lib/sklad/hooks/useSkladInlineConfigQuickCreate";
 import type { SpravaObsahReturnTo } from "@/lib/sklad/spravaObsahUrl";
 import type { SkladJednotka, SkladKategorie, SkladPodkategorie } from "@/lib/sklad/types";
 import type { SkladBlok } from "@/lib/sklad/types";
@@ -25,6 +27,8 @@ type SkladCaseContentCreateFormProps = {
   podkategorie: SkladPodkategorie[];
   jednotky: SkladJednotka[];
   vlastnici: TechnickyVlastnik[];
+  /** Po vytvoření číselníku — obnoví katalog v nadřazeném panelu. */
+  onCatalogConfigChanged?: () => void | Promise<void>;
 };
 
 export function SkladCaseContentCreateForm({
@@ -38,6 +42,7 @@ export function SkladCaseContentCreateForm({
   podkategorie,
   jednotky,
   vlastnici,
+  onCatalogConfigChanged,
 }: SkladCaseContentCreateFormProps) {
   const [blokId, setBlokId] = useState(defaults.skladBlokId ?? bloky[0]?.sklad_blok_id ?? "");
   const [kategorieId, setKategorieId] = useState(
@@ -46,20 +51,49 @@ export function SkladCaseContentCreateForm({
   const [podkategorieId, setPodkategorieId] = useState(
     defaults.podkategorieTechnikyId ?? ""
   );
+  const [jednotka, setJednotka] = useState(defaults.jednotka || "ks");
+
+  const {
+    bloky: blokyList,
+    kategorie: kategorieList,
+    podkategorie: podkategorieList,
+    jednotky: jednotkyList,
+    onQuickCreateBlok,
+    onQuickCreateKategorie,
+    onQuickCreatePodkategorie,
+    onQuickCreateJednotka,
+  } = useSkladInlineConfigQuickCreate({
+    bloky,
+    kategorie,
+    podkategorie,
+    jednotky,
+    selection: {
+      blokId,
+      kategorieId,
+      setBlokId,
+      setKategorieId,
+      setPodkategorieId,
+      setJednotka,
+    },
+    onAfterCreate: onCatalogConfigChanged,
+  });
 
   const kategorieOptions = useMemo(
-    () => kategorie.filter((row) => (row.sklad_blok_id ?? null) === (blokId || null)),
-    [kategorie, blokId]
+    () =>
+      kategorieList.filter((row) => (row.sklad_blok_id ?? null) === (blokId || null)),
+    [kategorieList, blokId]
   );
 
   const podkategorieOptions = useMemo(
     () =>
-      podkategorie.filter((row) => row.kategorie_techniky_id === kategorieId),
-    [podkategorie, kategorieId]
+      podkategorieList.filter((row) => row.kategorie_techniky_id === kategorieId),
+    [podkategorieList, kategorieId]
   );
 
   const inputClass =
-    "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30";
+    "w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30";
+
+  const selectClass = `${inputClass} min-w-0 flex-1`;
 
   return (
     <form
@@ -79,83 +113,108 @@ export function SkladCaseContentCreateForm({
 
       <label className="block text-sm font-semibold text-slate-200">
         Název položky *
-        <input name="nazev" required placeholder="Kabinet P3.9 outdoor" className={inputClass} />
+        <input name="nazev" required placeholder="Kabinet P3.9 outdoor" className={`mt-2 ${inputClass}`} />
       </label>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block text-sm font-semibold text-slate-200">
+        <div className="block text-sm font-semibold text-slate-200">
           Okruh *
-          <select
-            name="sklad_blok_id"
-            required
-            value={blokId}
-            onChange={(event) => {
-              setBlokId(event.target.value);
-              setKategorieId("");
-              setPodkategorieId("");
-            }}
-            className={inputClass}
-          >
-            <option value="">Vyberte okruh</option>
-            {bloky.map((blok) => (
-              <option key={blok.sklad_blok_id} value={blok.sklad_blok_id}>
-                {blok.nazev}
-              </option>
-            ))}
-          </select>
-        </label>
+          <div className="mt-2 flex min-w-0 items-center">
+            <SelectWithQuickCreate
+              name="sklad_blok_id"
+              value={blokId}
+              required
+              onChange={(value) => {
+                setBlokId(value);
+                setKategorieId("");
+                setPodkategorieId("");
+              }}
+              placeholder="Vyberte okruh"
+              selectClassName={selectClass}
+              variant="form"
+              options={blokyList.map((blok) => ({
+                value: blok.sklad_blok_id,
+                label: blok.nazev,
+              }))}
+              quickCreateTitle="Přidat okruh"
+              quickCreatePlaceholder="Název okruhu"
+              onQuickCreate={onQuickCreateBlok}
+            />
+          </div>
+        </div>
 
-        <label className="block text-sm font-semibold text-slate-200">
+        <div className="block text-sm font-semibold text-slate-200">
           Kategorie *
-          <select
-            name="kategorie_techniky_id"
-            required
-            value={kategorieId}
-            onChange={(event) => {
-              setKategorieId(event.target.value);
-              setPodkategorieId("");
-            }}
-            className={inputClass}
-          >
-            <option value="">Vyberte kategorii</option>
-            {kategorieOptions.map((row) => (
-              <option key={row.kategorie_techniky_id} value={row.kategorie_techniky_id}>
-                {row.nazev}
-              </option>
-            ))}
-          </select>
-        </label>
+          <div className="mt-2 flex min-w-0 items-center">
+            <SelectWithQuickCreate
+              name="kategorie_techniky_id"
+              value={kategorieId}
+              required
+              onChange={(value) => {
+                setKategorieId(value);
+                setPodkategorieId("");
+              }}
+              placeholder="Vyberte kategorii"
+              disabled={!blokId}
+              selectClassName={selectClass}
+              variant="form"
+              options={kategorieOptions.map((row) => ({
+                value: row.kategorie_techniky_id,
+                label: row.nazev,
+              }))}
+              quickCreateTitle="Přidat kategorii"
+              quickCreatePlaceholder="Název kategorie"
+              quickCreateDisabled={!blokId}
+              quickCreateDisabledTitle="Nejdřív vyber okruh"
+              onQuickCreate={onQuickCreateKategorie}
+            />
+          </div>
+        </div>
 
-        <label className="block text-sm font-semibold text-slate-200">
+        <div className="block text-sm font-semibold text-slate-200">
           Podkategorie
-          <select
-            name="podkategorie_techniky_id"
-            value={podkategorieId}
-            onChange={(event) => setPodkategorieId(event.target.value)}
-            className={inputClass}
-          >
-            <option value="">—</option>
-            {podkategorieOptions.map((row) => (
-              <option
-                key={row.podkategorie_techniky_id}
-                value={row.podkategorie_techniky_id}
-              >
-                {row.nazev}
-              </option>
-            ))}
-          </select>
-        </label>
+          <div className="mt-2 flex min-w-0 items-center">
+            <SelectWithQuickCreate
+              name="podkategorie_techniky_id"
+              value={podkategorieId}
+              onChange={setPodkategorieId}
+              placeholder="—"
+              disabled={!kategorieId}
+              selectClassName={selectClass}
+              variant="form"
+              options={podkategorieOptions.map((row) => ({
+                value: row.podkategorie_techniky_id,
+                label: row.nazev,
+              }))}
+              quickCreateTitle="Přidat podkategorii"
+              quickCreatePlaceholder="Název podkategorie"
+              quickCreateDisabled={!kategorieId}
+              quickCreateDisabledTitle="Nejdřív vyber kategorii"
+              onQuickCreate={onQuickCreatePodkategorie}
+            />
+          </div>
+        </div>
 
-        <label className="block text-sm font-semibold text-slate-200">
+        <div className="block text-sm font-semibold text-slate-200">
           Jednotka *
-          <select name="jednotka" required defaultValue={defaults.jednotka || "ks"} className={inputClass}>
-            {jednotky.map((row) => (
-              <option key={row.jednotka_id} value={row.nazev}>
-                {row.nazev}
-              </option>
-            ))}
-          </select>
-        </label>
+          <div className="mt-2 flex min-w-0 items-center">
+            <SelectWithQuickCreate
+              name="jednotka"
+              value={jednotka}
+              required
+              onChange={setJednotka}
+              selectClassName={selectClass}
+              variant="form"
+              options={jednotkyList.map((row) => ({
+                value: row.nazev,
+                label: row.nazev,
+              }))}
+              quickCreateTitle="Přidat jednotku"
+              quickCreatePlaceholder="Název jednotky"
+              onQuickCreate={onQuickCreateJednotka}
+            />
+          </div>
+        </div>
 
         <label className="block text-sm font-semibold text-slate-200">
           Počet kusů *
@@ -166,7 +225,7 @@ export function SkladCaseContentCreateForm({
             max={200}
             required
             defaultValue={8}
-            className={inputClass}
+            className={`mt-2 ${inputClass}`}
           />
         </label>
 
@@ -176,7 +235,7 @@ export function SkladCaseContentCreateForm({
             name="technicky_vlastnik_id"
             required
             defaultValue={defaults.technickyVlastnikId ?? ""}
-            className={inputClass}
+            className={`mt-2 ${inputClass}`}
           >
             <option value="">Vyberte vlastníka</option>
             {vlastnici.map((row) => (
@@ -190,7 +249,7 @@ export function SkladCaseContentCreateForm({
 
       <label className="block text-sm font-semibold text-slate-200">
         Poznámka (volitelně)
-        <input name="poznamka" className={inputClass} />
+        <input name="poznamka" className={`mt-2 ${inputClass}`} />
       </label>
 
       <SubmitButton
