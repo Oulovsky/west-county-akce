@@ -100,10 +100,6 @@ type Props = {
   onDraftChange: Dispatch<SetStateAction<Draft>>;
   /** Okamžité uložení jednotky (inline, bez režimu úprav celého řádku). */
   onUpdateJednotka?: (value: string) => void;
-  onQuickCreatePodkategorie?: (
-    name: string
-  ) => Promise<{ error?: string } | void>;
-  onQuickCreateJednotka?: (name: string) => Promise<{ error?: string } | void>;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   readOnly?: boolean;
 };
@@ -149,8 +145,6 @@ export function SkladTableRow({
   onUpdateVlastnik,
   onDraftChange,
   onUpdateJednotka,
-  onQuickCreatePodkategorie,
-  onQuickCreateJednotka,
   onKeyDown,
   readOnly = false,
 }: Props) {
@@ -325,6 +319,7 @@ export function SkladTableRow({
         <div className={SPRAVA_TABLE_INHERITED_CELL}>
           <SelectWithQuickCreate
             variant="table"
+            showQuickCreate={false}
             value={item.podkategorie_techniky_id ?? ""}
             disabled={isSaving || readOnly}
             onChange={(value) =>
@@ -337,11 +332,6 @@ export function SkladTableRow({
               value: p.podkategorie_techniky_id,
               label: p.nazev,
             }))}
-            quickCreateTitle="Přidat podkategorii"
-            quickCreatePlaceholder="Název podkategorie"
-            quickCreateDisabled={!item.kategorie_techniky_id}
-            quickCreateDisabledTitle="Nejdřív vyber kategorii"
-            onQuickCreate={onQuickCreatePodkategorie ?? (async () => {})}
           />
         </div>
 
@@ -493,6 +483,7 @@ export function SkladTableRow({
           ) : (
             <SelectWithQuickCreate
               variant="table"
+              showQuickCreate={false}
               value={jednotkaValue}
               disabled={isSaving}
               onChange={(value) => {
@@ -510,9 +501,6 @@ export function SkladTableRow({
                 value: j.nazev,
                 label: j.nazev,
               }))}
-              quickCreateTitle="Přidat jednotku"
-              quickCreatePlaceholder="Název jednotky"
-              onQuickCreate={onQuickCreateJednotka ?? (async () => {})}
             />
           )}
         </div>

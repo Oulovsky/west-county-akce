@@ -53,35 +53,30 @@ export function listActiveJednotky(jednotky: SkladJednotka[]): SkladJednotka[] {
 }
 
 /**
- * Možnosti podkategorie pro select.
- * S kategorií: filtr podle kategorie. Bez kategorie: celý katalog.
- * Aktuálně nastavená hodnota zůstane v seznamu, i když filtr neodpovídá.
+ * Možnosti podkategorie pro select — celý katalog bez filtru podle kategorie.
+ * Aktuálně nastavená hodnota zůstane v seznamu, i když v katalogu chybí.
  */
 export function listPodkategorieSelectOptions(
   podkategorie: SkladPodkategorie[],
-  kategorieId: string | null,
   currentPodkategorieId?: string | null
 ): SkladPodkategorie[] {
   const sorted = listActivePodkategorie(podkategorie);
-  const filtered = kategorieId
-    ? sorted.filter((row) => row.kategorie_techniky_id === kategorieId)
-    : sorted;
 
   if (
-    currentPodkategorieId &&
-    !filtered.some(
-      (row) => row.podkategorie_techniky_id === currentPodkategorieId
-    )
+    !currentPodkategorieId ||
+    sorted.some((row) => row.podkategorie_techniky_id === currentPodkategorieId)
   ) {
-    const current = sorted.find(
-      (row) => row.podkategorie_techniky_id === currentPodkategorieId
-    );
-    if (current) {
-      return [current, ...filtered];
-    }
+    return sorted;
   }
 
-  return filtered;
+  const current = podkategorie.find(
+    (row) => row.podkategorie_techniky_id === currentPodkategorieId
+  );
+  if (current) {
+    return [current, ...sorted];
+  }
+
+  return sorted;
 }
 
 /** Možnosti jednotky pro select — včetně aktuální hodnoty mimo katalog. */
@@ -101,7 +96,8 @@ export function listJednotkaSelectOptions(
 /** @deprecated Použij listPodkategorieSelectOptions */
 export function listPodkategorieForKategorie(
   podkategorie: SkladPodkategorie[],
-  kategorieId: string | null
+  _kategorieId: string | null,
+  currentPodkategorieId?: string | null
 ): SkladPodkategorie[] {
-  return listPodkategorieSelectOptions(podkategorie, kategorieId);
+  return listPodkategorieSelectOptions(podkategorie, currentPodkategorieId);
 }

@@ -608,26 +608,14 @@ export function SkladPolozkyCatalog() {
   }, [load, reloadCatalog]);
 
   const getPodkategorieOptions = useCallback(
-    (
-      kategorieId: string | null,
-      currentPodkategorieId?: string | null
-    ) =>
-      listPodkategorieSelectOptions(
-        podkategorie,
-        kategorieId,
-        currentPodkategorieId
-      ),
+    (currentPodkategorieId?: string | null) =>
+      listPodkategorieSelectOptions(podkategorie, currentPodkategorieId),
     [podkategorie]
   );
 
   const newPodkategorieOptions = useMemo(
-    () =>
-      listPodkategorieSelectOptions(
-        podkategorie,
-        newKategorieId || null,
-        newPodkategorieId || null
-      ),
-    [podkategorie, newKategorieId, newPodkategorieId]
+    () => listPodkategorieSelectOptions(podkategorie, newPodkategorieId || null),
+    [podkategorie, newPodkategorieId]
   );
 
   const newJednotkaOptions = useMemo(
@@ -740,50 +728,6 @@ export function SkladPolozkyCatalog() {
     },
     [reloadCatalog]
   );
-
-  async function handleQuickCreatePodkategorieForItem(
-    kategorieId: string | null,
-    polozkaId: string,
-    nazev: string
-  ) {
-    if (!kategorieId) return { error: "Nejdřív vyber kategorii." };
-
-    const result = await createInlinePodkategorie(supabase, nazev, kategorieId);
-    if (!result.ok) return inlineCreateError(result);
-
-    setPodkategorie((prev) => {
-      if (prev.some((p) => p.podkategorie_techniky_id === result.value)) {
-        return prev;
-      }
-      return [
-        ...prev,
-        {
-          podkategorie_techniky_id: result.value,
-          nazev: result.nazev,
-          kategorie_techniky_id: kategorieId,
-          kategorie_nazev: null,
-        },
-      ];
-    });
-
-    await reloadCatalog();
-    await updateZaklad(polozkaId, { podkategorieId: result.value });
-    return {};
-  }
-
-  async function handleQuickCreateJednotkaForItem(
-    polozkaId: string,
-    nazev: string
-  ) {
-    const result = await createInlineJednotka(supabase, nazev);
-    if (!result.ok) return inlineCreateError(result);
-
-    const catalogOk = await reloadCatalog();
-    if (!catalogOk) return { error: "Nepodařilo se načíst katalog." };
-
-    await updateJednotka(polozkaId, result.value);
-    return {};
-  }
 
   function resetAddForm() {
     const firstBlokId = bloky[0]?.sklad_blok_id ?? "";
@@ -1132,22 +1076,6 @@ export function SkladPolozkyCatalog() {
         ? patch.podkategorieId
         : oldItem.podkategorie_techniky_id;
 
-    if (
-      patch.kategorieId !== undefined &&
-      patch.kategorieId !== oldItem.kategorie_techniky_id &&
-      patch.podkategorieId === undefined
-    ) {
-      const keepPodkategorie =
-        finalPodkategorieId &&
-        patch.kategorieId &&
-        podkategorie.some(
-          (row) =>
-            row.podkategorie_techniky_id === finalPodkategorieId &&
-            row.kategorie_techniky_id === patch.kategorieId
-        );
-      finalPodkategorieId = keepPodkategorie ? finalPodkategorieId : null;
-    }
-
     const zakladChanged =
       finalKategorieId !== oldItem.kategorie_techniky_id ||
       finalBlokId !== oldItem.sklad_blok_id;
@@ -1439,7 +1367,6 @@ export function SkladPolozkyCatalog() {
 
           const kategorieOptions = listActiveKategorie(kategorie);
           const podkategorieOptions = getPodkategorieOptions(
-            i.kategorie_techniky_id ?? null,
             i.podkategorie_techniky_id
           );
 
@@ -1487,16 +1414,6 @@ export function SkladPolozkyCatalog() {
               }
               onUpdateJednotka={(value) =>
                 updateJednotka(i.skladova_polozka_id, value)
-              }
-              onQuickCreatePodkategorie={(name) =>
-                handleQuickCreatePodkategorieForItem(
-                  i.kategorie_techniky_id,
-                  i.skladova_polozka_id,
-                  name
-                )
-              }
-              onQuickCreateJednotka={(name) =>
-                handleQuickCreateJednotkaForItem(i.skladova_polozka_id, name)
               }
               onDraftChange={setDraft}
               onKeyDown={(e) => {

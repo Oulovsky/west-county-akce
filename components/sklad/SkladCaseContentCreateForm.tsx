@@ -90,12 +90,8 @@ export function SkladCaseContentCreateForm({
 
   const podkategorieOptions = useMemo(
     () =>
-      listPodkategorieSelectOptions(
-        podkategorieList,
-        kategorieId || null,
-        podkategorieId || null
-      ),
-    [podkategorieList, kategorieId, podkategorieId]
+      listPodkategorieSelectOptions(podkategorieList, podkategorieId || null),
+    [podkategorieList, podkategorieId]
   );
 
   const jednotkaOptions = useMemo(
@@ -162,7 +158,6 @@ export function SkladCaseContentCreateForm({
               value={kategorieId}
               onChange={(value) => {
                 setKategorieId(value);
-                setPodkategorieId("");
               }}
               placeholder="Bez kategorie"
               selectClassName={selectClass}

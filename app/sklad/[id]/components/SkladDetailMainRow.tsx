@@ -26,7 +26,7 @@ type SkladDetailMainRowProps = {
   editFormId: string;
   rowGridClassName: string;
   kategorie: SkladKategorie[];
-  /** Celý katalog podkategorií — výběr se filtruje podle aktuální kategorie v UI. */
+  /** Celý katalog podkategorií — bez filtru podle kategorie. */
   podkategorie: SkladPodkategorie[];
   jednotky: SkladJednotka[];
   celkemKusu: number;
@@ -35,19 +35,6 @@ type SkladDetailMainRowProps = {
   updateAction: (formData: FormData) => Promise<void>;
   readOnly?: boolean;
 };
-
-function podkategorieJeProKategorii(
-  podkategorieId: string,
-  kategorieId: string,
-  all: SkladPodkategorie[]
-) {
-  if (!podkategorieId) return true;
-  return all.some(
-    (p) =>
-      p.podkategorie_techniky_id === podkategorieId &&
-      (!kategorieId || p.kategorie_techniky_id === kategorieId)
-  );
-}
 
 export function SkladDetailMainRow({
   row,
@@ -93,12 +80,8 @@ export function SkladDetailMainRow({
 
   const podkategorieOptions = useMemo(
     () =>
-      listPodkategorieSelectOptions(
-        allPodkategorie,
-        kategorieId || null,
-        podkategorieId || null
-      ),
-    [allPodkategorie, kategorieId, podkategorieId]
+      listPodkategorieSelectOptions(allPodkategorie, podkategorieId || null),
+    [allPodkategorie, podkategorieId]
   );
 
   const jednotkaOptions = useMemo(
@@ -117,9 +100,6 @@ export function SkladDetailMainRow({
 
   const onKategorieChange = (next: string) => {
     setKategorieId(next);
-    setPodkategorieId((prev) =>
-      podkategorieJeProKategorii(prev, next, allPodkategorie) ? prev : ""
-    );
     scheduleSubmit();
   };
 
