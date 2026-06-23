@@ -12,7 +12,7 @@ import {
   insertKusIntoCaseAction,
   removeKusFromCaseAction,
 } from "@/app/sklad/kusObsahActions";
-import { spravaTableGridStyle, SPRAVA_TABLE_MIN_WIDTH } from "@/app/sklad/sprava/components/spravaTableLayout";
+import { spravaTableGridStyle } from "@/app/sklad/sprava/components/spravaTableLayout";
 import {
   filterChildOptionsForParent,
   formatKusObsahContainedLabel,
@@ -278,8 +278,7 @@ export function SkladKusCaseTreePanel({
   if (layout === "sprava") {
     return (
       <div
-        className="w-full min-w-0 border-t border-emerald-900/30 bg-slate-950/90"
-        style={{ minWidth: SPRAVA_TABLE_MIN_WIDTH }}
+        className="w-full min-w-0 border-t border-emerald-800/25"
         role="group"
         aria-label={`Obsah case ${parentDisplayLabel}`}
       >
@@ -288,7 +287,7 @@ export function SkladKusCaseTreePanel({
           style={spravaTableGridStyle}
         >
           <div
-            className="sticky left-0 z-10 flex min-w-0 flex-col gap-2 bg-slate-950/95 py-0.5 pl-10 pr-1"
+            className="sticky left-0 z-10 flex min-w-0 flex-col gap-2 bg-emerald-950/35 py-0.5 pl-10 pr-1"
             style={{ gridColumn: "1 / -1" }}
           >
             {toolbar}

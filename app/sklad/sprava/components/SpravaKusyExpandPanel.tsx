@@ -15,7 +15,7 @@ import {
   buildSpravaPolozkaHref,
 } from "@/lib/sklad/spravaObsahUrl";
 import { enrichObsahChildRows } from "@/lib/sklad/enrichObsahChildRows";
-import { SPRAVA_TABLE_MIN_WIDTH } from "./spravaTableLayout";
+import { spravaTableGridStyle, SPRAVA_CASE_EXPANDED_BLOCK_CLASS, SPRAVA_KUS_NAME_INDENT_CLASS } from "./spravaTableLayout";
 import {
   SKLAD_EMPTY_LABEL,
   SKLAD_EMPTY_LABEL_EM,
@@ -54,7 +54,6 @@ import { useSpravaKusSelection } from "./SpravaKusSelectionContext";
 import { useSpravaTableScroll } from "./SpravaTableScrollContext";
 import { formatMoney } from "./formatMoney";
 import { formatNumber } from "./formatNumber";
-import { spravaTableGridStyle } from "./spravaTableLayout";
 import {
   tableDangerBoxRight,
   tableMutedBoxRight,
@@ -280,11 +279,13 @@ function SpravaExpandKusRow({
     <li
       className={[
         kus.aktivni ? "" : "opacity-60",
-        isCaseExpanded ? "ring-1 ring-inset ring-emerald-900/40" : "",
+        isCaseExpanded ? SPRAVA_CASE_EXPANDED_BLOCK_CLASS : "",
       ].join(" ")}
     >
       <div className={KUS_SUBROW_GRID_CLASS} style={spravaTableGridStyle}>
-        <div className="sticky left-0 z-10 flex min-h-8 min-w-0 flex-col gap-0.5 bg-slate-950/95 pr-1 pt-0.5">
+        <div
+          className={`sticky left-0 z-10 flex min-h-8 min-w-0 flex-col gap-0.5 bg-inherit pr-1 pt-0.5 ${SPRAVA_KUS_NAME_INDENT_CLASS}`}
+        >
           <div className="flex min-h-8 min-w-0 items-center gap-1.5">
             <SpravaKusCheckbox
               checked={checked}
@@ -697,7 +698,6 @@ export function SpravaKusyExpandPanel({
   return (
     <div
       className="w-full min-w-0 border-t border-slate-800/80 bg-slate-950/80"
-      style={{ minWidth: SPRAVA_TABLE_MIN_WIDTH }}
       aria-label="Rozpis kusů"
     >
       <div className="min-w-0 px-0 py-1.5">

@@ -3,7 +3,12 @@
 import { useSpravaKusSelection } from "@/app/sklad/sprava/components/SpravaKusSelectionContext";
 import { formatMoney } from "@/app/sklad/sprava/components/formatMoney";
 import { formatNumber } from "@/app/sklad/sprava/components/formatNumber";
-import { spravaTableGridStyle } from "@/app/sklad/sprava/components/spravaTableLayout";
+import {
+  spravaTableGridStyle,
+  SPRAVA_CASE_CHILD_NAME_INDENT_CLASS,
+  SPRAVA_CASE_CHILD_ROW_BG_CLASS,
+  SPRAVA_CASE_CHILD_STICKY_BG_CLASS,
+} from "@/app/sklad/sprava/components/spravaTableLayout";
 import {
   SKLAD_EMPTY_LABEL,
   SKLAD_EMPTY_LABEL_EM,
@@ -87,9 +92,18 @@ export function SpravaCaseObsahChildRow({
     : "Kus není přiřazen k aktivní zakázce.";
 
   return (
-    <li className="border-t border-slate-800/60" role="listitem">
+    <li
+      className={`border-t border-emerald-900/25 ${SPRAVA_CASE_CHILD_ROW_BG_CLASS}`}
+      role="listitem"
+    >
       <div className={CHILD_SUBROW_GRID_CLASS} style={spravaTableGridStyle}>
-        <div className="sticky left-0 z-10 flex min-h-8 min-w-0 items-center gap-1 bg-slate-950/95 pr-1 pt-0.5">
+        <div
+          className={`sticky left-0 z-10 flex min-h-8 min-w-0 items-center gap-1.5 ${SPRAVA_CASE_CHILD_NAME_INDENT_CLASS} ${SPRAVA_CASE_CHILD_STICKY_BG_CLASS} pr-1 pt-0.5`}
+        >
+          <span
+            className="inline-block h-8 w-4 shrink-0 border-l-2 border-emerald-600/55"
+            aria-hidden
+          />
           <input
             type="checkbox"
             checked={checked}
@@ -97,11 +111,6 @@ export function SpravaCaseObsahChildRow({
             onClick={(e) => e.stopPropagation()}
             aria-label={`Vybrat ${child.displayLabel}`}
             className="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-950 text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500/60 disabled:opacity-50"
-          />
-          <span className="inline-block h-8 w-8 shrink-0" aria-hidden />
-          <span
-            className="inline-block h-8 w-4 shrink-0 border-l-2 border-emerald-700/50"
-            aria-hidden
           />
           <span
             className="min-w-0 flex-1 truncate pl-0.5 font-medium text-slate-200"
