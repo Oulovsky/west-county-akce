@@ -134,7 +134,7 @@ export function AddItemModal({
               value={newPodkategorieId}
               onChange={setNewPodkategorieId}
               placeholder="Bez podkategorie"
-              disabled={isCreating || !newKategorieId}
+              disabled={isCreating}
               selectClassName={modalSelectClass}
               options={newPodkategorieOptions.map((p) => ({
                 value: p.podkategorie_techniky_id,

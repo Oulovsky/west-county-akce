@@ -7,7 +7,8 @@ import { SubmitButton } from "@/components/ui/SubmitButton";
 import { useSkladInlineConfigQuickCreate } from "@/lib/sklad/hooks/useSkladInlineConfigQuickCreate";
 import {
   listActiveKategorie,
-  listPodkategorieForKategorie,
+  listJednotkaSelectOptions,
+  listPodkategorieSelectOptions,
 } from "@/lib/sklad/kategorieCatalog";
 import type { SpravaObsahReturnTo } from "@/lib/sklad/spravaObsahUrl";
 import type { SkladJednotka, SkladKategorie, SkladPodkategorie } from "@/lib/sklad/types";
@@ -88,8 +89,18 @@ export function SkladCaseContentCreateForm({
   );
 
   const podkategorieOptions = useMemo(
-    () => listPodkategorieForKategorie(podkategorieList, kategorieId || null),
-    [podkategorieList, kategorieId]
+    () =>
+      listPodkategorieSelectOptions(
+        podkategorieList,
+        kategorieId || null,
+        podkategorieId || null
+      ),
+    [podkategorieList, kategorieId, podkategorieId]
+  );
+
+  const jednotkaOptions = useMemo(
+    () => listJednotkaSelectOptions(jednotkyList, jednotka),
+    [jednotkyList, jednotka]
   );
 
   const inputClass =
@@ -177,7 +188,6 @@ export function SkladCaseContentCreateForm({
               value={podkategorieId}
               onChange={setPodkategorieId}
               placeholder="Bez podkategorie"
-              disabled={!kategorieId}
               selectClassName={selectClass}
               variant="form"
               options={podkategorieOptions.map((row) => ({
@@ -203,7 +213,7 @@ export function SkladCaseContentCreateForm({
               onChange={setJednotka}
               selectClassName={selectClass}
               variant="form"
-              options={jednotkyList.map((row) => ({
+              options={jednotkaOptions.map((row) => ({
                 value: row.nazev,
                 label: row.nazev,
               }))}

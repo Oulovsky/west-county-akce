@@ -14,6 +14,7 @@ import { formatMoney } from "./formatMoney";
 import { formatNumber } from "./formatNumber";
 import { toNumber } from "./toNumber";
 import { SelectWithQuickCreate } from "./SelectWithQuickCreate";
+import { listJednotkaSelectOptions } from "@/lib/sklad/kategorieCatalog";
 import { SpravaKusyExpandPanel } from "./SpravaKusyExpandPanel";
 import { isPolozkaCase } from "@/lib/sklad/caseKus";
 import { useSpravaKusSelection } from "./SpravaKusSelectionContext";
@@ -97,8 +98,12 @@ type Props = {
   onUpdateZaklad: (patch: ZakladPatch) => void;
   onUpdateVlastnik: (vlastnikId: string) => void;
   onDraftChange: Dispatch<SetStateAction<Draft>>;
-  /** Called after jednotka select change — persists immediately (správa table). */
-  onCommitJednotka?: (value: string) => void;
+  /** Okamžité uložení jednotky (inline, bez režimu úprav celého řádku). */
+  onUpdateJednotka?: (value: string) => void;
+  onQuickCreatePodkategorie?: (
+    name: string
+  ) => Promise<{ error?: string } | void>;
+  onQuickCreateJednotka?: (name: string) => Promise<{ error?: string } | void>;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   readOnly?: boolean;
 };
@@ -143,7 +148,9 @@ export function SkladTableRow({
   onUpdateZaklad,
   onUpdateVlastnik,
   onDraftChange,
-  onCommitJednotka,
+  onUpdateJednotka,
+  onQuickCreatePodkategorie,
+  onQuickCreateJednotka,
   onKeyDown,
   readOnly = false,
 }: Props) {
@@ -174,6 +181,8 @@ export function SkladTableRow({
   const kusyInputRef = useRef<HTMLInputElement>(null);
   const nakladInputRef = useRef<HTMLInputElement>(null);
   const jednotkaCellRef = useRef<HTMLDivElement>(null);
+  const jednotkaValue = isEditing ? draft.jednotka : (item.jednotka ?? "");
+  const jednotkaOptions = listJednotkaSelectOptions(jednotky, jednotkaValue);
 
   function beginEdit(target: EditFocusTarget) {
     if (readOnly || isEditing) return;
@@ -316,9 +325,8 @@ export function SkladTableRow({
         <div className={SPRAVA_TABLE_INHERITED_CELL}>
           <SelectWithQuickCreate
             variant="table"
-            showQuickCreate={false}
             value={item.podkategorie_techniky_id ?? ""}
-            disabled={isSaving || !item.kategorie_techniky_id}
+            disabled={isSaving || readOnly}
             onChange={(value) =>
               onUpdateZaklad({ podkategorieId: value || null })
             }
@@ -329,6 +337,11 @@ export function SkladTableRow({
               value: p.podkategorie_techniky_id,
               label: p.nazev,
             }))}
+            quickCreateTitle="Přidat podkategorii"
+            quickCreatePlaceholder="Název podkategorie"
+            quickCreateDisabled={!item.kategorie_techniky_id}
+            quickCreateDisabledTitle="Nejdřív vyber kategorii"
+            onQuickCreate={onQuickCreatePodkategorie ?? (async () => {})}
           />
         </div>
 
@@ -471,32 +484,36 @@ export function SkladTableRow({
 
         <div
           ref={jednotkaCellRef}
-          onClick={() => !isEditing && beginEdit("jednotka")}
           className={SPRAVA_TABLE_CELL_CENTER}
-          style={{ cursor: "pointer" }}
         >
-          {isEditing ? (
-            <SelectWithQuickCreate
-              variant="table"
-              showQuickCreate={false}
-              value={draft.jednotka}
-              onChange={(value) => {
-                onDraftChange((prev) => ({
-                  ...prev,
-                  jednotka: value,
-                }));
-                onCommitJednotka?.(value);
-              }}
-              selectStyle={tableSelectStyle}
-              options={jednotky.map((j) => ({
-                value: j.nazev,
-                label: j.nazev,
-              }))}
-            />
-          ) : (
+          {readOnly ? (
             <span style={tableValueBoxLeft} className="truncate">
               {item.jednotka ?? "-"}
             </span>
+          ) : (
+            <SelectWithQuickCreate
+              variant="table"
+              value={jednotkaValue}
+              disabled={isSaving}
+              onChange={(value) => {
+                if (isEditing) {
+                  onDraftChange((prev) => ({
+                    ...prev,
+                    jednotka: value,
+                  }));
+                }
+                onUpdateJednotka?.(value);
+              }}
+              selectStyle={tableSelectStyle}
+              selectClassName="min-w-0 w-full truncate text-center text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
+              options={jednotkaOptions.map((j) => ({
+                value: j.nazev,
+                label: j.nazev,
+              }))}
+              quickCreateTitle="Přidat jednotku"
+              quickCreatePlaceholder="Název jednotky"
+              onQuickCreate={onQuickCreateJednotka ?? (async () => {})}
+            />
           )}
         </div>
 

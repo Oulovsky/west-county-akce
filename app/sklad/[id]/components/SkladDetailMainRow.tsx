@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { formatNumber } from "@/lib/sklad/helpers";
+import {
+  listActiveKategorie,
+  listJednotkaSelectOptions,
+  listPodkategorieSelectOptions,
+} from "@/lib/sklad/kategorieCatalog";
 import type {
   SkladDetailRow,
   SkladJednotka,
@@ -67,23 +72,38 @@ export function SkladDetailMainRow({
   const [podkategorieId, setPodkategorieId] = useState(() =>
     String(row.podkategorie_techniky_id ?? "")
   );
+  const [jednotka, setJednotka] = useState(() => row.jednotka || "ks");
 
   useEffect(() => {
     setKategorieId(String(row.kategorie_techniky_id ?? ""));
     setPodkategorieId(String(row.podkategorie_techniky_id ?? ""));
+    setJednotka(row.jednotka || "ks");
   }, [
     row.skladova_polozka_id,
     row.kategorie_techniky_id,
     row.podkategorie_techniky_id,
+    row.jednotka,
     row.upraveno_dne,
   ]);
 
-  const filteredPodkategorie = useMemo(
+  const kategorieOptions = useMemo(
+    () => listActiveKategorie(kategorie),
+    [kategorie]
+  );
+
+  const podkategorieOptions = useMemo(
     () =>
-      allPodkategorie.filter(
-        (p) => !kategorieId || p.kategorie_techniky_id === kategorieId
+      listPodkategorieSelectOptions(
+        allPodkategorie,
+        kategorieId || null,
+        podkategorieId || null
       ),
-    [allPodkategorie, kategorieId]
+    [allPodkategorie, kategorieId, podkategorieId]
+  );
+
+  const jednotkaOptions = useMemo(
+    () => listJednotkaSelectOptions(jednotky, jednotka),
+    [jednotky, jednotka]
   );
 
   const scheduleSubmit = useCallback(() => {
@@ -108,7 +128,8 @@ export function SkladDetailMainRow({
     scheduleSubmit();
   };
 
-  const onJednotkaChange = () => {
+  const onJednotkaChange = (next: string) => {
+    setJednotka(next);
     scheduleSubmit();
   };
 
@@ -124,6 +145,7 @@ export function SkladDetailMainRow({
       <input type="hidden" name="celkem_k_dispozici" value={celkemKusu} />
       <input type="hidden" name="kategorie_techniky_id" value={kategorieId} />
       <input type="hidden" name="podkategorie_techniky_id" value={podkategorieId} />
+      <input type="hidden" name="jednotka" value={jednotka} />
 
       <div className="bg-slate-950/30 px-3 py-3">
         <div className={rowGridClassName}>
@@ -145,7 +167,7 @@ export function SkladDetailMainRow({
               className={fieldClassName()}
             >
               <option value="">Bez kategorie</option>
-              {kategorie.map((item) => (
+              {kategorieOptions.map((item) => (
                 <option key={item.kategorie_techniky_id} value={item.kategorie_techniky_id}>
                   {item.nazev}
                 </option>
@@ -161,7 +183,7 @@ export function SkladDetailMainRow({
               className={fieldClassName()}
             >
               <option value="">Bez podkategorie</option>
-              {filteredPodkategorie.map((item) => (
+              {podkategorieOptions.map((item) => (
                 <option key={item.podkategorie_techniky_id} value={item.podkategorie_techniky_id}>
                   {item.nazev}
                 </option>
@@ -213,13 +235,12 @@ export function SkladDetailMainRow({
 
           <div className={centerCellClassName}>
             <select
-              name="jednotka"
-              defaultValue={row.jednotka}
-              onChange={readOnly ? undefined : onJednotkaChange}
+              value={jednotka}
+              onChange={(e) => onJednotkaChange(e.target.value)}
               disabled={readOnly}
               className={fieldClassName("text-center")}
             >
-              {jednotky.map((item) => (
+              {jednotkaOptions.map((item) => (
                 <option key={item.jednotka_id} value={item.nazev}>
                   {item.nazev}
                 </option>

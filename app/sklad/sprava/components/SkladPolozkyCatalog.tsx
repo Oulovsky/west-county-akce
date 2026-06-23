@@ -29,7 +29,8 @@ import {
 import { filterCatalogPolozky } from "@/lib/sklad/caseContentPolozka";
 import {
   listActiveKategorie,
-  listPodkategorieForKategorie,
+  listJednotkaSelectOptions,
+  listPodkategorieSelectOptions,
 } from "@/lib/sklad/kategorieCatalog";
 import {
   enrichSpravaPolozkyWithPodkategorie,
@@ -607,19 +608,36 @@ export function SkladPolozkyCatalog() {
   }, [load, reloadCatalog]);
 
   const getPodkategorieOptions = useCallback(
-    (kategorieId: string | null) =>
-      listPodkategorieForKategorie(podkategorie, kategorieId),
+    (
+      kategorieId: string | null,
+      currentPodkategorieId?: string | null
+    ) =>
+      listPodkategorieSelectOptions(
+        podkategorie,
+        kategorieId,
+        currentPodkategorieId
+      ),
     [podkategorie]
+  );
+
+  const newPodkategorieOptions = useMemo(
+    () =>
+      listPodkategorieSelectOptions(
+        podkategorie,
+        newKategorieId || null,
+        newPodkategorieId || null
+      ),
+    [podkategorie, newKategorieId, newPodkategorieId]
+  );
+
+  const newJednotkaOptions = useMemo(
+    () => listJednotkaSelectOptions(jednotky, newJednotka),
+    [jednotky, newJednotka]
   );
 
   const newKategorieOptions = useMemo(
     () => listActiveKategorie(kategorie),
     [kategorie]
-  );
-
-  const newPodkategorieOptions = useMemo(
-    () => getPodkategorieOptions(newKategorieId || null),
-    [getPodkategorieOptions, newKategorieId]
   );
 
   function inlineCreateError(
@@ -722,6 +740,50 @@ export function SkladPolozkyCatalog() {
     },
     [reloadCatalog]
   );
+
+  async function handleQuickCreatePodkategorieForItem(
+    kategorieId: string | null,
+    polozkaId: string,
+    nazev: string
+  ) {
+    if (!kategorieId) return { error: "Nejdřív vyber kategorii." };
+
+    const result = await createInlinePodkategorie(supabase, nazev, kategorieId);
+    if (!result.ok) return inlineCreateError(result);
+
+    setPodkategorie((prev) => {
+      if (prev.some((p) => p.podkategorie_techniky_id === result.value)) {
+        return prev;
+      }
+      return [
+        ...prev,
+        {
+          podkategorie_techniky_id: result.value,
+          nazev: result.nazev,
+          kategorie_techniky_id: kategorieId,
+          kategorie_nazev: null,
+        },
+      ];
+    });
+
+    await reloadCatalog();
+    await updateZaklad(polozkaId, { podkategorieId: result.value });
+    return {};
+  }
+
+  async function handleQuickCreateJednotkaForItem(
+    polozkaId: string,
+    nazev: string
+  ) {
+    const result = await createInlineJednotka(supabase, nazev);
+    if (!result.ok) return inlineCreateError(result);
+
+    const catalogOk = await reloadCatalog();
+    if (!catalogOk) return { error: "Nepodařilo se načíst katalog." };
+
+    await updateJednotka(polozkaId, result.value);
+    return {};
+  }
 
   function resetAddForm() {
     const firstBlokId = bloky[0]?.sklad_blok_id ?? "";
@@ -888,15 +950,6 @@ export function SkladPolozkyCatalog() {
     [commitRowSave]
   );
 
-  const commitJednotkaChange = useCallback(
-    (polozkaId: string, jednotkaValue: string) => {
-      if (editingId !== polozkaId) return;
-      const snapshot = { ...draftRef.current, jednotka: jednotkaValue };
-      void commitRowSave(polozkaId, snapshot, { exitEdit: true });
-    },
-    [commitRowSave, editingId]
-  );
-
   useEffect(() => {
     function handleUndo(e: KeyboardEvent) {
       if (!(e.ctrlKey && e.key.toLowerCase() === "z")) return;
@@ -1026,6 +1079,43 @@ export function SkladPolozkyCatalog() {
     }
   }
 
+  async function updateJednotka(id: string, jednotkaValue: string) {
+    const trimmed = jednotkaValue.trim();
+    if (!trimmed) return;
+
+    const oldItem = items.find((item) => item.skladova_polozka_id === id);
+    if (!oldItem || (oldItem.jednotka ?? "") === trimmed) return;
+
+    const previous = items;
+    setSavingId(id);
+
+    setItems((prev) =>
+      prev.map((item) =>
+        item.skladova_polozka_id === id ? { ...item, jednotka: trimmed } : item
+      )
+    );
+
+    const { error } = await supabase.rpc("update_skladova_polozka_detail", {
+      p_id: id,
+      p_nazev: oldItem.nazev,
+      p_kusy: oldItem.celkem_k_dispozici,
+      p_jednotka: trimmed,
+      p_naklad: oldItem.interni_naklad,
+      p_rent: oldItem.fakturacni_cena,
+    });
+
+    setSavingId(null);
+
+    if (error) {
+      setItems(previous);
+      alert(error.message);
+      return;
+    }
+
+    setHighlightId(id);
+    window.setTimeout(() => setHighlightId(null), 1000);
+  }
+
   async function updateZaklad(id: string, patch: ZakladPatch) {
     const previous = items;
     const oldItem = items.find((item) => item.skladova_polozka_id === id);
@@ -1047,7 +1137,15 @@ export function SkladPolozkyCatalog() {
       patch.kategorieId !== oldItem.kategorie_techniky_id &&
       patch.podkategorieId === undefined
     ) {
-      finalPodkategorieId = null;
+      const keepPodkategorie =
+        finalPodkategorieId &&
+        patch.kategorieId &&
+        podkategorie.some(
+          (row) =>
+            row.podkategorie_techniky_id === finalPodkategorieId &&
+            row.kategorie_techniky_id === patch.kategorieId
+        );
+      finalPodkategorieId = keepPodkategorie ? finalPodkategorieId : null;
     }
 
     const zakladChanged =
@@ -1305,7 +1403,7 @@ export function SkladPolozkyCatalog() {
         onSave={handleCreateItem}
         isCreating={isCreating}
         bloky={bloky}
-        jednotky={jednotky}
+        jednotky={newJednotkaOptions}
         newBlokId={newBlokId}
         setNewBlokId={setNewBlokId}
         newKategorieId={newKategorieId}
@@ -1341,7 +1439,8 @@ export function SkladPolozkyCatalog() {
 
           const kategorieOptions = listActiveKategorie(kategorie);
           const podkategorieOptions = getPodkategorieOptions(
-            i.kategorie_techniky_id
+            i.kategorie_techniky_id ?? null,
+            i.podkategorie_techniky_id
           );
 
             const isObsahPolozka = obsahPolozkaId === i.skladova_polozka_id;
@@ -1386,12 +1485,20 @@ export function SkladPolozkyCatalog() {
               onUpdateZaklad={(patch) =>
                 updateZaklad(i.skladova_polozka_id, patch)
               }
-              onDraftChange={setDraft}
-              onCommitJednotka={
-                isEditing
-                  ? (value) => commitJednotkaChange(i.skladova_polozka_id, value)
-                  : undefined
+              onUpdateJednotka={(value) =>
+                updateJednotka(i.skladova_polozka_id, value)
               }
+              onQuickCreatePodkategorie={(name) =>
+                handleQuickCreatePodkategorieForItem(
+                  i.kategorie_techniky_id,
+                  i.skladova_polozka_id,
+                  name
+                )
+              }
+              onQuickCreateJednotka={(name) =>
+                handleQuickCreateJednotkaForItem(i.skladova_polozka_id, name)
+              }
+              onDraftChange={setDraft}
               onKeyDown={(e) => {
                 if (readOnly) return;
                 handleKeyDown(e, i.skladova_polozka_id);
