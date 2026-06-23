@@ -22,6 +22,7 @@ import {
   SPRAVA_TABLE_CELL,
   SPRAVA_TABLE_CELL_CENTER,
   SPRAVA_TABLE_CELL_STICKY,
+  SPRAVA_TABLE_INHERITED_CELL,
   SPRAVA_TABLE_ROW_CLASS,
   spravaTableGridStyle,
 } from "./spravaTableLayout";
@@ -273,7 +274,7 @@ export function SkladTableRow({
           )}
         </div>
 
-        <div className={SPRAVA_TABLE_CELL}>
+        <div className={SPRAVA_TABLE_INHERITED_CELL}>
           <SelectWithQuickCreate
             variant="table"
             showQuickCreate={false}
@@ -281,6 +282,7 @@ export function SkladTableRow({
             disabled={isSaving || readOnly}
             onChange={(value) => onUpdateZaklad(null, null, value || null)}
             selectStyle={tableSelectStyle}
+            selectClassName="min-w-0 w-full truncate text-center text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
             placeholder="Nepřiřazeno"
             options={bloky.map((b) => ({
               value: b.sklad_blok_id,
@@ -289,7 +291,7 @@ export function SkladTableRow({
           />
         </div>
 
-        <div className={SPRAVA_TABLE_CELL}>
+        <div className={SPRAVA_TABLE_INHERITED_CELL}>
           <SelectWithQuickCreate
             variant="table"
             showQuickCreate={false}
@@ -299,6 +301,7 @@ export function SkladTableRow({
               onUpdateZaklad(value || null, null, item.sklad_blok_id)
             }
             selectStyle={tableSelectStyle}
+            selectClassName="min-w-0 w-full truncate text-center text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
             placeholder="Bez kategorie"
             options={kategorieOptions.map((k) => ({
               value: k.kategorie_techniky_id,
@@ -307,7 +310,7 @@ export function SkladTableRow({
           />
         </div>
 
-        <div className={SPRAVA_TABLE_CELL}>
+        <div className={SPRAVA_TABLE_INHERITED_CELL}>
           <SelectWithQuickCreate
             variant="table"
             showQuickCreate={false}
@@ -321,6 +324,7 @@ export function SkladTableRow({
               )
             }
             selectStyle={tableSelectStyle}
+            selectClassName="min-w-0 w-full truncate text-center text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
             placeholder="Bez podkategorie"
             options={podkategorieOptions.map((p) => ({
               value: p.podkategorie_techniky_id,
@@ -329,7 +333,7 @@ export function SkladTableRow({
           />
         </div>
 
-        <div className={SPRAVA_TABLE_CELL}>
+        <div className={SPRAVA_TABLE_INHERITED_CELL}>
           <select
             value={item.technicky_vlastnik_id ?? ""}
             disabled={isSaving || readOnly}
@@ -338,7 +342,7 @@ export function SkladTableRow({
               if (value) onUpdateVlastnik(value);
             }}
             style={tableSelectStyle}
-            className="min-w-0 max-w-full truncate text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
+            className="min-w-0 w-full truncate text-center text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600/50"
             title="Vlastník techniky"
           >
             {(item.technicky_vlastnik_id &&

@@ -39,7 +39,14 @@ export const SPRAVA_KUS_NAME_INDENT_CLASS = "pl-4";
 export const SPRAVA_CASE_CHILD_NAME_INDENT_CLASS = "pl-10";
 
 export const SPRAVA_TABLE_ROW_CLASS =
-  "grid border-t border-slate-800 py-1.5 text-[13px] transition items-center";
+  "grid items-start border-t border-slate-800 px-2 py-1 text-[13px] transition";
+
+/** Buňky děděných sloupců (Okruh, Kategorie, …) — stejné zarovnání jako u kusů. */
+export const SPRAVA_TABLE_INHERITED_CELL =
+  "flex min-h-8 min-w-0 items-center justify-center px-1 pt-0.5";
+
+export const SPRAVA_TABLE_BODY_SUBROW_GRID =
+  "grid items-start px-2 py-1 text-xs text-slate-300";
 
 export const SPRAVA_TABLE_HEADER_CLASS =
   "grid border-b border-slate-700 bg-slate-900/95 py-1 text-[9px] font-semibold uppercase tracking-normal text-slate-300 items-center min-h-[2.5rem]";

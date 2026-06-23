@@ -258,6 +258,33 @@ export async function queryActiveChildrenInCase(
   return mapObsahLinksToChildRows(client, links);
 }
 
+export async function loadActiveChildCountsByParentKusIds(
+  client: SupabaseClient,
+  parentKusIds: string[]
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (parentKusIds.length === 0) return counts;
+
+  for (const parentKusId of parentKusIds) {
+    counts.set(parentKusId, 0);
+  }
+
+  const { data, error } = await client
+    .from(SKLAD_KUS_OBSAH_TABLE)
+    .select("parent_kus_id")
+    .in("parent_kus_id", parentKusIds)
+    .is("vyjmuto_at", null);
+
+  if (error) throw new Error(error.message);
+
+  for (const row of data ?? []) {
+    const parentId = row.parent_kus_id as string;
+    counts.set(parentId, (counts.get(parentId) ?? 0) + 1);
+  }
+
+  return counts;
+}
+
 export async function loadActiveChildrenByParentKusIds(
   client: SupabaseClient,
   parentKusIds: string[]

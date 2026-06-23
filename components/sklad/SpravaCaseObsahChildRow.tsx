@@ -1,13 +1,19 @@
 "use client";
 
+import type { CSSProperties } from "react";
+import { SkladKusCaseTreePanel } from "@/components/sklad/SkladKusCaseTreePanel";
 import { useSpravaKusSelection } from "@/app/sklad/sprava/components/SpravaKusSelectionContext";
+import { SpravaObsahExpandControl } from "@/app/sklad/sprava/components/SpravaObsahExpandControl";
 import { formatMoney } from "@/app/sklad/sprava/components/formatMoney";
 import { formatNumber } from "@/app/sklad/sprava/components/formatNumber";
+import type { SpravaCaseObsahTreeBindings } from "@/app/sklad/sprava/components/spravaCaseObsahTreeTypes";
 import {
   spravaTableGridStyle,
-  SPRAVA_CASE_CHILD_NAME_INDENT_CLASS,
   SPRAVA_CASE_CHILD_ROW_BG_CLASS,
   SPRAVA_CASE_CHILD_STICKY_BG_CLASS,
+  SPRAVA_CASE_EXPANDED_BLOCK_CLASS,
+  SPRAVA_TABLE_BODY_SUBROW_GRID,
+  SPRAVA_TABLE_INHERITED_CELL,
 } from "@/app/sklad/sprava/components/spravaTableLayout";
 import {
   SKLAD_EMPTY_LABEL,
@@ -31,8 +37,6 @@ import {
   tableValueBoxRight,
 } from "@/app/sklad/sprava/components/styles";
 
-const CHILD_SUBROW_GRID_CLASS = "grid items-start px-2 py-1 text-xs text-slate-300";
-
 function inheritedBoxText(value: string | null | undefined): string {
   const t = value?.trim();
   return t ? t : SKLAD_EMPTY_LABEL_EM;
@@ -55,6 +59,10 @@ function kusPoskozeneCell(stav: string): number {
   return 0;
 }
 
+function childNameIndentStyle(depth: number): CSSProperties {
+  return { paddingLeft: `${2.5 + depth * 1.5}rem` };
+}
+
 type Props = {
   child: SkladKusObsahChildRow;
   parentKusId: string;
@@ -63,6 +71,8 @@ type Props = {
   returnTo: SpravaObsahReturnTo;
   canEdit: boolean;
   assignment: SkladKusZakazkaAssignmentRow | null;
+  obsahTree: SpravaCaseObsahTreeBindings;
+  depth?: number;
 };
 
 export function SpravaCaseObsahChildRow({
@@ -70,9 +80,11 @@ export function SpravaCaseObsahChildRow({
   parentKusId,
   parentCaseLabel,
   returnPolozkaId: _returnPolozkaId,
-  returnTo: _returnTo,
-  canEdit,
+  returnTo,
+  canEdit: _canEdit,
   assignment,
+  obsahTree,
+  depth = 0,
 }: Props) {
   const { isKusSelected, toggleKus } = useSpravaKusSelection();
   const vybranyKus = buildSpravaVybranyKusFromObsahChild(
@@ -91,14 +103,32 @@ export function SpravaCaseObsahChildRow({
     ? `${formatZakazkaKusZakazkaLabel(assignment)} · ${formatZakazkaKusStav(assignment.stav)}`
     : "Kus není přiřazen k aktivní zakázce.";
 
+  const nestedChildren =
+    obsahTree.childrenByParentKusId.get(child.childKusId) ?? [];
+  const hasChildContent =
+    (obsahTree.childCountsByKusId.get(child.childKusId) ?? nestedChildren.length) >
+    0;
+  const isObsahExpanded = obsahTree.expandedKusIds.has(child.childKusId);
+  const showInsertForm =
+    isObsahExpanded &&
+    obsahTree.obsahMode === "insert" &&
+    obsahTree.openCaseKusId === child.childKusId;
+  const showUrlFlash =
+    isObsahExpanded && obsahTree.openCaseKusId === child.childKusId;
+
   return (
     <li
-      className={`border-t border-emerald-900/25 ${SPRAVA_CASE_CHILD_ROW_BG_CLASS}`}
+      className={[
+        "border-t border-emerald-900/25",
+        SPRAVA_CASE_CHILD_ROW_BG_CLASS,
+        isObsahExpanded ? SPRAVA_CASE_EXPANDED_BLOCK_CLASS : "",
+      ].join(" ")}
       role="listitem"
     >
-      <div className={CHILD_SUBROW_GRID_CLASS} style={spravaTableGridStyle}>
+      <div className={SPRAVA_TABLE_BODY_SUBROW_GRID} style={spravaTableGridStyle}>
         <div
-          className={`sticky left-0 z-10 flex min-h-8 min-w-0 items-center gap-1.5 ${SPRAVA_CASE_CHILD_NAME_INDENT_CLASS} ${SPRAVA_CASE_CHILD_STICKY_BG_CLASS} pr-1 pt-0.5`}
+          className={`sticky left-0 z-10 flex min-h-8 min-w-0 items-center gap-1.5 ${SPRAVA_CASE_CHILD_STICKY_BG_CLASS} pr-1 pt-0.5`}
+          style={childNameIndentStyle(depth)}
         >
           <span
             className="inline-block h-8 w-4 shrink-0 border-l-2 border-emerald-600/55"
@@ -112,6 +142,12 @@ export function SpravaCaseObsahChildRow({
             aria-label={`Vybrat ${child.displayLabel}`}
             className="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-950 text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500/60 disabled:opacity-50"
           />
+          <SpravaObsahExpandControl
+            hasChildContent={hasChildContent}
+            isExpanded={isObsahExpanded}
+            onToggle={() => obsahTree.onToggleExpand(child.childKusId)}
+            label={child.displayLabel}
+          />
           <span
             className="min-w-0 flex-1 truncate pl-0.5 font-medium text-slate-200"
             title={labelTitle}
@@ -120,7 +156,7 @@ export function SpravaCaseObsahChildRow({
           </span>
         </div>
 
-        <div className="flex min-h-8 min-w-0 items-center px-1 pt-0.5">
+        <div className={SPRAVA_TABLE_INHERITED_CELL}>
           <span
             style={tableValueBoxLeft}
             className="truncate text-[11px]"
@@ -130,7 +166,7 @@ export function SpravaCaseObsahChildRow({
           </span>
         </div>
 
-        <div className="flex min-h-8 min-w-0 items-center px-1 pt-0.5">
+        <div className={SPRAVA_TABLE_INHERITED_CELL}>
           <span
             style={tableValueBoxLeft}
             className="truncate text-[11px]"
@@ -140,7 +176,7 @@ export function SpravaCaseObsahChildRow({
           </span>
         </div>
 
-        <div className="flex min-h-8 min-w-0 items-center px-1 pt-0.5">
+        <div className={SPRAVA_TABLE_INHERITED_CELL}>
           <span
             style={tableValueBoxLeft}
             className="truncate text-[11px]"
@@ -150,7 +186,7 @@ export function SpravaCaseObsahChildRow({
           </span>
         </div>
 
-        <div className="flex min-h-8 min-w-0 items-center justify-center px-1 pt-0.5 text-center">
+        <div className={SPRAVA_TABLE_INHERITED_CELL}>
           <span
             style={tableValueBoxLeft}
             className="truncate text-[11px]"
@@ -220,6 +256,20 @@ export function SpravaCaseObsahChildRow({
           </span>
         </div>
       </div>
+
+      {isObsahExpanded ? (
+        <SkladKusCaseTreePanel
+          parentKusId={child.childKusId}
+          parentDisplayLabel={child.displayLabel}
+          activeChildren={nestedChildren}
+          obsahTree={obsahTree}
+          returnTo={returnTo}
+          layout="sprava"
+          showInsertForm={showInsertForm}
+          showUrlFlash={showUrlFlash}
+          depth={depth + 1}
+        />
+      ) : null}
     </li>
   );
 }

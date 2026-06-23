@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { SkladKusCaseTreePanel } from "@/components/sklad/SkladKusCaseTreePanel";
 import { isCaseJednotka } from "@/lib/sklad/caseJednotka";
 import { buildSpravaVybranyKus } from "@/lib/sklad/caseKus";
 import {
+  loadActiveChildCountsByParentKusIds,
   loadActiveChildrenByParentKusIds,
   loadAvailableChildKusOptions,
   type SkladKusObsahChildOption,
@@ -15,7 +17,9 @@ import {
   buildSpravaPolozkaHref,
 } from "@/lib/sklad/spravaObsahUrl";
 import { enrichObsahChildRows } from "@/lib/sklad/enrichObsahChildRows";
-import { spravaTableGridStyle, SPRAVA_CASE_EXPANDED_BLOCK_CLASS, SPRAVA_KUS_NAME_INDENT_CLASS } from "./spravaTableLayout";
+import { spravaTableGridStyle, SPRAVA_CASE_EXPANDED_BLOCK_CLASS, SPRAVA_KUS_NAME_INDENT_CLASS, SPRAVA_TABLE_BODY_SUBROW_GRID, SPRAVA_TABLE_CHEVRON_SPACER, SPRAVA_TABLE_INHERITED_CELL } from "./spravaTableLayout";
+import type { CaseObsahFormDefaults, SpravaCaseObsahTreeBindings } from "./spravaCaseObsahTreeTypes";
+import { SpravaObsahExpandControl } from "./SpravaObsahExpandControl";
 import {
   SKLAD_EMPTY_LABEL,
   SKLAD_EMPTY_LABEL_EM,
@@ -72,14 +76,6 @@ export type SpravaKusyInheritedColumns = Pick<
   | "interni_naklad"
 >;
 
-type CaseObsahFormDefaults = {
-  skladBlokId: string | null;
-  kategorieTechnikyId: string | null;
-  podkategorieTechnikyId: string | null;
-  technickyVlastnikId: string | null;
-  jednotka: string;
-};
-
 type Props = {
   skladovaPolozkaId: string;
   polozkaNazev: string;
@@ -100,11 +96,6 @@ type Props = {
   jednotky: SkladJednotka[];
   vlastnici: TechnickyVlastnik[];
 };
-
-const CASE_TREE_CHEVRON =
-  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-emerald-800/60 bg-emerald-950/40 text-xs font-bold text-emerald-200 transition hover:border-emerald-600 hover:bg-emerald-900/60 hover:text-white";
-
-const KUS_SUBROW_GRID_CLASS = "grid items-start px-2 py-1 text-xs text-slate-300";
 
 function SpravaKusCheckbox({
   checked,
@@ -162,18 +153,8 @@ function SpravaExpandKusRow({
   inherited,
   assignment,
   onUpdated,
-  openCaseKusId,
-  obsahMode,
   activeChildren,
-  availableChildOptions,
-  canEditObsah,
-  childAssignmentsByKusId,
-  formDefaults,
-  bloky,
-  kategorie,
-  podkategorie,
-  jednotky,
-  vlastnici,
+  obsahTree,
 }: {
   kus: SkladKusRow;
   polozkaNazev: string;
@@ -183,21 +164,10 @@ function SpravaExpandKusRow({
   inherited: SpravaKusyInheritedColumns;
   assignment: SkladKusZakazkaAssignmentRow | null;
   onUpdated: () => Promise<void>;
-  openCaseKusId: string | null;
-  obsahMode: string | null;
   activeChildren: SkladKusObsahChildRow[];
-  availableChildOptions: SkladKusObsahChildOption[];
-  canEditObsah: boolean;
-  childAssignmentsByKusId: Record<string, SkladKusZakazkaAssignmentRow>;
-  formDefaults: CaseObsahFormDefaults;
-  bloky: SkladBlok[];
-  kategorie: SkladKategorie[];
-  podkategorie: SkladPodkategorie[];
-  jednotky: SkladJednotka[];
-  vlastnici: TechnickyVlastnik[];
+  obsahTree: SpravaCaseObsahTreeBindings;
 }) {
   const { caseMetadata, isKusSelected, toggleKus } = useSpravaKusSelection();
-  const tableScroll = useSpravaTableScroll();
   const [poradiDraft, setPoradiDraft] = useState(() => String(kus.poradove_cislo));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -260,11 +230,14 @@ function SpravaExpandKusRow({
   const checked = isKusSelected(kus.kus_id);
   const stavHint = formatSkladKusStav(kus.stav);
   const labelTitle = `${label} · ${stavHint}`;
-  const isCaseExpanded = isCasePolozka && openCaseKusId === kus.kus_id;
-  const showInsertForm = isCaseExpanded && obsahMode === "insert";
-  const showUrlFlash = isCaseExpanded;
-  const caseExpandHref = buildSpravaObsahHref(skladovaPolozkaId, kus.kus_id);
-  const caseCollapseHref = buildSpravaPolozkaHref(skladovaPolozkaId);
+  const hasChildContent =
+    (obsahTree.childCountsByKusId.get(kus.kus_id) ?? activeChildren.length) > 0;
+  const isObsahExpanded = obsahTree.expandedKusIds.has(kus.kus_id);
+  const showInsertForm =
+    isObsahExpanded &&
+    obsahTree.obsahMode === "insert" &&
+    obsahTree.openCaseKusId === kus.kus_id;
+  const showUrlFlash = isObsahExpanded && obsahTree.openCaseKusId === kus.kus_id;
 
   const skladem = kusSklademCell(kus);
   const naZakazkach = assignment ? 1 : kusNaZakazkachCell(kus);
@@ -279,10 +252,10 @@ function SpravaExpandKusRow({
     <li
       className={[
         kus.aktivni ? "" : "opacity-60",
-        isCaseExpanded ? SPRAVA_CASE_EXPANDED_BLOCK_CLASS : "",
+        isObsahExpanded ? SPRAVA_CASE_EXPANDED_BLOCK_CLASS : "",
       ].join(" ")}
     >
-      <div className={KUS_SUBROW_GRID_CLASS} style={spravaTableGridStyle}>
+      <div className={SPRAVA_TABLE_BODY_SUBROW_GRID} style={spravaTableGridStyle}>
         <div
           className={`sticky left-0 z-10 flex min-h-8 min-w-0 flex-col gap-0.5 bg-inherit pr-1 pt-0.5 ${SPRAVA_KUS_NAME_INDENT_CLASS}`}
         >
@@ -293,20 +266,14 @@ function SpravaExpandKusRow({
               label={label}
             />
             {isCasePolozka ? (
-              <button
-                type="button"
-                onClick={() => {
-                  const href = isCaseExpanded ? caseCollapseHref : caseExpandHref;
-                  tableScroll?.navigateObsah(href);
-                }}
-                className={CASE_TREE_CHEVRON}
-                title={isCaseExpanded ? "Sbalit obsah case" : "Rozbalit obsah case"}
-                aria-expanded={isCaseExpanded}
-              >
-                {isCaseExpanded ? "▾" : "▸"}
-              </button>
+              <SpravaObsahExpandControl
+                hasChildContent={hasChildContent}
+                isExpanded={isObsahExpanded}
+                onToggle={() => obsahTree.onToggleExpand(kus.kus_id, true)}
+                label={label}
+              />
             ) : (
-              <span className="inline-block h-8 w-8 shrink-0" aria-hidden />
+              <span className={SPRAVA_TABLE_CHEVRON_SPACER} aria-hidden />
             )}
             <input
               type="number"
@@ -344,7 +311,7 @@ function SpravaExpandKusRow({
           ) : null}
         </div>
 
-        <div className="flex min-h-8 min-w-0 items-center px-1 pt-0.5">
+        <div className={SPRAVA_TABLE_INHERITED_CELL}>
           <span
             style={tableValueBoxLeft}
             className="truncate text-[11px]"
@@ -354,7 +321,7 @@ function SpravaExpandKusRow({
           </span>
         </div>
 
-        <div className="flex min-h-8 min-w-0 items-center px-1 pt-0.5">
+        <div className={SPRAVA_TABLE_INHERITED_CELL}>
           <span
             style={tableValueBoxLeft}
             className="truncate text-[11px]"
@@ -364,7 +331,7 @@ function SpravaExpandKusRow({
           </span>
         </div>
 
-        <div className="flex min-h-8 min-w-0 items-center px-1 pt-0.5">
+        <div className={SPRAVA_TABLE_INHERITED_CELL}>
           <span
             style={tableValueBoxLeft}
             className="truncate text-[11px]"
@@ -374,7 +341,7 @@ function SpravaExpandKusRow({
           </span>
         </div>
 
-        <div className="flex min-h-8 min-w-0 items-center justify-center px-1 pt-0.5 text-center">
+        <div className={SPRAVA_TABLE_INHERITED_CELL}>
           <span
             style={tableValueBoxLeft}
             className="truncate text-[11px]"
@@ -443,25 +410,16 @@ function SpravaExpandKusRow({
         </div>
       </div>
 
-      {isCaseExpanded ? (
+      {isObsahExpanded ? (
         <SkladKusCaseTreePanel
           parentKusId={kus.kus_id}
           parentDisplayLabel={label}
           activeChildren={activeChildren}
-          availableOptions={availableChildOptions}
-          canEdit={canEditObsah}
-          returnPolozkaId={skladovaPolozkaId}
+          obsahTree={obsahTree}
           returnTo="sprava"
           layout="sprava"
           showInsertForm={showInsertForm}
           showUrlFlash={showUrlFlash}
-          assignmentsByChildKusId={childAssignmentsByKusId}
-          formDefaults={formDefaults}
-          bloky={bloky}
-          kategorie={kategorie}
-          podkategorie={podkategorie}
-          jednotky={jednotky}
-          vlastnici={vlastnici}
         />
       ) : null}
     </li>
@@ -488,6 +446,9 @@ export function SpravaKusyExpandPanel({
 }: Props) {
   const celkem = toNumber(celkemKDispozici);
   const isCasePolozka = isCaseJednotka(polozkaJednotka);
+  const tableScroll = useSpravaTableScroll();
+  const router = useRouter();
+  const loadedParentsRef = useRef(new Set<string>());
   const [kusy, setKusy] = useState<SkladKusRow[] | null>(null);
   const [assignmentsByKusId, setAssignmentsByKusId] = useState<
     Record<string, SkladKusZakazkaAssignmentRow>
@@ -495,6 +456,12 @@ export function SpravaKusyExpandPanel({
   const [childrenByParentKusId, setChildrenByParentKusId] = useState<
     Map<string, SkladKusObsahChildRow[]>
   >(new Map());
+  const [childCountsByKusId, setChildCountsByKusId] = useState<
+    Map<string, number>
+  >(new Map());
+  const [expandedKusIds, setExpandedKusIds] = useState<Set<string>>(
+    () => new Set()
+  );
   const [childAssignmentsByKusId, setChildAssignmentsByKusId] = useState<
     Record<string, SkladKusZakazkaAssignmentRow>
   >({});
@@ -505,6 +472,99 @@ export function SpravaKusyExpandPanel({
   const [obsahLoadError, setObsahLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!openCaseKusId) return;
+    setExpandedKusIds((prev) => {
+      if (prev.has(openCaseKusId)) return prev;
+      const next = new Set(prev);
+      next.add(openCaseKusId);
+      return next;
+    });
+  }, [openCaseKusId]);
+
+  const mergeChildCounts = useCallback((incoming: Map<string, number>) => {
+    setChildCountsByKusId((prev) => {
+      const next = new Map(prev);
+      for (const [key, value] of incoming) {
+        next.set(key, value);
+      }
+      return next;
+    });
+  }, []);
+
+  const ensureChildrenLoaded = useCallback(
+    async (parentKusId: string) => {
+      if (loadedParentsRef.current.has(parentKusId)) return;
+
+      loadedParentsRef.current.add(parentKusId);
+
+      try {
+        const childrenMap = await loadActiveChildrenByParentKusIds(supabase, [
+          parentKusId,
+        ]);
+        const rows = enrichObsahChildRows(childrenMap.get(parentKusId) ?? [], {
+          bloky,
+          kategorie,
+          podkategorie,
+          jednotky,
+          vlastnici,
+        });
+
+        setChildrenByParentKusId((prev) => {
+          const next = new Map(prev);
+          next.set(parentKusId, rows);
+          return next;
+        });
+
+        const childIds = rows.map((row) => row.childKusId);
+        const [parentCounts, nestedCounts] = await Promise.all([
+          loadActiveChildCountsByParentKusIds(supabase, [parentKusId]),
+          childIds.length > 0
+            ? loadActiveChildCountsByParentKusIds(supabase, childIds)
+            : Promise.resolve(new Map<string, number>()),
+        ]);
+        mergeChildCounts(parentCounts);
+        mergeChildCounts(nestedCounts);
+      } catch {
+        loadedParentsRef.current.delete(parentKusId);
+      }
+    },
+    [bloky, kategorie, jednotky, mergeChildCounts, podkategorie, vlastnici]
+  );
+
+  const toggleKusExpand = useCallback(
+    (kusId: string, syncTopLevelUrl = false) => {
+      const apply = () => {
+        setExpandedKusIds((prev) => {
+          const willExpand = !prev.has(kusId);
+
+          if (willExpand) {
+            void ensureChildrenLoaded(kusId);
+          }
+
+          if (syncTopLevelUrl) {
+            const href = willExpand
+              ? buildSpravaObsahHref(skladovaPolozkaId, kusId)
+              : buildSpravaPolozkaHref(skladovaPolozkaId);
+            router.replace(href, { scroll: false });
+          }
+
+          const next = new Set(prev);
+          if (willExpand) next.add(kusId);
+          else next.delete(kusId);
+          return next;
+        });
+      };
+
+      if (tableScroll) {
+        tableScroll.runPreservingScroll(apply);
+      } else {
+        apply();
+      }
+    },
+    [ensureChildrenLoaded, router, skladovaPolozkaId, tableScroll]
+  );
 
   const fetchKusy = useCallback(async () => {
     setLoading(true);
@@ -579,6 +639,7 @@ export function SpravaKusyExpandPanel({
     async function loadObsah() {
       setObsahLoading(true);
       setObsahLoadError(null);
+      loadedParentsRef.current.clear();
       try {
         const [childrenMap, options] = await Promise.all([
           loadActiveChildrenByParentKusIds(supabase, parentIds),
@@ -600,6 +661,28 @@ export function SpravaKusyExpandPanel({
         }
         setChildrenByParentKusId(enrichedMap);
         setAvailableChildOptions(options);
+
+        for (const parentId of parentIds) {
+          loadedParentsRef.current.add(parentId);
+        }
+
+        const childKusIds = [
+          ...new Set(
+            [...enrichedMap.values()].flat().map((row) => row.childKusId)
+          ),
+        ];
+        const [topLevelCounts, nestedCounts] = await Promise.all([
+          loadActiveChildCountsByParentKusIds(supabase, parentIds),
+          childKusIds.length > 0
+            ? loadActiveChildCountsByParentKusIds(supabase, childKusIds)
+            : Promise.resolve(new Map<string, number>()),
+        ]);
+        if (!alive) return;
+        const mergedCounts = new Map<string, number>(topLevelCounts);
+        for (const [key, value] of nestedCounts) {
+          mergedCounts.set(key, value);
+        }
+        setChildCountsByKusId(mergedCounts);
       } catch (loadError) {
         if (!alive) return;
         const message =
@@ -695,6 +778,25 @@ export function SpravaKusyExpandPanel({
       ? getSpravaKusyCountMismatchMessage(celkem, kusy.length)
       : null;
 
+  const obsahTree: SpravaCaseObsahTreeBindings = {
+    expandedKusIds,
+    childCountsByKusId,
+    childrenByParentKusId,
+    onToggleExpand: toggleKusExpand,
+    childAssignmentsByKusId,
+    availableChildOptions,
+    canEditObsah: !readOnly,
+    returnPolozkaId: skladovaPolozkaId,
+    openCaseKusId,
+    obsahMode,
+    formDefaults,
+    bloky,
+    kategorie,
+    podkategorie,
+    jednotky,
+    vlastnici,
+  };
+
   return (
     <div
       className="w-full min-w-0 border-t border-slate-800/80 bg-slate-950/80"
@@ -736,18 +838,8 @@ export function SpravaKusyExpandPanel({
                   inherited={inherited}
                   assignment={assignmentsByKusId[kus.kus_id] ?? null}
                   onUpdated={refreshAfterPoradi}
-                  openCaseKusId={openCaseKusId}
-                  obsahMode={obsahMode}
                   activeChildren={childrenByParentKusId.get(kus.kus_id) ?? []}
-                  availableChildOptions={availableChildOptions}
-                  canEditObsah={!readOnly}
-                  childAssignmentsByKusId={childAssignmentsByKusId}
-                  formDefaults={formDefaults}
-                  bloky={bloky}
-                  kategorie={kategorie}
-                  podkategorie={podkategorie}
-                  jednotky={jednotky}
-                  vlastnici={vlastnici}
+                  obsahTree={obsahTree}
                 />
               ))}
             </ul>

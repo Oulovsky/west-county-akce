@@ -13,6 +13,7 @@ import {
   removeKusFromCaseAction,
 } from "@/app/sklad/kusObsahActions";
 import { spravaTableGridStyle } from "@/app/sklad/sprava/components/spravaTableLayout";
+import type { SpravaCaseObsahTreeBindings } from "@/app/sklad/sprava/components/spravaCaseObsahTreeTypes";
 import {
   filterChildOptionsForParent,
   formatKusObsahContainedLabel,
@@ -33,30 +34,37 @@ import type {
   TechnickyVlastnik,
 } from "@/lib/sklad/types";
 
+type DetailFormDefaults = {
+  skladBlokId: string | null;
+  kategorieTechnikyId: string | null;
+  podkategorieTechnikyId: string | null;
+  technickyVlastnikId: string | null;
+  jednotka: string;
+};
+
 type SkladKusCaseTreePanelProps = {
   parentKusId: string;
   parentDisplayLabel: string;
   activeChildren: SkladKusObsahChildRow[];
-  availableOptions: SkladKusObsahChildOption[];
-  canEdit: boolean;
-  returnPolozkaId: string;
   returnTo?: SpravaObsahReturnTo;
   layout?: "sprava" | "detail";
   showInsertForm: boolean;
   showUrlFlash?: boolean;
+  /** Pracovní tabulka /sklad — sdílený strom expand + child data. */
+  obsahTree?: SpravaCaseObsahTreeBindings;
+  /** Detail položky — klasické props (bez obsahTree). */
+  availableOptions?: SkladKusObsahChildOption[];
+  canEdit?: boolean;
+  returnPolozkaId?: string;
   assignmentsByChildKusId?: Record<string, SkladKusZakazkaAssignmentRow>;
-  formDefaults: {
-    skladBlokId: string | null;
-    kategorieTechnikyId: string | null;
-    podkategorieTechnikyId: string | null;
-    technickyVlastnikId: string | null;
-    jednotka: string;
-  };
-  bloky: SkladBlok[];
-  kategorie: SkladKategorie[];
-  podkategorie: SkladPodkategorie[];
-  jednotky: SkladJednotka[];
-  vlastnici: TechnickyVlastnik[];
+  formDefaults?: DetailFormDefaults;
+  bloky?: SkladBlok[];
+  kategorie?: SkladKategorie[];
+  podkategorie?: SkladPodkategorie[];
+  jednotky?: SkladJednotka[];
+  vlastnici?: TechnickyVlastnik[];
+  /** Hloubka vnoření pro odsazení child řádků (0 = první úroveň pod case kusem). */
+  depth?: number;
 };
 
 function buildObsahHref(
@@ -159,37 +167,63 @@ export function SkladKusCaseTreePanel({
   parentKusId,
   parentDisplayLabel,
   activeChildren,
-  availableOptions,
-  canEdit,
-  returnPolozkaId,
   returnTo = "polozka",
   layout = "detail",
   showInsertForm,
   showUrlFlash = false,
+  obsahTree,
+  availableOptions = [],
+  canEdit = false,
+  returnPolozkaId = "",
   assignmentsByChildKusId = {},
-  formDefaults,
-  bloky,
-  kategorie,
-  podkategorie,
-  jednotky,
-  vlastnici,
+  formDefaults = {
+    skladBlokId: null,
+    kategorieTechnikyId: null,
+    podkategorieTechnikyId: null,
+    technickyVlastnikId: null,
+    jednotka: "ks",
+  },
+  bloky = [],
+  kategorie = [],
+  podkategorie = [],
+  jednotky = [],
+  vlastnici = [],
+  depth = 0,
 }: SkladKusCaseTreePanelProps) {
+  const resolvedReturnPolozkaId = obsahTree?.returnPolozkaId ?? returnPolozkaId;
+  const resolvedCanEdit = obsahTree?.canEditObsah ?? canEdit;
+  const resolvedOptions = obsahTree?.availableChildOptions ?? availableOptions;
+  const resolvedAssignments =
+    obsahTree?.childAssignmentsByKusId ?? assignmentsByChildKusId;
+  const resolvedFormDefaults = obsahTree?.formDefaults ?? formDefaults;
+  const resolvedBloky = obsahTree?.bloky ?? bloky;
+  const resolvedKategorie = obsahTree?.kategorie ?? kategorie;
+  const resolvedPodkategorie = obsahTree?.podkategorie ?? podkategorie;
+  const resolvedJednotky = obsahTree?.jednotky ?? jednotky;
+  const resolvedVlastnici = obsahTree?.vlastnici ?? vlastnici;
+
   const containedLabel = formatKusObsahContainedLabel(activeChildren.length);
   const pickerOptions = filterChildOptionsForParent(
-    availableOptions,
+    resolvedOptions,
     parentKusId,
     activeChildren
   );
-  const expandHref = buildObsahHref(returnTo, returnPolozkaId, parentKusId);
-  const insertHref = buildObsahHref(returnTo, returnPolozkaId, parentKusId, {
+  const expandHref = buildObsahHref(
+    returnTo,
+    resolvedReturnPolozkaId,
+    parentKusId
+  );
+  const insertHref = buildObsahHref(returnTo, resolvedReturnPolozkaId, parentKusId, {
     insert: true,
   });
+
+  const toolbarIndentClass = depth <= 0 ? "pl-10" : "pl-16";
 
   const toolbar = (
     <>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold text-emerald-300/95">{containedLabel}</span>
-        {canEdit ? (
+        {resolvedCanEdit ? (
           showInsertForm ? (
             <ObsahToolbarNav
               href={expandHref}
@@ -222,19 +256,19 @@ export function SkladKusCaseTreePanel({
     </>
   );
 
-  const insertForms = canEdit && showInsertForm ? (
+  const insertForms = resolvedCanEdit && showInsertForm ? (
     <div className="mt-4 space-y-4">
       <SkladCaseContentCreateForm
         parentKusId={parentKusId}
-        returnPolozkaId={returnPolozkaId}
+        returnPolozkaId={resolvedReturnPolozkaId}
         returnTo={returnTo}
         parentCaseLabel={parentDisplayLabel}
-        defaults={formDefaults}
-        bloky={bloky}
-        kategorie={kategorie}
-        podkategorie={podkategorie}
-        jednotky={jednotky}
-        vlastnici={vlastnici}
+        defaults={resolvedFormDefaults}
+        bloky={resolvedBloky}
+        kategorie={resolvedKategorie}
+        podkategorie={resolvedPodkategorie}
+        jednotky={resolvedJednotky}
+        vlastnici={resolvedVlastnici}
       />
 
       <details className="rounded-xl border border-slate-800 bg-slate-950/50">
@@ -246,7 +280,7 @@ export function SkladKusCaseTreePanel({
           className="grid gap-3 border-t border-slate-800 p-4 lg:grid-cols-2"
         >
           <input type="hidden" name="parent_kus_id" value={parentKusId} />
-          <input type="hidden" name="return_polozka_id" value={returnPolozkaId} />
+          <input type="hidden" name="return_polozka_id" value={resolvedReturnPolozkaId} />
           <input type="hidden" name="return_to" value={returnTo} />
 
           <div className="lg:col-span-2">
@@ -276,6 +310,10 @@ export function SkladKusCaseTreePanel({
   ) : null;
 
   if (layout === "sprava") {
+    if (!obsahTree) {
+      return null;
+    }
+
     return (
       <div
         className="w-full min-w-0 border-t border-emerald-800/25"
@@ -287,7 +325,7 @@ export function SkladKusCaseTreePanel({
           style={spravaTableGridStyle}
         >
           <div
-            className="sticky left-0 z-10 flex min-w-0 flex-col gap-2 bg-emerald-950/35 py-0.5 pl-10 pr-1"
+            className={`sticky left-0 z-10 flex min-w-0 flex-col gap-2 bg-emerald-950/35 py-0.5 pr-1 ${toolbarIndentClass}`}
             style={{ gridColumn: "1 / -1" }}
           >
             {toolbar}
@@ -303,10 +341,12 @@ export function SkladKusCaseTreePanel({
                 child={child}
                 parentKusId={parentKusId}
                 parentCaseLabel={parentDisplayLabel}
-                returnPolozkaId={returnPolozkaId}
+                returnPolozkaId={resolvedReturnPolozkaId}
                 returnTo={returnTo}
-                canEdit={canEdit}
-                assignment={assignmentsByChildKusId[child.childKusId] ?? null}
+                canEdit={resolvedCanEdit}
+                assignment={resolvedAssignments[child.childKusId] ?? null}
+                obsahTree={obsahTree}
+                depth={depth}
               />
             ))}
           </ul>
@@ -314,7 +354,7 @@ export function SkladKusCaseTreePanel({
           <p className="px-4 py-2 text-xs text-slate-500">Case zatím neobsahuje žádné kusy.</p>
         )}
 
-        {!canEdit ? (
+        {!resolvedCanEdit ? (
           <p className="px-4 py-2 text-xs text-slate-500">
             Úpravy obsahu jsou dostupné jen pro skladníky.
           </p>
@@ -334,12 +374,12 @@ export function SkladKusCaseTreePanel({
         <DetailChildList
           activeChildren={activeChildren}
           parentKusId={parentKusId}
-          returnPolozkaId={returnPolozkaId}
+          returnPolozkaId={resolvedReturnPolozkaId}
           returnTo={returnTo}
-          canEdit={canEdit}
+          canEdit={resolvedCanEdit}
         />
         {insertForms}
-        {!canEdit ? (
+        {!resolvedCanEdit ? (
           <p className="mt-2 text-xs text-slate-500">Úpravy obsahu jsou dostupné jen pro skladníky.</p>
         ) : null}
       </div>
