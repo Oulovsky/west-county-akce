@@ -1461,10 +1461,6 @@ function SpravaPageBody() {
         onQuickCreatePodkategorie={handleQuickCreatePodkategorie}
         />
 
-        <div
-          className="min-h-[280px] max-h-[calc(100dvh-var(--sprava-sklad-workspace-top,20rem))] overflow-y-auto overscroll-y-contain rounded-2xl border border-slate-800/80 bg-slate-950/30"
-          aria-label="Scrollovatelný katalog skladu"
-        >
         <SkladTable loading={loading}>
           {!loading && filteredItems.length === 0 ? (
             <div className="border-t border-slate-800 px-4 py-10 text-center text-sm text-slate-400">
@@ -1540,7 +1536,6 @@ function SpravaPageBody() {
             );
           })}
         </SkladTable>
-        </div>
       </section>
     </div>
   );

@@ -9,7 +9,6 @@ import {
   SPRAVA_TABLE_HEADER_CELL_SHORT,
   SPRAVA_TABLE_HEADER_CELL_STICKY,
   SPRAVA_TABLE_HEADER_CLASS,
-  SPRAVA_TABLE_HEADER_STICKY_CLASS,
   spravaTableGridStyle,
 } from "./spravaTableLayout";
 
@@ -24,12 +23,7 @@ function HeaderLines({ lines }: { lines: [string, string] }) {
 
 export function SkladTableHeader() {
   return (
-    <section
-      className={[SPRAVA_TABLE_HEADER_CLASS, SPRAVA_TABLE_HEADER_STICKY_CLASS].join(
-        " "
-      )}
-      style={spravaTableGridStyle}
-    >
+    <section className={SPRAVA_TABLE_HEADER_CLASS} style={spravaTableGridStyle}>
       <div className={SPRAVA_TABLE_HEADER_CELL_STICKY}>
         <span className="h-4 w-4 shrink-0" aria-hidden />
         <span className={SPRAVA_TABLE_CHEVRON_SPACER} aria-hidden />

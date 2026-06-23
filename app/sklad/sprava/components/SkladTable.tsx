@@ -10,18 +10,28 @@ type Props = {
   children: ReactNode;
 };
 
+const tableWidthStyle = {
+  width: SPRAVA_TABLE_MIN_WIDTH,
+  minWidth: SPRAVA_TABLE_MIN_WIDTH,
+} as const;
+
 export function SkladTable({ loading, children }: Props) {
   if (loading) {
     return <SkladLoading />;
   }
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60">
-      <div className="overflow-x-auto">
-        <div style={{ width: SPRAVA_TABLE_MIN_WIDTH, minWidth: SPRAVA_TABLE_MIN_WIDTH }}>
+    <div className="flex min-h-[280px] max-h-[calc(100dvh-var(--sprava-sklad-workspace-top,20rem))] flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60">
+      <div className="shrink-0 overflow-x-auto">
+        <div style={tableWidthStyle}>
           <SkladTableHeader />
-          {children}
         </div>
+      </div>
+      <div
+        className="min-h-0 flex-1 overflow-x-auto overflow-y-auto overscroll-y-contain"
+        aria-label="Scrollovatelný katalog skladu"
+      >
+        <div style={tableWidthStyle}>{children}</div>
       </div>
     </div>
   );
