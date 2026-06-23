@@ -152,6 +152,7 @@ export type SpravaVybranaPolozka = {
   skladovaPolozkaId: string;
   nazev: string;
   isCase: boolean;
+  celkemKDispozici: number;
 };
 
 /** Kus dostupný pro vložení do case (volný, není v jiném case). */

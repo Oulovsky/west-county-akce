@@ -99,3 +99,82 @@ export async function getSkladovaPolozkaDeleteBlockers(
 
   return { reasons, checkError: null };
 }
+
+export type SkladovaPolozkaDeleteResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+/** Stejná logika jako deletePolozkaAction — vrací výsledek místo redirectu. */
+export async function executeSkladovaPolozkaDelete(
+  supabase: SupabaseClient,
+  skladovaPolozkaId: string
+): Promise<SkladovaPolozkaDeleteResult> {
+  const { reasons, checkError } = await getSkladovaPolozkaDeleteBlockers(
+    supabase,
+    skladovaPolozkaId
+  );
+
+  if (checkError) {
+    return { ok: false, error: `Položku nelze smazat: ${checkError}` };
+  }
+
+  if (reasons.length > 0) {
+    return { ok: false, error: buildSkladPolozkaDeleteBlockedMessage(reasons) };
+  }
+
+  const { error: poskozeniError } = await supabase
+    .from("hlaseni_poskozeni")
+    .delete()
+    .eq("skladova_polozka_id", skladovaPolozkaId);
+
+  if (poskozeniError) {
+    if (isForeignKeyViolation(poskozeniError)) {
+      return {
+        ok: false,
+        error: buildSkladPolozkaDeleteBlockedMessage([
+          foreignKeyBlockerReasonFromMessage(poskozeniError.message) ??
+            "má evidované poškození / historii (hlaseni_poskozeni)",
+        ]),
+      };
+    }
+    return { ok: false, error: `Položku nelze smazat: ${poskozeniError.message}` };
+  }
+
+  const { error: kusyError } = await supabase
+    .from("sklad_polozky_kusy")
+    .delete()
+    .eq("skladova_polozka_id", skladovaPolozkaId);
+
+  if (kusyError) {
+    if (isForeignKeyViolation(kusyError)) {
+      return {
+        ok: false,
+        error: buildSkladPolozkaDeleteBlockedMessage([
+          foreignKeyBlockerReasonFromMessage(kusyError.message) ??
+            "má založené kusy (sklad_polozky_kusy)",
+        ]),
+      };
+    }
+    return { ok: false, error: `Položku nelze smazat: ${kusyError.message}` };
+  }
+
+  const { error: deleteError } = await supabase
+    .from("skladove_polozky")
+    .delete()
+    .eq("skladova_polozka_id", skladovaPolozkaId);
+
+  if (deleteError) {
+    if (isForeignKeyViolation(deleteError)) {
+      return {
+        ok: false,
+        error: buildSkladPolozkaDeleteBlockedMessage([
+          foreignKeyBlockerReasonFromMessage(deleteError.message) ??
+            "položka je stále použita v databázi (cizí klíč)",
+        ]),
+      };
+    }
+    return { ok: false, error: `Položku nelze smazat: ${deleteError.message}` };
+  }
+
+  return { ok: true };
+}

@@ -8,6 +8,7 @@ import {
   pridatKusDoPolozky,
   vyjmoutKusZCase,
 } from "@/lib/sklad/spravaKusActions";
+import { executeSkladovaPolozkaDelete } from "@/lib/sklad/deletePolozka";
 import type { SpravaVybranaPolozka, SpravaVybranyKus } from "@/lib/sklad/types";
 import { supabase } from "@/lib/supabase";
 import { useSpravaKusSelection } from "./SpravaKusSelectionContext";
@@ -78,19 +79,34 @@ function computeKusPanelActions(
 }
 
 function computePolozkaPanelActions(
-  polozka: SpravaVybranaPolozka
+  _polozka: SpravaVybranaPolozka
 ): PanelActions {
   return {
     showDetail: true,
-    detailHref: `/sklad/${polozka.skladovaPolozkaId}`,
+    detailHref: `/sklad/${_polozka.skladovaPolozkaId}`,
     detailDisabled: false,
     detailLabel: "Detail položky",
     showQr: false,
     qrDisabled: true,
     showPridatKus: true,
     showVyjmout: false,
-    showSmazat: false,
+    showSmazat: true,
   };
+}
+
+function buildPolozkaDeleteConfirmMessage(polozka: SpravaVybranaPolozka): string {
+  const lines = ["Chcete odstranit položku?"];
+  if (polozka.celkemKDispozici > 0) {
+    const kusLabel =
+      polozka.celkemKDispozici === 1
+        ? "1 evidovaný kus"
+        : `${polozka.celkemKDispozici} evidovaných kusů`;
+    lines.push(
+      "",
+      `Položka „${polozka.nazev}“ má ${kusLabel}. Smazáním odstraníte položku včetně všech jejích kusů a souvisejících skladových vazeb, pokud to databázová pravidla dovolí.`
+    );
+  }
+  return lines.join("\n");
 }
 
 type Props = {
@@ -132,12 +148,35 @@ export function SpravaActionPanel({ onAddPolozka, onAddCase }: Props) {
     return null;
   }, [selectedPolozka, selectedKusList.length, singleKus]);
 
-  async function handleSmazat() {
+  async function handleSmazatPolozka() {
+    if (!selectedPolozka) return;
+
+    if (!window.confirm(buildPolozkaDeleteConfirmMessage(selectedPolozka))) {
+      return;
+    }
+
+    setBusy(true);
+    const result = await executeSkladovaPolozkaDelete(
+      supabase,
+      selectedPolozka.skladovaPolozkaId
+    );
+    setBusy(false);
+
+    if (!result.ok) {
+      window.alert(result.error);
+      return;
+    }
+
+    clearSelection();
+    onAfterKusMutation();
+  }
+
+  async function handleSmazatKusy() {
     if (selectedKusList.length === 0) return;
 
     const message =
       selectedKusList.length === 1
-        ? "Chcete odstranit položku?"
+        ? "Chcete odstranit vybraný kus?"
         : `Chcete odstranit ${selectedKusList.length} vybraných kusů?`;
 
     if (!window.confirm(message)) return;
@@ -164,6 +203,14 @@ export function SpravaActionPanel({ onAddPolozka, onAddCase }: Props) {
       clearSelection();
       onAfterKusMutation();
     }
+  }
+
+  async function handleSmazat() {
+    if (selectedPolozka) {
+      await handleSmazatPolozka();
+      return;
+    }
+    await handleSmazatKusy();
   }
 
   async function handleVyjmout() {

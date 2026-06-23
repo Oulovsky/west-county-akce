@@ -224,6 +224,7 @@ export function SkladTableRow({
                 skladovaPolozkaId: item.skladova_polozka_id,
                 nazev: item.nazev,
                 isCase: polozkaJeCase,
+                celkemKDispozici: toNumber(item.celkem_k_dispozici),
               })
             }
             onClick={(e) => e.stopPropagation()}
