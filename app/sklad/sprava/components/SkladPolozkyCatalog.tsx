@@ -74,6 +74,10 @@ import {
   type SpravaInventoryFilters as SpravaInventoryFiltersState,
   type TechnickyVlastnik,
 } from "@/lib/sklad/types";
+import type {
+  ObsahChildPolozkaAppliedFields,
+  SpravaObsahPolozkaUpdaters,
+} from "./spravaCaseObsahTreeTypes";
 
 type RpcErrorResult = {
   error: { message: string } | null;
@@ -628,6 +632,49 @@ export function SkladPolozkyCatalog() {
     [kategorie]
   );
 
+  const resolvePolozkaForUpdate = useCallback(
+    async (id: string): Promise<SkladPolozkaRow | null> => {
+      const fromCatalog = items.find((item) => item.skladova_polozka_id === id);
+      if (fromCatalog) return fromCatalog;
+
+      const { data, error } = await supabase
+        .from(SKLAD_TABLE.skladovePolozky)
+        .select(
+          "skladova_polozka_id, nazev, sklad_blok_id, kategorie_techniky_id, podkategorie_techniky_id, technicky_vlastnik_id, jednotka, celkem_k_dispozici, interni_naklad, fakturacni_cena, aktivni"
+        )
+        .eq("skladova_polozka_id", id)
+        .maybeSingle();
+
+      if (error || !data) return null;
+
+      const row = data as SkladPolozkaRow;
+      const blok = bloky.find((b) => b.sklad_blok_id === row.sklad_blok_id);
+      const kat = kategorie.find(
+        (k) => k.kategorie_techniky_id === row.kategorie_techniky_id
+      );
+      const pod = podkategorie.find(
+        (p) => p.podkategorie_techniky_id === row.podkategorie_techniky_id
+      );
+      const vlastnik = vlastnici.find((v) => v.id === row.technicky_vlastnik_id);
+
+      return {
+        ...row,
+        blok_nazev: blok?.nazev ?? null,
+        kategorie_nazev: kat?.nazev ?? null,
+        podkategorie_nazev: pod?.nazev ?? null,
+        technicky_vlastnik_nazev: vlastnik?.nazev ?? null,
+        na_sklade: 0,
+        na_akcich: 0,
+        na_zakazkach_fyzicky: 0,
+        poskozene: 0,
+        availability_usable: 0,
+        availability_future_planned: 0,
+        availability_future_collision: false,
+      };
+    },
+    [bloky, items, kategorie, podkategorie, vlastnici]
+  );
+
   function inlineCreateError(
     result: InlineConfigCreateResult
   ): { error?: string } {
@@ -992,52 +1039,79 @@ export function SkladPolozkyCatalog() {
     blokId?: string | null;
   };
 
-  async function updateVlastnik(id: string, vlastnikId: string) {
-    const oldItem = items.find((item) => item.skladova_polozka_id === id);
+  async function updateVlastnik(
+    id: string,
+    vlastnikId: string,
+    onApplied?: (fields: ObsahChildPolozkaAppliedFields) => void
+  ) {
+    const oldItem = await resolvePolozkaForUpdate(id);
     if (!oldItem) return;
 
+    const inCatalog = items.some((item) => item.skladova_polozka_id === id);
     const vlastnik = vlastnici.find((v) => v.id === vlastnikId);
+    const applied: ObsahChildPolozkaAppliedFields = {
+      technickyVlastnikId: vlastnikId,
+      technickyVlastnikNazev: vlastnik?.nazev ?? null,
+    };
 
-    setItems((prev) =>
-      prev.map((item) =>
-        item.skladova_polozka_id === id
-          ? {
-              ...item,
-              technicky_vlastnik_id: vlastnikId,
-              technicky_vlastnik_nazev: vlastnik?.nazev ?? null,
-            }
-          : item
-      )
-    );
+    if (inCatalog) {
+      setItems((prev) =>
+        prev.map((item) =>
+          item.skladova_polozka_id === id
+            ? {
+                ...item,
+                technicky_vlastnik_id: vlastnikId,
+                technicky_vlastnik_nazev: vlastnik?.nazev ?? null,
+              }
+            : item
+        )
+      );
+    }
+
+    setSavingId(id);
 
     const { error } = await supabase.rpc(SKLAD_RPC.updateSkladovaPolozkaVlastnik, {
       p_skladova_polozka_id: id,
       p_technicky_vlastnik_id: vlastnikId,
     });
 
+    setSavingId(null);
+
     if (error) {
       alert(error.message);
-      setItems((prev) =>
-        prev.map((item) => (item.skladova_polozka_id === id ? oldItem : item))
-      );
+      if (inCatalog) {
+        setItems((prev) =>
+          prev.map((item) => (item.skladova_polozka_id === id ? oldItem : item))
+        );
+      }
+      return;
     }
+
+    onApplied?.(applied);
   }
 
-  async function updateJednotka(id: string, jednotkaValue: string) {
+  async function updateJednotka(
+    id: string,
+    jednotkaValue: string,
+    onApplied?: (fields: ObsahChildPolozkaAppliedFields) => void
+  ) {
     const trimmed = jednotkaValue.trim();
     if (!trimmed) return;
 
-    const oldItem = items.find((item) => item.skladova_polozka_id === id);
+    const oldItem = await resolvePolozkaForUpdate(id);
     if (!oldItem || (oldItem.jednotka ?? "") === trimmed) return;
 
+    const inCatalog = items.some((item) => item.skladova_polozka_id === id);
     const previous = items;
     setSavingId(id);
 
-    setItems((prev) =>
-      prev.map((item) =>
-        item.skladova_polozka_id === id ? { ...item, jednotka: trimmed } : item
-      )
-    );
+    if (inCatalog) {
+      setItems((prev) =>
+        prev.map((item) =>
+          item.skladova_polozka_id === id ? { ...item, jednotka: trimmed } : item
+        )
+      );
+    }
 
     const { error } = await supabase.rpc("update_skladova_polozka_detail", {
       p_id: id,
@@ -1051,19 +1125,29 @@ export function SkladPolozkyCatalog() {
     setSavingId(null);
 
     if (error) {
-      setItems(previous);
+      if (inCatalog) setItems(previous);
       alert(error.message);
       return;
     }
 
-    setHighlightId(id);
-    window.setTimeout(() => setHighlightId(null), 1000);
+    if (inCatalog) {
+      setHighlightId(id);
+      window.setTimeout(() => setHighlightId(null), 1000);
+    }
+
+    onApplied?.({ jednotka: trimmed });
   }
 
-  async function updateZaklad(id: string, patch: ZakladPatch) {
+  async function updateZaklad(
+    id: string,
+    patch: ZakladPatch,
+    onApplied?: (fields: ObsahChildPolozkaAppliedFields) => void
+  ) {
     const previous = items;
-    const oldItem = items.find((item) => item.skladova_polozka_id === id);
+    const oldItem = await resolvePolozkaForUpdate(id);
     if (!oldItem) return;
+
+    const inCatalog = items.some((item) => item.skladova_polozka_id === id);
 
     let finalBlokId =
       patch.blokId !== undefined ? patch.blokId : oldItem.sklad_blok_id;
@@ -1105,21 +1189,23 @@ export function SkladPolozkyCatalog() {
 
     setSavingId(id);
 
-    setItems((prev) =>
-      prev.map((item) =>
-        item.skladova_polozka_id === id
-          ? {
-              ...item,
-              kategorie_techniky_id: finalKategorieId,
-              kategorie_nazev: novaKategorie,
-              podkategorie_techniky_id: finalPodkategorieId,
-              podkategorie_nazev: novaPodkategorie,
-              sklad_blok_id: finalBlokId,
-              blok_nazev: novyBlok,
-            }
-          : item
-      )
-    );
+    if (inCatalog) {
+      setItems((prev) =>
+        prev.map((item) =>
+          item.skladova_polozka_id === id
+            ? {
+                ...item,
+                kategorie_techniky_id: finalKategorieId,
+                kategorie_nazev: novaKategorie,
+                podkategorie_techniky_id: finalPodkategorieId,
+                podkategorie_nazev: novaPodkategorie,
+                sklad_blok_id: finalBlokId,
+                blok_nazev: novyBlok,
+              }
+            : item
+        )
+      );
+    }
 
     if (zakladChanged) {
       const { error } = await supabase.rpc(SKLAD_RPC.updateSkladovaPolozkaZaklad, {
@@ -1130,7 +1216,7 @@ export function SkladPolozkyCatalog() {
 
       if (error) {
         setSavingId(null);
-        setItems(previous);
+        if (inCatalog) setItems(previous);
         alert(error.message);
         return;
       }
@@ -1151,33 +1237,67 @@ export function SkladPolozkyCatalog() {
 
       if (error) {
         setSavingId(null);
-        setItems(previous);
+        if (inCatalog) setItems(previous);
         alert(error.message);
-        await load({ silent: true });
+        if (inCatalog) await load({ silent: true });
         return;
       }
 
-      const { data: podkategorieRows, error: podkategorieMapError } =
-        await querySkladovePolozkyPodkategorie(supabase);
+      if (inCatalog) {
+        const { data: podkategorieRows, error: podkategorieMapError } =
+          await querySkladovePolozkyPodkategorie(supabase);
 
-      if (!podkategorieMapError && podkategorieRows) {
-        setPodkategorie((currentPodkategorie) => {
-          setItems((prev) =>
-            enrichSpravaPolozkyWithPodkategorie(
-              prev,
-              podkategorieRows,
-              currentPodkategorie
-            )
-          );
-          return currentPodkategorie;
-        });
+        if (!podkategorieMapError && podkategorieRows) {
+          setPodkategorie((currentPodkategorie) => {
+            setItems((prev) =>
+              enrichSpravaPolozkyWithPodkategorie(
+                prev,
+                podkategorieRows,
+                currentPodkategorie
+              )
+            );
+            return currentPodkategorie;
+          });
+        }
       }
     }
 
     setSavingId(null);
-    setHighlightId(id);
-    window.setTimeout(() => setHighlightId(null), 1000);
+
+    if (inCatalog) {
+      setHighlightId(id);
+      window.setTimeout(() => setHighlightId(null), 1000);
+    }
+
+    onApplied?.({
+      skladBlokId: finalBlokId,
+      blokNazev: novyBlok,
+      kategorieTechnikyId: finalKategorieId,
+      kategorieNazev: novaKategorie,
+      podkategorieTechnikyId: finalPodkategorieId,
+      podkategorieNazev: novaPodkategorie,
+    });
   }
+
+  const obsahPolozkaUpdaters = useMemo<SpravaObsahPolozkaUpdaters>(
+    () => ({
+      savingPolozkaId: savingId,
+      onUpdateZaklad: (polozkaId, patch, onApplied) => {
+        void updateZaklad(polozkaId, patch, onApplied);
+      },
+      onUpdateVlastnik: (polozkaId, vlastnikId, onApplied) => {
+        void updateVlastnik(polozkaId, vlastnikId, onApplied);
+      },
+      onUpdateJednotka: (polozkaId, value, onApplied) => {
+        void updateJednotka(polozkaId, value, onApplied);
+      },
+      kategorieOptions: listActiveKategorie(kategorie),
+      getPodkategorieOptions,
+      getJednotkaOptions: (currentValue) =>
+        listJednotkaSelectOptions(jednotky, currentValue),
+    }),
+    [getPodkategorieOptions, jednotky, kategorie, savingId]
+  );
 
   async function handleCreateItem() {
     const parsedKusy = Number(newKusy);
@@ -1415,6 +1535,7 @@ export function SkladPolozkyCatalog() {
               onUpdateJednotka={(value) =>
                 updateJednotka(i.skladova_polozka_id, value)
               }
+              obsahPolozkaUpdaters={obsahPolozkaUpdaters}
               onDraftChange={setDraft}
               onKeyDown={(e) => {
                 if (readOnly) return;

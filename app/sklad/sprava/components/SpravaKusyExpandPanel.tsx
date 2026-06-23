@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SkladKusCaseTreePanel } from "@/components/sklad/SkladKusCaseTreePanel";
 import { isCaseJednotka } from "@/lib/sklad/caseJednotka";
@@ -18,7 +18,13 @@ import {
 } from "@/lib/sklad/spravaObsahUrl";
 import { enrichObsahChildRows } from "@/lib/sklad/enrichObsahChildRows";
 import { spravaTableGridStyle, SPRAVA_CASE_EXPANDED_BLOCK_CLASS, SPRAVA_KUS_NAME_INDENT_CLASS, SPRAVA_TABLE_BODY_SUBROW_GRID, SPRAVA_TABLE_CHEVRON_SPACER, SPRAVA_TABLE_INHERITED_CELL } from "./spravaTableLayout";
-import type { CaseObsahFormDefaults, SpravaCaseObsahTreeBindings } from "./spravaCaseObsahTreeTypes";
+import type {
+  CaseObsahFormDefaults,
+  ObsahChildPolozkaAppliedFields,
+  SpravaCaseObsahTreeBindings,
+  SpravaObsahPolozkaUpdaters,
+} from "./spravaCaseObsahTreeTypes";
+import { applyObsahChildPolozkaFields } from "./spravaCaseObsahTreeTypes";
 import { SpravaObsahExpandControl } from "./SpravaObsahExpandControl";
 import {
   SKLAD_EMPTY_LABEL,
@@ -96,6 +102,7 @@ type Props = {
   jednotky: SkladJednotka[];
   vlastnici: TechnickyVlastnik[];
   onCatalogConfigChanged?: () => void | Promise<void>;
+  obsahPolozkaUpdaters?: SpravaObsahPolozkaUpdaters;
 };
 
 function SpravaKusCheckbox({
@@ -440,6 +447,7 @@ export function SpravaKusyExpandPanel({
   jednotky,
   vlastnici,
   onCatalogConfigChanged,
+  obsahPolozkaUpdaters,
 }: Props) {
   const celkem = toNumber(celkemKDispozici);
   const isCasePolozka = isCaseJednotka(polozkaJednotka);
@@ -798,6 +806,54 @@ export function SpravaKusyExpandPanel({
       ? getSpravaKusyCountMismatchMessage(celkem, kusy.length)
       : null;
 
+  const patchObsahChildPolozka = useCallback(
+    (polozkaId: string, fields: ObsahChildPolozkaAppliedFields) => {
+      setChildrenByParentKusId((prev) => {
+        const next = new Map(prev);
+        for (const [parentId, rows] of prev) {
+          next.set(
+            parentId,
+            rows.map((row) =>
+              row.skladovaPolozkaId === polozkaId
+                ? applyObsahChildPolozkaFields(row, fields)
+                : row
+            )
+          );
+        }
+        return next;
+      });
+    },
+    []
+  );
+
+  const wrappedObsahPolozkaUpdaters = useMemo<
+    SpravaObsahPolozkaUpdaters | undefined
+  >(() => {
+    if (!obsahPolozkaUpdaters || readOnly) return undefined;
+
+    return {
+      ...obsahPolozkaUpdaters,
+      onUpdateZaklad: (polozkaId, patch, onApplied) => {
+        obsahPolozkaUpdaters.onUpdateZaklad(polozkaId, patch, (fields) => {
+          patchObsahChildPolozka(polozkaId, fields);
+          onApplied?.(fields);
+        });
+      },
+      onUpdateVlastnik: (polozkaId, vlastnikId, onApplied) => {
+        obsahPolozkaUpdaters.onUpdateVlastnik(polozkaId, vlastnikId, (fields) => {
+          patchObsahChildPolozka(polozkaId, fields);
+          onApplied?.(fields);
+        });
+      },
+      onUpdateJednotka: (polozkaId, value, onApplied) => {
+        obsahPolozkaUpdaters.onUpdateJednotka(polozkaId, value, (fields) => {
+          patchObsahChildPolozka(polozkaId, fields);
+          onApplied?.(fields);
+        });
+      },
+    };
+  }, [obsahPolozkaUpdaters, patchObsahChildPolozka, readOnly]);
+
   const obsahTree: SpravaCaseObsahTreeBindings = {
     expandedKusIds,
     childCountsByKusId,
@@ -818,6 +874,7 @@ export function SpravaKusyExpandPanel({
     jednotky,
     vlastnici,
     onCatalogConfigChanged,
+    polozkaUpdaters: wrappedObsahPolozkaUpdaters,
   };
 
   return (

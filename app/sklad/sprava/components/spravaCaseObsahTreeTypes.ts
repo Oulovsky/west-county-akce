@@ -19,6 +19,49 @@ export type CaseObsahFormDefaults = {
   jednotka: string;
 };
 
+export type PolozkaZakladPatch = {
+  kategorieId?: string | null;
+  podkategorieId?: string | null;
+  blokId?: string | null;
+};
+
+/** Pole obohaceného child řádku po inline úpravě položky. */
+export type ObsahChildPolozkaAppliedFields = {
+  skladBlokId?: string | null;
+  blokNazev?: string | null;
+  kategorieTechnikyId?: string | null;
+  kategorieNazev?: string | null;
+  podkategorieTechnikyId?: string | null;
+  podkategorieNazev?: string | null;
+  technickyVlastnikId?: string | null;
+  technickyVlastnikNazev?: string | null;
+  jednotka?: string | null;
+};
+
+export type SpravaObsahPolozkaUpdaters = {
+  savingPolozkaId: string | null;
+  onUpdateZaklad: (
+    polozkaId: string,
+    patch: PolozkaZakladPatch,
+    onApplied?: (fields: ObsahChildPolozkaAppliedFields) => void
+  ) => void;
+  onUpdateVlastnik: (
+    polozkaId: string,
+    vlastnikId: string,
+    onApplied?: (fields: ObsahChildPolozkaAppliedFields) => void
+  ) => void;
+  onUpdateJednotka: (
+    polozkaId: string,
+    value: string,
+    onApplied?: (fields: ObsahChildPolozkaAppliedFields) => void
+  ) => void;
+  kategorieOptions: SkladKategorie[];
+  getPodkategorieOptions: (
+    currentPodkategorieId?: string | null
+  ) => SkladPodkategorie[];
+  getJednotkaOptions: (currentValue?: string | null) => SkladJednotka[];
+};
+
 /** Sdílený stav stromu obsahu kusů — expand, počty a child data. */
 export type SpravaCaseObsahTreeBindings = {
   expandedKusIds: ReadonlySet<string>;
@@ -40,4 +83,37 @@ export type SpravaCaseObsahTreeBindings = {
   jednotky: SkladJednotka[];
   vlastnici: TechnickyVlastnik[];
   onCatalogConfigChanged?: () => void | Promise<void>;
+  polozkaUpdaters?: SpravaObsahPolozkaUpdaters;
 };
+
+export function applyObsahChildPolozkaFields(
+  child: SkladKusObsahChildRow,
+  fields: ObsahChildPolozkaAppliedFields
+): SkladKusObsahChildRow {
+  return {
+    ...child,
+    ...(fields.skladBlokId !== undefined
+      ? { skladBlokId: fields.skladBlokId }
+      : {}),
+    ...(fields.blokNazev !== undefined ? { blokNazev: fields.blokNazev } : {}),
+    ...(fields.kategorieTechnikyId !== undefined
+      ? { kategorieTechnikyId: fields.kategorieTechnikyId }
+      : {}),
+    ...(fields.kategorieNazev !== undefined
+      ? { kategorieNazev: fields.kategorieNazev }
+      : {}),
+    ...(fields.podkategorieTechnikyId !== undefined
+      ? { podkategorieTechnikyId: fields.podkategorieTechnikyId }
+      : {}),
+    ...(fields.podkategorieNazev !== undefined
+      ? { podkategorieNazev: fields.podkategorieNazev }
+      : {}),
+    ...(fields.technickyVlastnikId !== undefined
+      ? { technickyVlastnikId: fields.technickyVlastnikId }
+      : {}),
+    ...(fields.technickyVlastnikNazev !== undefined
+      ? { technickyVlastnikNazev: fields.technickyVlastnikNazev }
+      : {}),
+    ...(fields.jednotka !== undefined ? { jednotka: fields.jednotka } : {}),
+  };
+}

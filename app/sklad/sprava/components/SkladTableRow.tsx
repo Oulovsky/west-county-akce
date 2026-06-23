@@ -60,6 +60,8 @@ type Draft = {
   naklad: string;
 };
 
+import type { SpravaObsahPolozkaUpdaters } from "./spravaCaseObsahTreeTypes";
+
 type CaseObsahFormDefaults = {
   skladBlokId: string | null;
   kategorieTechnikyId: string | null;
@@ -100,6 +102,7 @@ type Props = {
   onDraftChange: Dispatch<SetStateAction<Draft>>;
   /** Okamžité uložení jednotky (inline, bez režimu úprav celého řádku). */
   onUpdateJednotka?: (value: string) => void;
+  obsahPolozkaUpdaters?: SpravaObsahPolozkaUpdaters;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   readOnly?: boolean;
 };
@@ -145,6 +148,7 @@ export function SkladTableRow({
   onUpdateVlastnik,
   onDraftChange,
   onUpdateJednotka,
+  obsahPolozkaUpdaters,
   onKeyDown,
   readOnly = false,
 }: Props) {
@@ -559,6 +563,7 @@ export function SkladTableRow({
           jednotky={jednotky}
           vlastnici={vlastnici}
           onCatalogConfigChanged={onCatalogConfigChanged}
+          obsahPolozkaUpdaters={obsahPolozkaUpdaters}
         />
       ) : null}
     </div>
