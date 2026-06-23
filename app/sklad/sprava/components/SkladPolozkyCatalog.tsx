@@ -78,6 +78,7 @@ import type {
   ObsahChildPolozkaAppliedFields,
   SpravaObsahPolozkaUpdaters,
 } from "./spravaCaseObsahTreeTypes";
+import { SetupSelectionPanel } from "../../setupy/components/SetupSelectionPanel";
 
 type RpcErrorResult = {
   error: { message: string } | null;
@@ -85,7 +86,16 @@ type RpcErrorResult = {
 
 type AddItemMode = "polozka" | "case";
 
-export function SkladPolozkyCatalog() {
+type SkladPolozkyCatalogProps = {
+  catalogMode?: "sprava" | "setup";
+  setupId?: string;
+};
+
+export function SkladPolozkyCatalog({
+  catalogMode = "sprava",
+  setupId,
+}: SkladPolozkyCatalogProps = {}) {
+  const isSetupMode = catalogMode === "setup";
   const searchParams = useSearchParams();
   const obsahPolozkaId = searchParams.get("obsahPolozka");
   const openCaseKusId = searchParams.get("obsahCase");
@@ -94,7 +104,7 @@ export function SkladPolozkyCatalog() {
   const obsahError = searchParams.get("obsahError");
 
   const { nav } = useProfileRole();
-  const readOnly = nav.readOnly;
+  const readOnly = isSetupMode ? true : nav.readOnly;
   const { caseMetadata, setCaseMetadata, registerAfterKusMutation } =
     useSpravaKusSelection();
   const [items, setItems] = useState<SkladPolozkaRow[]>([]);
@@ -1428,7 +1438,7 @@ export function SkladPolozkyCatalog() {
 
   return (
     <div className="flex flex-col gap-3">
-      <SkladPolozkyHeader readOnly={readOnly} />
+      {isSetupMode ? null : <SkladPolozkyHeader readOnly={readOnly} />}
 
       <SpravaInventoryFilters
           filters={inventoryFilters}
@@ -1439,12 +1449,16 @@ export function SkladPolozkyCatalog() {
           totalCount={catalogItems.length}
         />
 
-        <SpravaActionPanel
-          onAddPolozka={() => openAddModal("polozka")}
-          onAddCase={() => openAddModal("case")}
-        />
+        {isSetupMode && setupId ? (
+          <SetupSelectionPanel setupId={setupId} />
+        ) : (
+          <>
+            <SpravaActionPanel
+              onAddPolozka={() => openAddModal("polozka")}
+              onAddCase={() => openAddModal("case")}
+            />
 
-        <AddItemModal
+            <AddItemModal
         mode={addItemMode}
         open={isAddOpen}
         onClose={closeAddModal}
@@ -1473,6 +1487,8 @@ export function SkladPolozkyCatalog() {
         onQuickCreatePodkategorie={handleQuickCreatePodkategorie}
         onQuickCreateJednotka={handleQuickCreateJednotka}
         />
+          </>
+        )}
 
         <SkladTable loading={loading}>
           {!loading && filteredItems.length === 0 ? (

@@ -8,6 +8,7 @@ import {
   loadSessionRolePermissions,
 } from "@/lib/auth/internal-role-access-server";
 import { createClient } from "@/lib/supabase/server";
+import { DeleteSetupButton } from "./components/DeleteSetupButton";
 
 type SetupRow = {
   setup_id: string;
@@ -271,6 +272,7 @@ export default async function SkladSetupyPage() {
                       Otevřít detail
                     </Link>
                     {readOnly ? null : (
+                    <>
                     <form action={toggleSetup}>
                       <input type="hidden" name="setup_id" value={setup.setup_id} />
                       <input
@@ -285,6 +287,8 @@ export default async function SkladSetupyPage() {
                         {setup.aktivni ? "Deaktivovat" : "Aktivovat"}
                       </button>
                     </form>
+                    <DeleteSetupButton setupId={setup.setup_id} />
+                    </>
                     )}
                   </div>
                 </div>
