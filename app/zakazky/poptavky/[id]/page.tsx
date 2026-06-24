@@ -26,6 +26,8 @@ import {
   canInternalActOnPoptavka,
   loadInternalPoptavkaDetail,
 } from "@/lib/client-portal/poptavka-internal-server";
+import { loadPoptavkaObjednavkaDraft } from "@/lib/client-portal/poptavka-objednavka-draft-server";
+import type { PoptavkaStav } from "@/lib/client-portal/types";
 import { SETUP_OBLASTI } from "@/lib/client-portal/types";
 import { createClient } from "@/lib/supabase/server";
 import PoptavkaInboxActions, {
@@ -67,6 +69,17 @@ const SAVED_TO_OUTBOUND_KIND: Partial<Record<string, PoptavkaOutboundKind>> = {
   revision: "revision",
   rejected: "rejected",
 };
+
+function canShowObjednavkaEditorLink(stav: PoptavkaStav) {
+  return (
+    stav === "odeslana" ||
+    stav === "v_revizi" ||
+    stav === "objednavka_odeslana" ||
+    stav === "objednavka_potvrzena" ||
+    stav === "objednavka_odmitnuta" ||
+    stav === "schvalena"
+  );
+}
 
 export default async function ZakazkyPoptavkaDetailPage({
   params,
@@ -128,6 +141,10 @@ export default async function ZakazkyPoptavkaDetailPage({
       : null;
   const canAct = canInternalActOnPoptavka(detail.stav);
   const canConvert = canConvertPoptavkaToZakazka(detail);
+  const showObjednavkaLink = canShowObjednavkaEditorLink(detail.stav);
+  const existingObjednavkaDraft = showObjednavkaLink
+    ? await loadPoptavkaObjednavkaDraft(supabase, id)
+    : null;
   const convertedZakazkaId =
     detail.zakazka_id ?? resolvedSearchParams?.zakazka ?? null;
 
@@ -147,6 +164,22 @@ export default async function ZakazkyPoptavkaDetailPage({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {showObjednavkaLink && !readOnly ? (
+            <Link
+              href={`/zakazky/poptavky/${id}/objednavka`}
+              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+            >
+              {existingObjednavkaDraft ? "Pokračovat v objednávce" : "Připravit závaznou objednávku"}
+            </Link>
+          ) : null}
+          {showObjednavkaLink && readOnly && existingObjednavkaDraft ? (
+            <Link
+              href={`/zakazky/poptavky/${id}/objednavka`}
+              className="rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-900"
+            >
+              Zobrazit návrh objednávky
+            </Link>
+          ) : null}
           <span className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-sm font-semibold text-slate-200">
             {POPTAVKA_STAV_LABELS[detail.stav]}
           </span>
