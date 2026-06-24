@@ -23,10 +23,11 @@ export const TYP_AKCE_LABELS: Record<string, string> = {
 
 export const POPTAVKA_STAV_LABELS: Record<PoptavkaStav, string> = {
   koncept: "Koncept",
-  odeslana: "Odeslána",
-  ceka_na_schvaleni: "Čeká na schválení",
-  v_revizi: "K doplnění",
-  schvalena: "Schválená",
+  odeslana: "Odeslána — čeká na reakci",
+  /** @deprecated V DB se nezapisuje; label jen pro kompatibilitu typů. */
+  ceka_na_schvaleni: "Odeslána",
+  v_revizi: "Zajímá — k doplnění",
+  schvalena: "Schváleno k převodu",
   zamitnuta: "Zamítnutá",
   prevadena_do_zakazky: "Převedena do zakázky",
 };
@@ -35,6 +36,7 @@ export const POPTAVKA_STAV_LABELS: Record<PoptavkaStav, string> = {
 export const CLIENT_POPTAVKA_STAV_LABELS: Record<PoptavkaStav, string> = {
   koncept: "Rozpracováno",
   odeslana: "Čeká na kontrolu",
+  /** @deprecated V DB se nezapisuje; label jen pro kompatibilitu typů. */
   ceka_na_schvaleni: "Čeká na kontrolu",
   v_revizi: "Vráceno k doplnění",
   schvalena: "Schváleno, připravujeme zakázku",

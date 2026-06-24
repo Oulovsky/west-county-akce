@@ -48,8 +48,8 @@ export default async function ZakazkyPoptavkyPage() {
             ) : null}
           </div>
           <p className="mt-2 text-sm text-slate-400">
-            Odeslané a zpracované klientské poptávky z portálu. Schválené lze převést na interní
-            zakázku.
+            Odeslané a zpracované klientské poptávky z portálu. Po schválení k převodu lze vytvořit
+            interní zakázku.
           </p>
         </div>
         <Link href="/zakazky" className="text-sm text-blue-300 hover:text-blue-200">

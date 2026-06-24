@@ -194,7 +194,7 @@ export default async function PortalPoptavkaDetailPage({
         ) : null}
         {detail.stav === "schvalena" ? (
           <p className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-            Poptávka byla schválena. WEST COUNTY připravuje interní zakázku.
+            Poptávka byla interně schválena k převodu. WEST COUNTY připravuje další kroky.
           </p>
         ) : null}
         {detail.stav === "prevadena_do_zakazky" && detail.zakazka_id ? (
@@ -208,7 +208,7 @@ export default async function PortalPoptavkaDetailPage({
             </Link>
           </div>
         ) : null}
-        {detail.stav === "odeslana" || detail.stav === "ceka_na_schvaleni" ? (
+        {detail.stav === "odeslana" ? (
           <p className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
             Poptávka čeká na kontrolu WEST COUNTY.
             {detail.odeslano_at

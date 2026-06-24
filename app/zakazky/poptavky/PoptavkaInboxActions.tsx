@@ -60,7 +60,12 @@ export default function PoptavkaInboxActions({
 
   return (
     <section className="space-y-6 rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
-      <h2 className="text-xl font-semibold text-white">Akce šéfa / admina</h2>
+      <div>
+        <h2 className="text-xl font-semibold text-white">První reakce na poptávku</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          Rozhodněte, zda poptávka zajímá, potřebuje doplnění, nebo ji nelze realizovat.
+        </p>
+      </div>
 
       {errorCode && ERROR_MESSAGES[errorCode] ? (
         <p className="rounded-lg border border-red-500/30 bg-red-950/20 px-4 py-3 text-sm text-red-200">
@@ -98,7 +103,8 @@ export default function PoptavkaInboxActions({
           <input type="hidden" name="poptavka_id" value={poptavkaId} />
           <p className="text-sm leading-relaxed text-slate-400">
             Ze schválené poptávky vznikne interní zakázka s plánem techniky. Konkrétní skladové kusy
-            se neřadí — ty vzniknou až při scanování.
+            se neřadí — ty vzniknou až při scanování. Závazná objednávka klientem bude řešena v
+            dalším kroku workflow.
           </p>
           <button
             type="submit"
@@ -117,10 +123,14 @@ export default function PoptavkaInboxActions({
       ) : (
         <div className="grid gap-6 lg:grid-cols-3">
           <form action={returnPoptavkaToRevisionAction} className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-950/10 p-4">
-            <h3 className="font-semibold text-amber-100">Vrátit k doplnění</h3>
+            <h3 className="font-semibold text-amber-100">Zajímá nás — požádat o doplnění</h3>
             <input type="hidden" name="poptavka_id" value={poptavkaId} />
+            <p className="text-sm leading-relaxed text-slate-400">
+              Poptávka vás zajímá, ale potřebujete od klienta doplnit technické údaje nebo upřesnit
+              zadání. Klient dostane žádost e-mailem nebo ručně přes připravený text.
+            </p>
             <label className="block text-sm text-slate-300">
-              Poznámka pro klienta
+              Co má klient doplnit
               <textarea
                 name="duvod"
                 required
@@ -133,15 +143,18 @@ export default function PoptavkaInboxActions({
               type="submit"
               className="rounded-xl border border-amber-500/40 bg-amber-600/20 px-4 py-2 text-sm font-semibold text-amber-50 hover:bg-amber-600/30"
             >
-              Vrátit k doplnění
+              Požádat o doplnění
             </button>
           </form>
 
           <form action={rejectPoptavkaAction} className="space-y-3 rounded-xl border border-red-500/20 bg-red-950/10 p-4">
-            <h3 className="font-semibold text-red-100">Zamítnout</h3>
+            <h3 className="font-semibold text-red-100">Nezajímá / odmítnout</h3>
             <input type="hidden" name="poptavka_id" value={poptavkaId} />
+            <p className="text-sm leading-relaxed text-slate-400">
+              Poptávku nelze nebo nechcete realizovat. Klient dostane informaci s důvodem odmítnutí.
+            </p>
             <label className="block text-sm text-slate-300">
-              Důvod zamítnutí
+              Důvod pro klienta
               <textarea
                 name="duvod"
                 required
@@ -154,7 +167,7 @@ export default function PoptavkaInboxActions({
               type="submit"
               className="rounded-xl border border-red-500/40 bg-red-600/20 px-4 py-2 text-sm font-semibold text-red-50 hover:bg-red-600/30"
             >
-              Zamítnout poptávku
+              Odmítnout poptávku
             </button>
           </form>
 
@@ -162,22 +175,23 @@ export default function PoptavkaInboxActions({
             action={approvePoptavkaAction}
             onSubmit={(event) => {
               const confirmed = window.confirm(
-                "Schválit poptávku? Zakázka se zatím nevytvoří — pouze se změní stav."
+                "Schválit poptávku k převodu? Zakázka se zatím nevytvoří — změní se pouze interní stav. Závazná objednávka klientem bude řešena v dalším kroku workflow."
               );
               if (!confirmed) event.preventDefault();
             }}
             className="space-y-3 rounded-xl border border-emerald-500/20 bg-emerald-950/10 p-4"
           >
-            <h3 className="font-semibold text-emerald-100">Schválit</h3>
+            <h3 className="font-semibold text-emerald-100">Schválit k převodu</h3>
             <input type="hidden" name="poptavka_id" value={poptavkaId} />
             <p className="text-sm leading-relaxed text-slate-400">
-              Poptávka přejde do stavu schválená. Poté ji lze převést na interní zakázku.
+              Interně schválí poptávku pro další práci a případný převod na zakázku. Nejde o závaznou
+              objednávku ani finální potvrzení klientem — ty budou řešeny v dalším kroku workflow.
             </p>
             <button
               type="submit"
               className="rounded-xl border border-emerald-500/40 bg-emerald-600/20 px-4 py-2 text-sm font-semibold text-emerald-50 hover:bg-emerald-600/30"
             >
-              Schválit poptávku
+              Schválit k převodu
             </button>
           </form>
         </div>

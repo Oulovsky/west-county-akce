@@ -44,9 +44,10 @@ function ReadOnlyField({ label, value }: { label: string; value: string | null |
 }
 
 const SAVED_MESSAGES: Record<string, string> = {
-  revision: "Poptávka byla vrácena klientovi k doplnění.",
-  rejected: "Poptávka byla zamítnuta.",
-  approved: "Poptávka byla schválena.",
+  revision: "Klient byl požádán o doplnění poptávky.",
+  rejected: "Poptávka byla odmítnuta.",
+  approved:
+    "Poptávka byla schválena k převodu. Závazná objednávka klientem bude řešena v dalším kroku workflow.",
   note: "Interní poznámka byla uložena.",
   converted: "Interní zakázka byla vytvořena.",
 };

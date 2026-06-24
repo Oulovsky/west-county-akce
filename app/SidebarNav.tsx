@@ -93,7 +93,7 @@ export default function SidebarNav() {
           supabase
             .from("poptavky")
             .select("poptavka_id", { count: "exact", head: true })
-            .in("stav", ["odeslana", "ceka_na_schvaleni"])
+            .in("stav", ["odeslana"])
         );
       }
 
