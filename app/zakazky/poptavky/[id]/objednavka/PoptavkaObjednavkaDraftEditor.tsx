@@ -11,6 +11,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   read_only: "Tento draft už nelze upravovat.",
   save_failed: "Uložení se nezdařilo.",
   link_failed: "Vytvoření závazné objednávky se nezdařilo. Zkuste to znovu nebo kontaktujte správce.",
+  invalid_state: "Závaznou objednávku v aktuálním stavu poptávky už nelze odeslat.",
 };
 
 const TRI_OPTIONS = [
@@ -29,6 +30,7 @@ type Props = {
   sourceChanged: boolean;
   readOnly: boolean;
   canEdit: boolean;
+  canSend: boolean;
   saved: boolean;
   errorCode: string | null;
 };
@@ -178,6 +180,7 @@ export default function PoptavkaObjednavkaDraftEditor({
   sourceChanged,
   readOnly,
   canEdit,
+  canSend,
   saved,
   errorCode,
 }: Props) {
@@ -406,7 +409,7 @@ export default function PoptavkaObjednavkaDraftEditor({
                 : "Tento draft nelze upravovat (není aktivní)."}
             </p>
           )}
-          {canEdit ? (
+          {canEdit && canSend ? (
             <button
               type="submit"
               formAction={sendPoptavkaObjednavkaAction}

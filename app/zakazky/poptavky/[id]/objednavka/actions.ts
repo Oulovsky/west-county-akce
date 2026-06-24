@@ -18,7 +18,10 @@ import {
   buildPoptavkaObjednavkaUrl,
   createPoptavkaObjednavkaLinkFromDraft,
 } from "@/lib/client-portal/poptavka-objednavka-link-server";
-import { loadInternalPoptavkaDetail } from "@/lib/client-portal/poptavka-internal-server";
+import {
+  canSendPoptavkaBindingOrder,
+  loadInternalPoptavkaDetail,
+} from "@/lib/client-portal/poptavka-internal-server";
 
 async function loadDraftRowByIdInternal(
   supabase: Awaited<ReturnType<typeof requireInternalWriteAdminOrSef>>["supabase"],
@@ -100,6 +103,10 @@ export async function sendPoptavkaObjednavkaAction(formData: FormData) {
     redirectObjednavkaEditor(poptavkaId, { error: "not_found" });
   }
 
+  if (!canSendPoptavkaBindingOrder(detail.stav)) {
+    redirectObjednavkaEditor(poptavkaId, { error: "invalid_state" });
+  }
+
   const row = await loadDraftRowByIdInternal(supabase, draftId);
 
   if (!row || row.poptavka_id !== poptavkaId) {
@@ -132,11 +139,15 @@ export async function sendPoptavkaObjednavkaAction(formData: FormData) {
 
   if (!linkResult.ok) {
     const linkError =
-      linkResult.error === "draft_not_found" || linkResult.error === "draft_poptavka_mismatch"
-        ? "not_found"
-        : linkResult.error === "draft_not_active"
-          ? "read_only"
-          : "link_failed";
+      linkResult.error === "invalid_state"
+        ? "invalid_state"
+        : linkResult.error === "draft_not_found" || linkResult.error === "draft_poptavka_mismatch"
+          ? "not_found"
+          : linkResult.error === "draft_not_active"
+            ? "read_only"
+            : linkResult.error === "poptavka_update_failed"
+              ? "invalid_state"
+              : "link_failed";
     redirectObjednavkaEditor(poptavkaId, { error: linkError });
   }
 

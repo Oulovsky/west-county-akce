@@ -5,6 +5,7 @@ import type { PoptavkaStav } from "@/lib/client-portal/types";
 import {
   INTERNAL_INBOX_POPTAVKA_STAVY,
   PENDING_INTERNAL_POPTAVKA_STAVY,
+  SEND_BINDING_ORDER_POPTAVKA_STAVY,
 } from "@/lib/client-portal/types";
 import { loadPoptavkaFotkyWithUrls } from "@/lib/client-portal/poptavka-fotky-server";
 import type { PortalSetupSelection } from "@/lib/client-portal/poptavka-server";
@@ -14,7 +15,11 @@ import type {
   PoptavkaTechnickeUdaje,
 } from "@/lib/client-portal/types";
 
-export { INTERNAL_INBOX_POPTAVKA_STAVY, PENDING_INTERNAL_POPTAVKA_STAVY };
+export {
+  INTERNAL_INBOX_POPTAVKA_STAVY,
+  PENDING_INTERNAL_POPTAVKA_STAVY,
+  SEND_BINDING_ORDER_POPTAVKA_STAVY,
+};
 
 const POPTAVKA_DETAIL_SELECT =
   "poptavka_id, cislo_poptavky, klient_id, vytvoril_account_id, stav, kontakt_jmeno, kontakt_telefon, kontakt_email, misto_id, misto_nazev, misto_adresa, misto_poznamka, misto_lat, misto_lng, datum_od, datum_do, cas_programu_od, cas_programu_do, cas_prijezd_orientacni, vice_denni, typ_akce, typ_akce_poznamka, stavba_datum, stavba_cas_od, stavba_cas_do, stavba_pristup_od, stavba_omezeni_vjezdu, stavba_poznamka, bourani_datum, bourani_cas_od, bourani_cas_do, bourani_misto_uvolneno_do, bourani_poznamka, interni_poznamka, schvalil_user_id, schvaleno_at, zamitnuto_duvod, zakazka_id, odeslano_at, objednavka_odeslana_at, objednavka_odeslana_user_id, objednavka_potvrzena_at, objednavka_potvrzena_zpusob, objednavka_odmitnuta_at, objednavka_odmitnuta_duvod, created_at, updated_at" as const;
@@ -167,9 +172,9 @@ export function canInternalFirstReactOnPoptavka(stav: PoptavkaStav) {
   return stav === "odeslana" || stav === "v_revizi";
 }
 
-/** Odeslání závazné objednávky klientovi (připraveno pro budoucí akci). */
+/** Odeslání závazné objednávky klientovi. */
 export function canSendPoptavkaBindingOrder(stav: PoptavkaStav) {
-  return stav === "odeslana";
+  return (SEND_BINDING_ORDER_POPTAVKA_STAVY as readonly string[]).includes(stav);
 }
 
 /** Finální interní schválení k převodu — jen po potvrzení závazné objednávky klientem. */

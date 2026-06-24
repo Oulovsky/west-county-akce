@@ -25,6 +25,7 @@ import {
 import {
   canInternalActOnPoptavka,
   canInternalApproveForConvert,
+  canSendPoptavkaBindingOrder,
   loadInternalPoptavkaDetail,
 } from "@/lib/client-portal/poptavka-internal-server";
 import { loadPoptavkaObjednavkaDraft } from "@/lib/client-portal/poptavka-objednavka-draft-server";
@@ -78,9 +79,7 @@ function canShowObjednavkaEditorLink(stav: PoptavkaStav) {
     stav === "odeslana" ||
     stav === "v_revizi" ||
     stav === "objednavka_odeslana" ||
-    stav === "objednavka_potvrzena" ||
-    stav === "objednavka_odmitnuta" ||
-    stav === "schvalena"
+    stav === "objednavka_odmitnuta"
   );
 }
 
@@ -180,14 +179,14 @@ export default async function ZakazkyPoptavkaDetailPage({
               >
                 Závazná objednávka odeslána
               </Link>
-            ) : (
+            ) : canSendPoptavkaBindingOrder(detail.stav) ? (
               <Link
                 href={`/zakazky/poptavky/${id}/objednavka`}
                 className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
               >
                 {existingObjednavkaDraft ? "Pokračovat v objednávce" : "Připravit závaznou objednávku"}
               </Link>
-            )
+            ) : null
           ) : null}
           {showObjednavkaLink && readOnly && existingObjednavkaDraft ? (
             <Link

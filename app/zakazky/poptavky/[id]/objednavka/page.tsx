@@ -2,7 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { verifyInternalPoptavkyReadPage } from "@/lib/auth/admin-access-server";
 import { loadSessionRolePermissions } from "@/lib/auth/internal-role-access-server";
-import { loadInternalPoptavkaDetail } from "@/lib/client-portal/poptavka-internal-server";
+import { canSendPoptavkaBindingOrder, loadInternalPoptavkaDetail } from "@/lib/client-portal/poptavka-internal-server";
 import {
   formatPoptavkaOutboundForCopy,
   getPortalAppBaseUrl,
@@ -24,9 +24,7 @@ function canOpenObjednavkaEditor(stav: PoptavkaStav) {
     stav === "odeslana" ||
     stav === "v_revizi" ||
     stav === "objednavka_odeslana" ||
-    stav === "objednavka_potvrzena" ||
-    stav === "objednavka_odmitnuta" ||
-    stav === "schvalena"
+    stav === "objednavka_odmitnuta"
   );
 }
 
@@ -87,6 +85,38 @@ export default async function PoptavkaObjednavkaEditorPage({
   }
 
   if (!canOpenObjednavkaEditor(detail.stav)) {
+    const backLink = (
+      <Link href={`/zakazky/poptavky/${poptavkaId}`} className="mt-4 inline-block text-blue-300">
+        ← Zpět na poptávku
+      </Link>
+    );
+
+    if (detail.stav === "objednavka_potvrzena") {
+      return (
+        <div className="p-6">
+          <h1 className="text-3xl font-bold text-white">Závazná objednávka</h1>
+          <p className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
+            Klient potvrdil závaznou objednávku. Čeká na interní schválení k převodu — použijte
+            detail poptávky.
+          </p>
+          {backLink}
+        </div>
+      );
+    }
+
+    if (detail.stav === "schvalena") {
+      return (
+        <div className="p-6">
+          <h1 className="text-3xl font-bold text-white">Závazná objednávka</h1>
+          <p className="mt-4 rounded-lg border border-blue-500/30 bg-blue-950/20 px-4 py-3 text-sm text-blue-100">
+            Poptávka je schválená k převodu. Novou objednávku nelze odeslat — pokračujte vytvořením
+            zakázky z detailu poptávky.
+          </p>
+          {backLink}
+        </div>
+      );
+    }
+
     return (
       <div className="p-6">
         <h1 className="text-3xl font-bold text-white">Závazná objednávka</h1>
@@ -94,9 +124,7 @@ export default async function PoptavkaObjednavkaEditorPage({
           Pro tuto poptávku zatím nelze připravit závaznou objednávku ve stavu{" "}
           <strong>{detail.stav}</strong>.
         </p>
-        <Link href={`/zakazky/poptavky/${poptavkaId}`} className="mt-4 inline-block text-blue-300">
-          ← Zpět na poptávku
-        </Link>
+        {backLink}
       </div>
     );
   }
@@ -105,8 +133,7 @@ export default async function PoptavkaObjednavkaEditorPage({
   const shouldAutoCreateDraft =
     !readOnly &&
     !orderSent &&
-    detail.stav !== "objednavka_odeslana" &&
-    detail.stav !== "objednavka_potvrzena";
+    canSendPoptavkaBindingOrder(detail.stav);
 
   const draft = readOnly
     ? await loadPoptavkaObjednavkaDraft(supabase, poptavkaId)
@@ -173,6 +200,26 @@ export default async function PoptavkaObjednavkaEditorPage({
     );
   }
 
+  if (!draft && detail.stav === "objednavka_odeslana" && !orderSent) {
+    return (
+      <div className="space-y-6 p-6">
+        <div>
+          <h1 className="text-3xl font-bold text-white">Závazná objednávka</h1>
+          <p className="mt-2 text-slate-400">{detail.cislo_poptavky}</p>
+        </div>
+        <p className="rounded-lg border border-blue-500/30 bg-blue-950/20 px-4 py-3 text-sm text-blue-100">
+          Závazná objednávka byla odeslána klientovi a čeká na jeho potvrzení.
+        </p>
+        <Link
+          href={`/zakazky/poptavky/${poptavkaId}`}
+          className="inline-flex rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+        >
+          ← Detail poptávky
+        </Link>
+      </div>
+    );
+  }
+
   if (!draft) {
     return (
       <div className="p-6">
@@ -207,6 +254,8 @@ export default async function PoptavkaObjednavkaEditorPage({
           emailTo: draft.draftData.klient.email,
         })
       : null;
+
+  const canSend = canSendPoptavkaBindingOrder(detail.stav);
 
   return (
     <div className="space-y-6 p-6">
@@ -270,6 +319,7 @@ export default async function PoptavkaObjednavkaEditorPage({
         sourceChanged={draft.sourceChanged}
         readOnly={readOnly}
         canEdit={canEdit}
+        canSend={canSend}
         saved={resolvedSearchParams?.saved === "1"}
         errorCode={resolvedSearchParams?.error ?? null}
       />

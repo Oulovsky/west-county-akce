@@ -25,6 +25,8 @@ import {
   type PoptavkaObjednavkaSnapshot,
 } from "@/lib/client-portal/poptavka-objednavka-types";
 import type { PoptavkaStav } from "@/lib/client-portal/types";
+import { SEND_BINDING_ORDER_POPTAVKA_STAVY } from "@/lib/client-portal/types";
+import { canSendPoptavkaBindingOrder } from "@/lib/client-portal/poptavka-internal-server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type PoptavkaObjednavkaLinkStav =
@@ -88,6 +90,7 @@ export type CreatePoptavkaObjednavkaLinkFromDraftResult =
       ok: false;
       error:
         | "poptavka_not_found"
+        | "invalid_state"
         | "draft_not_found"
         | "draft_poptavka_mismatch"
         | "draft_not_active"
@@ -359,6 +362,11 @@ export async function createPoptavkaObjednavkaLinkFromDraft(
     return { ok: false, error: "poptavka_not_found" };
   }
 
+  const poptavkaStav = poptavka.stav as PoptavkaStav;
+  if (!canSendPoptavkaBindingOrder(poptavkaStav)) {
+    return { ok: false, error: "invalid_state" };
+  }
+
   const draftRow = await loadDraftForSend(supabase, poptavkaId, options.draftId);
   if (!draftRow) {
     return { ok: false, error: options.draftId ? "draft_poptavka_mismatch" : "draft_not_found" };
@@ -474,6 +482,7 @@ export async function createPoptavkaObjednavkaLinkFromDraft(
       objednavka_odeslana_user_id: preparedByUserId,
     })
     .eq("poptavka_id", poptavkaId)
+    .in("stav", [...SEND_BINDING_ORDER_POPTAVKA_STAVY])
     .select("poptavka_id")
     .maybeSingle();
 
