@@ -8,6 +8,14 @@ import {
   buildZakazkaFieldsFromSnapshot,
   snapshotSetupRows,
 } from "@/lib/client-portal/convert-poptavka-snapshot";
+import {
+  enrichMistoAfterPoptavkaConvert,
+  type ConvertEnrichContext,
+} from "@/lib/client-portal/convert-poptavka-misto-enrich";
+import {
+  resolveMistoForPoptavkaConvert,
+  type MistoConvertHints,
+} from "@/lib/client-portal/convert-poptavka-misto";
 import { buildTechnikaPayloadFromSetupRows } from "@/lib/client-portal/convert-poptavka-technika";
 import type { InternalPoptavkaDetail } from "@/lib/client-portal/poptavka-internal-server";
 import { loadInternalPoptavkaDetail } from "@/lib/client-portal/poptavka-internal-server";
@@ -27,13 +35,15 @@ export type ConvertPoptavkaError =
   | "invalid_confirmed_snapshot"
   | "snapshot_poptavka_mismatch"
   | "setup_not_found"
-  | "setup_empty";
+  | "setup_empty"
+  | "misto_resolve_failed";
 
 export type ConvertPoptavkaResult =
   | {
       ok: true;
       zakazkaId: string;
       alreadyConverted: boolean;
+      mistoEnrichWarning?: string;
     }
   | {
       ok: false;
@@ -159,66 +169,6 @@ async function generateCisloZakazky(supabase: SupabaseClient) {
   return `${rok}/${String(dalsiPoradi).padStart(3, "0")}`;
 }
 
-type MistoSearchHint = {
-  nazev?: string | null;
-  adresa?: string | null;
-};
-
-async function resolveMistoId(
-  supabase: SupabaseClient,
-  detail: InternalPoptavkaDetail,
-  search?: MistoSearchHint
-): Promise<string | null> {
-  if (detail.misto_id && detail.klient_id) {
-    const { data } = await supabase
-      .from("mista_konani")
-      .select("misto_id, klient_id")
-      .eq("misto_id", detail.misto_id)
-      .maybeSingle();
-
-    if (data?.misto_id && data.klient_id === detail.klient_id) {
-      return data.misto_id as string;
-    }
-  }
-
-  const searchName = search?.nazev?.trim() || detail.misto_nazev?.trim();
-  const searchAddress = search?.adresa?.trim() || detail.misto_adresa?.trim();
-
-  if (!searchName && !searchAddress) {
-    return null;
-  }
-
-  if (searchName && detail.klient_id) {
-    const { data: byName } = await supabase
-      .from("mista_konani")
-      .select("misto_id")
-      .eq("klient_id", detail.klient_id)
-      .ilike("nazev", searchName)
-      .limit(1)
-      .maybeSingle();
-
-    if (byName?.misto_id) {
-      return byName.misto_id as string;
-    }
-  }
-
-  if (searchAddress && detail.klient_id) {
-    const { data: byAddress } = await supabase
-      .from("mista_konani")
-      .select("misto_id")
-      .eq("klient_id", detail.klient_id)
-      .ilike("adresa_text", searchAddress)
-      .limit(1)
-      .maybeSingle();
-
-    if (byAddress?.misto_id) {
-      return byAddress.misto_id as string;
-    }
-  }
-
-  return null;
-}
-
 function buildDotaznikPayload(detail: InternalPoptavkaDetail, zakazkaId: string) {
   const technika = detail.technicke_udaje;
   const extra = technika?.odpovedi_extra ?? {};
@@ -262,17 +212,10 @@ function buildDotaznikPayload(detail: InternalPoptavkaDetail, zakazkaId: string)
 type ZakazkaCreateInput = {
   nazev: string;
   mistoText: string | null;
-  mistoId: string | null;
   mistoLat: number | null;
   mistoLng: number | null;
-  mistoPayload: {
-    klient_id: string;
-    nazev: string;
-    adresa_text: string;
-    lat: number;
-    lng: number;
-    radius_m: number;
-  } | null;
+  mistoHints: MistoConvertHints;
+  enrich: ConvertEnrichContext;
   akceOd: string;
   akceDo: string;
   stavbaOd: string | null;
@@ -319,32 +262,24 @@ async function buildLegacyZakazkaCreateInput(
 
   const mistoText = detail.misto_adresa?.trim() || detail.misto_nazev?.trim() || null;
   const nazev = detail.misto_nazev?.trim() || detail.misto_adresa?.trim() || detail.cislo_poptavky;
-
-  const mistoId = await resolveMistoId(supabase, detail);
   const mistoLat = detail.misto_lat != null ? Number(detail.misto_lat) : null;
   const mistoLng = detail.misto_lng != null ? Number(detail.misto_lng) : null;
-
-  const mistoPayload =
-    !mistoId && mistoLat != null && mistoLng != null && detail.klient_id
-      ? {
-          klient_id: detail.klient_id,
-          nazev: detail.misto_nazev?.trim() || mistoText || nazev,
-          adresa_text: detail.misto_adresa?.trim() || mistoText || nazev,
-          lat: mistoLat,
-          lng: mistoLng,
-          radius_m: 300,
-        }
-      : null;
 
   return {
     ok: true,
     input: {
       nazev,
       mistoText,
-      mistoId,
-      mistoLat,
-      mistoLng,
-      mistoPayload,
+      mistoLat: Number.isFinite(mistoLat) ? mistoLat : null,
+      mistoLng: Number.isFinite(mistoLng) ? mistoLng : null,
+      mistoHints: {
+        nazev: detail.misto_nazev?.trim() || null,
+        adresa: detail.misto_adresa?.trim() || null,
+        lat: Number.isFinite(mistoLat) ? mistoLat : null,
+        lng: Number.isFinite(mistoLng) ? mistoLng : null,
+        poznamka: detail.misto_poznamka?.trim() || null,
+      },
+      enrich: { mode: "legacy" },
       akceOd,
       akceDo,
       stavbaOd,
@@ -387,36 +322,30 @@ async function buildSnapshotZakazkaCreateInput(
     return { ok: false, error: technikaResult.error, message: technikaResult.message };
   }
 
-  const mistoId = await resolveMistoId(supabase, detail, {
-    nazev: snapshot.misto.nazev,
-    adresa: snapshot.misto.adresa,
-  });
-
-  const mistoLat = fields.mistoLat;
-  const mistoLng = fields.mistoLng;
-
-  const mistoPayload =
-    !mistoId && mistoLat != null && mistoLng != null && detail.klient_id
-      ? {
-          klient_id: detail.klient_id,
-          nazev: snapshot.misto.nazev?.trim() || fields.nazev,
-          adresa_text:
-            snapshot.misto.adresa?.trim() || fields.mistoText || snapshot.misto.nazev?.trim() || fields.nazev,
-          lat: mistoLat,
-          lng: mistoLng,
-          radius_m: 300,
-        }
-      : null;
-
   return {
     ok: true,
     input: {
       nazev: fields.nazev,
       mistoText: fields.mistoText,
-      mistoId,
-      mistoLat,
-      mistoLng,
-      mistoPayload,
+      mistoLat: fields.mistoLat,
+      mistoLng: fields.mistoLng,
+      mistoHints: {
+        nazev: snapshot.misto.nazev?.trim() || null,
+        adresa: snapshot.misto.adresa?.trim() || null,
+        lat: fields.mistoLat,
+        lng: fields.mistoLng,
+        poznamka:
+          snapshot.akce.poznamka?.trim() ||
+          snapshot.misto.dalsiTechnickePoznamky?.trim() ||
+          null,
+      },
+      enrich: {
+        mode: "snapshot",
+        snapshot,
+        objednavkaLinkId: snapshot.meta.linkId,
+        snapshotFotkaIds:
+          snapshot.fotky.length > 0 ? snapshot.fotky.map((row) => row.fotkaId) : null,
+      },
       akceOd: fields.akceOd,
       akceDo: fields.akceDo,
       stavbaOd: fields.stavbaOd,
@@ -436,10 +365,25 @@ async function createZakazkaFromInput(
   detail: InternalPoptavkaDetail,
   input: ZakazkaCreateInput
 ): Promise<ConvertPoptavkaResult> {
+  const resolveResult = await resolveMistoForPoptavkaConvert(
+    supabase,
+    detail,
+    input.mistoHints
+  );
+
+  if (!resolveResult.ok) {
+    return {
+      ok: false,
+      error: "misto_resolve_failed",
+      message: resolveResult.message,
+    };
+  }
+
+  const resolvedMistoId = resolveResult.mistoId;
   const cisloZakazky = await generateCisloZakazky(supabase);
 
   const { data: zakazkaId, error: createError } = await supabase.rpc("create_zakazka_atomic", {
-    misto_payload: input.mistoPayload,
+    misto_payload: null,
     realizace_payload: [],
     technika_payload: input.technikaPayload,
     zakazka_payload: {
@@ -448,7 +392,7 @@ async function createZakazkaFromInput(
       nazev: input.nazev,
       klient_id: detail.klient_id,
       fakturacni_firma_id: null,
-      misto_id: input.mistoId,
+      misto_id: resolvedMistoId,
       misto: input.mistoText,
       misto_lat: input.mistoLat,
       misto_lng: input.mistoLng,
@@ -517,7 +461,34 @@ async function createZakazkaFromInput(
     return { ok: false, error: "link_failed", message: poptavkaUpdateError.message };
   }
 
-  return { ok: true, zakazkaId: createdZakazkaId, alreadyConverted: false };
+  let mistoEnrichWarning: string | undefined;
+
+  if (resolvedMistoId) {
+    const enrichResult = await enrichMistoAfterPoptavkaConvert(supabase, {
+      mistoId: resolvedMistoId,
+      poptavkaId,
+      zakazkaId: createdZakazkaId,
+      enrich: input.enrich,
+    });
+
+    if (!enrichResult.ok) {
+      console.error("misto enrich after convert failed", {
+        poptavkaId,
+        zakazkaId: createdZakazkaId,
+        mistoId: resolvedMistoId,
+        warnings: enrichResult.warnings,
+      });
+      mistoEnrichWarning =
+        "Zakázka byla vytvořena, ale technické údaje místa se nepodařilo uložit.";
+    }
+  }
+
+  return {
+    ok: true,
+    zakazkaId: createdZakazkaId,
+    alreadyConverted: false,
+    mistoEnrichWarning,
+  };
 }
 
 export function canConvertPoptavkaToZakazka(detail: {

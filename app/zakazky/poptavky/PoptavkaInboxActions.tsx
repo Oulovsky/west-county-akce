@@ -28,6 +28,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   snapshot_poptavka_mismatch: "Snapshot objednávky neodpovídá této poptávce.",
   setup_not_found: "Objednávka obsahuje setup, který už není v katalogu.",
   setup_empty: "Objednávka neobsahuje žádné setupy pro plán techniky.",
+  misto_resolve_failed: "Převod selhal — nepodařilo se určit nebo vytvořit místo akce.",
 };
 
 export default function PoptavkaInboxActions({

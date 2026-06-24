@@ -88,7 +88,13 @@ export default async function ZakazkyPoptavkaDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ saved?: string; error?: string; zakazka?: string; email?: string }>;
+  searchParams?: Promise<{
+    saved?: string;
+    error?: string;
+    zakazka?: string;
+    email?: string;
+    misto_enrich_warning?: string;
+  }>;
 }) {
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
@@ -320,6 +326,11 @@ export default async function ZakazkyPoptavkaDetailPage({
               ].join(" ")}
             >
               {EMAIL_STATUS_MESSAGES[emailStatus]}
+            </p>
+          ) : null}
+          {savedKey === "converted" && resolvedSearchParams?.misto_enrich_warning ? (
+            <p className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">
+              Zakázka byla vytvořena, ale technické údaje místa se nepodařilo uložit.
             </p>
           ) : null}
           {outboundMessage ? (
