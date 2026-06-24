@@ -32,6 +32,7 @@ export function isPublicAppPath(pathname: string): boolean {
   if (pathname.startsWith("/auth/")) return true;
   if (pathname.startsWith("/dotaznik/")) return true;
   if (pathname.startsWith("/schvaleni/")) return true;
+  if (pathname.startsWith("/poptavka-objednavka/")) return true;
   if (pathname.startsWith("/faktura-render/")) return true;
   return false;
 }
