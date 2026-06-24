@@ -70,7 +70,7 @@ export async function resolvePoptavkaClientEmail(
   return null;
 }
 
-export type PoptavkaOutboundKind = "revision" | "rejected" | "approved";
+export type PoptavkaOutboundKind = "revision" | "rejected" | "approved" | "binding_order";
 
 export type PoptavkaOutboundMessage = {
   kind: PoptavkaOutboundKind;
@@ -111,11 +111,15 @@ export type SendRevisionEmailResult =
     }
   | { ok: false; reason: "send_failed"; message: string };
 
-const OUTBOUND_SUBJECTS: Record<PoptavkaOutboundKind, string> = {
+const OUTBOUND_SUBJECTS: Record<Exclude<PoptavkaOutboundKind, "binding_order">, string> = {
   revision: "WEST COUNTY – poptávka vyžaduje doplnění",
   rejected: "WEST COUNTY – poptávka byla zamítnuta",
   approved: "WEST COUNTY – poptávka byla schválena",
 };
+
+export function buildBindingOrderEmailSubject(cisloPoptavky: string) {
+  return `WEST COUNTY – závazná objednávka k poptávce ${cisloPoptavky}`;
+}
 
 function escapeHtml(value: string) {
   return value
@@ -198,6 +202,27 @@ function buildApprovedEmailBody(link: string) {
   return { text, html };
 }
 
+/** Závazná objednávka poptávky — odkaz na tokenovou stránku /poptavka-objednavka/{token}. */
+function buildBindingOrderEmailBody(link: string, cisloPoptavky: string) {
+  const text = [
+    `zasíláme Vám závaznou objednávku k poptávce ${cisloPoptavky}.`,
+    "",
+    "Prosíme o kontrolu obsahu a potvrzení objednávky prostřednictvím odkazu níže.",
+    "Potvrzením závazné objednávky souhlasíte s uvedeným rozsahem služeb a smluvními podmínkami.",
+    "",
+    `Odkaz k závazné objednávce: ${link}`,
+  ].join("\n");
+
+  const html = `
+    <p>zasíláme Vám závaznou objednávku k poptávce <strong>${escapeHtml(cisloPoptavky)}</strong>.</p>
+    <p>Prosíme o kontrolu obsahu a potvrzení objednávky prostřednictvím odkazu níže.</p>
+    <p><strong>Potvrzením závazné objednávky</strong> souhlasíte s uvedeným rozsahem služeb a smluvními podmínkami.</p>
+    <p><a href="${link}">${link}</a></p>
+  `.trim();
+
+  return { text, html };
+}
+
 function buildOutboundContent(
   kind: PoptavkaOutboundKind,
   link: string,
@@ -210,6 +235,8 @@ function buildOutboundContent(
       return buildRejectedEmailBody(link, options.duvod?.trim() || "—", options.cisloPoptavky);
     case "approved":
       return buildApprovedEmailBody(link);
+    case "binding_order":
+      return buildBindingOrderEmailBody(link, options.cisloPoptavky?.trim() || "poptávky");
   }
 }
 
@@ -219,7 +246,7 @@ export async function preparePoptavkaOutboundMessage({
   baseUrl,
   duvod,
 }: {
-  kind: PoptavkaOutboundKind;
+  kind: Exclude<PoptavkaOutboundKind, "binding_order">;
   detail: InternalPoptavkaDetail;
   baseUrl: string;
   duvod?: string | null;
@@ -263,7 +290,7 @@ export async function trySendPoptavkaOutbound({
   baseUrl,
   duvod,
 }: {
-  kind: PoptavkaOutboundKind;
+  kind: Exclude<PoptavkaOutboundKind, "binding_order">;
   detail: InternalPoptavkaDetail;
   baseUrl: string;
   duvod?: string | null;
@@ -294,6 +321,72 @@ export async function trySendPoptavkaOutbound({
 
   if (error) {
     console.warn(`Poptavka outbound email (${kind}) failed:`, error.message);
+    return { ok: false, reason: "send_failed", message: error.message, outbound };
+  }
+
+  return { ok: true, sent: true, outbound };
+}
+
+export async function preparePoptavkaBindingOrderOutboundMessage({
+  cisloPoptavky,
+  publicLink,
+  emailTo,
+}: {
+  cisloPoptavky: string;
+  publicLink: string;
+  emailTo: string | null;
+}): Promise<PoptavkaOutboundMessage> {
+  const { text, html } = buildBindingOrderEmailBody(publicLink, cisloPoptavky);
+
+  return {
+    kind: "binding_order",
+    subject: buildBindingOrderEmailSubject(cisloPoptavky),
+    text,
+    html,
+    link: publicLink,
+    emailTo,
+  };
+}
+
+export async function trySendPoptavkaBindingOrderOutbound({
+  cisloPoptavky,
+  publicLink,
+  emailTo,
+}: {
+  cisloPoptavky: string;
+  publicLink: string;
+  emailTo: string | null;
+}): Promise<TrySendPoptavkaOutboundResult> {
+  const outbound = await preparePoptavkaBindingOrderOutboundMessage({
+    cisloPoptavky,
+    publicLink,
+    emailTo,
+  });
+
+  const resendApiKey = process.env.RESEND_API_KEY?.trim();
+  if (!resendApiKey) {
+    return { ok: true, sent: false, reason: "missing_resend_key", outbound };
+  }
+
+  if (!publicLink.startsWith("http://") && !publicLink.startsWith("https://")) {
+    return { ok: true, sent: false, reason: "missing_base_url", outbound };
+  }
+
+  if (!outbound.emailTo) {
+    return { ok: true, sent: false, reason: "missing_email", outbound };
+  }
+
+  const resend = new Resend(resendApiKey);
+  const { error } = await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL?.trim() || "WEST COUNTY <onboarding@resend.dev>",
+    to: outbound.emailTo,
+    subject: outbound.subject,
+    text: outbound.text,
+    html: outbound.html,
+  });
+
+  if (error) {
+    console.warn("Poptavka binding order outbound email failed:", error.message);
     return { ok: false, reason: "send_failed", message: error.message, outbound };
   }
 

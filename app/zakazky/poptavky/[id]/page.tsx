@@ -27,6 +27,7 @@ import {
   loadInternalPoptavkaDetail,
 } from "@/lib/client-portal/poptavka-internal-server";
 import { loadPoptavkaObjednavkaDraft } from "@/lib/client-portal/poptavka-objednavka-draft-server";
+import { loadActivePoptavkaObjednavkaLink } from "@/lib/client-portal/poptavka-objednavka-link-server";
 import type { PoptavkaStav } from "@/lib/client-portal/types";
 import { SETUP_OBLASTI } from "@/lib/client-portal/types";
 import { createClient } from "@/lib/supabase/server";
@@ -65,7 +66,9 @@ const EMAIL_STATUS_MESSAGES: Record<string, string> = {
   failed: "Stav poptávky byl uložen, ale odeslání e-mailu klientovi selhalo.",
 };
 
-const SAVED_TO_OUTBOUND_KIND: Partial<Record<string, PoptavkaOutboundKind>> = {
+const SAVED_TO_OUTBOUND_KIND: Partial<
+  Record<string, Exclude<PoptavkaOutboundKind, "binding_order">>
+> = {
   revision: "revision",
   rejected: "rejected",
 };
@@ -145,6 +148,10 @@ export default async function ZakazkyPoptavkaDetailPage({
   const existingObjednavkaDraft = showObjednavkaLink
     ? await loadPoptavkaObjednavkaDraft(supabase, id)
     : null;
+  const activeObjednavkaLink =
+    detail.stav === "objednavka_odeslana"
+      ? await loadActivePoptavkaObjednavkaLink(supabase, id)
+      : null;
   const convertedZakazkaId =
     detail.zakazka_id ?? resolvedSearchParams?.zakazka ?? null;
 
@@ -165,12 +172,21 @@ export default async function ZakazkyPoptavkaDetailPage({
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {showObjednavkaLink && !readOnly ? (
-            <Link
-              href={`/zakazky/poptavky/${id}/objednavka`}
-              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
-            >
-              {existingObjednavkaDraft ? "Pokračovat v objednávce" : "Připravit závaznou objednávku"}
-            </Link>
+            detail.stav === "objednavka_odeslana" ? (
+              <Link
+                href={`/zakazky/poptavky/${id}/objednavka`}
+                className="rounded-xl border border-blue-500/40 px-4 py-2 text-sm font-semibold text-blue-100 hover:bg-blue-950/40"
+              >
+                Závazná objednávka odeslána
+              </Link>
+            ) : (
+              <Link
+                href={`/zakazky/poptavky/${id}/objednavka`}
+                className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+              >
+                {existingObjednavkaDraft ? "Pokračovat v objednávce" : "Připravit závaznou objednávku"}
+              </Link>
+            )
           ) : null}
           {showObjednavkaLink && readOnly && existingObjednavkaDraft ? (
             <Link
@@ -190,18 +206,69 @@ export default async function ZakazkyPoptavkaDetailPage({
       </div>
 
       {detail.stav === "objednavka_odeslana" ? (
-        <p className="rounded-lg border border-blue-500/30 bg-blue-950/20 px-4 py-3 text-sm text-blue-100">
-          Závazná objednávka byla odeslána klientovi a čeká na jeho potvrzení.
-          {detail.objednavka_odeslana_at
-            ? ` Odesláno ${new Intl.DateTimeFormat("cs-CZ", {
-                day: "numeric",
-                month: "numeric",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              }).format(new Date(detail.objednavka_odeslana_at))}.`
-            : null}
-        </p>
+        <div className="space-y-3">
+          <p className="rounded-lg border border-blue-500/30 bg-blue-950/20 px-4 py-3 text-sm text-blue-100">
+            Závazná objednávka byla odeslána klientovi a čeká na jeho potvrzení.
+            {detail.objednavka_odeslana_at
+              ? ` Odesláno ${new Intl.DateTimeFormat("cs-CZ", {
+                  day: "numeric",
+                  month: "numeric",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }).format(new Date(detail.objednavka_odeslana_at))}.`
+              : null}
+          </p>
+          {activeObjednavkaLink ? (
+            <div className="rounded-lg border border-slate-700 bg-slate-950/60 px-4 py-3 text-sm text-slate-200">
+              <p className="font-semibold text-slate-100">Aktivní odkaz pro klienta</p>
+              <dl className="mt-2 grid gap-1 text-xs text-slate-400 sm:grid-cols-2">
+                <div>
+                  <dt className="inline">Komu: </dt>
+                  <dd className="inline text-slate-200">
+                    {activeObjednavkaLink.email_to ?? "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="inline">Stav linku: </dt>
+                  <dd className="inline text-slate-200">{activeObjednavkaLink.stav}</dd>
+                </div>
+                {activeObjednavkaLink.expires_at ? (
+                  <div>
+                    <dt className="inline">Platnost do: </dt>
+                    <dd className="inline text-slate-200">
+                      {new Intl.DateTimeFormat("cs-CZ", {
+                        day: "numeric",
+                        month: "numeric",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      }).format(new Date(activeObjednavkaLink.expires_at))}
+                    </dd>
+                  </div>
+                ) : null}
+                {activeObjednavkaLink.email_sent_at ? (
+                  <div>
+                    <dt className="inline">E-mail odeslán: </dt>
+                    <dd className="inline text-slate-200">
+                      {new Intl.DateTimeFormat("cs-CZ", {
+                        day: "numeric",
+                        month: "numeric",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      }).format(new Date(activeObjednavkaLink.email_sent_at))}
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+              <p className="mt-2 text-xs text-slate-500">
+                Plná URL odkazu není uložena v systému (bezpečnost tokenu). Zkopírujte ji z e-mailu
+                nebo z panelu po odeslání v editoru objednávky.
+              </p>
+            </div>
+          ) : null}
+        </div>
       ) : null}
       {detail.stav === "objednavka_potvrzena" ? (
         <p className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">

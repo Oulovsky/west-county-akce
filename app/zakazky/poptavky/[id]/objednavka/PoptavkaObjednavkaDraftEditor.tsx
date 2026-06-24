@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { savePoptavkaObjednavkaDraftAction } from "@/app/zakazky/poptavky/[id]/objednavka/actions";
+import { savePoptavkaObjednavkaDraftAction, sendPoptavkaObjednavkaAction } from "@/app/zakazky/poptavky/[id]/objednavka/actions";
 import { OBJEDNAVKA_DRAFT_STAV_LABELS } from "@/lib/client-portal/poptavka-objednavka-draft-form";
 import type { PoptavkaObjednavkaDraftData } from "@/lib/client-portal/poptavka-objednavka-types";
 
@@ -10,6 +10,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   not_found: "Draft objednávky nebyl nalezen.",
   read_only: "Tento draft už nelze upravovat.",
   save_failed: "Uložení se nezdařilo.",
+  link_failed: "Vytvoření závazné objednávky se nezdařilo. Zkuste to znovu nebo kontaktujte správce.",
 };
 
 const TRI_OPTIONS = [
@@ -188,9 +189,8 @@ export default function PoptavkaObjednavkaDraftEditor({
       <div className="rounded-2xl border border-indigo-500/30 bg-indigo-950/20 p-5 text-sm text-indigo-100">
         <p className="font-semibold">Návrh závazné objednávky — interní dokument</p>
         <p className="mt-2 text-indigo-200/90">
-          Klient zatím nic nevidí. Po odeslání (další krok) se z návrhu vytvoří zmrazená verze ke
-          schválení. Setupy v objednávce jsou konfigurace služeb, ne rezervace konkrétních kusů ze
-          skladu.
+          Klient zatím nic nevidí. Po odeslání se z návrhu vytvoří zmrazená verze ke schválení.
+          Setupy v objednávce jsou konfigurace služeb, ne rezervace konkrétních kusů ze skladu.
         </p>
       </div>
 
@@ -406,14 +406,24 @@ export default function PoptavkaObjednavkaDraftEditor({
                 : "Tento draft nelze upravovat (není aktivní)."}
             </p>
           )}
-          <button
-            type="button"
-            disabled
-            className="cursor-not-allowed rounded-xl border border-slate-700 px-5 py-2.5 text-sm text-slate-500"
-            title="Odeslání klientovi bude v dalším kroku"
-          >
-            Odeslat klientovi — připravuje se
-          </button>
+          {canEdit ? (
+            <button
+              type="submit"
+              formAction={sendPoptavkaObjednavkaAction}
+              onClick={(event) => {
+                if (
+                  !window.confirm(
+                    "Odesláním se vytvoří zmrazená verze objednávky a klient dostane odkaz k potvrzení. Pokračovat?"
+                  )
+                ) {
+                  event.preventDefault();
+                }
+              }}
+              className="rounded-xl border border-emerald-500/50 bg-emerald-950/40 px-5 py-2.5 text-sm font-semibold text-emerald-100 hover:bg-emerald-900/50"
+            >
+              Odeslat klientovi
+            </button>
+          ) : null}
           <Link
             href={`/zakazky/poptavky/${poptavkaId}/objednavka/nahled`}
             className="rounded-xl border border-slate-600 px-5 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-900"

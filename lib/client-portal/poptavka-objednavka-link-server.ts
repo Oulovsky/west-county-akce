@@ -562,3 +562,28 @@ export async function markPoptavkaObjednavkaLinkOpened(
 
   return { ok: true };
 }
+
+/** Poslední nezrušený odkaz závazné objednávky pro poptávku (interní přehled). */
+export async function loadActivePoptavkaObjednavkaLink(
+  supabase: SupabaseClient,
+  poptavkaId: string
+): Promise<PoptavkaObjednavkaLinkRow | null> {
+  const { data, error } = await supabase
+    .from("poptavka_objednavka_links")
+    .select(LINK_ROW_SELECT)
+    .eq("poptavka_id", poptavkaId)
+    .is("revoked_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return mapLinkRow(data as Record<string, unknown>);
+}
