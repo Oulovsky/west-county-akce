@@ -17,6 +17,8 @@ export type PoptavkaSetupInput = {
   poznamka_klienta: string | null;
 };
 
+export type PoptavkaMistoSource = "new" | "saved";
+
 export type PoptavkaFormValues = {
   kontakt_jmeno: string;
   kontakt_telefon: string;
@@ -29,6 +31,10 @@ export type PoptavkaFormValues = {
   cas_programu_od: string;
   cas_programu_do: string;
   misto_poznamka: string;
+  misto_source: PoptavkaMistoSource;
+  misto_id: string | null;
+  misto_lat: number | null;
+  misto_lng: number | null;
   setupy: PoptavkaSetupInput[];
 };
 
@@ -49,6 +55,17 @@ function normalizeTime(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return null;
   return trimmed.length === 5 ? `${trimmed}:00` : trimmed;
+}
+
+function parseMistoSource(value: string): PoptavkaMistoSource {
+  return value === "saved" ? "saved" : "new";
+}
+
+function parseOptionalNumber(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export function parseSetupSelections(raw: string): PoptavkaSetupInput[] {
@@ -89,6 +106,9 @@ export function parseSetupSelections(raw: string): PoptavkaSetupInput[] {
 }
 
 export function parsePoptavkaFormData(formData: FormData): PoptavkaFormValues {
+  const mistoSource = parseMistoSource(String(formData.get("misto_source") ?? "new"));
+  const rawMistoId = nullable(String(formData.get("misto_id") ?? ""));
+
   return {
     kontakt_jmeno: String(formData.get("kontakt_jmeno") ?? "").trim(),
     kontakt_telefon: String(formData.get("kontakt_telefon") ?? "").trim(),
@@ -101,6 +121,10 @@ export function parsePoptavkaFormData(formData: FormData): PoptavkaFormValues {
     cas_programu_od: String(formData.get("cas_programu_od") ?? "").trim(),
     cas_programu_do: String(formData.get("cas_programu_do") ?? "").trim(),
     misto_poznamka: String(formData.get("misto_poznamka") ?? "").trim(),
+    misto_source: mistoSource,
+    misto_id: mistoSource === "saved" ? rawMistoId : null,
+    misto_lat: parseOptionalNumber(String(formData.get("misto_lat") ?? "")),
+    misto_lng: parseOptionalNumber(String(formData.get("misto_lng") ?? "")),
     setupy: parseSetupSelections(String(formData.get("setupy_json") ?? "")),
   };
 }
@@ -123,9 +147,12 @@ export function buildPoptavkaRowPayload(values: PoptavkaFormValues) {
     kontakt_jmeno: nullable(values.kontakt_jmeno),
     kontakt_telefon: nullable(values.kontakt_telefon),
     kontakt_email: nullable(values.kontakt_email),
+    misto_id: values.misto_id,
     misto_nazev: nullable(values.misto_nazev),
     typ_akce: nullable(values.typ_akce),
     misto_adresa: nullable(values.misto_adresa),
+    misto_lat: values.misto_lat,
+    misto_lng: values.misto_lng,
     datum_od: nullable(values.datum_od),
     datum_do: nullable(values.datum_do),
     cas_programu_od: normalizeTime(values.cas_programu_od),

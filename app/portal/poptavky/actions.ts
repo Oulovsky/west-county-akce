@@ -20,11 +20,13 @@ import {
   parsePoptavkaFormData,
   validatePoptavkaForm,
 } from "@/lib/client-portal/poptavka-form";
+import { assertClientCanUseMistoId } from "@/lib/client-portal/client-mista-server";
 import {
   generateCisloPoptavky,
   isPoptavkaEditable,
   loadPoptavkaDetail,
 } from "@/lib/client-portal/poptavka-server";
+import type { PoptavkaFormValues } from "@/lib/client-portal/poptavka-form";
 import { notifyInternalTeamAboutSubmittedPoptavka } from "@/lib/client-portal/poptavka-notifications-server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -80,6 +82,20 @@ async function upsertTechnickeUdaje(
   if (error) throw new Error(error.message);
 }
 
+async function resolveValidatedMistoIdForSave(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  values: PoptavkaFormValues
+) {
+  const mistoIdCandidate = values.misto_source === "saved" ? values.misto_id : null;
+  const access = await assertClientCanUseMistoId(supabase, mistoIdCandidate);
+
+  if (!access.ok) {
+    return { ok: false as const, error: "invalid_misto" as const };
+  }
+
+  return { ok: true as const, mistoId: access.mistoId };
+}
+
 async function replacePoptavkaSetups(
   supabase: Awaited<ReturnType<typeof createClient>>,
   poptavkaId: string,
@@ -123,8 +139,16 @@ export async function createPoptavkaAction(formData: FormData) {
     redirectWithError("/portal/poptavka/nova", validationError);
   }
 
+  const mistoResult = await resolveValidatedMistoIdForSave(supabase, values);
+  if (!mistoResult.ok) {
+    redirectWithError("/portal/poptavka/nova", mistoResult.error);
+  }
+
   const cisloPoptavky = await generateCisloPoptavky(supabase);
-  const payload = buildPoptavkaRowPayload(values);
+  const payload = buildPoptavkaRowPayload({
+    ...values,
+    misto_id: mistoResult.mistoId,
+  });
 
   const { data: created, error } = await supabase
     .from("poptavky")
@@ -176,7 +200,15 @@ export async function updatePoptavkaAction(formData: FormData) {
     redirectWithError(`/portal/poptavka/${poptavkaId}`, validationError);
   }
 
-  const payload = buildPoptavkaRowPayload(values);
+  const mistoResult = await resolveValidatedMistoIdForSave(supabase, values);
+  if (!mistoResult.ok) {
+    redirectWithError(`/portal/poptavka/${poptavkaId}`, mistoResult.error);
+  }
+
+  const payload = buildPoptavkaRowPayload({
+    ...values,
+    misto_id: mistoResult.mistoId,
+  });
 
   const { error } = await supabase
     .from("poptavky")

@@ -40,6 +40,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   not_found: "Poptávka nenalezena.",
   submit_incomplete: "Doplňte kontakt, název akce a termín před odesláním.",
   submit_failed: "Odeslání se nezdařilo.",
+  invalid_misto:
+    "Vybrané místo není dostupné pro váš účet. Vyberte jiné místo nebo zadejte nové.",
 };
 
 type Props = {
@@ -111,6 +113,12 @@ export default function PoptavkaFormClient({
     cas_programu_od: initialValues?.cas_programu_od ?? "",
     cas_programu_do: initialValues?.cas_programu_do ?? "",
     misto_poznamka: initialValues?.misto_poznamka ?? "",
+    misto_source:
+      initialValues?.misto_source ??
+      (initialValues?.misto_id ? "saved" : "new"),
+    misto_id: initialValues?.misto_id ?? null,
+    misto_lat: initialValues?.misto_lat ?? null,
+    misto_lng: initialValues?.misto_lng ?? null,
     setupy: initialValues?.setupy ?? [],
   });
 
@@ -247,6 +255,20 @@ export default function PoptavkaFormClient({
             <input type="hidden" name="poptavka_id" value={poptavkaId} />
           ) : null}
           <input type="hidden" name="setupy_json" value={setupyJson} readOnly />
+          <input type="hidden" name="misto_source" value={form.misto_source} readOnly />
+          <input type="hidden" name="misto_id" value={form.misto_id ?? ""} readOnly />
+          <input
+            type="hidden"
+            name="misto_lat"
+            value={form.misto_lat != null ? String(form.misto_lat) : ""}
+            readOnly
+          />
+          <input
+            type="hidden"
+            name="misto_lng"
+            value={form.misto_lng != null ? String(form.misto_lng) : ""}
+            readOnly
+          />
 
           {(readOnly || step === 1) && (
             <section className="space-y-4">

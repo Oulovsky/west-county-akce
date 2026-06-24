@@ -152,6 +152,10 @@ export default async function PortalPoptavkaDetailPage({
           cas_programu_od: trimTime(detail.cas_programu_od),
           cas_programu_do: trimTime(detail.cas_programu_do),
           misto_poznamka: detail.misto_poznamka ?? "",
+          misto_source: detail.misto_id ? "saved" : "new",
+          misto_id: detail.misto_id,
+          misto_lat: detail.misto_lat,
+          misto_lng: detail.misto_lng,
           setupy: detail.setupy.map((row) => ({
             setup_id: row.setup_id,
             mnozstvi: row.mnozstvi,
