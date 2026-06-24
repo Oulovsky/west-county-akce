@@ -55,6 +55,7 @@ export type PoptavkaObjednavkaLinkRow = {
   open_count: number;
   potvrzeno_at: string | null;
   odmitnuto_at: string | null;
+  odmitnuto_duvod: string | null;
 };
 
 export type PoptavkaObjednavkaLinkPoptavkaSummary = {
@@ -118,10 +119,29 @@ export type MarkPoptavkaObjednavkaLinkOpenedResult =
   | { ok: true }
   | { ok: false; error: "not_found" | "update_failed"; message?: string };
 
+export type PoptavkaObjednavkaPublicViewState =
+  | "pending"
+  | "already_confirmed"
+  | "already_rejected";
+
+export type PoptavkaObjednavkaDecisionClientResult =
+  | {
+      ok: true;
+      status: "confirmed" | "already_confirmed" | "rejected" | "already_rejected";
+      poptavkaId: string;
+      reason?: string | null;
+    }
+  | { ok: false; errorMessage: string };
+
+export type PoptavkaObjednavkaDecisionRequestMeta = {
+  ip?: string | null;
+  userAgent?: string | null;
+};
+
 const DEFAULT_EXPIRES_IN_DAYS = 30;
 
 const LINK_ROW_SELECT =
-  "link_id, poptavka_id, klient_id, draft_id, token_hash, email_to, stav, objednavka_snapshot, objednavka_snapshot_created_at, snapshot_schema_version, created_at, expires_at, revoked_at, email_sent_at, opened_at, last_opened_at, open_count, potvrzeno_at, odmitnuto_at" as const;
+  "link_id, poptavka_id, klient_id, draft_id, token_hash, email_to, stav, objednavka_snapshot, objednavka_snapshot_created_at, snapshot_schema_version, created_at, expires_at, revoked_at, email_sent_at, opened_at, last_opened_at, open_count, potvrzeno_at, odmitnuto_at, odmitnuto_duvod" as const;
 
 const TOKEN_VIEW_POPTAVKA_STAVY = [
   "objednavka_odeslana",
@@ -192,7 +212,50 @@ function mapLinkRow(row: Record<string, unknown>): PoptavkaObjednavkaLinkRow {
     open_count: (row.open_count as number | null | undefined) ?? 0,
     potvrzeno_at: (row.potvrzeno_at as string | null | undefined) ?? null,
     odmitnuto_at: (row.odmitnuto_at as string | null | undefined) ?? null,
+    odmitnuto_duvod: (row.odmitnuto_duvod as string | null | undefined) ?? null,
   };
+}
+
+export function isPoptavkaObjednavkaLinkConfirmed(link: PoptavkaObjednavkaLinkRow) {
+  return Boolean(link.potvrzeno_at || link.stav === "potvrzeno");
+}
+
+export function isPoptavkaObjednavkaLinkRejected(link: PoptavkaObjednavkaLinkRow) {
+  return Boolean(link.odmitnuto_at || link.stav === "odmitnuto");
+}
+
+export function getPoptavkaObjednavkaPublicViewState(
+  link: PoptavkaObjednavkaLinkRow,
+  poptavkaStav: PoptavkaStav
+): PoptavkaObjednavkaPublicViewState {
+  if (isPoptavkaObjednavkaLinkConfirmed(link) || poptavkaStav === "objednavka_potvrzena") {
+    return "already_confirmed";
+  }
+
+  if (isPoptavkaObjednavkaLinkRejected(link) || poptavkaStav === "objednavka_odmitnuta") {
+    return "already_rejected";
+  }
+
+  return "pending";
+}
+
+export function canDecideOnPoptavkaObjednavkaLink(
+  link: PoptavkaObjednavkaLinkRow,
+  poptavkaStav: PoptavkaStav
+) {
+  if (link.revoked_at || link.stav === "revoked") {
+    return false;
+  }
+
+  if (isLinkExpired(link)) {
+    return false;
+  }
+
+  if (getPoptavkaObjednavkaPublicViewState(link, poptavkaStav) !== "pending") {
+    return false;
+  }
+
+  return poptavkaStav === "objednavka_odeslana";
 }
 
 async function resolvePreparedByUserId(
@@ -561,6 +624,310 @@ export async function markPoptavkaObjednavkaLinkOpened(
   }
 
   return { ok: true };
+}
+
+type DecisionLinkContext = {
+  link: PoptavkaObjednavkaLinkRow;
+  poptavka: PoptavkaObjednavkaLinkPoptavkaSummary;
+};
+
+function decisionErrorMessage(
+  code:
+    | "invalid_token"
+    | "revoked"
+    | "expired"
+    | "snapshot_invalid"
+    | "already_confirmed"
+    | "already_rejected"
+    | "state_invalid"
+    | "save_failed"
+): string {
+  switch (code) {
+    case "revoked":
+      return "Tato verze objednávky byla nahrazena novější verzí. Požádejte organizátora akce o aktuální odkaz.";
+    case "expired":
+      return "Platnost odkazu vypršela. Požádejte organizátora akce o nový odkaz.";
+    case "already_confirmed":
+      return "Objednávka už byla potvrzena.";
+    case "already_rejected":
+      return "Objednávka už byla odmítnuta.";
+    case "state_invalid":
+      return "Objednávku už nelze tímto odkazem zpracovat.";
+    case "save_failed":
+      return "Uložení rozhodnutí se nezdařilo. Zkuste to prosím znovu.";
+    case "snapshot_invalid":
+    case "invalid_token":
+    default:
+      return "Odkaz není platný.";
+  }
+}
+
+async function loadDecisionLinkContext(
+  rawToken: string
+): Promise<
+  | { ok: true; context: DecisionLinkContext }
+  | { ok: false; error: "invalid_token" | "revoked" | "expired" | "snapshot_invalid" }
+> {
+  const trimmed = rawToken?.trim();
+  if (!trimmed) {
+    return { ok: false, error: "invalid_token" };
+  }
+
+  const supabase = createAdminClient();
+  const tokenHash = hashClientApprovalToken(trimmed);
+
+  const { data: linkRaw, error: linkError } = await supabase
+    .from("poptavka_objednavka_links")
+    .select(`${LINK_ROW_SELECT}, poptavka:poptavky(poptavka_id, cislo_poptavky, stav, klient_id, misto_nazev)`)
+    .eq("token_hash", tokenHash)
+    .maybeSingle();
+
+  if (linkError || !linkRaw) {
+    return { ok: false, error: "invalid_token" };
+  }
+
+  const link = mapLinkRow(linkRaw as Record<string, unknown>);
+
+  if (link.revoked_at || link.stav === "revoked") {
+    return { ok: false, error: "revoked" };
+  }
+
+  if (isLinkExpired(link)) {
+    return { ok: false, error: "expired" };
+  }
+
+  const poptavkaRaw = (linkRaw as { poptavka?: unknown }).poptavka;
+  const poptavkaRow = Array.isArray(poptavkaRaw) ? poptavkaRaw[0] : poptavkaRaw;
+  if (!poptavkaRow || typeof poptavkaRow !== "object") {
+    return { ok: false, error: "invalid_token" };
+  }
+
+  const snapshot = parseSnapshot(linkRaw.objednavka_snapshot);
+  if (!snapshot) {
+    return { ok: false, error: "snapshot_invalid" };
+  }
+
+  const poptavka = poptavkaRow as PoptavkaObjednavkaLinkPoptavkaSummary;
+
+  return {
+    ok: true,
+    context: {
+      link: { ...link, objednavka_snapshot: snapshot },
+      poptavka,
+    },
+  };
+}
+
+export async function confirmPoptavkaObjednavkaByToken(
+  rawToken: string,
+  meta: PoptavkaObjednavkaDecisionRequestMeta = {}
+): Promise<PoptavkaObjednavkaDecisionClientResult> {
+  const loaded = await loadDecisionLinkContext(rawToken);
+  if (!loaded.ok) {
+    return { ok: false, errorMessage: decisionErrorMessage(loaded.error) };
+  }
+
+  const { link, poptavka } = loaded.context;
+
+  if (isPoptavkaObjednavkaLinkConfirmed(link)) {
+    return {
+      ok: true,
+      status: "already_confirmed",
+      poptavkaId: poptavka.poptavka_id,
+    };
+  }
+
+  if (isPoptavkaObjednavkaLinkRejected(link)) {
+    return { ok: false, errorMessage: decisionErrorMessage("already_rejected") };
+  }
+
+  if (poptavka.stav !== "objednavka_odeslana") {
+    if (poptavka.stav === "objednavka_potvrzena") {
+      return {
+        ok: true,
+        status: "already_confirmed",
+        poptavkaId: poptavka.poptavka_id,
+      };
+    }
+
+    return { ok: false, errorMessage: decisionErrorMessage("state_invalid") };
+  }
+
+  const supabase = createAdminClient();
+  const now = new Date().toISOString();
+
+  const { data: updatedLink, error: linkError } = await supabase
+    .from("poptavka_objednavka_links")
+    .update({
+      stav: "potvrzeno",
+      potvrzeno_at: now,
+      potvrzeno_ip: meta.ip ?? null,
+      potvrzeno_user_agent: meta.userAgent ?? null,
+    })
+    .eq("link_id", link.link_id)
+    .is("potvrzeno_at", null)
+    .is("odmitnuto_at", null)
+    .is("revoked_at", null)
+    .select("link_id")
+    .maybeSingle();
+
+  if (linkError) {
+    return { ok: false, errorMessage: decisionErrorMessage("save_failed") };
+  }
+
+  if (!updatedLink) {
+    const reload = await loadDecisionLinkContext(rawToken);
+    if (reload.ok && isPoptavkaObjednavkaLinkConfirmed(reload.context.link)) {
+      return {
+        ok: true,
+        status: "already_confirmed",
+        poptavkaId: reload.context.poptavka.poptavka_id,
+      };
+    }
+
+    return { ok: false, errorMessage: decisionErrorMessage("save_failed") };
+  }
+
+  const { data: updatedPoptavka, error: poptavkaError } = await supabase
+    .from("poptavky")
+    .update({
+      stav: "objednavka_potvrzena",
+      objednavka_potvrzena_at: now,
+      objednavka_potvrzena_zpusob: "token",
+      updated_at: now,
+    })
+    .eq("poptavka_id", poptavka.poptavka_id)
+    .eq("stav", "objednavka_odeslana")
+    .select("poptavka_id")
+    .maybeSingle();
+
+  if (poptavkaError || !updatedPoptavka) {
+    const reload = await loadDecisionLinkContext(rawToken);
+    if (reload.ok && reload.context.poptavka.stav === "objednavka_potvrzena") {
+      return {
+        ok: true,
+        status: "already_confirmed",
+        poptavkaId: reload.context.poptavka.poptavka_id,
+      };
+    }
+
+    return { ok: false, errorMessage: decisionErrorMessage("save_failed") };
+  }
+
+  return {
+    ok: true,
+    status: "confirmed",
+    poptavkaId: poptavka.poptavka_id,
+  };
+}
+
+export async function rejectPoptavkaObjednavkaByToken(
+  rawToken: string,
+  reason: string | null | undefined,
+  meta: PoptavkaObjednavkaDecisionRequestMeta = {}
+): Promise<PoptavkaObjednavkaDecisionClientResult> {
+  const loaded = await loadDecisionLinkContext(rawToken);
+  if (!loaded.ok) {
+    return { ok: false, errorMessage: decisionErrorMessage(loaded.error) };
+  }
+
+  const { link, poptavka } = loaded.context;
+  const trimmedReason = reason?.trim() || null;
+
+  if (isPoptavkaObjednavkaLinkRejected(link)) {
+    return {
+      ok: true,
+      status: "already_rejected",
+      poptavkaId: poptavka.poptavka_id,
+      reason: link.odmitnuto_duvod ?? trimmedReason,
+    };
+  }
+
+  if (isPoptavkaObjednavkaLinkConfirmed(link)) {
+    return { ok: false, errorMessage: decisionErrorMessage("already_confirmed") };
+  }
+
+  if (poptavka.stav !== "objednavka_odeslana") {
+    if (poptavka.stav === "objednavka_odmitnuta") {
+      return {
+        ok: true,
+        status: "already_rejected",
+        poptavkaId: poptavka.poptavka_id,
+        reason: trimmedReason,
+      };
+    }
+
+    return { ok: false, errorMessage: decisionErrorMessage("state_invalid") };
+  }
+
+  const supabase = createAdminClient();
+  const now = new Date().toISOString();
+
+  const { data: updatedLink, error: linkError } = await supabase
+    .from("poptavka_objednavka_links")
+    .update({
+      stav: "odmitnuto",
+      odmitnuto_at: now,
+      odmitnuto_duvod: trimmedReason,
+    })
+    .eq("link_id", link.link_id)
+    .is("potvrzeno_at", null)
+    .is("odmitnuto_at", null)
+    .is("revoked_at", null)
+    .select("link_id")
+    .maybeSingle();
+
+  if (linkError) {
+    return { ok: false, errorMessage: decisionErrorMessage("save_failed") };
+  }
+
+  if (!updatedLink) {
+    const reload = await loadDecisionLinkContext(rawToken);
+    if (reload.ok && isPoptavkaObjednavkaLinkRejected(reload.context.link)) {
+      return {
+        ok: true,
+        status: "already_rejected",
+        poptavkaId: reload.context.poptavka.poptavka_id,
+        reason: reload.context.link.odmitnuto_duvod ?? trimmedReason,
+      };
+    }
+
+    return { ok: false, errorMessage: decisionErrorMessage("save_failed") };
+  }
+
+  const { data: updatedPoptavka, error: poptavkaError } = await supabase
+    .from("poptavky")
+    .update({
+      stav: "objednavka_odmitnuta",
+      objednavka_odmitnuta_at: now,
+      objednavka_odmitnuta_duvod: trimmedReason,
+      updated_at: now,
+    })
+    .eq("poptavka_id", poptavka.poptavka_id)
+    .eq("stav", "objednavka_odeslana")
+    .select("poptavka_id")
+    .maybeSingle();
+
+  if (poptavkaError || !updatedPoptavka) {
+    const reload = await loadDecisionLinkContext(rawToken);
+    if (reload.ok && reload.context.poptavka.stav === "objednavka_odmitnuta") {
+      return {
+        ok: true,
+        status: "already_rejected",
+        poptavkaId: reload.context.poptavka.poptavka_id,
+        reason: reload.context.link.odmitnuto_duvod ?? trimmedReason,
+      };
+    }
+
+    return { ok: false, errorMessage: decisionErrorMessage("save_failed") };
+  }
+
+  return {
+    ok: true,
+    status: "rejected",
+    poptavkaId: poptavka.poptavka_id,
+    reason: trimmedReason,
+  };
 }
 
 /** Poslední nezrušený odkaz závazné objednávky pro poptávku (interní přehled). */

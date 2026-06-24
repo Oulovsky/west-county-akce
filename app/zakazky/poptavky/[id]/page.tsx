@@ -272,7 +272,7 @@ export default async function ZakazkyPoptavkaDetailPage({
       ) : null}
       {detail.stav === "objednavka_potvrzena" ? (
         <p className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
-          Klient potvrdil závaznou objednávku.
+          Klient potvrdil závaznou objednávku. Další krok: schválit k převodu.
           {detail.objednavka_potvrzena_at
             ? ` Potvrzeno ${new Intl.DateTimeFormat("cs-CZ", {
                 day: "numeric",
@@ -285,12 +285,12 @@ export default async function ZakazkyPoptavkaDetailPage({
           {detail.objednavka_potvrzena_zpusob
             ? ` (${detail.objednavka_potvrzena_zpusob === "portal" ? "klientská zóna" : "odkaz"})`
             : null}
-          . Další krok: schválení k převodu na zakázku.
+          .
         </p>
       ) : null}
       {detail.stav === "objednavka_odmitnuta" ? (
         <div className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">
-          <p className="font-semibold">Klient závaznou objednávku odmítl.</p>
+          <p className="font-semibold">Klient odmítl závaznou objednávku.</p>
           {detail.objednavka_odmitnuta_duvod ? (
             <p className="mt-2 whitespace-pre-wrap">{detail.objednavka_odmitnuta_duvod}</p>
           ) : null}

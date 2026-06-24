@@ -2,11 +2,14 @@ import { unstable_noStore as noStore } from "next/cache";
 import PoptavkaObjednavkaDocument from "@/components/poptavka/PoptavkaObjednavkaDocument";
 import { snapshotToDocumentData } from "@/lib/client-portal/poptavka-objednavka-document";
 import {
+  canDecideOnPoptavkaObjednavkaLink,
+  getPoptavkaObjednavkaPublicViewState,
   loadPoptavkaObjednavkaLinkByToken,
   markPoptavkaObjednavkaLinkOpened,
   type LoadPoptavkaObjednavkaLinkByTokenResult,
 } from "@/lib/client-portal/poptavka-objednavka-link-server";
 import { PAGE_STANDALONE_CLASS } from "@/lib/layout/page-shell";
+import { PoptavkaObjednavkaDecisionClient } from "./PoptavkaObjednavkaDecisionClient";
 
 type PageProps = {
   params: Promise<{ token: string }>;
@@ -67,6 +70,39 @@ function ErrorView({
   );
 }
 
+function StatusBanner({
+  viewState,
+  rejectReason,
+}: {
+  viewState: "already_confirmed" | "already_rejected";
+  rejectReason?: string | null;
+}) {
+  if (viewState === "already_confirmed") {
+    return (
+      <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/30 px-4 py-4 text-sm text-emerald-100">
+        <p className="font-semibold">Objednávka už byla potvrzena.</p>
+        <p className="mt-1 text-emerald-100/90">
+          Závazná objednávka byla potvrzena. Děkujeme, nyní ji interně zpracujeme.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-amber-500/40 bg-amber-950/30 px-4 py-4 text-sm text-amber-100">
+      <p className="font-semibold">Objednávka už byla odmítnuta.</p>
+      <p className="mt-1 text-amber-100/90">
+        Závazná objednávka byla odmítnuta. Důvod jsme uložili a ozveme se.
+      </p>
+      {rejectReason?.trim() ? (
+        <p className="mt-3 whitespace-pre-wrap rounded-lg border border-amber-500/20 bg-amber-950/40 px-3 py-2 text-amber-50/90">
+          {rejectReason.trim()}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export default async function PoptavkaObjednavkaTokenPage({ params }: PageProps) {
   noStore();
 
@@ -81,7 +117,9 @@ export default async function PoptavkaObjednavkaTokenPage({ params }: PageProps)
   await markPoptavkaObjednavkaLinkOpened(loaded.link.link_id);
 
   const documentData = snapshotToDocumentData(loaded.snapshot);
-  const { poptavka, snapshot } = loaded;
+  const { poptavka, snapshot, link } = loaded;
+  const viewState = getPoptavkaObjednavkaPublicViewState(link, poptavka.stav);
+  const showDecisionPanel = canDecideOnPoptavkaObjednavkaLink(link, poptavka.stav);
 
   return (
     <div className={`${PAGE_STANDALONE_CLASS} py-6 sm:py-10`}>
@@ -117,6 +155,13 @@ export default async function PoptavkaObjednavkaTokenPage({ params }: PageProps)
           ) : null}
         </div>
 
+        {viewState !== "pending" ? (
+          <StatusBanner
+            viewState={viewState}
+            rejectReason={link.odmitnuto_duvod}
+          />
+        ) : null}
+
         <PoptavkaObjednavkaDocument
           data={documentData}
           meta={{
@@ -125,13 +170,7 @@ export default async function PoptavkaObjednavkaTokenPage({ params }: PageProps)
           }}
         />
 
-        <div className="rounded-2xl border border-slate-700 bg-slate-900/60 px-4 py-4 text-sm text-slate-400">
-          <p className="font-medium text-slate-300">Potvrzení objednávky</p>
-          <p className="mt-1">
-            Potvrzení / odmítnutí bude doplněno v dalším kroku. Prozatím si prosím dokument
-            prostudujte a v případě dotazů kontaktujte organizátora akce.
-          </p>
-        </div>
+        {showDecisionPanel ? <PoptavkaObjednavkaDecisionClient token={token} /> : null}
       </div>
     </div>
   );
