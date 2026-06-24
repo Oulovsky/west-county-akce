@@ -49,7 +49,8 @@ export default async function ZakazkyPoptavkyPage() {
           </div>
           <p className="mt-2 text-sm text-slate-400">
             Odeslané a zpracované klientské poptávky z portálu. Po schválení k převodu lze vytvořit
-            interní zakázku.
+            interní zakázku. Badge zahrnuje nové poptávky i potvrzené objednávky čekající na finální
+            schválení.
           </p>
         </div>
         <Link href="/zakazky" className="text-sm text-blue-300 hover:text-blue-200">

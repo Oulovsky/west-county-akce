@@ -30,6 +30,9 @@ export const POPTAVKA_STAV_LABELS: Record<PoptavkaStav, string> = {
   schvalena: "Schváleno k převodu",
   zamitnuta: "Zamítnutá",
   prevadena_do_zakazky: "Převedena do zakázky",
+  objednavka_odeslana: "Objednávka odeslána — čeká na klienta",
+  objednavka_potvrzena: "Objednávka potvrzena klientem",
+  objednavka_odmitnuta: "Objednávka odmítnuta klientem",
 };
 
 /** Texty stavů zobrazené klientovi v portálu. */
@@ -42,4 +45,7 @@ export const CLIENT_POPTAVKA_STAV_LABELS: Record<PoptavkaStav, string> = {
   schvalena: "Schváleno, připravujeme zakázku",
   zamitnuta: "Zamítnuto",
   prevadena_do_zakazky: "Převedeno na zakázku",
+  objednavka_odeslana: "Závazná objednávka k potvrzení",
+  objednavka_potvrzena: "Objednávka potvrzena",
+  objednavka_odmitnuta: "Objednávka odmítnuta",
 };

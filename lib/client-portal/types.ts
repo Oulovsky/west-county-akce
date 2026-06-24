@@ -31,7 +31,10 @@ export type PoptavkaStav =
   | "v_revizi"
   | "schvalena"
   | "zamitnuta"
-  | "prevadena_do_zakazky";
+  | "prevadena_do_zakazky"
+  | "objednavka_odeslana"
+  | "objednavka_potvrzena"
+  | "objednavka_odmitnuta";
 
 export const POPTAVKA_STAVY: readonly PoptavkaStav[] = [
   "koncept",
@@ -41,7 +44,30 @@ export const POPTAVKA_STAVY: readonly PoptavkaStav[] = [
   "schvalena",
   "zamitnuta",
   "prevadena_do_zakazky",
+  "objednavka_odeslana",
+  "objednavka_potvrzena",
+  "objednavka_odmitnuta",
 ] as const;
+
+/** Poptávky čekající na interní akci (badge, počítadlo inboxu). */
+export const PENDING_INTERNAL_POPTAVKA_STAVY: readonly PoptavkaStav[] = [
+  "odeslana",
+  "objednavka_potvrzena",
+] as const;
+
+/** Stavy zobrazené v interním seznamu poptávek. */
+export const INTERNAL_INBOX_POPTAVKA_STAVY: readonly PoptavkaStav[] = [
+  "odeslana",
+  "v_revizi",
+  "objednavka_odeslana",
+  "objednavka_potvrzena",
+  "objednavka_odmitnuta",
+  "schvalena",
+  "prevadena_do_zakazky",
+  "zamitnuta",
+] as const;
+
+export type PoptavkaObjednavkaPotvrzenaZpusob = "token" | "portal";
 
 /** Stavy, ve kterých smí klient poptávku editovat (DB: client_can_edit_poptavka). */
 export const CLIENT_EDITABLE_POPTAVKA_STAVY: readonly PoptavkaStav[] = [
@@ -146,6 +172,12 @@ export type Poptavka = {
   zamitnuto_duvod: string | null;
   zakazka_id: string | null;
   odeslano_at: string | null;
+  objednavka_odeslana_at: string | null;
+  objednavka_odeslana_user_id: string | null;
+  objednavka_potvrzena_at: string | null;
+  objednavka_potvrzena_zpusob: PoptavkaObjednavkaPotvrzenaZpusob | null;
+  objednavka_odmitnuta_at: string | null;
+  objednavka_odmitnuta_duvod: string | null;
   created_at: string;
   updated_at: string;
 };

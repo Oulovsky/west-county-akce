@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { resolveAppAdminAccess } from "@/lib/auth/admin-access";
 import { useProfileRole } from "@/lib/auth/use-profile-role";
 import { subscribeNotificationsUnreadChanged } from "@/lib/notifications/unread-count-sync";
+import { PENDING_INTERNAL_POPTAVKA_STAVY } from "@/lib/client-portal/types";
 import { supabase } from "@/lib/supabase";
 
 function NavLink({
@@ -93,7 +94,7 @@ export default function SidebarNav() {
           supabase
             .from("poptavky")
             .select("poptavka_id", { count: "exact", head: true })
-            .in("stav", ["odeslana"])
+            .in("stav", [...PENDING_INTERNAL_POPTAVKA_STAVY])
         );
       }
 

@@ -8,6 +8,7 @@ import {
   updatePoptavkaInterniPoznamkaAction,
 } from "@/app/zakazky/poptavky/actions";
 import type { PoptavkaStav } from "@/lib/client-portal/types";
+import { POPTAVKA_STAV_LABELS } from "@/lib/client-portal/labels";
 import Link from "next/link";
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -60,12 +61,29 @@ export default function PoptavkaInboxActions({
 
   return (
     <section className="space-y-6 rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
-      <div>
-        <h2 className="text-xl font-semibold text-white">První reakce na poptávku</h2>
-        <p className="mt-1 text-sm text-slate-400">
-          Rozhodněte, zda poptávka zajímá, potřebuje doplnění, nebo ji nelze realizovat.
-        </p>
-      </div>
+      {canAct ? (
+        <div>
+          <h2 className="text-xl font-semibold text-white">První reakce na poptávku</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Rozhodněte, zda poptávka zajímá, potřebuje doplnění, nebo ji nelze realizovat.
+          </p>
+        </div>
+      ) : stav === "objednavka_potvrzena" ? (
+        <div>
+          <h2 className="text-xl font-semibold text-white">Finální schválení k převodu</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Klient potvrdil závaznou objednávku. Další krok bude interní schválení k převodu na
+            zakázku.
+          </p>
+        </div>
+      ) : (
+        <div>
+          <h2 className="text-xl font-semibold text-white">Stav poptávky</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Aktuální stav: {POPTAVKA_STAV_LABELS[stav]}
+          </p>
+        </div>
+      )}
 
       {errorCode && ERROR_MESSAGES[errorCode] ? (
         <p className="rounded-lg border border-red-500/30 bg-red-950/20 px-4 py-3 text-sm text-red-200">
@@ -116,10 +134,32 @@ export default function PoptavkaInboxActions({
       ) : null}
 
       {!canAct ? (
-        <p className="text-sm text-slate-400">
-          Poptávka je ve stavu <strong className="text-slate-200">{stav}</strong>. Stavové akce
-          nejsou dostupné.
-        </p>
+        <div className="space-y-3">
+          <p className="text-sm text-slate-400">
+            Poptávka je ve stavu{" "}
+            <strong className="text-slate-200">{POPTAVKA_STAV_LABELS[stav]}</strong>. Stavové akce
+            nejsou v tomto kroku dostupné.
+          </p>
+          {stav === "objednavka_odeslana" ? (
+            <p className="rounded-lg border border-blue-500/30 bg-blue-950/20 px-4 py-3 text-sm text-blue-100">
+              Čeká se na potvrzení závazné objednávky klientem. Odeslání a potvrzování objednávky
+              bude dostupné v další fázi implementace.
+            </p>
+          ) : null}
+          {stav === "objednavka_potvrzena" ? (
+            <p className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
+              Klient objednávku potvrdil. Akce „Schválit k převodu“ bude v další fázi dostupná právě
+              z tohoto stavu. Do té doby lze stále použít stávající cestu přes dřívější schválení,
+              pokud na poptávce už existuje.
+            </p>
+          ) : null}
+          {stav === "objednavka_odmitnuta" ? (
+            <p className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">
+              Klient závaznou objednávku odmítl. Vyžaduje interní řešení — kontakt s klientem nebo
+              návrat k jednání.
+            </p>
+          ) : null}
+        </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-3">
           <form action={returnPoptavkaToRevisionAction} className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-950/10 p-4">

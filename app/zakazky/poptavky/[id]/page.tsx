@@ -156,6 +156,47 @@ export default async function ZakazkyPoptavkaDetailPage({
         </div>
       </div>
 
+      {detail.stav === "objednavka_odeslana" ? (
+        <p className="rounded-lg border border-blue-500/30 bg-blue-950/20 px-4 py-3 text-sm text-blue-100">
+          Závazná objednávka byla odeslána klientovi a čeká na jeho potvrzení.
+          {detail.objednavka_odeslana_at
+            ? ` Odesláno ${new Intl.DateTimeFormat("cs-CZ", {
+                day: "numeric",
+                month: "numeric",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              }).format(new Date(detail.objednavka_odeslana_at))}.`
+            : null}
+        </p>
+      ) : null}
+      {detail.stav === "objednavka_potvrzena" ? (
+        <p className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
+          Klient potvrdil závaznou objednávku.
+          {detail.objednavka_potvrzena_at
+            ? ` Potvrzeno ${new Intl.DateTimeFormat("cs-CZ", {
+                day: "numeric",
+                month: "numeric",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              }).format(new Date(detail.objednavka_potvrzena_at))}`
+            : null}
+          {detail.objednavka_potvrzena_zpusob
+            ? ` (${detail.objednavka_potvrzena_zpusob === "portal" ? "klientská zóna" : "odkaz"})`
+            : null}
+          . Další krok: schválení k převodu na zakázku.
+        </p>
+      ) : null}
+      {detail.stav === "objednavka_odmitnuta" ? (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">
+          <p className="font-semibold">Klient závaznou objednávku odmítl.</p>
+          {detail.objednavka_odmitnuta_duvod ? (
+            <p className="mt-2 whitespace-pre-wrap">{detail.objednavka_odmitnuta_duvod}</p>
+          ) : null}
+        </div>
+      ) : null}
+
       {savedKey && SAVED_MESSAGES[savedKey] ? (
         <div className="space-y-3">
           <p className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
@@ -233,6 +274,12 @@ export default async function ZakazkyPoptavkaDetailPage({
             ) : null}
             {detail.zamitnuto_duvod && detail.stav === "v_revizi" ? (
               <ReadOnlyField label="Poznámka k doplnění" value={detail.zamitnuto_duvod} />
+            ) : null}
+            {detail.objednavka_odmitnuta_duvod && detail.stav === "objednavka_odmitnuta" ? (
+              <ReadOnlyField
+                label="Důvod odmítnutí objednávky klientem"
+                value={detail.objednavka_odmitnuta_duvod}
+              />
             ) : null}
           </dl>
         </section>

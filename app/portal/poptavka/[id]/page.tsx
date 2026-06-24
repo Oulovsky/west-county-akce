@@ -197,6 +197,40 @@ export default async function PortalPoptavkaDetailPage({
             Poptávka byla interně schválena k převodu. WEST COUNTY připravuje další kroky.
           </p>
         ) : null}
+        {detail.stav === "objednavka_odeslana" ? (
+          <div className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
+            <p className="font-semibold">Závazná objednávka čeká na vaše potvrzení</p>
+            <p className="mt-2 text-blue-200/90">
+              WEST COUNTY vám zaslala závaznou objednávku. Potvrzení bude brzy dostupné přímo v
+              klientské zóně.
+            </p>
+          </div>
+        ) : null}
+        {detail.stav === "objednavka_potvrzena" ? (
+          <p className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+            Závaznou objednávku jste potvrdili. WEST COUNTY nyní připravuje další kroky.
+            {detail.objednavka_potvrzena_at
+              ? ` Potvrzeno ${new Intl.DateTimeFormat("cs-CZ", {
+                  day: "numeric",
+                  month: "numeric",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }).format(new Date(detail.objednavka_potvrzena_at))}.`
+              : null}
+          </p>
+        ) : null}
+        {detail.stav === "objednavka_odmitnuta" ? (
+          <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            <p className="font-semibold">Závaznou objednávku jste odmítli.</p>
+            {detail.objednavka_odmitnuta_duvod ? (
+              <p className="mt-2 whitespace-pre-wrap">{detail.objednavka_odmitnuta_duvod}</p>
+            ) : null}
+            <p className="mt-3 text-amber-200/90">
+              Pokud chcete pokračovat v jednání, kontaktujte WEST COUNTY.
+            </p>
+          </div>
+        ) : null}
         {detail.stav === "prevadena_do_zakazky" && detail.zakazka_id ? (
           <div className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
             <p>Poptávka byla převedena do interní zakázky.</p>
