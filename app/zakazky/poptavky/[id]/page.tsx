@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import PoptavkaFotkyClient from "@/components/portal/PoptavkaFotkyClient";
 import { verifyInternalPoptavkyReadPage } from "@/lib/auth/admin-access-server";
 import { loadSessionRolePermissions } from "@/lib/auth/internal-role-access-server";
@@ -16,6 +17,12 @@ import {
   canConvertPoptavkaToZakazka,
 } from "@/lib/client-portal/convert-poptavka-to-zakazka";
 import {
+  formatPoptavkaOutboundForCopy,
+  getPortalAppBaseUrl,
+  preparePoptavkaOutboundMessage,
+  type PoptavkaOutboundKind,
+} from "@/lib/client-portal/poptavka-email-server";
+import {
   canInternalActOnPoptavka,
   loadInternalPoptavkaDetail,
 } from "@/lib/client-portal/poptavka-internal-server";
@@ -24,6 +31,7 @@ import { createClient } from "@/lib/supabase/server";
 import PoptavkaInboxActions, {
   PoptavkaInterniPoznamkaForm,
 } from "../PoptavkaInboxActions";
+import PoptavkaOutboundMessagePanel from "../PoptavkaOutboundMessagePanel";
 
 function ReadOnlyField({ label, value }: { label: string; value: string | null | undefined }) {
   if (!value?.trim()) return null;
@@ -52,6 +60,11 @@ const EMAIL_STATUS_MESSAGES: Record<string, string> = {
   missing_base_url:
     "Stav poptávky byl uložen, ale nepodařilo se sestavit veřejnou URL aplikace pro e-mail.",
   failed: "Stav poptávky byl uložen, ale odeslání e-mailu klientovi selhalo.",
+};
+
+const SAVED_TO_OUTBOUND_KIND: Partial<Record<string, PoptavkaOutboundKind>> = {
+  revision: "revision",
+  rejected: "rejected",
 };
 
 export default async function ZakazkyPoptavkaDetailPage({
@@ -102,6 +115,16 @@ export default async function ZakazkyPoptavkaDetailPage({
 
   const savedKey = resolvedSearchParams?.saved;
   const emailStatus = resolvedSearchParams?.email ?? null;
+  const outboundKind = savedKey ? SAVED_TO_OUTBOUND_KIND[savedKey] : undefined;
+  const outboundMessage =
+    outboundKind && emailStatus && emailStatus !== "sent"
+      ? await preparePoptavkaOutboundMessage({
+          kind: outboundKind,
+          detail,
+          baseUrl: getPortalAppBaseUrl(await headers()),
+          duvod: detail.zamitnuto_duvod,
+        })
+      : null;
   const canAct = canInternalActOnPoptavka(detail.stav);
   const canConvert = canConvertPoptavkaToZakazka(detail);
   const convertedZakazkaId =
@@ -145,7 +168,7 @@ export default async function ZakazkyPoptavkaDetailPage({
               </>
             ) : null}
           </p>
-          {savedKey === "revision" && emailStatus && EMAIL_STATUS_MESSAGES[emailStatus] ? (
+          {outboundKind && emailStatus && EMAIL_STATUS_MESSAGES[emailStatus] ? (
             <p
               className={[
                 "rounded-lg border px-4 py-3 text-sm",
@@ -156,6 +179,15 @@ export default async function ZakazkyPoptavkaDetailPage({
             >
               {EMAIL_STATUS_MESSAGES[emailStatus]}
             </p>
+          ) : null}
+          {outboundMessage ? (
+            <PoptavkaOutboundMessagePanel
+              subject={outboundMessage.subject}
+              fullText={formatPoptavkaOutboundForCopy(outboundMessage)}
+              bodyText={outboundMessage.text}
+              link={outboundMessage.link}
+              emailTo={outboundMessage.emailTo}
+            />
           ) : null}
         </div>
       ) : null}

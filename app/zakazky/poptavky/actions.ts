@@ -6,7 +6,8 @@ import { redirect } from "next/navigation";
 import { requireInternalWriteAdminOrSef } from "@/lib/auth/admin-access-server";
 import {
   getPortalAppBaseUrl,
-  sendPoptavkaRevisionEmail,
+  outboundResultToEmailQuery,
+  trySendPoptavkaOutbound,
 } from "@/lib/client-portal/poptavka-email-server";
 import {
   canInternalActOnPoptavka,
@@ -54,9 +55,13 @@ export async function returnPoptavkaToRevisionAction(formData: FormData) {
     redirectWithError(`/zakazky/poptavky/${poptavkaId}`, "save_failed");
   }
 
-  const emailResult = await sendPoptavkaRevisionEmail({
-    detail,
+  const refreshedDetail = (await loadInternalPoptavkaDetail(supabase, poptavkaId)) ?? detail;
+
+  const emailResult = await trySendPoptavkaOutbound({
+    kind: "revision",
+    detail: refreshedDetail,
     baseUrl: getPortalAppBaseUrl(await headers()),
+    duvod,
   });
 
   revalidatePath("/zakazky/poptavky");
@@ -64,12 +69,7 @@ export async function returnPoptavkaToRevisionAction(formData: FormData) {
   revalidatePath(`/portal/poptavka/${poptavkaId}`);
   revalidatePath("/portal/poptavky");
 
-  const emailQuery =
-    emailResult.ok && emailResult.sent
-      ? "sent"
-      : emailResult.ok && !emailResult.sent
-        ? emailResult.reason
-        : "failed";
+  const emailQuery = outboundResultToEmailQuery(emailResult);
 
   redirect(`/zakazky/poptavky/${poptavkaId}?saved=revision&email=${encodeURIComponent(emailQuery)}`);
 }
@@ -113,10 +113,21 @@ export async function rejectPoptavkaAction(formData: FormData) {
     redirectWithError(`/zakazky/poptavky/${poptavkaId}`, "save_failed");
   }
 
+  const refreshedDetail = (await loadInternalPoptavkaDetail(supabase, poptavkaId)) ?? detail;
+
+  const emailResult = await trySendPoptavkaOutbound({
+    kind: "rejected",
+    detail: refreshedDetail,
+    baseUrl: getPortalAppBaseUrl(await headers()),
+    duvod,
+  });
+
   revalidatePath("/zakazky/poptavky");
   revalidatePath(`/zakazky/poptavky/${poptavkaId}`);
   revalidatePath(`/portal/poptavka/${poptavkaId}`);
-  redirect(`/zakazky/poptavky/${poptavkaId}?saved=rejected`);
+  redirect(
+    `/zakazky/poptavky/${poptavkaId}?saved=rejected&email=${encodeURIComponent(outboundResultToEmailQuery(emailResult))}`
+  );
 }
 
 export async function approvePoptavkaAction(formData: FormData) {
