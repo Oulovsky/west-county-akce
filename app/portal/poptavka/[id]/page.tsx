@@ -15,6 +15,7 @@ import {
   technikaFromRecord,
 } from "@/lib/client-portal/poptavka-technika-form";
 import { loadClientMistaKonaniForPortal, loadClientMistaKnowHowByIdForPortal } from "@/lib/client-portal/client-mista-server";
+import { loadClientPreviousTechnikaOptionsForPortal } from "@/lib/client-portal/client-previous-technika-server";
 import {
   isPoptavkaEditable,
   loadPoptavkaDetail,
@@ -116,7 +117,8 @@ export default async function PortalPoptavkaDetailPage({
   const editable = isPoptavkaEditable(detail);
 
   if (editable) {
-    const [{ data: klient }, setupsByOblast, savedMista] = await Promise.all([
+    const [{ data: klient }, setupsByOblast, savedMista, previousTechnikaOptions] =
+      await Promise.all([
       supabase
         .from("klienti")
         .select("nazev, ico, email, telefon")
@@ -124,6 +126,9 @@ export default async function PortalPoptavkaDetailPage({
         .single(),
       loadPortalSetups(supabase),
       loadClientMistaKonaniForPortal(supabase),
+      loadClientPreviousTechnikaOptionsForPortal(supabase, {
+        excludePoptavkaId: detail.poptavka_id,
+      }),
     ]);
 
     const savedMistaKnowHowById = await loadClientMistaKnowHowByIdForPortal(
@@ -149,6 +154,7 @@ export default async function PortalPoptavkaDetailPage({
         setupsByOblast={setupsByOblast}
         savedMista={savedMista}
         savedMistaKnowHowById={savedMistaKnowHowById}
+        previousTechnikaOptions={previousTechnikaOptions}
         initialValues={{
           kontakt_jmeno: detail.kontakt_jmeno ?? "",
           kontakt_telefon: detail.kontakt_telefon ?? "",

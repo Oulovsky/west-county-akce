@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { PoptavkaSetupInput } from "@/lib/client-portal/poptavka-form";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   SETUP_OBLASTI,
@@ -97,6 +98,35 @@ export async function loadPortalSetups(
   }
 
   return grouped;
+}
+
+export async function filterPortalSetupSelections(
+  supabase: SupabaseClient,
+  setupy: PoptavkaSetupInput[]
+): Promise<{ setupy: PoptavkaSetupInput[]; rejectedCount: number }> {
+  if (setupy.length === 0) {
+    return { setupy: [], rejectedCount: 0 };
+  }
+
+  const setupIds = [...new Set(setupy.map((row) => row.setup_id))];
+  const { data, error } = await supabase
+    .from("setupy")
+    .select("setup_id")
+    .in("setup_id", setupIds)
+    .eq("aktivni", true)
+    .eq("dostupne_v_portalu", true);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const allowed = new Set((data ?? []).map((row) => row.setup_id as string));
+  const filtered = setupy.filter((row) => allowed.has(row.setup_id));
+
+  return {
+    setupy: filtered,
+    rejectedCount: setupy.length - filtered.length,
+  };
 }
 
 export async function loadClientPoptavkyList(supabase: SupabaseClient) {

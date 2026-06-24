@@ -23,6 +23,7 @@ import {
 import { assertClientCanUseMistoId } from "@/lib/client-portal/client-mista-server";
 import {
   generateCisloPoptavky,
+  filterPortalSetupSelections,
   isPoptavkaEditable,
   loadPoptavkaDetail,
 } from "@/lib/client-portal/poptavka-server";
@@ -96,6 +97,22 @@ async function resolveValidatedMistoIdForSave(
   return { ok: true as const, mistoId: access.mistoId };
 }
 
+async function resolvePortalSetupsForSave(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  setupy: PoptavkaFormValues["setupy"]
+) {
+  const { setupy: filtered, rejectedCount } = await filterPortalSetupSelections(
+    supabase,
+    setupy
+  );
+
+  if (setupy.length > 0 && filtered.length === 0) {
+    return { ok: false as const, error: "invalid_setups" as const };
+  }
+
+  return { ok: true as const, setupy: filtered, rejectedCount };
+}
+
 async function replacePoptavkaSetups(
   supabase: Awaited<ReturnType<typeof createClient>>,
   poptavkaId: string,
@@ -144,6 +161,11 @@ export async function createPoptavkaAction(formData: FormData) {
     redirectWithError("/portal/poptavka/nova", mistoResult.error);
   }
 
+  const setupResult = await resolvePortalSetupsForSave(supabase, values.setupy);
+  if (!setupResult.ok) {
+    redirectWithError("/portal/poptavka/nova", setupResult.error);
+  }
+
   const cisloPoptavky = await generateCisloPoptavky(supabase);
   const payload = buildPoptavkaRowPayload({
     ...values,
@@ -167,7 +189,7 @@ export async function createPoptavkaAction(formData: FormData) {
   }
 
   try {
-    await replacePoptavkaSetups(supabase, created.poptavka_id, values.setupy);
+    await replacePoptavkaSetups(supabase, created.poptavka_id, setupResult.setupy);
   } catch {
     redirectWithError("/portal/poptavka/nova", "setups_failed");
   }
@@ -205,6 +227,11 @@ export async function updatePoptavkaAction(formData: FormData) {
     redirectWithError(`/portal/poptavka/${poptavkaId}`, mistoResult.error);
   }
 
+  const setupResult = await resolvePortalSetupsForSave(supabase, values.setupy);
+  if (!setupResult.ok) {
+    redirectWithError(`/portal/poptavka/${poptavkaId}`, setupResult.error);
+  }
+
   const payload = buildPoptavkaRowPayload({
     ...values,
     misto_id: mistoResult.mistoId,
@@ -220,7 +247,7 @@ export async function updatePoptavkaAction(formData: FormData) {
   }
 
   try {
-    await replacePoptavkaSetups(supabase, poptavkaId, values.setupy);
+    await replacePoptavkaSetups(supabase, poptavkaId, setupResult.setupy);
     await upsertTechnickeUdaje(supabase, poptavkaId, formData);
   } catch {
     redirectWithError(`/portal/poptavka/${poptavkaId}`, "setups_failed");

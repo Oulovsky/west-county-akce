@@ -3,6 +3,7 @@ import PoptavkaFormClient from "@/components/portal/PoptavkaFormClient";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
 import type { PoptavkaPrefill } from "@/lib/client-portal/poptavka-form";
 import { loadClientMistaKonaniForPortal, loadClientMistaKnowHowByIdForPortal } from "@/lib/client-portal/client-mista-server";
+import { loadClientPreviousTechnikaOptionsForPortal } from "@/lib/client-portal/client-previous-technika-server";
 import { loadPortalSetups } from "@/lib/client-portal/poptavka-server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -48,10 +49,11 @@ export default async function PortalNovaPoptavkaPage({
     redirect("/portal/prihlaseni?next=/portal/poptavka/nova");
   }
 
-  const [prefill, setupsByOblast, savedMista] = await Promise.all([
+  const [prefill, setupsByOblast, savedMista, previousTechnikaOptions] = await Promise.all([
     loadPoptavkaPrefill(supabase, session),
     loadPortalSetups(supabase),
     loadClientMistaKonaniForPortal(supabase),
+    loadClientPreviousTechnikaOptionsForPortal(supabase),
   ]);
 
   const savedMistaKnowHowById = await loadClientMistaKnowHowByIdForPortal(
@@ -66,6 +68,7 @@ export default async function PortalNovaPoptavkaPage({
       setupsByOblast={setupsByOblast}
       savedMista={savedMista}
       savedMistaKnowHowById={savedMistaKnowHowById}
+      previousTechnikaOptions={previousTechnikaOptions}
       errorCode={resolvedSearchParams?.error ?? null}
     />
   );

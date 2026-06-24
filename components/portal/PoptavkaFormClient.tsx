@@ -7,6 +7,7 @@ import {
   updatePoptavkaAction,
 } from "@/app/portal/poptavky/actions";
 import PoptavkaFotkyClient from "@/components/portal/PoptavkaFotkyClient";
+import PoptavkaPreviousTechnikaPanel from "@/components/portal/PoptavkaPreviousTechnikaPanel";
 import PoptavkaMistoKnowHowPanel from "@/components/portal/PoptavkaMistoKnowHowPanel";
 import PoptavkaSubmitButton from "@/components/portal/PoptavkaSubmitButton";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
@@ -17,6 +18,7 @@ import {
   type PoptavkaPrefill,
   type PoptavkaSetupInput,
 } from "@/lib/client-portal/poptavka-form";
+import type { ClientPortalPreviousTechnikaOption } from "@/lib/client-portal/client-previous-technika-shared";
 import type { ClientPortalMistoSummary, ClientPortalMistoKnowHow } from "@/lib/client-portal/client-mista-shared";
 import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-server";
 import type { PortalSetupsByOblast } from "@/lib/client-portal/poptavka-server";
@@ -45,6 +47,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_misto:
     "Vybrané místo není dostupné pro váš účet. Vyberte jiné místo nebo zadejte nové.",
   missing_saved_misto: "Vyberte uložené místo, nebo přepněte na Nové místo.",
+  invalid_setups:
+    "Vybrané setupy už nejsou v portálu dostupné. Upravte výběr techniky a uložte znovu.",
 };
 
 type Props = {
@@ -53,6 +57,7 @@ type Props = {
   setupsByOblast: PortalSetupsByOblast;
   savedMista?: ClientPortalMistoSummary[];
   savedMistaKnowHowById?: Record<string, ClientPortalMistoKnowHow>;
+  previousTechnikaOptions?: ClientPortalPreviousTechnikaOption[];
   initialValues?: Partial<PoptavkaFormValues>;
   initialTechnika?: PoptavkaTechnikaFormValues;
   initialFotky?: PoptavkaFotkaWithUrl[];
@@ -100,6 +105,7 @@ export default function PoptavkaFormClient({
   setupsByOblast,
   savedMista = [],
   savedMistaKnowHowById = {},
+  previousTechnikaOptions = [],
   initialValues,
   initialTechnika,
   initialFotky = [],
@@ -225,6 +231,35 @@ export default function PoptavkaFormClient({
     form.misto_source === "saved" && isSavedMistoInList(form.misto_id)
       ? (savedMistaKnowHowById[form.misto_id!] ?? { poznamky: [], fotky: [] })
       : null;
+
+  const visiblePreviousTechnikaOptions = useMemo(() => {
+    if (form.misto_source === "saved" && form.misto_id) {
+      const onMisto = previousTechnikaOptions.filter(
+        (option) => option.misto_id === form.misto_id
+      );
+      if (onMisto.length > 0) {
+        return onMisto;
+      }
+    }
+    return previousTechnikaOptions;
+  }, [form.misto_id, form.misto_source, previousTechnikaOptions]);
+
+  const previousTechnikaPanelTitle =
+    form.misto_source === "saved" && form.misto_id
+      ? "Předchozí technika na tomto místě"
+      : "Předchozí technika";
+
+  function applyPreviousTechnika(option: ClientPortalPreviousTechnikaOption) {
+    const next: Record<string, PoptavkaSetupInput> = {};
+    for (const row of option.setupy) {
+      next[row.setup_id] = {
+        setup_id: row.setup_id,
+        mnozstvi: row.mnozstvi,
+        poznamka_klienta: row.poznamka_klienta,
+      };
+    }
+    setSelectedSetups(next);
+  }
 
   function toggleSetup(setupId: string, checked: boolean) {
     setSelectedSetups((current) => {
@@ -593,6 +628,13 @@ export default function PoptavkaFormClient({
                   stage zadávat nemusíte.
                 </p>
               </div>
+
+              <PoptavkaPreviousTechnikaPanel
+                title={previousTechnikaPanelTitle}
+                options={visiblePreviousTechnikaOptions}
+                readOnly={readOnly}
+                onApply={applyPreviousTechnika}
+              />
 
               {SETUP_OBLASTI.map((oblast: SetupOblast) => {
                 const rows = setupsByOblast[oblast];
