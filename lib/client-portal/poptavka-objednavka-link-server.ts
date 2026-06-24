@@ -175,20 +175,85 @@ function addDaysIso(days: number, from = new Date()) {
 }
 
 function parseSnapshot(raw: unknown): PoptavkaObjednavkaSnapshot | null {
+  const validated = validatePoptavkaObjednavkaSnapshot(raw);
+  return validated.ok ? validated.snapshot : null;
+}
+
+export type ValidatePoptavkaObjednavkaSnapshotResult =
+  | { ok: true; snapshot: PoptavkaObjednavkaSnapshot }
+  | { ok: false; error: "invalid_confirmed_snapshot" | "snapshot_poptavka_mismatch" };
+
+export function validatePoptavkaObjednavkaSnapshot(
+  raw: unknown,
+  expectedPoptavkaId?: string
+): ValidatePoptavkaObjednavkaSnapshotResult {
   if (!raw || typeof raw !== "object") {
-    return null;
+    return { ok: false, error: "invalid_confirmed_snapshot" };
   }
 
   const snapshot = raw as Partial<PoptavkaObjednavkaSnapshot>;
   if (snapshot.version !== POPTAVKA_OBJEDNAVKA_SNAPSHOT_VERSION) {
-    return null;
+    return { ok: false, error: "invalid_confirmed_snapshot" };
   }
 
   if (!snapshot.meta?.poptavkaId || !snapshot.meta?.cisloPoptavky || !snapshot.meta?.linkId) {
-    return null;
+    return { ok: false, error: "invalid_confirmed_snapshot" };
   }
 
-  return snapshot as PoptavkaObjednavkaSnapshot;
+  if (expectedPoptavkaId && snapshot.meta.poptavkaId !== expectedPoptavkaId) {
+    return { ok: false, error: "snapshot_poptavka_mismatch" };
+  }
+
+  return { ok: true, snapshot: snapshot as PoptavkaObjednavkaSnapshot };
+}
+
+export type LoadConfirmedPoptavkaObjednavkaLinkResult =
+  | { ok: true; link: PoptavkaObjednavkaLinkRow; snapshot: PoptavkaObjednavkaSnapshot }
+  | {
+      ok: false;
+      error: "not_found" | "invalid_confirmed_snapshot" | "snapshot_poptavka_mismatch";
+    };
+
+/** Potvrzený odkaz závazné objednávky pro převod na zakázku (ne pending / odmítnutý). */
+export async function loadConfirmedPoptavkaObjednavkaLink(
+  supabase: SupabaseClient,
+  poptavkaId: string
+): Promise<LoadConfirmedPoptavkaObjednavkaLinkResult> {
+  const { data, error } = await supabase
+    .from("poptavka_objednavka_links")
+    .select(LINK_ROW_SELECT)
+    .eq("poptavka_id", poptavkaId)
+    .is("revoked_at", null)
+    .not("potvrzeno_at", "is", null)
+    .eq("stav", "potvrzeno")
+    .order("potvrzeno_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    return { ok: false, error: "not_found" };
+  }
+
+  const validated = validatePoptavkaObjednavkaSnapshot(
+    (data as Record<string, unknown>).objednavka_snapshot,
+    poptavkaId
+  );
+
+  if (!validated.ok) {
+    return { ok: false, error: validated.error };
+  }
+
+  const link = mapLinkRow(data as Record<string, unknown>);
+
+  return {
+    ok: true,
+    link: { ...link, objednavka_snapshot: validated.snapshot },
+    snapshot: validated.snapshot,
+  };
 }
 
 function mapLinkRow(row: Record<string, unknown>): PoptavkaObjednavkaLinkRow {

@@ -22,6 +22,12 @@ const ERROR_MESSAGES: Record<string, string> = {
   missing_akce_datum: "Chybí termín akce pro vytvoření zakázky.",
   create_failed: "Vytvoření zakázky se nezdařilo.",
   link_failed: "Zakázka byla vytvořena, ale dokončení vazby selhalo. Zkuste akci znovu.",
+  missing_confirmed_snapshot:
+    "Chybí potvrzená závazná objednávka — převod na zakázku nelze dokončit.",
+  invalid_confirmed_snapshot: "Potvrzená objednávka má neplatný snapshot.",
+  snapshot_poptavka_mismatch: "Snapshot objednávky neodpovídá této poptávce.",
+  setup_not_found: "Objednávka obsahuje setup, který už není v katalogu.",
+  setup_empty: "Objednávka neobsahuje žádné setupy pro plán techniky.",
 };
 
 export default function PoptavkaInboxActions({

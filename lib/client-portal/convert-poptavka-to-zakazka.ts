@@ -3,8 +3,15 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { combineDateAndTime } from "@/app/zakazky/[id]/helpers";
 import { formatTypAkce } from "@/lib/client-portal/poptavka-form";
+import {
+  buildDotaznikPayloadFromSnapshot,
+  buildZakazkaFieldsFromSnapshot,
+  snapshotSetupRows,
+} from "@/lib/client-portal/convert-poptavka-snapshot";
+import { buildTechnikaPayloadFromSetupRows } from "@/lib/client-portal/convert-poptavka-technika";
 import type { InternalPoptavkaDetail } from "@/lib/client-portal/poptavka-internal-server";
 import { loadInternalPoptavkaDetail } from "@/lib/client-portal/poptavka-internal-server";
+import { loadConfirmedPoptavkaObjednavkaLink } from "@/lib/client-portal/poptavka-objednavka-link-server";
 import type { PoptavkaStav } from "@/lib/client-portal/types";
 
 const DEFAULT_STAV_ZAKAZKY_ID = "7a0e168f-216f-40bd-b33e-3f1f517620da";
@@ -15,7 +22,12 @@ export type ConvertPoptavkaError =
   | "missing_klient"
   | "missing_akce_datum"
   | "create_failed"
-  | "link_failed";
+  | "link_failed"
+  | "missing_confirmed_snapshot"
+  | "invalid_confirmed_snapshot"
+  | "snapshot_poptavka_mismatch"
+  | "setup_not_found"
+  | "setup_empty";
 
 export type ConvertPoptavkaResult =
   | {
@@ -29,17 +41,14 @@ export type ConvertPoptavkaResult =
       message?: string;
     };
 
+type ConvertMode = "legacy" | "snapshot";
+
 function deriveLegacyDate(value: string | null) {
   return value ? value.slice(0, 10) : null;
 }
 
 function deriveLegacyTime(value: string | null) {
   return value ? value.slice(11, 16) : null;
-}
-
-function toNumber(value: number | string | null | undefined) {
-  const number = Number(value ?? 0);
-  return Number.isFinite(number) ? number : 0;
 }
 
 function normalizeTime(value: string | null | undefined) {
@@ -49,6 +58,10 @@ function normalizeTime(value: string | null | undefined) {
     return trimmed.slice(0, 5);
   }
   return trimmed;
+}
+
+function resolveConvertMode(detail: InternalPoptavkaDetail): ConvertMode {
+  return detail.objednavka_potvrzena_at ? "snapshot" : "legacy";
 }
 
 function combineAkceRange(detail: InternalPoptavkaDetail) {
@@ -67,7 +80,9 @@ function buildPoznamka(detail: InternalPoptavkaDetail) {
   const lines: string[] = [`Převzato z poptávky ${detail.cislo_poptavky}.`];
 
   if (detail.typ_akce) {
-    lines.push(`Typ akce: ${formatTypAkce(detail.typ_akce)}${detail.typ_akce_poznamka ? ` — ${detail.typ_akce_poznamka}` : ""}`);
+    lines.push(
+      `Typ akce: ${formatTypAkce(detail.typ_akce)}${detail.typ_akce_poznamka ? ` — ${detail.typ_akce_poznamka}` : ""}`
+    );
   } else if (detail.typ_akce_poznamka) {
     lines.push(`Typ akce: ${detail.typ_akce_poznamka}`);
   }
@@ -144,30 +159,36 @@ async function generateCisloZakazky(supabase: SupabaseClient) {
   return `${rok}/${String(dalsiPoradi).padStart(3, "0")}`;
 }
 
+type MistoSearchHint = {
+  nazev?: string | null;
+  adresa?: string | null;
+};
+
 async function resolveMistoId(
   supabase: SupabaseClient,
-  detail: InternalPoptavkaDetail
+  detail: InternalPoptavkaDetail,
+  search?: MistoSearchHint
 ): Promise<string | null> {
-  if (detail.misto_id) {
+  if (detail.misto_id && detail.klient_id) {
     const { data } = await supabase
       .from("mista_konani")
-      .select("misto_id")
+      .select("misto_id, klient_id")
       .eq("misto_id", detail.misto_id)
       .maybeSingle();
 
-    if (data?.misto_id) {
+    if (data?.misto_id && data.klient_id === detail.klient_id) {
       return data.misto_id as string;
     }
   }
 
-  const searchName = detail.misto_nazev?.trim();
-  const searchAddress = detail.misto_adresa?.trim();
+  const searchName = search?.nazev?.trim() || detail.misto_nazev?.trim();
+  const searchAddress = search?.adresa?.trim() || detail.misto_adresa?.trim();
 
   if (!searchName && !searchAddress) {
     return null;
   }
 
-  if (searchName) {
+  if (searchName && detail.klient_id) {
     const { data: byName } = await supabase
       .from("mista_konani")
       .select("misto_id")
@@ -181,7 +202,7 @@ async function resolveMistoId(
     }
   }
 
-  if (searchAddress) {
+  if (searchAddress && detail.klient_id) {
     const { data: byAddress } = await supabase
       .from("mista_konani")
       .select("misto_id")
@@ -196,50 +217,6 @@ async function resolveMistoId(
   }
 
   return null;
-}
-
-async function buildTechnikaPayload(
-  supabase: SupabaseClient,
-  detail: InternalPoptavkaDetail
-) {
-  if (detail.setupy.length === 0) {
-    return [];
-  }
-
-  const setupIds = detail.setupy.map((row) => row.setup_id);
-  const { data: polozkyRaw, error } = await supabase
-    .from("setup_polozky")
-    .select("setup_id, skladova_polozka_id, mnozstvi")
-    .in("setup_id", setupIds);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const aggregated = new Map<string, number>();
-
-  for (const setupRow of detail.setupy) {
-    const setupQuantity = toNumber(setupRow.mnozstvi);
-    if (setupQuantity <= 0) continue;
-
-    for (const polozka of polozkyRaw ?? []) {
-      if (polozka.setup_id !== setupRow.setup_id) continue;
-
-      const itemQuantity = toNumber(polozka.mnozstvi);
-      if (itemQuantity <= 0) continue;
-
-      const total = itemQuantity * setupQuantity;
-      aggregated.set(
-        polozka.skladova_polozka_id as string,
-        (aggregated.get(polozka.skladova_polozka_id as string) ?? 0) + total
-      );
-    }
-  }
-
-  return [...aggregated.entries()].map(([skladova_polozka_id, mnozstvi]) => ({
-    skladova_polozka_id,
-    mnozstvi: Math.max(1, Math.round(mnozstvi)),
-  }));
 }
 
 function buildDotaznikPayload(detail: InternalPoptavkaDetail, zakazkaId: string) {
@@ -280,6 +257,267 @@ function buildDotaznikPayload(detail: InternalPoptavkaDetail, zakazkaId: string)
     submitted_at: technika ? now : null,
     updated_at: now,
   };
+}
+
+type ZakazkaCreateInput = {
+  nazev: string;
+  mistoText: string | null;
+  mistoId: string | null;
+  mistoLat: number | null;
+  mistoLng: number | null;
+  mistoPayload: {
+    klient_id: string;
+    nazev: string;
+    adresa_text: string;
+    lat: number;
+    lng: number;
+    radius_m: number;
+  } | null;
+  akceOd: string;
+  akceDo: string;
+  stavbaOd: string | null;
+  stavbaDo: string | null;
+  bouraniOd: string | null;
+  bouraniDo: string | null;
+  poznamka: string | null;
+  technikaPayload: { skladova_polozka_id: string; mnozstvi: number }[];
+  buildDotaznik: (zakazkaId: string) => Record<string, unknown>;
+};
+
+type BuildZakazkaInputResult =
+  | { ok: false; error: ConvertPoptavkaError; message?: string }
+  | { ok: true; input: ZakazkaCreateInput };
+
+async function buildLegacyZakazkaCreateInput(
+  supabase: SupabaseClient,
+  detail: InternalPoptavkaDetail
+): Promise<BuildZakazkaInputResult> {
+  const { akceOd, akceDo } = combineAkceRange(detail);
+  if (!akceOd || !akceDo) {
+    return { ok: false, error: "missing_akce_datum" };
+  }
+
+  const technikaResult =
+    detail.setupy.length === 0
+      ? { ok: true as const, payload: [] }
+      : await buildTechnikaPayloadFromSetupRows(
+          supabase,
+          detail.setupy.map((row) => ({
+            setupId: row.setup_id,
+            mnozstvi: row.mnozstvi,
+          }))
+        );
+
+  if (!technikaResult.ok) {
+    return { ok: false, error: technikaResult.error, message: technikaResult.message };
+  }
+
+  const stavbaOd = combineDateAndTime(detail.stavba_datum, normalizeTime(detail.stavba_cas_od));
+  const stavbaDo = combineDateAndTime(detail.stavba_datum, normalizeTime(detail.stavba_cas_do));
+  const bouraniOd = combineDateAndTime(detail.bourani_datum, normalizeTime(detail.bourani_cas_od));
+  const bouraniDo = combineDateAndTime(detail.bourani_datum, normalizeTime(detail.bourani_cas_do));
+
+  const mistoText = detail.misto_adresa?.trim() || detail.misto_nazev?.trim() || null;
+  const nazev = detail.misto_nazev?.trim() || detail.misto_adresa?.trim() || detail.cislo_poptavky;
+
+  const mistoId = await resolveMistoId(supabase, detail);
+  const mistoLat = detail.misto_lat != null ? Number(detail.misto_lat) : null;
+  const mistoLng = detail.misto_lng != null ? Number(detail.misto_lng) : null;
+
+  const mistoPayload =
+    !mistoId && mistoLat != null && mistoLng != null && detail.klient_id
+      ? {
+          klient_id: detail.klient_id,
+          nazev: detail.misto_nazev?.trim() || mistoText || nazev,
+          adresa_text: detail.misto_adresa?.trim() || mistoText || nazev,
+          lat: mistoLat,
+          lng: mistoLng,
+          radius_m: 300,
+        }
+      : null;
+
+  return {
+    ok: true,
+    input: {
+      nazev,
+      mistoText,
+      mistoId,
+      mistoLat,
+      mistoLng,
+      mistoPayload,
+      akceOd,
+      akceDo,
+      stavbaOd,
+      stavbaDo,
+      bouraniOd,
+      bouraniDo,
+      poznamka: buildPoznamka(detail) || null,
+      technikaPayload: technikaResult.payload,
+      buildDotaznik: (zakazkaId) => buildDotaznikPayload(detail, zakazkaId),
+    },
+  };
+}
+
+async function buildSnapshotZakazkaCreateInput(
+  supabase: SupabaseClient,
+  detail: InternalPoptavkaDetail
+): Promise<BuildZakazkaInputResult> {
+  const confirmed = await loadConfirmedPoptavkaObjednavkaLink(supabase, detail.poptavka_id);
+
+  if (!confirmed.ok) {
+    if (confirmed.error === "not_found") {
+      return { ok: false, error: "missing_confirmed_snapshot" };
+    }
+    return { ok: false, error: confirmed.error };
+  }
+
+  const { snapshot } = confirmed;
+  const fields = buildZakazkaFieldsFromSnapshot(snapshot, detail);
+
+  if ("error" in fields) {
+    return { ok: false, error: fields.error };
+  }
+
+  const technikaResult = await buildTechnikaPayloadFromSetupRows(
+    supabase,
+    snapshotSetupRows(snapshot)
+  );
+
+  if (!technikaResult.ok) {
+    return { ok: false, error: technikaResult.error, message: technikaResult.message };
+  }
+
+  const mistoId = await resolveMistoId(supabase, detail, {
+    nazev: snapshot.misto.nazev,
+    adresa: snapshot.misto.adresa,
+  });
+
+  const mistoLat = fields.mistoLat;
+  const mistoLng = fields.mistoLng;
+
+  const mistoPayload =
+    !mistoId && mistoLat != null && mistoLng != null && detail.klient_id
+      ? {
+          klient_id: detail.klient_id,
+          nazev: snapshot.misto.nazev?.trim() || fields.nazev,
+          adresa_text:
+            snapshot.misto.adresa?.trim() || fields.mistoText || snapshot.misto.nazev?.trim() || fields.nazev,
+          lat: mistoLat,
+          lng: mistoLng,
+          radius_m: 300,
+        }
+      : null;
+
+  return {
+    ok: true,
+    input: {
+      nazev: fields.nazev,
+      mistoText: fields.mistoText,
+      mistoId,
+      mistoLat,
+      mistoLng,
+      mistoPayload,
+      akceOd: fields.akceOd,
+      akceDo: fields.akceDo,
+      stavbaOd: fields.stavbaOd,
+      stavbaDo: fields.stavbaDo,
+      bouraniOd: fields.bouraniOd,
+      bouraniDo: fields.bouraniDo,
+      poznamka: fields.poznamka || null,
+      technikaPayload: technikaResult.payload,
+      buildDotaznik: (zakazkaId) => buildDotaznikPayloadFromSnapshot(snapshot, detail, zakazkaId),
+    },
+  };
+}
+
+async function createZakazkaFromInput(
+  supabase: SupabaseClient,
+  poptavkaId: string,
+  detail: InternalPoptavkaDetail,
+  input: ZakazkaCreateInput
+): Promise<ConvertPoptavkaResult> {
+  const cisloZakazky = await generateCisloZakazky(supabase);
+
+  const { data: zakazkaId, error: createError } = await supabase.rpc("create_zakazka_atomic", {
+    misto_payload: input.mistoPayload,
+    realizace_payload: [],
+    technika_payload: input.technikaPayload,
+    zakazka_payload: {
+      cislo_zakazky: cisloZakazky,
+      stav_zakazky_id: DEFAULT_STAV_ZAKAZKY_ID,
+      nazev: input.nazev,
+      klient_id: detail.klient_id,
+      fakturacni_firma_id: null,
+      misto_id: input.mistoId,
+      misto: input.mistoText,
+      misto_lat: input.mistoLat,
+      misto_lng: input.mistoLng,
+      misto_gps_radius_m: input.mistoLat != null && input.mistoLng != null ? 300 : null,
+      misto_gps_presnost_m: null,
+      misto_gps_zdroj: input.mistoLat != null && input.mistoLng != null ? "poptavka" : null,
+      misto_gps_updated_at:
+        input.mistoLat != null && input.mistoLng != null ? new Date().toISOString() : null,
+      typ_obsluhy: "s_obsluhou",
+      odjezd_ze_skladu: null,
+      sraz_na_miste: null,
+      stavba_od: input.stavbaOd,
+      stavba_do: input.stavbaDo,
+      akce_od: input.akceOd,
+      akce_do: input.akceDo,
+      bourani_od: input.bouraniOd,
+      bourani_do: input.bouraniDo,
+      datum_od: deriveLegacyDate(input.akceOd),
+      datum_do: deriveLegacyDate(input.akceDo),
+      cas_od: deriveLegacyTime(input.akceOd),
+      cas_do: deriveLegacyTime(input.akceDo),
+      poznamka: input.poznamka,
+    },
+  });
+
+  if (createError || !zakazkaId) {
+    return {
+      ok: false,
+      error: "create_failed",
+      message: createError?.message,
+    };
+  }
+
+  const createdZakazkaId = zakazkaId as string;
+
+  const { error: sourceLinkError } = await supabase
+    .from("zakazky")
+    .update({ zdroj_poptavka_id: poptavkaId })
+    .eq("zakazka_id", createdZakazkaId)
+    .is("zdroj_poptavka_id", null);
+
+  if (sourceLinkError) {
+    return { ok: false, error: "link_failed", message: sourceLinkError.message };
+  }
+
+  const dotaznikPayload = input.buildDotaznik(createdZakazkaId);
+  const { error: dotaznikError } = await supabase.from("zakazka_dotazniky").insert(dotaznikPayload);
+
+  if (dotaznikError) {
+    return { ok: false, error: "link_failed", message: dotaznikError.message };
+  }
+
+  const now = new Date().toISOString();
+  const { error: poptavkaUpdateError } = await supabase
+    .from("poptavky")
+    .update({
+      zakazka_id: createdZakazkaId,
+      stav: "prevadena_do_zakazky",
+      updated_at: now,
+    })
+    .eq("poptavka_id", poptavkaId)
+    .eq("stav", "schvalena")
+    .is("zakazka_id", null);
+
+  if (poptavkaUpdateError) {
+    return { ok: false, error: "link_failed", message: poptavkaUpdateError.message };
+  }
+
+  return { ok: true, zakazkaId: createdZakazkaId, alreadyConverted: false };
 }
 
 export function canConvertPoptavkaToZakazka(detail: {
@@ -335,127 +573,15 @@ export async function convertPoptavkaToZakazka(
     return { ok: false, error: "missing_klient" };
   }
 
-  const { akceOd, akceDo } = combineAkceRange(detail);
-  if (!akceOd || !akceDo) {
-    return { ok: false, error: "missing_akce_datum" };
+  const mode = resolveConvertMode(detail);
+  const built =
+    mode === "snapshot"
+      ? await buildSnapshotZakazkaCreateInput(supabase, detail)
+      : await buildLegacyZakazkaCreateInput(supabase, detail);
+
+  if (!built.ok) {
+    return built;
   }
 
-  const stavbaOd = combineDateAndTime(
-    detail.stavba_datum,
-    normalizeTime(detail.stavba_cas_od)
-  );
-  const stavbaDo = combineDateAndTime(
-    detail.stavba_datum,
-    normalizeTime(detail.stavba_cas_do)
-  );
-  const bouraniOd = combineDateAndTime(
-    detail.bourani_datum,
-    normalizeTime(detail.bourani_cas_od)
-  );
-  const bouraniDo = combineDateAndTime(
-    detail.bourani_datum,
-    normalizeTime(detail.bourani_cas_do)
-  );
-
-  const mistoText = detail.misto_adresa?.trim() || detail.misto_nazev?.trim() || null;
-  const nazev = detail.misto_nazev?.trim() || detail.misto_adresa?.trim() || detail.cislo_poptavky;
-
-  let mistoId = await resolveMistoId(supabase, detail);
-  const mistoLat = detail.misto_lat != null ? Number(detail.misto_lat) : null;
-  const mistoLng = detail.misto_lng != null ? Number(detail.misto_lng) : null;
-
-  const mistoPayload =
-    !mistoId && mistoLat != null && mistoLng != null
-      ? {
-          klient_id: detail.klient_id,
-          nazev: detail.misto_nazev?.trim() || mistoText || nazev,
-          adresa_text: detail.misto_adresa?.trim() || mistoText || nazev,
-          lat: mistoLat,
-          lng: mistoLng,
-          radius_m: 300,
-        }
-      : null;
-
-  const technikaPayload = await buildTechnikaPayload(supabase, detail);
-  const cisloZakazky = await generateCisloZakazky(supabase);
-
-  const { data: zakazkaId, error: createError } = await supabase.rpc("create_zakazka_atomic", {
-    misto_payload: mistoPayload,
-    realizace_payload: [],
-    technika_payload: technikaPayload,
-    zakazka_payload: {
-      cislo_zakazky: cisloZakazky,
-      stav_zakazky_id: DEFAULT_STAV_ZAKAZKY_ID,
-      nazev,
-      klient_id: detail.klient_id,
-      fakturacni_firma_id: null,
-      misto_id: mistoId,
-      misto: mistoText,
-      misto_lat: mistoLat,
-      misto_lng: mistoLng,
-      misto_gps_radius_m: mistoLat != null && mistoLng != null ? 300 : null,
-      misto_gps_presnost_m: null,
-      misto_gps_zdroj: mistoLat != null && mistoLng != null ? "poptavka" : null,
-      misto_gps_updated_at: mistoLat != null && mistoLng != null ? new Date().toISOString() : null,
-      typ_obsluhy: "s_obsluhou",
-      odjezd_ze_skladu: null,
-      sraz_na_miste: null,
-      stavba_od: stavbaOd,
-      stavba_do: stavbaDo,
-      akce_od: akceOd,
-      akce_do: akceDo,
-      bourani_od: bouraniOd,
-      bourani_do: bouraniDo,
-      datum_od: deriveLegacyDate(akceOd),
-      datum_do: deriveLegacyDate(akceDo),
-      cas_od: deriveLegacyTime(akceOd),
-      cas_do: deriveLegacyTime(akceDo),
-      poznamka: buildPoznamka(detail) || null,
-    },
-  });
-
-  if (createError || !zakazkaId) {
-    return {
-      ok: false,
-      error: "create_failed",
-      message: createError?.message,
-    };
-  }
-
-  const createdZakazkaId = zakazkaId as string;
-
-  const { error: sourceLinkError } = await supabase
-    .from("zakazky")
-    .update({ zdroj_poptavka_id: poptavkaId })
-    .eq("zakazka_id", createdZakazkaId)
-    .is("zdroj_poptavka_id", null);
-
-  if (sourceLinkError) {
-    return { ok: false, error: "link_failed", message: sourceLinkError.message };
-  }
-
-  const dotaznikPayload = buildDotaznikPayload(detail, createdZakazkaId);
-  const { error: dotaznikError } = await supabase.from("zakazka_dotazniky").insert(dotaznikPayload);
-
-  if (dotaznikError) {
-    return { ok: false, error: "link_failed", message: dotaznikError.message };
-  }
-
-  const now = new Date().toISOString();
-  const { error: poptavkaUpdateError } = await supabase
-    .from("poptavky")
-    .update({
-      zakazka_id: createdZakazkaId,
-      stav: "prevadena_do_zakazky",
-      updated_at: now,
-    })
-    .eq("poptavka_id", poptavkaId)
-    .eq("stav", "schvalena")
-    .is("zakazka_id", null);
-
-  if (poptavkaUpdateError) {
-    return { ok: false, error: "link_failed", message: poptavkaUpdateError.message };
-  }
-
-  return { ok: true, zakazkaId: createdZakazkaId, alreadyConverted: false };
+  return createZakazkaFromInput(supabase, poptavkaId, detail, built.input);
 }
