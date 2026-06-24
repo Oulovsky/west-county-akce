@@ -172,7 +172,7 @@ export function canSendPoptavkaBindingOrder(stav: PoptavkaStav) {
   return stav === "odeslana";
 }
 
-/** Finální interní schválení k převodu (připraveno pro budoucí úpravu approve akce). */
+/** Finální interní schválení k převodu — jen po potvrzení závazné objednávky klientem. */
 export function canInternalApproveForConvert(stav: PoptavkaStav) {
   return stav === "objednavka_potvrzena";
 }

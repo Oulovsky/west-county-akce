@@ -11,6 +11,7 @@ import {
 } from "@/lib/client-portal/poptavka-email-server";
 import {
   canInternalActOnPoptavka,
+  canInternalApproveForConvert,
   loadInternalPoptavkaDetail,
 } from "@/lib/client-portal/poptavka-internal-server";
 
@@ -144,12 +145,12 @@ export async function approvePoptavkaAction(formData: FormData) {
     redirectWithError("/zakazky/poptavky", "not_found");
   }
 
-  if (!canInternalActOnPoptavka(detail.stav)) {
-    redirectWithError(`/zakazky/poptavky/${poptavkaId}`, "invalid_state");
+  if (!canInternalApproveForConvert(detail.stav)) {
+    redirectWithError(`/zakazky/poptavky/${poptavkaId}`, "approve_invalid_state");
   }
 
   const now = new Date().toISOString();
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("poptavky")
     .update({
       stav: "schvalena",
@@ -158,10 +159,17 @@ export async function approvePoptavkaAction(formData: FormData) {
       zamitnuto_duvod: null,
       updated_at: now,
     })
-    .eq("poptavka_id", poptavkaId);
+    .eq("poptavka_id", poptavkaId)
+    .eq("stav", "objednavka_potvrzena")
+    .select("poptavka_id")
+    .maybeSingle();
 
   if (error) {
     redirectWithError(`/zakazky/poptavky/${poptavkaId}`, "save_failed");
+  }
+
+  if (!updated) {
+    redirectWithError(`/zakazky/poptavky/${poptavkaId}`, "approve_invalid_state");
   }
 
   revalidatePath("/zakazky/poptavky");

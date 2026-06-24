@@ -24,6 +24,7 @@ import {
 } from "@/lib/client-portal/poptavka-email-server";
 import {
   canInternalActOnPoptavka,
+  canInternalApproveForConvert,
   loadInternalPoptavkaDetail,
 } from "@/lib/client-portal/poptavka-internal-server";
 import { loadPoptavkaObjednavkaDraft } from "@/lib/client-portal/poptavka-objednavka-draft-server";
@@ -49,8 +50,7 @@ function ReadOnlyField({ label, value }: { label: string; value: string | null |
 const SAVED_MESSAGES: Record<string, string> = {
   revision: "Klient byl požádán o doplnění poptávky.",
   rejected: "Poptávka byla odmítnuta.",
-  approved:
-    "Poptávka byla schválena k převodu. Závazná objednávka klientem bude řešena v dalším kroku workflow.",
+  approved: "Poptávka byla schválena k převodu na zakázku.",
   note: "Interní poznámka byla uložena.",
   converted: "Interní zakázka byla vytvořena.",
 };
@@ -143,6 +143,7 @@ export default async function ZakazkyPoptavkaDetailPage({
         })
       : null;
   const canAct = canInternalActOnPoptavka(detail.stav);
+  const canApprove = canInternalApproveForConvert(detail.stav);
   const canConvert = canConvertPoptavkaToZakazka(detail);
   const showObjednavkaLink = canShowObjednavkaEditorLink(detail.stav);
   const existingObjednavkaDraft = showObjednavkaLink
@@ -478,6 +479,7 @@ export default async function ZakazkyPoptavkaDetailPage({
         poptavkaId={detail.poptavka_id}
         stav={detail.stav}
         canAct={canAct && !readOnly}
+        canApprove={canApprove && !readOnly}
         canConvert={canConvert && !readOnly}
         zakazkaId={convertedZakazkaId}
         errorCode={resolvedSearchParams?.error ?? null}

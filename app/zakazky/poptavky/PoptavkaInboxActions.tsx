@@ -14,6 +14,8 @@ import Link from "next/link";
 const ERROR_MESSAGES: Record<string, string> = {
   missing_reason: "Vyplňte důvod nebo poznámku.",
   invalid_state: "Akce není pro aktuální stav poptávky dostupná.",
+  approve_invalid_state:
+    "Schválit k převodu lze až po potvrzení závazné objednávky klientem.",
   save_failed: "Uložení se nezdařilo.",
   not_found: "Poptávka nenalezena.",
   missing_klient: "Poptávka nemá přiřazeného klienta.",
@@ -26,6 +28,7 @@ export default function PoptavkaInboxActions({
   poptavkaId,
   stav,
   canAct,
+  canApprove,
   canConvert,
   zakazkaId,
   errorCode,
@@ -34,6 +37,7 @@ export default function PoptavkaInboxActions({
   poptavkaId: string;
   stav: PoptavkaStav;
   canAct: boolean;
+  canApprove?: boolean;
   canConvert?: boolean;
   zakazkaId?: string | null;
   errorCode?: string | null;
@@ -61,19 +65,20 @@ export default function PoptavkaInboxActions({
 
   return (
     <section className="space-y-6 rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
-      {canAct ? (
+      {canApprove ? (
+        <div>
+          <h2 className="text-xl font-semibold text-white">Schválit k převodu</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Klient potvrdil závaznou objednávku. Interním schválením poptávku připravíte k převodu
+            na zakázku.
+          </p>
+        </div>
+      ) : canAct ? (
         <div>
           <h2 className="text-xl font-semibold text-white">První reakce na poptávku</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Rozhodněte, zda poptávka zajímá, potřebuje doplnění, nebo ji nelze realizovat.
-          </p>
-        </div>
-      ) : stav === "objednavka_potvrzena" ? (
-        <div>
-          <h2 className="text-xl font-semibold text-white">Finální schválení k převodu</h2>
-          <p className="mt-1 text-sm text-slate-400">
-            Klient potvrdil závaznou objednávku. Další krok bude interní schválení k převodu na
-            zakázku.
+            Rozhodněte, zda poptávka zajímá, potřebuje doplnění, nebo ji nelze realizovat. Schválení
+            k převodu přijde až po potvrzení závazné objednávky klientem.
           </p>
         </div>
       ) : (
@@ -106,6 +111,31 @@ export default function PoptavkaInboxActions({
         </div>
       ) : null}
 
+      {canApprove ? (
+        <form
+          action={approvePoptavkaAction}
+          onSubmit={(event) => {
+            const confirmed = window.confirm(
+              "Schválit poptávku k převodu na zakázku? Klient již potvrdil závaznou objednávku. Zakázka se zatím nevytvoří — změní se pouze interní stav."
+            );
+            if (!confirmed) event.preventDefault();
+          }}
+          className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4"
+        >
+          <input type="hidden" name="poptavka_id" value={poptavkaId} />
+          <p className="text-sm leading-relaxed text-emerald-100/90">
+            Potvrzená závazná objednávka je podkladem pro další práci. Po schválení můžete poptávku
+            převést na interní zakázku.
+          </p>
+          <button
+            type="submit"
+            className="rounded-xl border border-emerald-500/50 bg-emerald-600/30 px-5 py-2.5 text-sm font-semibold text-emerald-50 hover:bg-emerald-600/40"
+          >
+            Schválit k převodu
+          </button>
+        </form>
+      ) : null}
+
       {canConvert ? (
         <form
           action={convertPoptavkaToZakazkaAction}
@@ -121,8 +151,7 @@ export default function PoptavkaInboxActions({
           <input type="hidden" name="poptavka_id" value={poptavkaId} />
           <p className="text-sm leading-relaxed text-slate-400">
             Ze schválené poptávky vznikne interní zakázka s plánem techniky. Konkrétní skladové kusy
-            se neřadí — ty vzniknou až při scanování. Závazná objednávka klientem bude řešena v
-            dalším kroku workflow.
+            se neřadí — ty vzniknou až při scanování.
           </p>
           <button
             type="submit"
@@ -133,35 +162,8 @@ export default function PoptavkaInboxActions({
         </form>
       ) : null}
 
-      {!canAct ? (
-        <div className="space-y-3">
-          <p className="text-sm text-slate-400">
-            Poptávka je ve stavu{" "}
-            <strong className="text-slate-200">{POPTAVKA_STAV_LABELS[stav]}</strong>. Stavové akce
-            nejsou v tomto kroku dostupné.
-          </p>
-          {stav === "objednavka_odeslana" ? (
-            <p className="rounded-lg border border-blue-500/30 bg-blue-950/20 px-4 py-3 text-sm text-blue-100">
-              Čeká se na potvrzení závazné objednávky klientem. Odeslání a potvrzování objednávky
-              bude dostupné v další fázi implementace.
-            </p>
-          ) : null}
-          {stav === "objednavka_potvrzena" ? (
-            <p className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
-              Klient objednávku potvrdil. Akce „Schválit k převodu“ bude v další fázi dostupná právě
-              z tohoto stavu. Do té doby lze stále použít stávající cestu přes dřívější schválení,
-              pokud na poptávce už existuje.
-            </p>
-          ) : null}
-          {stav === "objednavka_odmitnuta" ? (
-            <p className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">
-              Klient závaznou objednávku odmítl. Vyžaduje interní řešení — kontakt s klientem nebo
-              návrat k jednání.
-            </p>
-          ) : null}
-        </div>
-      ) : (
-        <div className="grid gap-6 lg:grid-cols-3">
+      {canAct ? (
+        <div className="grid gap-6 lg:grid-cols-2">
           <form action={returnPoptavkaToRevisionAction} className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-950/10 p-4">
             <h3 className="font-semibold text-amber-100">Zajímá nás — požádat o doplnění</h3>
             <input type="hidden" name="poptavka_id" value={poptavkaId} />
@@ -210,32 +212,30 @@ export default function PoptavkaInboxActions({
               Odmítnout poptávku
             </button>
           </form>
-
-          <form
-            action={approvePoptavkaAction}
-            onSubmit={(event) => {
-              const confirmed = window.confirm(
-                "Schválit poptávku k převodu? Zakázka se zatím nevytvoří — změní se pouze interní stav. Závazná objednávka klientem bude řešena v dalším kroku workflow."
-              );
-              if (!confirmed) event.preventDefault();
-            }}
-            className="space-y-3 rounded-xl border border-emerald-500/20 bg-emerald-950/10 p-4"
-          >
-            <h3 className="font-semibold text-emerald-100">Schválit k převodu</h3>
-            <input type="hidden" name="poptavka_id" value={poptavkaId} />
-            <p className="text-sm leading-relaxed text-slate-400">
-              Interně schválí poptávku pro další práci a případný převod na zakázku. Nejde o závaznou
-              objednávku ani finální potvrzení klientem — ty budou řešeny v dalším kroku workflow.
-            </p>
-            <button
-              type="submit"
-              className="rounded-xl border border-emerald-500/40 bg-emerald-600/20 px-4 py-2 text-sm font-semibold text-emerald-50 hover:bg-emerald-600/30"
-            >
-              Schválit k převodu
-            </button>
-          </form>
         </div>
-      )}
+      ) : !canApprove ? (
+        <div className="space-y-3">
+          {!canConvert && !zakazkaId ? (
+            <p className="text-sm text-slate-400">
+              Poptávka je ve stavu{" "}
+              <strong className="text-slate-200">{POPTAVKA_STAV_LABELS[stav]}</strong>. Stavové akce
+              nejsou v tomto kroku dostupné.
+            </p>
+          ) : null}
+          {stav === "objednavka_odeslana" ? (
+            <p className="rounded-lg border border-blue-500/30 bg-blue-950/20 px-4 py-3 text-sm text-blue-100">
+              Čeká se na potvrzení závazné objednávky klientem. Po potvrzení zde bude k dispozici
+              akce „Schválit k převodu“.
+            </p>
+          ) : null}
+          {stav === "objednavka_odmitnuta" ? (
+            <p className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">
+              Klient závaznou objednávku odmítl. Vyžaduje interní řešení — kontakt s klientem,
+              úpravu objednávky nebo nové jednání.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }
