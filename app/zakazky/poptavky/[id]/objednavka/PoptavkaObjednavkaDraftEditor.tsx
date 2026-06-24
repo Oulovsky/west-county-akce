@@ -415,6 +415,12 @@ export default function PoptavkaObjednavkaDraftEditor({
             Odeslat klientovi — připravuje se
           </button>
           <Link
+            href={`/zakazky/poptavky/${poptavkaId}/objednavka/nahled`}
+            className="rounded-xl border border-slate-600 px-5 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-900"
+          >
+            Náhled objednávky
+          </Link>
+          <Link
             href={`/zakazky/poptavky/${poptavkaId}`}
             className="text-sm text-blue-300 hover:text-blue-200"
           >

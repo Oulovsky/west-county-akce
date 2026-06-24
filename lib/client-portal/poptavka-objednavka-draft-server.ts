@@ -8,7 +8,8 @@ import {
   type BuildPoptavkaObjednavkaDraftOptions,
 } from "@/lib/client-portal/poptavka-objednavka-draft";
 import { POPTAVKA_OBJEDNAVKA_DRAFT_SCHEMA_VERSION } from "@/lib/client-portal/poptavka-objednavka-types";
-import type { PoptavkaObjednavkaDraftData } from "@/lib/client-portal/poptavka-objednavka-types";
+import type { FotkaDraft, PoptavkaObjednavkaDraftData } from "@/lib/client-portal/poptavka-objednavka-types";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type PoptavkaObjednavkaDraftStav =
   | "rozpracovano"
@@ -399,4 +400,23 @@ export async function archivePoptavkaObjednavkaDraft(
   }
 
   return { ok: true, draft: mapDraftRow(data as PoptavkaObjednavkaDraftRow) };
+}
+
+/** Signed URL pro fotky draftu (náhled / později snapshot build). */
+export async function resolveDraftFotkaSignedUrls(
+  fotky: FotkaDraft[],
+  expiresInSeconds = 60 * 60
+): Promise<Record<string, string | null>> {
+  const admin = createAdminClient();
+  const included = fotky.filter((row) => row.zahrnoutDoObjednavky);
+  const entries = await Promise.all(
+    included.map(async (row) => {
+      const { data } = await admin.storage
+        .from(row.storageBucket)
+        .createSignedUrl(row.storagePath, expiresInSeconds);
+      return [row.fotkaId, data?.signedUrl ?? null] as const;
+    })
+  );
+
+  return Object.fromEntries(entries);
 }

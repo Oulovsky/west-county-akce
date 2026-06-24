@@ -200,3 +200,30 @@ export type DraftToSnapshotParams = {
   draftSchemaVersion?: number;
   snapshotSchemaVersion?: number;
 };
+
+/** Fotka zobrazená v klientském / náhledovém dokumentu objednávky. */
+export type PoptavkaObjednavkaDocumentFotka = {
+  fotkaId: string;
+  typ: PoptavkaFotkaTyp;
+  popis: string | null;
+  imageUrl: string | null;
+  poradi: number;
+};
+
+/** Obsah objednávky pro read-only render (draft i snapshot). */
+export type PoptavkaObjednavkaDocumentData = {
+  klient: PartyBlock;
+  dodavatel: PartyBlock;
+  akce: AkceBlock;
+  misto: MistoTechnickeBlock;
+  organizace: OrganizaceBlock;
+  technickePlneni: TechnickePlneniBlock;
+  smluvniPodminky: SmluvniPodminkyBlock;
+  textProKlienta: TextProKlientaBlock;
+  fotky: PoptavkaObjednavkaDocumentFotka[];
+};
+
+export type PoptavkaObjednavkaDocumentMeta = {
+  cisloPoptavky?: string | null;
+  nazevAkce?: string | null;
+};
