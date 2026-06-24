@@ -44,6 +44,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   submit_failed: "Odeslání se nezdařilo.",
   invalid_misto:
     "Vybrané místo není dostupné pro váš účet. Vyberte jiné místo nebo zadejte nové.",
+  missing_saved_misto: "Vyberte uložené místo, nebo přepněte na Nové místo.",
 };
 
 type Props = {
@@ -204,9 +205,25 @@ export default function PoptavkaFormClient({
   }
 
   const hasSavedMista = savedMista.length > 0;
+
+  function isSavedMistoInList(mistoId: string | null | undefined) {
+    return Boolean(mistoId && savedMista.some((misto) => misto.misto_id === mistoId));
+  }
+
+  const showStaleSavedMistoWarning =
+    form.misto_source === "saved" &&
+    ((Boolean(form.misto_id) && !isSavedMistoInList(form.misto_id)) ||
+      (!form.misto_id &&
+        initialValues?.misto_source === "saved" &&
+        Boolean(initialValues?.misto_id) &&
+        !isSavedMistoInList(initialValues.misto_id)));
+
+  const showSavedMistoPickHint =
+    form.misto_source === "saved" && hasSavedMista && !form.misto_id && !showStaleSavedMistoWarning;
+
   const selectedMistoKnowHow: ClientPortalMistoKnowHow | null =
-    form.misto_source === "saved" && form.misto_id
-      ? (savedMistaKnowHowById[form.misto_id] ?? { poznamky: [], fotky: [] })
+    form.misto_source === "saved" && isSavedMistoInList(form.misto_id)
+      ? (savedMistaKnowHowById[form.misto_id!] ?? { poznamky: [], fotky: [] })
       : null;
 
   function toggleSetup(setupId: string, checked: boolean) {
@@ -464,6 +481,15 @@ export default function PoptavkaFormClient({
                           </option>
                         ))}
                       </select>
+                      {showStaleSavedMistoWarning ? (
+                        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                          Místo uložené u této poptávky už není dostupné pro váš účet. Vyberte jiné
+                          uložené místo nebo přepněte na Nové místo.
+                        </p>
+                      ) : null}
+                      {showSavedMistoPickHint ? (
+                        <p className="text-xs text-amber-200/90">Vyberte místo ze seznamu.</p>
+                      ) : null}
                       <p className="text-xs text-slate-500">
                         Adresa a poznámka se předvyplní z uloženého místa. Můžete je upravit pro
                         tuto konkrétní akci.

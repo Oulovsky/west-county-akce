@@ -137,6 +137,7 @@ export function validatePoptavkaForm(values: PoptavkaFormValues): string | null 
   if (!values.datum_od) return "missing_date_from";
   if (!values.datum_do) return "missing_date_to";
   if (values.datum_do < values.datum_od) return "invalid_date_range";
+  if (values.misto_source === "saved" && !values.misto_id) return "missing_saved_misto";
   return null;
 }
 
