@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import PoptavkaFormClient from "@/components/portal/PoptavkaFormClient";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
 import type { PoptavkaPrefill } from "@/lib/client-portal/poptavka-form";
+import { loadClientMistaKonaniForPortal } from "@/lib/client-portal/client-mista-server";
 import { loadPortalSetups } from "@/lib/client-portal/poptavka-server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -47,9 +48,10 @@ export default async function PortalNovaPoptavkaPage({
     redirect("/portal/prihlaseni?next=/portal/poptavka/nova");
   }
 
-  const [prefill, setupsByOblast] = await Promise.all([
+  const [prefill, setupsByOblast, savedMista] = await Promise.all([
     loadPoptavkaPrefill(supabase, session),
     loadPortalSetups(supabase),
+    loadClientMistaKonaniForPortal(supabase),
   ]);
 
   return (
@@ -57,6 +59,7 @@ export default async function PortalNovaPoptavkaPage({
       mode="create"
       prefill={prefill}
       setupsByOblast={setupsByOblast}
+      savedMista={savedMista}
       errorCode={resolvedSearchParams?.error ?? null}
     />
   );

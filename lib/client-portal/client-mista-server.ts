@@ -2,19 +2,12 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireActiveClientPortalSession } from "@/lib/auth/client-portal-access-server";
+import type { ClientPortalMistoSummary } from "@/lib/client-portal/client-mista-shared";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const MISTO_DETAIL_NOTES_LIMIT = 5;
+export type { ClientPortalMistoSummary } from "@/lib/client-portal/client-mista-shared";
 
-export type ClientPortalMistoSummary = {
-  misto_id: string;
-  nazev: string;
-  adresa_text: string | null;
-  lat: number | null;
-  lng: number | null;
-  poznamka: string | null;
-  updated_at: string;
-};
+const MISTO_DETAIL_NOTES_LIMIT = 5;
 
 export type ClientPortalMistoTechnickaPoznamka = {
   id: string;

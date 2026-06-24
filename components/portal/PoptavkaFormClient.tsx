@@ -16,6 +16,7 @@ import {
   type PoptavkaPrefill,
   type PoptavkaSetupInput,
 } from "@/lib/client-portal/poptavka-form";
+import type { ClientPortalMistoSummary } from "@/lib/client-portal/client-mista-shared";
 import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-server";
 import type { PortalSetupsByOblast } from "@/lib/client-portal/poptavka-server";
 import {
@@ -48,6 +49,7 @@ type Props = {
   mode: "create" | "edit";
   prefill: PoptavkaPrefill;
   setupsByOblast: PortalSetupsByOblast;
+  savedMista?: ClientPortalMistoSummary[];
   initialValues?: Partial<PoptavkaFormValues>;
   initialTechnika?: PoptavkaTechnikaFormValues;
   initialFotky?: PoptavkaFotkaWithUrl[];
@@ -82,10 +84,18 @@ function emptySetupMap(): Record<string, PoptavkaSetupInput> {
   return {};
 }
 
+function formatSavedMistoLabel(misto: ClientPortalMistoSummary) {
+  if (misto.adresa_text?.trim()) {
+    return `${misto.nazev} — ${misto.adresa_text.trim()}`;
+  }
+  return misto.nazev;
+}
+
 export default function PoptavkaFormClient({
   mode,
   prefill,
   setupsByOblast,
+  savedMista = [],
   initialValues,
   initialTechnika,
   initialFotky = [],
@@ -148,6 +158,49 @@ export default function PoptavkaFormClient({
   function updateField<K extends keyof PoptavkaFormValues>(key: K, value: PoptavkaFormValues[K]) {
     setForm((current) => ({ ...current, [key]: value }));
   }
+
+  function switchToNewMisto() {
+    setForm((current) => {
+      if (current.misto_source === "new") return current;
+      return {
+        ...current,
+        misto_source: "new",
+        misto_id: null,
+        misto_lat: null,
+        misto_lng: null,
+      };
+    });
+  }
+
+  function switchToSavedMisto() {
+    setForm((current) => {
+      if (current.misto_source === "saved") return current;
+      return {
+        ...current,
+        misto_source: "saved",
+        misto_id: null,
+        misto_lat: null,
+        misto_lng: null,
+      };
+    });
+  }
+
+  function selectSavedMisto(mistoId: string) {
+    const misto = savedMista.find((row) => row.misto_id === mistoId);
+    if (!misto) return;
+
+    setForm((current) => ({
+      ...current,
+      misto_source: "saved",
+      misto_id: misto.misto_id,
+      misto_adresa: misto.adresa_text?.trim() ?? "",
+      misto_lat: misto.lat,
+      misto_lng: misto.lng,
+      misto_poznamka: misto.poznamka?.trim() ?? "",
+    }));
+  }
+
+  const hasSavedMista = savedMista.length > 0;
 
   function toggleSetup(setupId: string, checked: boolean) {
     setSelectedSetups((current) => {
@@ -361,6 +414,61 @@ export default function PoptavkaFormClient({
                   ))}
                 </select>
               </label>
+
+              {hasSavedMista ? (
+                <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+                  <span className={labelClass}>Místo konání</span>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className={optionCardClass}>
+                      <input
+                        type="radio"
+                        name="misto_source_ui"
+                        checked={form.misto_source === "new"}
+                        onChange={switchToNewMisto}
+                        disabled={readOnly}
+                      />
+                      <span>Nové místo</span>
+                    </label>
+                    <label className={optionCardClass}>
+                      <input
+                        type="radio"
+                        name="misto_source_ui"
+                        checked={form.misto_source === "saved"}
+                        onChange={switchToSavedMisto}
+                        disabled={readOnly}
+                      />
+                      <span>Vybrat uložené místo</span>
+                    </label>
+                  </div>
+
+                  {form.misto_source === "saved" ? (
+                    <label className="block space-y-2">
+                      <span className="text-sm text-slate-400">Uložené místo</span>
+                      <select
+                        value={form.misto_id ?? ""}
+                        onChange={(e) => selectSavedMisto(e.target.value)}
+                        disabled={readOnly}
+                        className={inputClass}
+                      >
+                        <option value="">Vyberte místo</option>
+                        {savedMista.map((misto) => (
+                          <option key={misto.misto_id} value={misto.misto_id}>
+                            {formatSavedMistoLabel(misto)}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-slate-500">
+                        Adresa a poznámka se předvyplní z uloženého místa. Můžete je upravit pro
+                        tuto konkrétní akci.
+                      </p>
+                    </label>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">
+                  Zatím nemáte žádné uložené místo. Vytvoří se po první zpracované akci.
+                </p>
+              )}
 
               <label className="block space-y-2">
                 <span className={labelClass}>Místo / adresa / obec *</span>

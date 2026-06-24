@@ -14,6 +14,7 @@ import {
   formatTriVolba,
   technikaFromRecord,
 } from "@/lib/client-portal/poptavka-technika-form";
+import { loadClientMistaKonaniForPortal } from "@/lib/client-portal/client-mista-server";
 import {
   isPoptavkaEditable,
   loadPoptavkaDetail,
@@ -115,13 +116,14 @@ export default async function PortalPoptavkaDetailPage({
   const editable = isPoptavkaEditable(detail);
 
   if (editable) {
-    const [{ data: klient }, setupsByOblast] = await Promise.all([
+    const [{ data: klient }, setupsByOblast, savedMista] = await Promise.all([
       supabase
         .from("klienti")
         .select("nazev, ico, email, telefon")
         .eq("klient_id", session.account.klient_id!)
         .single(),
       loadPortalSetups(supabase),
+      loadClientMistaKonaniForPortal(supabase),
     ]);
 
     const kontaktJmeno = [session.account.jmeno, session.account.prijmeni]
@@ -140,6 +142,7 @@ export default async function PortalPoptavkaDetailPage({
           firma_ico: klient?.ico ?? "",
         }}
         setupsByOblast={setupsByOblast}
+        savedMista={savedMista}
         initialValues={{
           kontakt_jmeno: detail.kontakt_jmeno ?? "",
           kontakt_telefon: detail.kontakt_telefon ?? "",
