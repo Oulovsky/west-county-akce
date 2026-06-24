@@ -195,7 +195,7 @@ async function resolvePreparedByUserId(
   return user?.id ?? null;
 }
 
-async function loadActiveDraftRow(
+export async function loadActiveDraftRow(
   supabase: SupabaseClient,
   poptavkaId: string
 ): Promise<PoptavkaObjednavkaDraftRow | null> {
@@ -213,7 +213,7 @@ async function loadActiveDraftRow(
   return (data as PoptavkaObjednavkaDraftRow | null) ?? null;
 }
 
-async function loadDraftRowById(
+export async function loadDraftRowById(
   supabase: SupabaseClient,
   draftId: string
 ): Promise<PoptavkaObjednavkaDraftRow | null> {
