@@ -14,7 +14,7 @@ import {
   formatTriVolba,
   technikaFromRecord,
 } from "@/lib/client-portal/poptavka-technika-form";
-import { loadClientMistaKonaniForPortal } from "@/lib/client-portal/client-mista-server";
+import { loadClientMistaKonaniForPortal, loadClientMistaKnowHowByIdForPortal } from "@/lib/client-portal/client-mista-server";
 import {
   isPoptavkaEditable,
   loadPoptavkaDetail,
@@ -126,6 +126,11 @@ export default async function PortalPoptavkaDetailPage({
       loadClientMistaKonaniForPortal(supabase),
     ]);
 
+    const savedMistaKnowHowById = await loadClientMistaKnowHowByIdForPortal(
+      supabase,
+      savedMista.map((misto) => misto.misto_id)
+    );
+
     const kontaktJmeno = [session.account.jmeno, session.account.prijmeni]
       .filter(Boolean)
       .join(" ");
@@ -143,6 +148,7 @@ export default async function PortalPoptavkaDetailPage({
         }}
         setupsByOblast={setupsByOblast}
         savedMista={savedMista}
+        savedMistaKnowHowById={savedMistaKnowHowById}
         initialValues={{
           kontakt_jmeno: detail.kontakt_jmeno ?? "",
           kontakt_telefon: detail.kontakt_telefon ?? "",

@@ -7,6 +7,7 @@ import {
   updatePoptavkaAction,
 } from "@/app/portal/poptavky/actions";
 import PoptavkaFotkyClient from "@/components/portal/PoptavkaFotkyClient";
+import PoptavkaMistoKnowHowPanel from "@/components/portal/PoptavkaMistoKnowHowPanel";
 import PoptavkaSubmitButton from "@/components/portal/PoptavkaSubmitButton";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
 import { SETUP_OBLAST_LABELS } from "@/lib/client-portal/labels";
@@ -16,7 +17,7 @@ import {
   type PoptavkaPrefill,
   type PoptavkaSetupInput,
 } from "@/lib/client-portal/poptavka-form";
-import type { ClientPortalMistoSummary } from "@/lib/client-portal/client-mista-shared";
+import type { ClientPortalMistoSummary, ClientPortalMistoKnowHow } from "@/lib/client-portal/client-mista-shared";
 import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-server";
 import type { PortalSetupsByOblast } from "@/lib/client-portal/poptavka-server";
 import {
@@ -50,6 +51,7 @@ type Props = {
   prefill: PoptavkaPrefill;
   setupsByOblast: PortalSetupsByOblast;
   savedMista?: ClientPortalMistoSummary[];
+  savedMistaKnowHowById?: Record<string, ClientPortalMistoKnowHow>;
   initialValues?: Partial<PoptavkaFormValues>;
   initialTechnika?: PoptavkaTechnikaFormValues;
   initialFotky?: PoptavkaFotkaWithUrl[];
@@ -96,6 +98,7 @@ export default function PoptavkaFormClient({
   prefill,
   setupsByOblast,
   savedMista = [],
+  savedMistaKnowHowById = {},
   initialValues,
   initialTechnika,
   initialFotky = [],
@@ -201,6 +204,10 @@ export default function PoptavkaFormClient({
   }
 
   const hasSavedMista = savedMista.length > 0;
+  const selectedMistoKnowHow: ClientPortalMistoKnowHow | null =
+    form.misto_source === "saved" && form.misto_id
+      ? (savedMistaKnowHowById[form.misto_id] ?? { poznamky: [], fotky: [] })
+      : null;
 
   function toggleSetup(setupId: string, checked: boolean) {
     setSelectedSetups((current) => {
@@ -461,6 +468,9 @@ export default function PoptavkaFormClient({
                         Adresa a poznámka se předvyplní z uloženého místa. Můžete je upravit pro
                         tuto konkrétní akci.
                       </p>
+                      {form.misto_id ? (
+                        <PoptavkaMistoKnowHowPanel knowHow={selectedMistoKnowHow} />
+                      ) : null}
                     </label>
                   ) : null}
                 </div>

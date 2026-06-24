@@ -2,14 +2,23 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireActiveClientPortalSession } from "@/lib/auth/client-portal-access-server";
-import type { ClientPortalMistoSummary } from "@/lib/client-portal/client-mista-shared";
+import type {
+  ClientPortalMistoKnowHow,
+  ClientPortalMistoSummary,
+} from "@/lib/client-portal/client-mista-shared";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type { ClientPortalMistoSummary } from "@/lib/client-portal/client-mista-shared";
+export type {
+  ClientPortalMistoKnowHow,
+  ClientPortalMistoTechnickaFotka,
+  ClientPortalMistoTechnickaPoznamka,
+} from "@/lib/client-portal/client-mista-shared";
 
 const MISTO_DETAIL_NOTES_LIMIT = 5;
+const MISTO_DETAIL_FOTKY_LIMIT = 12;
 
-export type ClientPortalMistoTechnickaPoznamka = {
+type MistoTechnickaPoznamkaRow = {
   id: string;
   misto_id: string;
   typ: string;
@@ -19,7 +28,7 @@ export type ClientPortalMistoTechnickaPoznamka = {
   updated_at: string;
 };
 
-export type ClientPortalMistoTechnickaFotka = {
+type MistoTechnickaFotkaRow = {
   id: string;
   misto_id: string;
   storage_bucket: string;
@@ -31,12 +40,10 @@ export type ClientPortalMistoTechnickaFotka = {
   mime_type: string | null;
   size_bytes: number | null;
   created_at: string;
-  signedUrl: string | null;
 };
 
-export type ClientPortalMistoDetail = ClientPortalMistoSummary & {
-  poznamky: ClientPortalMistoTechnickaPoznamka[];
-  fotky: ClientPortalMistoTechnickaFotka[];
+type MistoTechnickaFotkaWithUrl = MistoTechnickaFotkaRow & {
+  signedUrl: string | null;
 };
 
 export type AssertClientMistoIdResult =
@@ -49,9 +56,7 @@ function nullableMistoId(value: string | null | undefined) {
   return trimmed || null;
 }
 
-async function signMistoTechnickaFotkaUrl(
-  row: Omit<ClientPortalMistoTechnickaFotka, "signedUrl">
-): Promise<ClientPortalMistoTechnickaFotka> {
+async function signMistoTechnickaFotkaUrl(row: MistoTechnickaFotkaRow): Promise<MistoTechnickaFotkaWithUrl> {
   const admin = createAdminClient();
   const { data: signed } = await admin.storage
     .from(row.storage_bucket)
@@ -115,6 +120,60 @@ export async function assertClientCanUseMistoId(
   return { ok: true, mistoId: data.misto_id as string };
 }
 
+export type ClientPortalMistoDetail = ClientPortalMistoSummary & {
+  poznamky: MistoTechnickaPoznamkaRow[];
+  fotky: MistoTechnickaFotkaWithUrl[];
+};
+
+function toClientMistoKnowHow(detail: Pick<ClientPortalMistoDetail, "poznamky" | "fotky">): ClientPortalMistoKnowHow {
+  return {
+    poznamky: detail.poznamky.map(({ id, typ, text, dulezite, created_at }) => ({
+      id,
+      typ,
+      text,
+      dulezite,
+      created_at,
+    })),
+    fotky: detail.fotky.map(({ id, typ, popis, signedUrl, created_at }) => ({
+      id,
+      typ,
+      popis,
+      signedUrl,
+      created_at,
+    })),
+  };
+}
+
+export async function loadClientMistaKnowHowByIdForPortal(
+  supabase: SupabaseClient,
+  mistoIds: string[]
+): Promise<Record<string, ClientPortalMistoKnowHow>> {
+  const uniqueIds = [...new Set(mistoIds.map((id) => id.trim()).filter(Boolean))];
+  if (uniqueIds.length === 0) {
+    return {};
+  }
+
+  const entries = await Promise.all(
+    uniqueIds.map(async (mistoId) => {
+      try {
+        const detail = await loadClientMistoDetailForPortal(supabase, mistoId);
+        if (!detail) {
+          return [mistoId, { poznamky: [], fotky: [] } satisfies ClientPortalMistoKnowHow] as const;
+        }
+        return [mistoId, toClientMistoKnowHow(detail)] as const;
+      } catch (error) {
+        console.warn(`Failed to load know-how for misto ${mistoId}:`, error);
+        return [
+          mistoId,
+          { poznamky: [], fotky: [], loadError: true } satisfies ClientPortalMistoKnowHow,
+        ] as const;
+      }
+    })
+  );
+
+  return Object.fromEntries(entries);
+}
+
 export async function loadClientMistoDetailForPortal(
   supabase: SupabaseClient,
   mistoId: string
@@ -154,7 +213,8 @@ export async function loadClientMistoDetailForPortal(
         )
         .eq("misto_id", access.mistoId)
         .order("dulezite", { ascending: false })
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false })
+        .limit(MISTO_DETAIL_FOTKY_LIMIT),
     ]);
 
   if (poznamkyError) {
@@ -166,14 +226,12 @@ export async function loadClientMistoDetailForPortal(
   }
 
   const fotky = await Promise.all(
-    ((fotkyRaw ?? []) as Omit<ClientPortalMistoTechnickaFotka, "signedUrl">[]).map((row) =>
-      signMistoTechnickaFotkaUrl(row)
-    )
+    ((fotkyRaw ?? []) as MistoTechnickaFotkaRow[]).map((row) => signMistoTechnickaFotkaUrl(row))
   );
 
   return {
     ...(misto as ClientPortalMistoSummary),
-    poznamky: (poznamkyRaw ?? []) as ClientPortalMistoTechnickaPoznamka[],
+    poznamky: (poznamkyRaw ?? []) as MistoTechnickaPoznamkaRow[],
     fotky,
   };
 }

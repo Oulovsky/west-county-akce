@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import PoptavkaFormClient from "@/components/portal/PoptavkaFormClient";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
 import type { PoptavkaPrefill } from "@/lib/client-portal/poptavka-form";
-import { loadClientMistaKonaniForPortal } from "@/lib/client-portal/client-mista-server";
+import { loadClientMistaKonaniForPortal, loadClientMistaKnowHowByIdForPortal } from "@/lib/client-portal/client-mista-server";
 import { loadPortalSetups } from "@/lib/client-portal/poptavka-server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -54,12 +54,18 @@ export default async function PortalNovaPoptavkaPage({
     loadClientMistaKonaniForPortal(supabase),
   ]);
 
+  const savedMistaKnowHowById = await loadClientMistaKnowHowByIdForPortal(
+    supabase,
+    savedMista.map((misto) => misto.misto_id)
+  );
+
   return (
     <PoptavkaFormClient
       mode="create"
       prefill={prefill}
       setupsByOblast={setupsByOblast}
       savedMista={savedMista}
+      savedMistaKnowHowById={savedMistaKnowHowById}
       errorCode={resolvedSearchParams?.error ?? null}
     />
   );
