@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   createPoptavkaAction,
   updatePoptavkaAction,
@@ -9,6 +9,7 @@ import {
 import PoptavkaFotkyClient from "@/components/portal/PoptavkaFotkyClient";
 import PoptavkaPreviousTechnikaPanel from "@/components/portal/PoptavkaPreviousTechnikaPanel";
 import PoptavkaMistoKnowHowPanel from "@/components/portal/PoptavkaMistoKnowHowPanel";
+import PoptavkaSestavaKonfigurator from "@/components/portal/PoptavkaSestavaKonfigurator";
 import PoptavkaSubmitButton from "@/components/portal/PoptavkaSubmitButton";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
 import { SETUP_OBLAST_LABELS } from "@/lib/client-portal/labels";
@@ -28,6 +29,14 @@ import {
   TRIZVOLBA_OPTIONS,
   type PoptavkaTechnikaFormValues,
 } from "@/lib/client-portal/poptavka-technika-form";
+import {
+  EMPTY_SESTAVA_KONFIGURATOR,
+  deriveSetupSelectionsFromSestava,
+} from "@/lib/client-portal/sestava-konfigurator-form";
+import type {
+  PortalSestavaKatalog,
+  SestavaKonfiguratorState,
+} from "@/lib/client-portal/sestava-konfigurator-types";
 import { SETUP_OBLASTI, type SetupOblast } from "@/lib/client-portal/types";
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -49,6 +58,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   missing_saved_misto: "Vyberte uložené místo, nebo přepněte na Nové místo.",
   invalid_setups:
     "Vybrané setupy už nejsou v portálu dostupné. Upravte výběr techniky a uložte znovu.",
+  invalid_sestava:
+    "Konfigurace sestavy obsahuje chyby. Doplňte povinné volby ve kroku Konfigurace sestavy.",
 };
 
 type Props = {
@@ -58,6 +69,8 @@ type Props = {
   savedMista?: ClientPortalMistoSummary[];
   savedMistaKnowHowById?: Record<string, ClientPortalMistoKnowHow>;
   previousTechnikaOptions?: ClientPortalPreviousTechnikaOption[];
+  sestavaKatalog: PortalSestavaKatalog;
+  initialSestava?: SestavaKonfiguratorState;
   initialValues?: Partial<PoptavkaFormValues>;
   initialTechnika?: PoptavkaTechnikaFormValues;
   initialFotky?: PoptavkaFotkaWithUrl[];
@@ -73,12 +86,13 @@ const CREATE_STEPS = [
   { id: 1, title: "Kdo zadává" },
   { id: 2, title: "Kde a kdy" },
   { id: 3, title: "Setupy" },
+  { id: 4, title: "Konfigurace sestavy" },
 ] as const;
 
 const EDIT_STEPS = [
   ...CREATE_STEPS,
-  { id: 4, title: "Technika místa" },
-  { id: 5, title: "Fotky" },
+  { id: 5, title: "Technika místa" },
+  { id: 6, title: "Fotky" },
 ] as const;
 
 function setupDescription(setup: {
@@ -106,6 +120,8 @@ export default function PoptavkaFormClient({
   savedMista = [],
   savedMistaKnowHowById = {},
   previousTechnikaOptions = [],
+  sestavaKatalog,
+  initialSestava,
   initialValues,
   initialTechnika,
   initialFotky = [],
@@ -147,6 +163,13 @@ export default function PoptavkaFormClient({
     ...initialTechnika,
   });
 
+  const [sestava, setSestava] = useState<SestavaKonfiguratorState>({
+    ...EMPTY_SESTAVA_KONFIGURATOR,
+    ...initialSestava,
+  });
+
+  const sestavaJson = useMemo(() => JSON.stringify(sestava), [sestava]);
+
   const [selectedSetups, setSelectedSetups] = useState<Record<string, PoptavkaSetupInput>>(
     () => {
       const map = emptySetupMap();
@@ -161,6 +184,21 @@ export default function PoptavkaFormClient({
     () => JSON.stringify(Object.values(selectedSetups)),
     [selectedSetups]
   );
+
+  useEffect(() => {
+    if (!sestava.stage_typ) return;
+    const derived = deriveSetupSelectionsFromSestava(sestava, sestavaKatalog, setupsByOblast);
+    if (derived.length === 0) return;
+    setSelectedSetups((current) => {
+      const next = { ...current };
+      for (const row of derived) {
+        if (!next[row.setup_id]) {
+          next[row.setup_id] = row;
+        }
+      }
+      return next;
+    });
+  }, [sestava, sestavaKatalog, setupsByOblast]);
 
   const title =
     mode === "create" ? "Nová poptávka" : readOnly ? "Detail poptávky" : "Upravit poptávku";
@@ -367,6 +405,7 @@ export default function PoptavkaFormClient({
             <input type="hidden" name="poptavka_id" value={poptavkaId} />
           ) : null}
           <input type="hidden" name="setupy_json" value={setupyJson} readOnly />
+          <input type="hidden" name="sestava_konfigurator_json" value={sestavaJson} readOnly />
           <input type="hidden" name="misto_source" value={form.misto_source} readOnly />
           <input type="hidden" name="misto_id" value={form.misto_id ?? ""} readOnly />
           <input
@@ -724,9 +763,30 @@ export default function PoptavkaFormClient({
             </section>
           )}
 
-          {mode === "edit" && (readOnly || step === 4) && (
+          {(readOnly || step === 4) && (
             <section className="space-y-4">
-              <h2 className="text-lg font-semibold text-white">4. Technické údaje místa</h2>
+              <div>
+                <h2 className="text-lg font-semibold text-white">4. Konfigurace sestavy</h2>
+                <p className="mt-1 text-sm text-slate-400">
+                  Postupně poskládejte stage, pódium, LED, zvuk a světla. Schéma se aktualizuje podle
+                  vašich voleb.
+                </p>
+              </div>
+              <PoptavkaSestavaKonfigurator
+                katalog={sestavaKatalog}
+                state={sestava}
+                onChange={setSestava}
+                readOnly={readOnly}
+                inputClass={inputClass}
+                labelClass={labelClass}
+                optionCardClass={optionCardClass}
+              />
+            </section>
+          )}
+
+          {mode === "edit" && (readOnly || step === 5) && (
+            <section className="space-y-4">
+              <h2 className="text-lg font-semibold text-white">5. Technické údaje místa</h2>
 
               <label className="block space-y-2">
                 <span className={labelClass}>Poznámka k příjezdu</span>
@@ -968,7 +1028,7 @@ export default function PoptavkaFormClient({
               </button>
             ) : null}
 
-            {!readOnly && (step === 3 || step === 4) ? (
+            {!readOnly && step >= 3 && step <= (mode === "create" ? 4 : 5) ? (
               <button
                 type="submit"
                 disabled={submitting}
@@ -991,7 +1051,7 @@ export default function PoptavkaFormClient({
           </div>
         </form>
 
-        {mode === "edit" && poptavkaId && (readOnly || step === 5) ? (
+        {mode === "edit" && poptavkaId && (readOnly || step === 6) ? (
           <div className="mt-8 space-y-6 border-t border-white/10 pt-8">
             <PoptavkaFotkyClient
               key={initialFotky.map((row) => row.id).join("-") || "empty"}

@@ -3,6 +3,11 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { formatTypAkce } from "@/lib/client-portal/poptavka-form";
 import type { InternalPoptavkaDetail } from "@/lib/client-portal/poptavka-internal-server";
+import { DEFAULT_PORTAL_SESTAVA_KATALOG } from "@/lib/client-portal/sestava-konfigurator-katalog";
+import {
+  formatSestavaSummaryText,
+  sestavaFromOdpovediExtra,
+} from "@/lib/client-portal/sestava-konfigurator-form";
 import { loadInternalPoptavkaDetail } from "@/lib/client-portal/poptavka-internal-server";
 import { cloneVychoziSmluvniPodminky } from "@/lib/client-portal/poptavka-objednavka-sablony";
 import {
@@ -291,6 +296,14 @@ function buildMistoBlock(
   mistoKonani: MistoKonaniRow | null
 ): MistoTechnickeBlock {
   const extra = technika?.odpovedi_extra ?? {};
+  const sestava = sestavaFromOdpovediExtra(extra);
+  const sestavaSummary = formatSestavaSummaryText(sestava, DEFAULT_PORTAL_SESTAVA_KATALOG);
+  const kotveniText =
+    sestava.kotveni_typ === "ibc_boxy"
+      ? "Zátěž IBC boxy (pořadatel zajistí vodu)"
+      : sestava.kotveni_typ === "zatloukane"
+        ? "Zatloukané kotvení"
+        : null;
   const lat =
     toOptionalNumber(detail.misto_lat) ?? toOptionalNumber(mistoKonani?.lat ?? null);
   const lng =
@@ -324,10 +337,11 @@ function buildMistoBlock(
     omezeniHluku: nullableText(technika?.omezeni_hluku),
     casovaOmezeni: nullableText(technika?.casova_omezeni),
     nocniPraceOmezeni: null,
-    kotveniZaveseni: null,
+    kotveniZaveseni: joinNonEmpty([kotveniText, sestava.kotveni_povrch || null]),
     pozadavkyPoradatele: nullableText(technika?.dalsi_poznamky),
     dalsiTechnickePoznamky: joinNonEmpty([
       technika?.dalsi_poznamky,
+      sestavaSummary || null,
       mistoKonani?.poznamka ? `Poznámka k místu konání: ${mistoKonani.poznamka}` : null,
     ]),
     pozadovanVyjezdTechnika: technika?.pozadovan_vyjezd_technika ?? false,
@@ -374,10 +388,17 @@ function buildTechnickePlneniBlock(detail: InternalPoptavkaDetail): TechnickePln
     )
     .filter(Boolean) as string[];
 
+  const sestavaSummary = formatSestavaSummaryText(
+    sestavaFromOdpovediExtra(detail.technicke_udaje?.odpovedi_extra ?? {}),
+    DEFAULT_PORTAL_SESTAVA_KATALOG
+  );
+
   return {
     setupy,
     oblasti: emptyOblastiPlneni(),
-    poznamkaKTechnice: setupNotes.length > 0 ? setupNotes.join("\n") : null,
+    poznamkaKTechnice:
+      joinNonEmpty([setupNotes.length > 0 ? setupNotes.join("\n") : null, sestavaSummary || null]) ??
+      null,
   };
 }
 

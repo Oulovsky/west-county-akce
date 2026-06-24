@@ -14,6 +14,12 @@ import {
   formatTriVolba,
   technikaFromRecord,
 } from "@/lib/client-portal/poptavka-technika-form";
+import {
+  buildSestavaSummaryLines,
+  sestavaFromOdpovediExtra,
+} from "@/lib/client-portal/sestava-konfigurator-form";
+import { loadPortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-server";
+import PoptavkaSestavaSchema from "@/components/portal/PoptavkaSestavaSchema";
 import { loadClientMistaKonaniForPortal, loadClientMistaKnowHowByIdForPortal } from "@/lib/client-portal/client-mista-server";
 import { loadClientPreviousTechnikaOptionsForPortal } from "@/lib/client-portal/client-previous-technika-server";
 import {
@@ -36,6 +42,39 @@ function ReadOnlyField({ label, value }: { label: string; value: string | null |
       <dt className="text-slate-500">{label}</dt>
       <dd className="whitespace-pre-wrap text-slate-100">{value}</dd>
     </div>
+  );
+}
+
+function SestavaReadOnlySection({
+  extra,
+  katalog,
+}: {
+  extra: Record<string, unknown> | null | undefined;
+  katalog: Awaited<ReturnType<typeof loadPortalSestavaKatalog>>;
+}) {
+  const state = sestavaFromOdpovediExtra(extra ?? {});
+  const lines = buildSestavaSummaryLines(state, katalog);
+  if (!state.stage_typ && lines.length === 0) {
+    return (
+      <section className="mt-8 space-y-3 border-t border-white/10 pt-6">
+        <h2 className="text-lg font-semibold text-white">Konfigurace sestavy</h2>
+        <p className="text-sm text-slate-500">Sestava nebyla nakonfigurována.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="mt-8 space-y-4 border-t border-white/10 pt-6">
+      <h2 className="text-lg font-semibold text-white">Konfigurace sestavy</h2>
+      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+        <PoptavkaSestavaSchema state={state} />
+        <ul className="space-y-1 text-sm text-slate-200">
+          {lines.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      </div>
+    </section>
   );
 }
 
@@ -117,8 +156,13 @@ export default async function PortalPoptavkaDetailPage({
   const editable = isPoptavkaEditable(detail);
 
   if (editable) {
-    const [{ data: klient }, setupsByOblast, savedMista, previousTechnikaOptions] =
-      await Promise.all([
+    const [
+      { data: klient },
+      setupsByOblast,
+      savedMista,
+      previousTechnikaOptions,
+      sestavaKatalog,
+    ] = await Promise.all([
       supabase
         .from("klienti")
         .select("nazev, ico, email, telefon")
@@ -129,6 +173,7 @@ export default async function PortalPoptavkaDetailPage({
       loadClientPreviousTechnikaOptionsForPortal(supabase, {
         excludePoptavkaId: detail.poptavka_id,
       }),
+      loadPortalSestavaKatalog(),
     ]);
 
     const savedMistaKnowHowById = await loadClientMistaKnowHowByIdForPortal(
@@ -155,6 +200,8 @@ export default async function PortalPoptavkaDetailPage({
         savedMista={savedMista}
         savedMistaKnowHowById={savedMistaKnowHowById}
         previousTechnikaOptions={previousTechnikaOptions}
+        sestavaKatalog={sestavaKatalog}
+        initialSestava={sestavaFromOdpovediExtra(detail.technicke_udaje?.odpovedi_extra ?? {})}
         initialValues={{
           kontakt_jmeno: detail.kontakt_jmeno ?? "",
           kontakt_telefon: detail.kontakt_telefon ?? "",
@@ -193,6 +240,8 @@ export default async function PortalPoptavkaDetailPage({
     oblast,
     rows: detail.setupy.filter((row) => row.setup.oblast === oblast),
   })).filter((group) => group.rows.length > 0);
+
+  const sestavaKatalog = await loadPortalSestavaKatalog();
 
   return (
     <PortalShell showBackToPortal showMainNav>
@@ -371,6 +420,11 @@ export default async function PortalPoptavkaDetailPage({
             ))
           )}
         </section>
+
+        <SestavaReadOnlySection
+          extra={detail.technicke_udaje?.odpovedi_extra ?? {}}
+          katalog={sestavaKatalog}
+        />
 
         <TechnikaReadOnlySection row={detail.technicke_udaje} />
 

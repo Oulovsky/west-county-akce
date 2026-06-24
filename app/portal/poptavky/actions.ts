@@ -16,6 +16,14 @@ import {
   parseTechnikaFormData,
 } from "@/lib/client-portal/poptavka-technika-form";
 import {
+  buildSestavaOdpovediExtra,
+  deriveSetupSelectionsFromSestava,
+  mergeSetupSelections,
+  parseSestavaFormData,
+  validateSestavaKonfigurator,
+} from "@/lib/client-portal/sestava-konfigurator-form";
+import { loadPortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-server";
+import {
   buildPoptavkaRowPayload,
   parsePoptavkaFormData,
   validatePoptavkaForm,
@@ -26,6 +34,7 @@ import {
   filterPortalSetupSelections,
   isPoptavkaEditable,
   loadPoptavkaDetail,
+  loadPortalSetups,
 } from "@/lib/client-portal/poptavka-server";
 import type { PoptavkaFormValues } from "@/lib/client-portal/poptavka-form";
 import { notifyInternalTeamAboutSubmittedPoptavka } from "@/lib/client-portal/poptavka-notifications-server";
@@ -59,7 +68,8 @@ async function upsertTechnickeUdaje(
   formData: FormData
 ) {
   const technikaValues = parseTechnikaFormData(formData);
-  const payload = buildTechnikaRowPayload(technikaValues);
+  const sestava = parseSestavaFormData(formData);
+  const payload = buildTechnikaRowPayload(technikaValues, buildSestavaOdpovediExtra(sestava));
 
   const { data: existing } = await supabase
     .from("poptavka_technicke_udaje")
@@ -113,6 +123,26 @@ async function resolvePortalSetupsForSave(
   return { ok: true as const, setupy: filtered, rejectedCount };
 }
 
+async function resolveSetupsWithSestava(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  formData: FormData,
+  manualSetups: PoptavkaFormValues["setupy"]
+) {
+  const sestava = parseSestavaFormData(formData);
+  const katalog = await loadPortalSestavaKatalog();
+  const validation = validateSestavaKonfigurator(sestava, katalog);
+
+  if (sestava.stage_typ && validation.errors.length > 0) {
+    return { ok: false as const, error: "invalid_sestava" as const };
+  }
+
+  const portalSetups = await loadPortalSetups(supabase);
+  const derived = deriveSetupSelectionsFromSestava(sestava, katalog, portalSetups);
+  const merged = mergeSetupSelections(manualSetups, derived);
+
+  return resolvePortalSetupsForSave(supabase, merged);
+}
+
 async function replacePoptavkaSetups(
   supabase: Awaited<ReturnType<typeof createClient>>,
   poptavkaId: string,
@@ -161,7 +191,7 @@ export async function createPoptavkaAction(formData: FormData) {
     redirectWithError("/portal/poptavka/nova", mistoResult.error);
   }
 
-  const setupResult = await resolvePortalSetupsForSave(supabase, values.setupy);
+  const setupResult = await resolveSetupsWithSestava(supabase, formData, values.setupy);
   if (!setupResult.ok) {
     redirectWithError("/portal/poptavka/nova", setupResult.error);
   }
@@ -190,6 +220,7 @@ export async function createPoptavkaAction(formData: FormData) {
 
   try {
     await replacePoptavkaSetups(supabase, created.poptavka_id, setupResult.setupy);
+    await upsertTechnickeUdaje(supabase, created.poptavka_id, formData);
   } catch {
     redirectWithError("/portal/poptavka/nova", "setups_failed");
   }
@@ -227,7 +258,7 @@ export async function updatePoptavkaAction(formData: FormData) {
     redirectWithError(`/portal/poptavka/${poptavkaId}`, mistoResult.error);
   }
 
-  const setupResult = await resolvePortalSetupsForSave(supabase, values.setupy);
+  const setupResult = await resolveSetupsWithSestava(supabase, formData, values.setupy);
   if (!setupResult.ok) {
     redirectWithError(`/portal/poptavka/${poptavkaId}`, setupResult.error);
   }

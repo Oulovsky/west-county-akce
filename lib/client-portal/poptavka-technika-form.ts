@@ -123,7 +123,10 @@ export function parseTechnikaFormData(formData: FormData): PoptavkaTechnikaFormV
   };
 }
 
-export function buildTechnikaRowPayload(values: PoptavkaTechnikaFormValues) {
+export function buildTechnikaRowPayload(
+  values: PoptavkaTechnikaFormValues,
+  extraFields?: Record<string, unknown>
+) {
   const now = new Date().toISOString();
 
   return {
@@ -146,6 +149,7 @@ export function buildTechnikaRowPayload(values: PoptavkaTechnikaFormValues) {
       lze_zajet_autem: values.lze_zajet_autem,
       misto_zpevnene: values.misto_zpevnene,
       kabel_pres_silnici: values.kabel_pres_silnici,
+      ...extraFields,
     },
     updated_at: now,
   };
