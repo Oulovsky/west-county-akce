@@ -24,6 +24,9 @@ import type { PoptavkaStav } from "@/lib/client-portal/types";
 
 const DEFAULT_STAV_ZAKAZKY_ID = "7a0e168f-216f-40bd-b33e-3f1f517620da";
 
+const MISTO_ENRICH_WARNING =
+  "Zakázka byla vytvořena, ale technické údaje místa se nepodařilo uložit.";
+
 export type ConvertPoptavkaError =
   | "not_found"
   | "invalid_state"
@@ -230,6 +233,66 @@ type ZakazkaCreateInput = {
 type BuildZakazkaInputResult =
   | { ok: false; error: ConvertPoptavkaError; message?: string }
   | { ok: true; input: ZakazkaCreateInput };
+
+async function buildConvertEnrichContext(
+  supabase: SupabaseClient,
+  detail: InternalPoptavkaDetail
+): Promise<ConvertEnrichContext> {
+  if (resolveConvertMode(detail) !== "snapshot") {
+    return { mode: "legacy" };
+  }
+
+  const confirmed = await loadConfirmedPoptavkaObjednavkaLink(supabase, detail.poptavka_id);
+  if (!confirmed.ok) {
+    return { mode: "legacy" };
+  }
+
+  const { snapshot } = confirmed;
+  return {
+    mode: "snapshot",
+    snapshot,
+    objednavkaLinkId: snapshot.meta.linkId,
+    snapshotFotkaIds:
+      snapshot.fotky.length > 0 ? snapshot.fotky.map((row) => row.fotkaId) : null,
+  };
+}
+
+async function tryMistoEnrichForZakazka(
+  supabase: SupabaseClient,
+  detail: InternalPoptavkaDetail,
+  zakazkaId: string,
+  enrichOverride?: ConvertEnrichContext
+): Promise<string | undefined> {
+  const { data: zakazka, error: zakazkaError } = await supabase
+    .from("zakazky")
+    .select("misto_id")
+    .eq("zakazka_id", zakazkaId)
+    .maybeSingle();
+
+  if (zakazkaError || !zakazka?.misto_id) {
+    return undefined;
+  }
+
+  const enrich = enrichOverride ?? (await buildConvertEnrichContext(supabase, detail));
+  const enrichResult = await enrichMistoAfterPoptavkaConvert(supabase, {
+    mistoId: zakazka.misto_id as string,
+    poptavkaId: detail.poptavka_id,
+    zakazkaId,
+    enrich,
+  });
+
+  if (!enrichResult.ok) {
+    console.error("misto enrich after convert failed", {
+      poptavkaId: detail.poptavka_id,
+      zakazkaId,
+      mistoId: zakazka.misto_id,
+      warnings: enrichResult.warnings,
+    });
+    return MISTO_ENRICH_WARNING;
+  }
+
+  return undefined;
+}
 
 async function buildLegacyZakazkaCreateInput(
   supabase: SupabaseClient,
@@ -461,27 +524,9 @@ async function createZakazkaFromInput(
     return { ok: false, error: "link_failed", message: poptavkaUpdateError.message };
   }
 
-  let mistoEnrichWarning: string | undefined;
-
-  if (resolvedMistoId) {
-    const enrichResult = await enrichMistoAfterPoptavkaConvert(supabase, {
-      mistoId: resolvedMistoId,
-      poptavkaId,
-      zakazkaId: createdZakazkaId,
-      enrich: input.enrich,
-    });
-
-    if (!enrichResult.ok) {
-      console.error("misto enrich after convert failed", {
-        poptavkaId,
-        zakazkaId: createdZakazkaId,
-        mistoId: resolvedMistoId,
-        warnings: enrichResult.warnings,
-      });
-      mistoEnrichWarning =
-        "Zakázka byla vytvořena, ale technické údaje místa se nepodařilo uložit.";
-    }
-  }
+  const mistoEnrichWarning = resolvedMistoId
+    ? await tryMistoEnrichForZakazka(supabase, detail, createdZakazkaId, input.enrich)
+    : undefined;
 
   return {
     ok: true,
@@ -509,7 +554,17 @@ export async function convertPoptavkaToZakazka(
   }
 
   if (detail.zakazka_id) {
-    return { ok: true, zakazkaId: detail.zakazka_id, alreadyConverted: true };
+    const mistoEnrichWarning = await tryMistoEnrichForZakazka(
+      supabase,
+      detail,
+      detail.zakazka_id
+    );
+    return {
+      ok: true,
+      zakazkaId: detail.zakazka_id,
+      alreadyConverted: true,
+      mistoEnrichWarning,
+    };
   }
 
   if (detail.stav !== "schvalena") {
@@ -533,10 +588,16 @@ export async function convertPoptavkaToZakazka(
       .eq("poptavka_id", poptavkaId)
       .is("zakazka_id", null);
 
+    const mistoEnrichWarning = await tryMistoEnrichForZakazka(
+      supabase,
+      detail,
+      existingBySource.zakazka_id as string
+    );
     return {
       ok: true,
       zakazkaId: existingBySource.zakazka_id as string,
       alreadyConverted: true,
+      mistoEnrichWarning,
     };
   }
 

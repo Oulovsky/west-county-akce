@@ -37,10 +37,30 @@ function hasCreateableMistoData(hints: MistoConvertHints) {
   );
 }
 
+async function assignKlientIdToMistoIfNull(
+  supabase: SupabaseClient,
+  mistoId: string,
+  klientId: string
+) {
+  const { error } = await supabase
+    .from("mista_konani")
+    .update({
+      klient_id: klientId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("misto_id", mistoId)
+    .is("klient_id", null);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
 async function verifyPoptavkaMistoId(
   supabase: SupabaseClient,
   mistoId: string,
-  klientId: string | null
+  klientId: string,
+  options: { assignKlientIfNull: boolean }
 ): Promise<string | null> {
   const { data, error } = await supabase
     .from("mista_konani")
@@ -57,8 +77,16 @@ async function verifyPoptavkaMistoId(
   }
 
   const mistoKlientId = data.klient_id as string | null;
-  if (mistoKlientId && klientId && mistoKlientId !== klientId) {
+
+  if (mistoKlientId && mistoKlientId !== klientId) {
     return null;
+  }
+
+  if (!mistoKlientId) {
+    if (!options.assignKlientIfNull) {
+      return null;
+    }
+    await assignKlientIdToMistoIfNull(supabase, mistoId, klientId);
   }
 
   return data.misto_id as string;
@@ -176,19 +204,27 @@ async function createMistoKonani(
   return data.misto_id as string;
 }
 
-async function backfillPoptavkaMistoId(
+async function syncPoptavkaMistoId(
   supabase: SupabaseClient,
   poptavkaId: string,
-  mistoId: string
+  expectedCurrentMistoId: string | null,
+  resolvedMistoId: string
 ) {
-  const { error } = await supabase
+  let query = supabase
     .from("poptavky")
     .update({
-      misto_id: mistoId,
+      misto_id: resolvedMistoId,
       updated_at: new Date().toISOString(),
     })
-    .eq("poptavka_id", poptavkaId)
-    .is("misto_id", null);
+    .eq("poptavka_id", poptavkaId);
+
+  if (expectedCurrentMistoId === null) {
+    query = query.is("misto_id", null);
+  } else {
+    query = query.eq("misto_id", expectedCurrentMistoId);
+  }
+
+  const { error } = await query;
 
   if (error) {
     throw new Error(error.message);
@@ -207,9 +243,16 @@ export async function resolveMistoForPoptavkaConvert(
 
     let mistoId: string | null = null;
     let created = false;
+    let verifiedOriginalMistoId: string | null = null;
 
     if (detail.misto_id) {
-      mistoId = await verifyPoptavkaMistoId(supabase, detail.misto_id, detail.klient_id);
+      verifiedOriginalMistoId = await verifyPoptavkaMistoId(
+        supabase,
+        detail.misto_id,
+        detail.klient_id,
+        { assignKlientIfNull: true }
+      );
+      mistoId = verifiedOriginalMistoId;
     }
 
     if (!mistoId && hints.nazev) {
@@ -234,8 +277,12 @@ export async function resolveMistoForPoptavkaConvert(
     }
 
     let poptavkaMistoIdUpdated = false;
+
     if (!detail.misto_id) {
-      await backfillPoptavkaMistoId(supabase, detail.poptavka_id, mistoId);
+      await syncPoptavkaMistoId(supabase, detail.poptavka_id, null, mistoId);
+      poptavkaMistoIdUpdated = true;
+    } else if (!verifiedOriginalMistoId && mistoId !== detail.misto_id) {
+      await syncPoptavkaMistoId(supabase, detail.poptavka_id, detail.misto_id, mistoId);
       poptavkaMistoIdUpdated = true;
     }
 
