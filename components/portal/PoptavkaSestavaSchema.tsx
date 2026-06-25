@@ -34,6 +34,28 @@ function floorPoints(w: number, d: number, h: number) {
 }
 
 export default function PoptavkaSestavaSchema({ state, className }: Props) {
+  if (state.rezim === "atypicka") {
+    return (
+      <svg
+        viewBox="0 0 400 200"
+        className={className ?? "h-auto w-full max-w-md rounded-xl border border-white/10 bg-slate-950/60"}
+        role="img"
+        aria-label="Atypické technické zadání"
+      >
+        <rect x="24" y="24" width="352" height="152" rx="12" fill="#1e293b" stroke="#64748b" />
+        <text x="200" y="72" fill="#f8fafc" fontSize="14" textAnchor="middle" fontWeight="bold">
+          Atypické zadání
+        </text>
+        <text x="200" y="98" fill="#94a3b8" fontSize="11" textAnchor="middle">
+          Ruční technický návrh a nacenění
+        </text>
+        <text x="200" y="128" fill="#cbd5e1" fontSize="10" textAnchor="middle">
+          WEST COUNTY posoudí zadání individuálně
+        </text>
+      </svg>
+    );
+  }
+
   const roofW = state.zastreseni_sirka_m ?? state.podium_sirka_m ?? 10;
   const roofD = state.zastreseni_hloubka_m ?? state.podium_hloubka_m ?? 8;
   const podW = state.podium_sirka_m ?? roofW * 0.8;

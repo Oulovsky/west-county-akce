@@ -2,6 +2,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   DEFAULT_PORTAL_SESTAVA_KATALOG,
   computeLedMaxFromStock,
+  isKatalogPolozkaAktivni,
+  normalizePortalSestavaKatalog,
 } from "@/lib/client-portal/sestava-konfigurator-katalog";
 import type { PortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-types";
 
@@ -22,7 +24,7 @@ async function loadKatalogFromDb(): Promise<PortalSestavaKatalog | null> {
       .maybeSingle();
 
     if (error || !data?.obsah) return null;
-    return data.obsah as PortalSestavaKatalog;
+    return normalizePortalSestavaKatalog(data.obsah as PortalSestavaKatalog);
   } catch {
     return null;
   }
@@ -109,11 +111,42 @@ async function enrichPresetSetupIds(katalog: PortalSestavaKatalog): Promise<Port
   }
 }
 
+function sortByPoradi<T extends { poradi?: number; nazev: string }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    const pa = a.poradi ?? 999;
+    const pb = b.poradi ?? 999;
+    if (pa !== pb) return pa - pb;
+    return a.nazev.localeCompare(b.nazev, "cs");
+  });
+}
+
+function filterActiveKatalogForPortal(katalog: PortalSestavaKatalog): PortalSestavaKatalog {
+  return {
+    ...katalog,
+    zastreseni_varianty: sortByPoradi(
+      katalog.zastreseni_varianty.filter((row) => isKatalogPolozkaAktivni(row.aktivni))
+    ),
+    praktikabl_varianty: sortByPoradi(
+      katalog.praktikabl_varianty.filter((row) => isKatalogPolozkaAktivni(row.aktivni))
+    ),
+    led_typy: sortByPoradi(
+      katalog.led_typy.filter((row) => isKatalogPolozkaAktivni(row.aktivni))
+    ),
+    zvuk_presety: sortByPoradi(
+      katalog.zvuk_presety.filter((row) => isKatalogPolozkaAktivni(row.aktivni))
+    ),
+    svetla_presety: sortByPoradi(
+      katalog.svetla_presety.filter((row) => isKatalogPolozkaAktivni(row.aktivni))
+    ),
+  };
+}
+
 export async function loadPortalSestavaKatalog(): Promise<PortalSestavaKatalog> {
   const fromDb = await loadKatalogFromDb();
-  const base = fromDb ?? DEFAULT_PORTAL_SESTAVA_KATALOG;
+  const base = normalizePortalSestavaKatalog(fromDb ?? DEFAULT_PORTAL_SESTAVA_KATALOG);
   const withStock = await enrichLedStock(base);
-  return enrichPresetSetupIds(withStock);
+  const withSetups = await enrichPresetSetupIds(withStock);
+  return filterActiveKatalogForPortal(withSetups);
 }
 
 export type { KatalogRow };

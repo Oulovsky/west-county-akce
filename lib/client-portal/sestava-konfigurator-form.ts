@@ -25,6 +25,8 @@ import type { PoptavkaSetupInput } from "@/lib/client-portal/poptavka-form";
 import type { PortalSetupsByOblast } from "@/lib/client-portal/poptavka-server";
 
 export const EMPTY_SESTAVA_KONFIGURATOR: SestavaKonfiguratorState = {
+  rezim: "standard",
+  atypicka_poptavka_text: "",
   stage_typ: null,
   zastreseni_variant_id: null,
   zastreseni_sirka_m: null,
@@ -115,6 +117,8 @@ export function sestavaFromOdpovediExtra(
   return {
     ...EMPTY_SESTAVA_KONFIGURATOR,
     ...data,
+    rezim: data.rezim === "atypicka" ? "atypicka" : "standard",
+    atypicka_poptavka_text: String(data.atypicka_poptavka_text ?? "").trim(),
     schody_strany: parseSchodyStrany(data.schody_strany),
     schody_pocet: Math.max(0, Math.min(2, Number(data.schody_pocet ?? 1) || 0)),
     kamery_pocet: Math.max(0, Math.min(3, Number(data.kamery_pocet ?? 0) || 0)),
@@ -140,6 +144,8 @@ export function parseSestavaFormData(formData: FormData): SestavaKonfiguratorSta
   }
 
   return {
+    rezim: parseEnum(formData.get("sestava_rezim"), ["standard", "atypicka"] as const) ?? "standard",
+    atypicka_poptavka_text: String(formData.get("sestava_atypicka_text") ?? "").trim(),
     stage_typ: parseEnum(formData.get("sestava_stage_typ"), STAGE_TYP_VALUES),
     zastreseni_variant_id: String(formData.get("sestava_zastreseni_variant") ?? "").trim() || null,
     zastreseni_sirka_m: parseNumber(formData.get("sestava_zastreseni_sirka_m")),
@@ -199,6 +205,13 @@ export function validateSestavaKonfigurator(
 ): SestavaKonfiguratorValidation {
   const warnings: string[] = [];
   const errors: string[] = [];
+
+  if (state.rezim === "atypicka") {
+    if (!state.atypicka_poptavka_text.trim()) {
+      errors.push("U atypické poptávky popište požadovanou techniku.");
+    }
+    return { warnings, errors };
+  }
 
   if (!state.stage_typ) {
     warnings.push("Nebyl zvolen typ stage / zastřešení.");
@@ -284,6 +297,10 @@ export function deriveSetupSelectionsFromSestava(
   katalog: PortalSestavaKatalog,
   portalSetups: PortalSetupsByOblast
 ): PoptavkaSetupInput[] {
+  if (state.rezim === "atypicka") {
+    return [];
+  }
+
   const selections: PoptavkaSetupInput[] = [];
   const seen = new Set<string>();
 
@@ -379,6 +396,16 @@ export function buildSestavaSummaryLines(
   katalog: PortalSestavaKatalog
 ): string[] {
   const lines: string[] = [];
+
+  if (state.rezim === "atypicka") {
+    lines.push("Atypická technická poptávka — ruční návrh a nacenění");
+    if (state.atypicka_poptavka_text.trim()) {
+      lines.push(state.atypicka_poptavka_text.trim());
+    }
+    if (state.poznamka) lines.push(`Poznámka: ${state.poznamka}`);
+    return lines;
+  }
+
   if (!state.stage_typ) return lines;
 
   lines.push(`Stage: ${STAGE_LABELS[state.stage_typ]}`);

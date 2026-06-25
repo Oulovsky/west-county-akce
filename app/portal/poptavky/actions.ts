@@ -132,13 +132,21 @@ async function resolveSetupsWithSestava(
   const katalog = await loadPortalSestavaKatalog();
   const validation = validateSestavaKonfigurator(sestava, katalog);
 
-  if (sestava.stage_typ && validation.errors.length > 0) {
+  if (sestava.rezim === "atypicka" && validation.errors.length > 0) {
+    return { ok: false as const, error: "invalid_sestava" as const };
+  }
+
+  if (sestava.rezim === "standard" && sestava.stage_typ && validation.errors.length > 0) {
     return { ok: false as const, error: "invalid_sestava" as const };
   }
 
   const portalSetups = await loadPortalSetups(supabase);
-  const derived = deriveSetupSelectionsFromSestava(sestava, katalog, portalSetups);
-  const merged = mergeSetupSelections(manualSetups, derived);
+  const derived =
+    sestava.rezim === "atypicka"
+      ? []
+      : deriveSetupSelectionsFromSestava(sestava, katalog, portalSetups);
+  const merged =
+    sestava.rezim === "atypicka" ? manualSetups : mergeSetupSelections(manualSetups, derived);
 
   return resolvePortalSetupsForSave(supabase, merged);
 }

@@ -54,6 +54,22 @@ function SestavaReadOnlySection({
 }) {
   const state = sestavaFromOdpovediExtra(extra ?? {});
   const lines = buildSestavaSummaryLines(state, katalog);
+  if (state.rezim === "atypicka") {
+    return (
+      <section className="mt-8 space-y-4 border-t border-white/10 pt-6">
+        <h2 className="text-lg font-semibold text-white">Konfigurace sestavy</h2>
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          Atypická technická poptávka — ruční návrh a nacenění
+        </div>
+        <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+          <PoptavkaSestavaSchema state={state} />
+          <div className="whitespace-pre-wrap text-sm text-slate-200">
+            {state.atypicka_poptavka_text || "Text atypické poptávky nebyl vyplněn."}
+          </div>
+        </div>
+      </section>
+    );
+  }
   if (!state.stage_typ && lines.length === 0) {
     return (
       <section className="mt-8 space-y-3 border-t border-white/10 pt-6">

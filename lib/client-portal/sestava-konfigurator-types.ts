@@ -23,7 +23,11 @@ export type LedObsluhaObsahu = "klient_sam" | "nase_obsahu";
 
 export type PresetVelikost = "mala" | "stredni" | "velka";
 
+export type SestavaKonfiguratorRezim = "standard" | "atypicka";
+
 export type SestavaKonfiguratorState = {
+  rezim: SestavaKonfiguratorRezim;
+  atypicka_poptavka_text: string;
   stage_typ: StageTyp | null;
   zastreseni_variant_id: string | null;
   zastreseni_sirka_m: number | null;
@@ -59,6 +63,8 @@ export type SestavaKonfiguratorState = {
 export type PortalLedTypKatalog = {
   kod: LedTypKod;
   nazev: string;
+  aktivni?: boolean;
+  poradi?: number;
   pixel_pitch: string;
   prostredi: "indoor" | "outdoor";
   panel_sirka_m: number;
@@ -75,6 +81,8 @@ export type PortalLedTypKatalog = {
 export type PortalZastreseniVarianta = {
   id: string;
   nazev: string;
+  aktivni?: boolean;
+  poradi?: number;
   min_sirka_m: number;
   max_sirka_m: number;
   min_hloubka_m: number;
@@ -87,6 +95,8 @@ export type PortalZastreseniVarianta = {
 export type PortalPraktikablVarianta = {
   id: string;
   nazev: string;
+  aktivni?: boolean;
+  poradi?: number;
   sirka_m: number;
   hloubka_m: number;
   vyska_m: number;
@@ -97,6 +107,24 @@ export type PortalPresetKatalog = {
   nazev: string;
   oblast: SetupOblast;
   setup_id: string | null;
+  aktivni?: boolean;
+  poradi?: number;
+};
+
+export type PortalKameryDronKatalog = {
+  max_pocet_kamer: number;
+  dron_povolen: boolean;
+  poznamka: string;
+};
+
+export type PortalKonfiguratorKatalogRow = {
+  katalog_id: string | null;
+  kod: string;
+  verze: number;
+  aktivni: boolean;
+  updated_at: string | null;
+  obsah: PortalSestavaKatalog;
+  from_db: boolean;
 };
 
 export type PortalSestavaKatalog = {
@@ -115,6 +143,7 @@ export type PortalSestavaKatalog = {
   led_typy: PortalLedTypKatalog[];
   zvuk_presety: PortalPresetKatalog[];
   svetla_presety: PortalPresetKatalog[];
+  kamery_dron: PortalKameryDronKatalog;
 };
 
 export type SestavaKonfiguratorValidation = {

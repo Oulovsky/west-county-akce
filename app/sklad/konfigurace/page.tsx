@@ -125,6 +125,13 @@ export default function SkladKonfiguracePage() {
           status="Hotovo"
           href="/sklad/konfigurace/odpisova-pasma"
         />
+
+        <SectionCard
+          title="Portálový konfigurátor"
+          description="Katalog stage, pódia, LED, zvuku a světel pro klientský portál."
+          status="Hotovo"
+          href="/sklad/konfigurace/portal-konfigurator"
+        />
       </div>
     </div>
   );

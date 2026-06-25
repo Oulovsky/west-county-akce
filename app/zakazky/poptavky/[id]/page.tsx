@@ -14,6 +14,11 @@ import {
   technikaFromRecord,
 } from "@/lib/client-portal/poptavka-technika-form";
 import {
+  buildSestavaSummaryLines,
+  sestavaFromOdpovediExtra,
+} from "@/lib/client-portal/sestava-konfigurator-form";
+import { loadPortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-server";
+import {
   canConvertPoptavkaToZakazka,
 } from "@/lib/client-portal/convert-poptavka-to-zakazka";
 import {
@@ -130,6 +135,9 @@ export default async function ZakazkyPoptavkaDetailPage({
 
   const technika = technikaFromRecord(detail.technicke_udaje);
   const extra = detail.technicke_udaje?.odpovedi_extra ?? {};
+  const sestava = sestavaFromOdpovediExtra(extra);
+  const sestavaKatalog = await loadPortalSestavaKatalog();
+  const sestavaSummary = buildSestavaSummaryLines(sestava, sestavaKatalog);
   const setupyByOblast = SETUP_OBLASTI.map((oblast) => ({
     oblast,
     rows: detail.setupy.filter((row) => row.setup.oblast === oblast),
@@ -428,6 +436,24 @@ export default async function ZakazkyPoptavkaDetailPage({
           </div>
         )}
       </section>
+
+      {sestavaSummary.length > 0 ? (
+        <section className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
+          <h2 className="text-lg font-semibold text-white">Konfigurace sestavy</h2>
+          {sestava.rezim === "atypicka" ? (
+            <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+              Atypická technická poptávka — ruční návrh
+            </p>
+          ) : null}
+          <ul className="mt-4 space-y-1 text-sm text-slate-200">
+            {sestavaSummary.map((line) => (
+              <li key={line} className="whitespace-pre-wrap">
+                {line}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
         <h2 className="text-lg font-semibold text-white">Technické údaje místa</h2>

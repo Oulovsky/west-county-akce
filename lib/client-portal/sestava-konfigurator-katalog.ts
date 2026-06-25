@@ -135,11 +135,58 @@ export const DEFAULT_PORTAL_SESTAVA_KATALOG: PortalSestavaKatalog = {
     { kod: "velka", nazev: "Velká sestava", oblast: "sound", setup_id: null },
   ],
   svetla_presety: [
-    { kod: "mala", nazev: "Malá sestava", oblast: "lights", setup_id: null },
-    { kod: "stredni", nazev: "Střední sestava", oblast: "lights", setup_id: null },
-    { kod: "velka", nazev: "Velká sestava", oblast: "lights", setup_id: null },
+    { kod: "mala", nazev: "Malá sestava", oblast: "lights", setup_id: null, aktivni: true, poradi: 1 },
+    { kod: "stredni", nazev: "Střední sestava", oblast: "lights", setup_id: null, aktivni: true, poradi: 2 },
+    { kod: "velka", nazev: "Velká sestava", oblast: "lights", setup_id: null, aktivni: true, poradi: 3 },
   ],
+  kamery_dron: {
+    max_pocet_kamer: 3,
+    dron_povolen: true,
+    poznamka: "Kamery a dron jsou vždy včetně obsluhy WEST COUNTY.",
+  },
 };
+
+export function normalizePortalSestavaKatalog(
+  input: Partial<PortalSestavaKatalog> | null | undefined
+): PortalSestavaKatalog {
+  const base = { ...DEFAULT_PORTAL_SESTAVA_KATALOG, ...input };
+  return {
+    ...base,
+    kamery_dron: {
+      ...DEFAULT_PORTAL_SESTAVA_KATALOG.kamery_dron,
+      ...(input?.kamery_dron ?? {}),
+    },
+    zastreseni_varianty: (input?.zastreseni_varianty ?? base.zastreseni_varianty).map((row, index) => ({
+      aktivni: true,
+      poradi: index + 1,
+      ...row,
+    })),
+    praktikabl_varianty: (input?.praktikabl_varianty ?? base.praktikabl_varianty).map((row, index) => ({
+      aktivni: true,
+      poradi: index + 1,
+      ...row,
+    })),
+    led_typy: (input?.led_typy ?? base.led_typy).map((row, index) => ({
+      aktivni: true,
+      poradi: index + 1,
+      ...row,
+    })),
+    zvuk_presety: (input?.zvuk_presety ?? base.zvuk_presety).map((row, index) => ({
+      aktivni: true,
+      poradi: index + 1,
+      ...row,
+    })),
+    svetla_presety: (input?.svetla_presety ?? base.svetla_presety).map((row, index) => ({
+      aktivni: true,
+      poradi: index + 1,
+      ...row,
+    })),
+  };
+}
+
+export function isKatalogPolozkaAktivni(aktivni: boolean | undefined) {
+  return aktivni !== false;
+}
 
 export function findZastreseniVariant(
   katalog: PortalSestavaKatalog,

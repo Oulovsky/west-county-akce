@@ -186,7 +186,7 @@ export default function PoptavkaFormClient({
   );
 
   useEffect(() => {
-    if (!sestava.stage_typ) return;
+    if (sestava.rezim === "atypicka" || !sestava.stage_typ) return;
     const derived = deriveSetupSelectionsFromSestava(sestava, sestavaKatalog, setupsByOblast);
     if (derived.length === 0) return;
     setSelectedSetups((current) => {

@@ -106,6 +106,68 @@ export default function PoptavkaSestavaKonfigurator({
       <div className="space-y-6">
         <section className="space-y-3 rounded-xl border border-white/10 bg-white/[0.02] p-4">
           <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-amber-200/90">
+            Režim konfigurace
+          </h3>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {(
+              [
+                ["standard", "Standardní konfigurace"],
+                ["atypicka", "Atypická poptávka / chci to popsat ručně"],
+              ] as const
+            ).map(([value, label]) => (
+              <label key={value} className={optionCardClass}>
+                <input
+                  type="radio"
+                  name="sestava_rezim"
+                  checked={state.rezim === value}
+                  onChange={() =>
+                    patch({
+                      rezim: value,
+                      atypicka_poptavka_text:
+                        value === "atypicka" ? state.atypicka_poptavka_text : "",
+                    })
+                  }
+                  disabled={readOnly}
+                />
+                <span className="text-sm">{label}</span>
+              </label>
+            ))}
+          </div>
+          {state.rezim === "atypicka" ? (
+            <div className="space-y-3">
+              <p className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm text-blue-100">
+                Atypické zadání posoudíme individuálně a techniku navrhneme ručně. Není potřeba
+                vyplňovat standardní rozměry stage, LED ani pódia.
+              </p>
+              <label className="block space-y-2">
+                <span className={labelClass}>Popis atypické technické poptávky *</span>
+                <textarea
+                  value={state.atypicka_poptavka_text}
+                  onChange={(e) => patch({ atypicka_poptavka_text: e.target.value })}
+                  disabled={readOnly}
+                  rows={8}
+                  className={inputClass}
+                  placeholder="Popište nestandardní požadavek — např. LED pruh kolem budovy, LED kostka kolem IBC, atypická konstrukce…"
+                />
+              </label>
+              <label className="block space-y-2">
+                <span className={labelClass}>Doplňující poznámka (volitelné)</span>
+                <textarea
+                  value={state.poznamka}
+                  onChange={(e) => patch({ poznamka: e.target.value })}
+                  disabled={readOnly}
+                  rows={2}
+                  className={inputClass}
+                />
+              </label>
+            </div>
+          ) : null}
+        </section>
+
+        {state.rezim === "standard" ? (
+          <>
+        <section className="space-y-3 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+          <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-amber-200/90">
             1. Typ stage / zastřešení
           </h3>
           <div className="grid gap-2 sm:grid-cols-2">
@@ -562,7 +624,9 @@ export default function PoptavkaSestavaKonfigurator({
           <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-amber-200/90">
             14. Kamery / dron
           </h3>
-          <p className="text-xs text-slate-500">Kamery a dron jsou vždy včetně naší obsluhy.</p>
+          <p className="text-xs text-slate-500">
+            {katalog.kamery_dron.poznamka || "Kamery a dron jsou vždy včetně naší obsluhy."}
+          </p>
           <label className="block space-y-1">
             <span className={labelClass}>Počet kamer</span>
             <select
@@ -572,11 +636,16 @@ export default function PoptavkaSestavaKonfigurator({
               className={inputClass}
             >
               <option value={0}>Bez kamer</option>
-              <option value={1}>1</option>
-              <option value={2}>2</option>
-              <option value={3}>3</option>
+              {Array.from({ length: katalog.kamery_dron.max_pocet_kamer }, (_, i) => i + 1).map(
+                (count) => (
+                  <option key={count} value={count}>
+                    {count}
+                  </option>
+                )
+              )}
             </select>
           </label>
+          {katalog.kamery_dron.dron_povolen ? (
           <label className="flex items-center gap-2 text-sm text-slate-200">
             <input
               type="checkbox"
@@ -586,7 +655,10 @@ export default function PoptavkaSestavaKonfigurator({
             />
             Dron (včetně obsluhy)
           </label>
+          ) : null}
         </section>
+          </>
+        ) : null}
 
         {validation.warnings.length > 0 || validation.errors.length > 0 ? (
           <div className="space-y-2">
