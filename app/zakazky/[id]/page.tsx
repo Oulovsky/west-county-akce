@@ -2314,14 +2314,37 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
       data: { user },
     } = await supabase.auth.getUser();
 
+    const odjezdZeSkladu = combineDateAndTime(
+      String(formData.get("odjezd_ze_skladu_datum") ?? ""),
+      String(formData.get("odjezd_ze_skladu_cas") ?? "")
+    );
+    const srazNaMiste = combineDateAndTime(
+      String(formData.get("sraz_na_miste_datum") ?? ""),
+      String(formData.get("sraz_na_miste_cas") ?? "")
+    );
+    const stavbaOd = combineDateAndTime(
+      String(formData.get("stavba_od_datum") ?? ""),
+      String(formData.get("stavba_od_cas") ?? "")
+    );
+    const stavbaDo = combineDateAndTime(
+      String(formData.get("stavba_do_datum") ?? ""),
+      String(formData.get("stavba_do_cas") ?? "")
+    );
     const akceOd = combineDateAndTime(
       String(formData.get("akce_od_datum") ?? ""),
       String(formData.get("akce_od_cas") ?? "")
     );
-
     const akceDo = combineDateAndTime(
       String(formData.get("akce_do_datum") ?? ""),
       String(formData.get("akce_do_cas") ?? "")
+    );
+    const bouraniOd = combineDateAndTime(
+      String(formData.get("bourani_od_datum") ?? ""),
+      String(formData.get("bourani_od_cas") ?? "")
+    );
+    const bouraniDo = combineDateAndTime(
+      String(formData.get("bourani_do_datum") ?? ""),
+      String(formData.get("bourani_do_cas") ?? "")
     );
 
     if (!akceOd || !akceDo) {
@@ -2331,8 +2354,18 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
     const { error } = await supabase
       .from("zakazky")
       .update({
+        odjezd_ze_skladu: odjezdZeSkladu,
+        sraz_na_miste: srazNaMiste,
+        stavba_od: stavbaOd,
+        stavba_do: stavbaDo,
         akce_od: akceOd,
         akce_do: akceDo,
+        bourani_od: bouraniOd,
+        bourani_do: bouraniDo,
+        datum_od: akceOd.slice(0, 10),
+        datum_do: akceDo.slice(0, 10),
+        cas_od: akceOd.slice(11, 16),
+        cas_do: akceDo.slice(11, 16),
       })
       .eq("zakazka_id", id);
 
@@ -2344,8 +2377,8 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
       zakazkaId: id,
       actorId: user?.id ?? null,
       changes: ["termin"],
-      detail: "Změněn termín akce po klientském schválení.",
-      metadata: { akce_od: akceOd, akce_do: akceDo },
+      detail: "Změněny termíny zakázky po klientském schválení.",
+      metadata: { akce_od: akceOd, akce_do: akceDo, stavba_od: stavbaOd, bourani_od: bouraniOd },
     });
     if (!changeResult.ok) throw new Error(changeResult.error);
 
@@ -2353,6 +2386,7 @@ export default async function ZakazkaDetailPage({ params, searchParams }: PagePr
     revalidatePath("/zakazky");
     revalidatePath("/kalendar");
     revalidatePath("/kalendar/lide");
+    revalidatePath(`/moje/zakazky/${id}`);
   }
 
   async function updateZakazkaPricing(formData: FormData) {

@@ -65,6 +65,15 @@ export type MistoTechnickeBlock = {
 };
 
 export type TerminBlock = {
+  /** Klientské časové okno — začátek (ISO timestamptz). */
+  oknoOd: string | null;
+  /** Klientské časové okno — konec (ISO timestamptz). */
+  oknoDo: string | null;
+  /** Interně zvolený začátek realizace (ISO timestamptz). */
+  realizaceOd: string | null;
+  /** Interně zvolený konec realizace (ISO timestamptz). */
+  realizaceDo: string | null;
+  /** @deprecated Jednodenní realizace — zpětná kompatibilita snapshotů. */
   datum: string | null;
   casOd: string | null;
   casDo: string | null;

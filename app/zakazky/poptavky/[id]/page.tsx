@@ -9,6 +9,7 @@ import {
   formatPoptavkaTime,
   formatTypAkce,
 } from "@/lib/client-portal/poptavka-form";
+import { formatLogistikaOknoRange } from "@/lib/logistika-okna";
 import {
   formatTriVolba,
   technikaFromRecord,
@@ -400,6 +401,33 @@ export default async function ZakazkyPoptavkaDetailPage({
                 value={detail.objednavka_odmitnuta_duvod}
               />
             ) : null}
+          </dl>
+        </section>
+
+        <section className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
+          <h2 className="text-lg font-semibold text-white">Klientské okno stavby a bourání</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Maximální časové okno od klienta — není to přesný termín realizace pro zaměstnance.
+          </p>
+          <dl className="mt-4 grid gap-3 text-sm">
+            <ReadOnlyField
+              label="Klientské okno stavby"
+              value={formatLogistikaOknoRange(
+                detail.stavba_okno_od,
+                detail.stavba_okno_do
+              )}
+            />
+            <ReadOnlyField
+              label="Klientské okno bourání"
+              value={formatLogistikaOknoRange(
+                detail.bourani_okno_od,
+                detail.bourani_okno_do
+              )}
+            />
+            <ReadOnlyField
+              label="Poznámka k přístupu / omezení"
+              value={detail.logistika_poznamka_klienta}
+            />
           </dl>
         </section>
       </div>

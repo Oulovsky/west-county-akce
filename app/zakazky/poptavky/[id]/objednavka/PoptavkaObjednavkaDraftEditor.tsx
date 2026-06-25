@@ -5,6 +5,11 @@ import type { ReactNode } from "react";
 import { savePoptavkaObjednavkaDraftAction, sendPoptavkaObjednavkaAction } from "@/app/zakazky/poptavky/[id]/objednavka/actions";
 import { OBJEDNAVKA_DRAFT_STAV_LABELS } from "@/lib/client-portal/poptavka-objednavka-draft-form";
 import type { PoptavkaObjednavkaDraftData } from "@/lib/client-portal/poptavka-objednavka-types";
+import {
+  formatLogistikaOknoRange,
+  getTerminRealizaceRange,
+  toDatetimeLocalInput,
+} from "@/lib/logistika-okna";
 
 const ERROR_MESSAGES: Record<string, string> = {
   not_found: "Draft objednávky nebyl nalezen.",
@@ -322,25 +327,88 @@ export default function PoptavkaObjednavkaDraftEditor({
             <div className="md:col-span-2">
               <Field label="Příjezd techniky (orientačně)" name="org_prijezd_techniky" defaultValue={d.organizace.prijezdTechniky} disabled={disabled} />
             </div>
-            <p className="md:col-span-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Stavba</p>
-            <Field label="Datum stavby" name="stavba_datum" type="date" defaultValue={d.organizace.stavba.datum} disabled={disabled} />
-            <Field label="Přístup od" name="stavba_pristup_od" defaultValue={d.organizace.stavba.pristupOd} disabled={disabled} />
-            <Field label="Čas od" name="stavba_cas_od" type="time" defaultValue={d.organizace.stavba.casOd ?? ""} disabled={disabled} />
-            <Field label="Čas do" name="stavba_cas_do" type="time" defaultValue={d.organizace.stavba.casDo ?? ""} disabled={disabled} />
-            <div className="md:col-span-2">
-              <TextArea label="Omezení vjezdu" name="stavba_omezeni_vjezdu" defaultValue={d.organizace.stavba.omezeniVjezdu} disabled={disabled} />
+
+            <div className="md:col-span-2 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Stavba</p>
+              <p className="mt-2 text-sm text-slate-300">
+                Stavba možná v okně:{" "}
+                <span className="font-medium text-white">
+                  {formatLogistikaOknoRange(
+                    d.organizace.stavba.oknoOd,
+                    d.organizace.stavba.oknoDo
+                  ) ?? "—"}
+                </span>
+              </p>
+              <input type="hidden" name="stavba_okno_od" value={d.organizace.stavba.oknoOd ?? ""} />
+              <input type="hidden" name="stavba_okno_do" value={d.organizace.stavba.oknoDo ?? ""} />
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <Field
+                  label="Domluvená realizace stavby — od"
+                  name="stavba_realizace_od"
+                  type="datetime-local"
+                  defaultValue={toDatetimeLocalInput(
+                    getTerminRealizaceRange(d.organizace.stavba).od
+                  )}
+                  disabled={disabled}
+                />
+                <Field
+                  label="Domluvená realizace stavby — do"
+                  name="stavba_realizace_do"
+                  type="datetime-local"
+                  defaultValue={toDatetimeLocalInput(
+                    getTerminRealizaceRange(d.organizace.stavba).do
+                  )}
+                  disabled={disabled}
+                />
+              </div>
+              <Field label="Přístup od" name="stavba_pristup_od" defaultValue={d.organizace.stavba.pristupOd} disabled={disabled} />
+              <div className="mt-3">
+                <TextArea label="Omezení vjezdu" name="stavba_omezeni_vjezdu" defaultValue={d.organizace.stavba.omezeniVjezdu} disabled={disabled} />
+              </div>
+              <div className="mt-3">
+                <TextArea label="Poznámka ke stavbě" name="stavba_poznamka" defaultValue={d.organizace.stavba.poznamka} disabled={disabled} />
+              </div>
             </div>
-            <div className="md:col-span-2">
-              <TextArea label="Poznámka ke stavbě" name="stavba_poznamka" defaultValue={d.organizace.stavba.poznamka} disabled={disabled} />
+
+            <div className="md:col-span-2 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Bourání</p>
+              <p className="mt-2 text-sm text-slate-300">
+                Bourání možné v okně:{" "}
+                <span className="font-medium text-white">
+                  {formatLogistikaOknoRange(
+                    d.organizace.bourani.oknoOd,
+                    d.organizace.bourani.oknoDo
+                  ) ?? "—"}
+                </span>
+              </p>
+              <input type="hidden" name="bourani_okno_od" value={d.organizace.bourani.oknoOd ?? ""} />
+              <input type="hidden" name="bourani_okno_do" value={d.organizace.bourani.oknoDo ?? ""} />
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <Field
+                  label="Domluvená realizace bourání — od"
+                  name="bourani_realizace_od"
+                  type="datetime-local"
+                  defaultValue={toDatetimeLocalInput(
+                    getTerminRealizaceRange(d.organizace.bourani).od
+                  )}
+                  disabled={disabled}
+                />
+                <Field
+                  label="Domluvená realizace bourání — do"
+                  name="bourani_realizace_do"
+                  type="datetime-local"
+                  defaultValue={toDatetimeLocalInput(
+                    getTerminRealizaceRange(d.organizace.bourani).do
+                  )}
+                  disabled={disabled}
+                />
+              </div>
+              <Field label="Místo uvolněno do" name="bourani_misto_uvolneno_do" defaultValue={d.organizace.bourani.mistoUvolnenoDo} disabled={disabled} />
+              <div className="mt-3">
+                <TextArea label="Poznámka k bourání" name="bourani_poznamka" defaultValue={d.organizace.bourani.poznamka} disabled={disabled} />
+              </div>
             </div>
-            <p className="md:col-span-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Bourání</p>
-            <Field label="Datum bourání" name="bourani_datum" type="date" defaultValue={d.organizace.bourani.datum} disabled={disabled} />
-            <Field label="Místo uvolněno do" name="bourani_misto_uvolneno_do" defaultValue={d.organizace.bourani.mistoUvolnenoDo} disabled={disabled} />
-            <Field label="Čas od" name="bourani_cas_od" type="time" defaultValue={d.organizace.bourani.casOd ?? ""} disabled={disabled} />
-            <Field label="Čas do" name="bourani_cas_do" type="time" defaultValue={d.organizace.bourani.casDo ?? ""} disabled={disabled} />
-            <div className="md:col-span-2">
-              <TextArea label="Poznámka k bourání" name="bourani_poznamka" defaultValue={d.organizace.bourani.poznamka} disabled={disabled} />
-            </div>
+
             <div className="md:col-span-2">
               <TextArea label="Součinnost klienta" name="org_soucinnost_klienta" defaultValue={d.organizace.soucinnostKlienta} disabled={disabled} />
             </div>

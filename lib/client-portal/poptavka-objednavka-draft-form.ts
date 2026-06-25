@@ -3,6 +3,7 @@ import type {
   PoptavkaObjednavkaTriVolba,
 } from "@/lib/client-portal/poptavka-objednavka-types";
 import { POPTAVKA_OBJEDNAVKA_DRAFT_DATA_VERSION } from "@/lib/client-portal/poptavka-objednavka-types";
+import { parseDatetimeLocalToIso } from "@/lib/logistika-okna";
 
 function field(formData: FormData, name: string) {
   return String(formData.get(name) ?? "").trim();
@@ -108,6 +109,10 @@ export function mergeObjednavkaDraftFromFormData(
     organizace: {
       prijezdTechniky: nullableField(formData, "org_prijezd_techniky"),
       stavba: {
+        oknoOd: nullableField(formData, "stavba_okno_od") ?? base.organizace.stavba.oknoOd,
+        oknoDo: nullableField(formData, "stavba_okno_do") ?? base.organizace.stavba.oknoDo,
+        realizaceOd: parseDatetimeLocalToIso(field(formData, "stavba_realizace_od")),
+        realizaceDo: parseDatetimeLocalToIso(field(formData, "stavba_realizace_do")),
         datum: nullableField(formData, "stavba_datum"),
         casOd: normalizeTime(field(formData, "stavba_cas_od")),
         casDo: normalizeTime(field(formData, "stavba_cas_do")),
@@ -116,6 +121,10 @@ export function mergeObjednavkaDraftFromFormData(
         poznamka: nullableField(formData, "stavba_poznamka"),
       },
       bourani: {
+        oknoOd: nullableField(formData, "bourani_okno_od") ?? base.organizace.bourani.oknoOd,
+        oknoDo: nullableField(formData, "bourani_okno_do") ?? base.organizace.bourani.oknoDo,
+        realizaceOd: parseDatetimeLocalToIso(field(formData, "bourani_realizace_od")),
+        realizaceDo: parseDatetimeLocalToIso(field(formData, "bourani_realizace_do")),
         datum: nullableField(formData, "bourani_datum"),
         casOd: normalizeTime(field(formData, "bourani_cas_od")),
         casDo: normalizeTime(field(formData, "bourani_cas_do")),

@@ -125,6 +125,10 @@ function formatKlientAddress(klient: InternalPoptavkaDetail["klient"]): string |
 
 function emptyTerminBlock(): TerminBlock {
   return {
+    oknoOd: null,
+    oknoDo: null,
+    realizaceOd: null,
+    realizaceDo: null,
     datum: null,
     casOd: null,
     casDo: null,
@@ -349,20 +353,34 @@ function buildMistoBlock(
 }
 
 function buildOrganizaceBlock(detail: InternalPoptavkaDetail): OrganizaceBlock {
+  const logistikaNote = joinNonEmpty([
+    detail.logistika_poznamka_klienta,
+    detail.stavba_pristup_od ? `Přístup od: ${detail.stavba_pristup_od}` : null,
+    detail.stavba_omezeni_vjezdu ? `Omezení vjezdu: ${detail.stavba_omezeni_vjezdu}` : null,
+  ]);
+
   return {
     prijezdTechniky: nullableText(detail.cas_prijezd_orientacni),
     stavba: {
-      datum: nullableText(detail.stavba_datum),
-      casOd: normalizeTime(detail.stavba_cas_od),
-      casDo: normalizeTime(detail.stavba_cas_do),
+      oknoOd: nullableText(detail.stavba_okno_od),
+      oknoDo: nullableText(detail.stavba_okno_do),
+      realizaceOd: null,
+      realizaceDo: null,
+      datum: null,
+      casOd: null,
+      casDo: null,
       pristupOd: nullableText(detail.stavba_pristup_od),
       omezeniVjezdu: nullableText(detail.stavba_omezeni_vjezdu),
-      poznamka: nullableText(detail.stavba_poznamka),
+      poznamka: joinNonEmpty([detail.stavba_poznamka, logistikaNote || null]),
     },
     bourani: {
-      datum: nullableText(detail.bourani_datum),
-      casOd: normalizeTime(detail.bourani_cas_od),
-      casDo: normalizeTime(detail.bourani_cas_do),
+      oknoOd: nullableText(detail.bourani_okno_od),
+      oknoDo: nullableText(detail.bourani_okno_do),
+      realizaceOd: null,
+      realizaceDo: null,
+      datum: null,
+      casOd: null,
+      casDo: null,
       pristupOd: null,
       omezeniVjezdu: null,
       poznamka: nullableText(detail.bourani_poznamka),
@@ -430,7 +448,16 @@ function hasElektroUdaje(misto: MistoTechnickeBlock): boolean {
 }
 
 function hasTermin(termin: TerminBlock): boolean {
-  return Boolean(termin.datum || termin.casOd || termin.casDo || termin.poznamka);
+  return Boolean(
+    termin.oknoOd ||
+      termin.oknoDo ||
+      termin.realizaceOd ||
+      termin.realizaceDo ||
+      termin.datum ||
+      termin.casOd ||
+      termin.casDo ||
+      termin.poznamka
+  );
 }
 
 export function getPoptavkaObjednavkaDraftWarnings(
@@ -451,10 +478,10 @@ export function getPoptavkaObjednavkaDraftWarnings(
     warnings.push("Chybí údaje o elektro přípojce nebo rozváděčích.");
   }
   if (!hasTermin(draft.organizace.stavba)) {
-    warnings.push("Chybí termín nebo čas stavby.");
+    warnings.push("Chybí klientské okno nebo interní termín stavby.");
   }
   if (!hasTermin(draft.organizace.bourani)) {
-    warnings.push("Chybí termín nebo čas bourání.");
+    warnings.push("Chybí klientské okno nebo interní termín bourání.");
   }
   if (
     !draft.misto.prijezdPopis &&
@@ -487,6 +514,10 @@ function normalizePartyBlock(party: PartyBlock): PartyBlock {
 
 function normalizeTerminBlock(termin: TerminBlock): TerminBlock {
   return {
+    oknoOd: nullableText(termin.oknoOd),
+    oknoDo: nullableText(termin.oknoDo),
+    realizaceOd: nullableText(termin.realizaceOd),
+    realizaceDo: nullableText(termin.realizaceDo),
     datum: nullableText(termin.datum),
     casOd: normalizeTime(termin.casOd),
     casDo: normalizeTime(termin.casDo),

@@ -10,6 +10,8 @@ import {
   formatPoptavkaTime,
   formatTypAkce,
 } from "@/lib/client-portal/poptavka-form";
+import { logistikaOknaFromPoptavka } from "@/lib/logistika-okna";
+import PoptavkaLogistikaOknaPanel from "@/components/portal/PoptavkaLogistikaOknaPanel";
 import {
   formatTriVolba,
   technikaFromRecord,
@@ -239,6 +241,7 @@ export default async function PortalPoptavkaDetailPage({
             mnozstvi: row.mnozstvi,
             poznamka_klienta: row.poznamka_klienta,
           })),
+          ...logistikaOknaFromPoptavka(detail),
         }}
         initialTechnika={technikaFromRecord(detail.technicke_udaje)}
         initialFotky={detail.fotky}
@@ -405,6 +408,13 @@ export default async function PortalPoptavkaDetailPage({
             </div>
           ) : null}
         </dl>
+
+        <div className="mt-6">
+          <PoptavkaLogistikaOknaPanel
+            mode="read"
+            values={logistikaOknaFromPoptavka(detail)}
+          />
+        </div>
 
         <section className="mt-8 space-y-4 border-t border-white/10 pt-6">
           <h2 className="text-lg font-semibold text-white">Vybrané setupy</h2>

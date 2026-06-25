@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { combineDateAndTime } from "@/app/zakazky/[id]/helpers";
+import { buildLogistikaOknaRowPayload, logistikaOknaFromPoptavka } from "@/lib/logistika-okna";
 import { formatTypAkce } from "@/lib/client-portal/poptavka-form";
 import {
   buildDotaznikPayloadFromSnapshot,
@@ -221,6 +222,10 @@ type ZakazkaCreateInput = {
   enrich: ConvertEnrichContext;
   akceOd: string;
   akceDo: string;
+  stavbaOknoOd: string | null;
+  stavbaOknoDo: string | null;
+  bouraniOknoOd: string | null;
+  bouraniOknoDo: string | null;
   stavbaOd: string | null;
   stavbaDo: string | null;
   bouraniOd: string | null;
@@ -318,10 +323,7 @@ async function buildLegacyZakazkaCreateInput(
     return { ok: false, error: technikaResult.error, message: technikaResult.message };
   }
 
-  const stavbaOd = combineDateAndTime(detail.stavba_datum, normalizeTime(detail.stavba_cas_od));
-  const stavbaDo = combineDateAndTime(detail.stavba_datum, normalizeTime(detail.stavba_cas_do));
-  const bouraniOd = combineDateAndTime(detail.bourani_datum, normalizeTime(detail.bourani_cas_od));
-  const bouraniDo = combineDateAndTime(detail.bourani_datum, normalizeTime(detail.bourani_cas_do));
+  const logistikaPayload = buildLogistikaOknaRowPayload(logistikaOknaFromPoptavka(detail));
 
   const mistoText = detail.misto_adresa?.trim() || detail.misto_nazev?.trim() || null;
   const nazev = detail.misto_nazev?.trim() || detail.misto_adresa?.trim() || detail.cislo_poptavky;
@@ -345,10 +347,14 @@ async function buildLegacyZakazkaCreateInput(
       enrich: { mode: "legacy" },
       akceOd,
       akceDo,
-      stavbaOd,
-      stavbaDo,
-      bouraniOd,
-      bouraniDo,
+      stavbaOknoOd: logistikaPayload.stavba_okno_od,
+      stavbaOknoDo: logistikaPayload.stavba_okno_do,
+      bouraniOknoOd: logistikaPayload.bourani_okno_od,
+      bouraniOknoDo: logistikaPayload.bourani_okno_do,
+      stavbaOd: null,
+      stavbaDo: null,
+      bouraniOd: null,
+      bouraniDo: null,
       poznamka: buildPoznamka(detail) || null,
       technikaPayload: technikaResult.payload,
       buildDotaznik: (zakazkaId) => buildDotaznikPayload(detail, zakazkaId),
@@ -411,6 +417,10 @@ async function buildSnapshotZakazkaCreateInput(
       },
       akceOd: fields.akceOd,
       akceDo: fields.akceDo,
+      stavbaOknoOd: fields.stavbaOknoOd,
+      stavbaOknoDo: fields.stavbaOknoDo,
+      bouraniOknoOd: fields.bouraniOknoOd,
+      bouraniOknoDo: fields.bouraniOknoDo,
       stavbaOd: fields.stavbaOd,
       stavbaDo: fields.stavbaDo,
       bouraniOd: fields.bouraniOd,
@@ -490,6 +500,24 @@ async function createZakazkaFromInput(
   }
 
   const createdZakazkaId = zakazkaId as string;
+
+  const { error: oknoUpdateError } = await supabase
+    .from("zakazky")
+    .update({
+      stavba_okno_od: input.stavbaOknoOd,
+      stavba_okno_do: input.stavbaOknoDo,
+      bourani_okno_od: input.bouraniOknoOd,
+      bourani_okno_do: input.bouraniOknoDo,
+    })
+    .eq("zakazka_id", createdZakazkaId);
+
+  if (oknoUpdateError) {
+    return {
+      ok: false,
+      error: "create_failed",
+      message: oknoUpdateError.message,
+    };
+  }
 
   const { error: sourceLinkError } = await supabase
     .from("zakazky")

@@ -12,6 +12,7 @@ import {
   getAssignmentPhaseLabel,
   isAssignmentLogisticsPhase,
 } from "@/lib/employee/assignment-display";
+import { getEmployeePhaseScheduleLabel } from "@/lib/logistika-okna";
 import { isPrepravaTypBloku } from "@/lib/zakazka-attendance";
 import { ParticipationActions } from "../../ParticipationActions";
 
@@ -42,6 +43,10 @@ type ZakazkaRow = {
   poznamka: string | null;
   akce_od: string | null;
   akce_do: string | null;
+  stavba_od: string | null;
+  stavba_do: string | null;
+  bourani_od: string | null;
+  bourani_do: string | null;
   datum_od: string | null;
   datum_do: string | null;
   zrusena?: boolean | null;
@@ -134,7 +139,7 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
 
   const { data: zakazkaRaw, error: zakazkaError } = await supabase
     .from("zakazky")
-    .select("zakazka_id, cislo_zakazky, nazev, misto, misto_lat, misto_lng, poznamka, akce_od, akce_do, datum_od, datum_do, zrusena, logistika_stav")
+    .select("zakazka_id, cislo_zakazky, nazev, misto, misto_lat, misto_lng, poznamka, akce_od, akce_do, stavba_od, stavba_do, bourani_od, bourani_do, datum_od, datum_do, zrusena, logistika_stav")
     .eq("zakazka_id", id)
     .maybeSingle();
 
@@ -301,6 +306,11 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
           <div className="grid gap-3">
             {workAssignments.map((assignment) => {
               const status = normalizeStatus(assignment.confirmation_status);
+              const phaseSchedule = getEmployeePhaseScheduleLabel(
+                assignment.typ_bloku,
+                assignment,
+                zakazka
+              );
 
               return (
                 <Card key={String(assignment.id)} className="space-y-4 overflow-hidden">
@@ -309,8 +319,13 @@ export default async function MojeZakazkaReadOnlyPage({ params }: PageProps) {
                       <div className="text-lg font-bold text-white">
                         {getAssignmentPhaseLabel(assignment.typ_bloku)}
                       </div>
-                      <div className="mt-1 text-sm text-slate-300">
-                        {formatAssignmentRange(assignment.datum_od, assignment.datum_do)}
+                      <div
+                        className={[
+                          "mt-1 text-sm",
+                          phaseSchedule.pending ? "text-amber-200" : "text-slate-300",
+                        ].join(" ")}
+                      >
+                        {phaseSchedule.text}
                       </div>
                       {isAssignmentLogisticsPhase(assignment.typ_bloku) ? (
                         <div className="mt-3 inline-flex rounded-md border border-cyan-500/30 bg-cyan-500/15 px-3 py-1 text-xs font-bold text-cyan-100">

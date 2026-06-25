@@ -1,4 +1,10 @@
 import type { SetupOblast } from "@/lib/client-portal/types";
+import {
+  buildLogistikaOknaRowPayload,
+  parseLogistikaOknaFromFormData,
+  type LogistikaOknoValues,
+  validateLogistikaOkna,
+} from "@/lib/logistika-okna";
 
 export const TYP_AKCE_OPTIONS = [
   { value: "koncert", label: "Koncert" },
@@ -36,7 +42,7 @@ export type PoptavkaFormValues = {
   misto_lat: number | null;
   misto_lng: number | null;
   setupy: PoptavkaSetupInput[];
-};
+} & LogistikaOknoValues;
 
 export type PoptavkaPrefill = {
   kontakt_jmeno: string;
@@ -126,6 +132,7 @@ export function parsePoptavkaFormData(formData: FormData): PoptavkaFormValues {
     misto_lat: parseOptionalNumber(String(formData.get("misto_lat") ?? "")),
     misto_lng: parseOptionalNumber(String(formData.get("misto_lng") ?? "")),
     setupy: parseSetupSelections(String(formData.get("setupy_json") ?? "")),
+    ...parseLogistikaOknaFromFormData(formData),
   };
 }
 
@@ -138,6 +145,8 @@ export function validatePoptavkaForm(values: PoptavkaFormValues): string | null 
   if (!values.datum_do) return "missing_date_to";
   if (values.datum_do < values.datum_od) return "invalid_date_range";
   if (values.misto_source === "saved" && !values.misto_id) return "missing_saved_misto";
+  const oknaError = validateLogistikaOkna(values);
+  if (oknaError) return "invalid_logistika_okna";
   return null;
 }
 
@@ -160,6 +169,7 @@ export function buildPoptavkaRowPayload(values: PoptavkaFormValues) {
     cas_programu_do: normalizeTime(values.cas_programu_do),
     misto_poznamka: nullable(values.misto_poznamka),
     vice_denni: viceDenni,
+    ...buildLogistikaOknaRowPayload(values),
     updated_at: new Date().toISOString(),
   };
 }

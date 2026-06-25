@@ -1,6 +1,11 @@
 import "server-only";
 
 import { combineDateAndTime } from "@/app/zakazky/[id]/helpers";
+import {
+  formatLogistikaOknoLabel,
+  getTerminOknoRange,
+  getTerminRealizaceRange,
+} from "@/lib/logistika-okna";
 import { SETUP_OBLAST_LABELS } from "@/lib/client-portal/labels";
 import type { InternalPoptavkaDetail } from "@/lib/client-portal/poptavka-internal-server";
 import type {
@@ -33,25 +38,27 @@ function combineAkceRangeFromSnapshot(snapshot: PoptavkaObjednavkaSnapshot) {
 }
 
 function combineTerminRange(termin: TerminBlock | BouraniBlock) {
-  const stavbaOd = termin.datum
-    ? combineDateAndTime(termin.datum, normalizeTime(termin.casOd))
-    : null;
-  const stavbaDo = termin.datum
-    ? combineDateAndTime(termin.datum, normalizeTime(termin.casDo))
-    : null;
-
-  return { od: stavbaOd, do: stavbaDo };
+  return getTerminRealizaceRange(termin);
 }
 
 function formatTerminBlock(label: string, termin: TerminBlock | BouraniBlock) {
   const lines: string[] = [];
 
-  if (termin.datum) {
-    lines.push(`${label} — datum: ${termin.datum}`);
-  }
-  if (termin.casOd || termin.casDo) {
-    lines.push(`${label} — čas: ${termin.casOd ?? "?"} – ${termin.casDo ?? "?"}`);
-  }
+  const oknoLabel = formatLogistikaOknoLabel(
+    `${label} — možné v okně`,
+    termin.oknoOd,
+    termin.oknoDo
+  );
+  if (oknoLabel) lines.push(oknoLabel);
+
+  const realizace = getTerminRealizaceRange(termin);
+  const realizaceLabel = formatLogistikaOknoLabel(
+    `${label} — domluvená realizace`,
+    realizace.od,
+    realizace.do
+  );
+  if (realizaceLabel) lines.push(realizaceLabel);
+
   if (termin.pristupOd) {
     lines.push(`${label} — přístup od: ${termin.pristupOd}`);
   }
@@ -200,6 +207,10 @@ export type SnapshotZakazkaFields = {
   mistoLng: number | null;
   akceOd: string;
   akceDo: string;
+  stavbaOknoOd: string | null;
+  stavbaOknoDo: string | null;
+  bouraniOknoOd: string | null;
+  bouraniOknoDo: string | null;
   stavbaOd: string | null;
   stavbaDo: string | null;
   bouraniOd: string | null;
@@ -216,6 +227,8 @@ export function buildZakazkaFieldsFromSnapshot(
     return { error: "missing_akce_datum" };
   }
 
+  const stavbaOkno = getTerminOknoRange(snapshot.organizace.stavba);
+  const bouraniOkno = getTerminOknoRange(snapshot.organizace.bourani);
   const stavba = combineTerminRange(snapshot.organizace.stavba);
   const bourani = combineTerminRange(snapshot.organizace.bourani);
 
@@ -237,6 +250,10 @@ export function buildZakazkaFieldsFromSnapshot(
     mistoLng: Number.isFinite(mistoLng) ? mistoLng : null,
     akceOd,
     akceDo,
+    stavbaOknoOd: stavbaOkno.od,
+    stavbaOknoDo: stavbaOkno.do,
+    bouraniOknoOd: bouraniOkno.od,
+    bouraniOknoDo: bouraniOkno.do,
     stavbaOd: stavba.od,
     stavbaDo: stavba.do,
     bouraniOd: bourani.od,

@@ -7,6 +7,8 @@ import {
   updatePoptavkaAction,
 } from "@/app/portal/poptavky/actions";
 import PoptavkaFotkyClient from "@/components/portal/PoptavkaFotkyClient";
+import { emptyLogistikaOknaValues } from "@/lib/logistika-okna";
+import PoptavkaLogistikaOknaPanel from "@/components/portal/PoptavkaLogistikaOknaPanel";
 import PoptavkaPreviousTechnikaPanel from "@/components/portal/PoptavkaPreviousTechnikaPanel";
 import PoptavkaMistoKnowHowPanel from "@/components/portal/PoptavkaMistoKnowHowPanel";
 import PoptavkaSestavaKonfigurator from "@/components/portal/PoptavkaSestavaKonfigurator";
@@ -60,6 +62,8 @@ const ERROR_MESSAGES: Record<string, string> = {
     "Vybrané setupy už nejsou v portálu dostupné. Upravte výběr techniky a uložte znovu.",
   invalid_sestava:
     "Konfigurace sestavy obsahuje chyby. Doplňte povinné volby ve kroku Konfigurace sestavy.",
+  invalid_logistika_okna:
+    "Časové okno stavby nebo bourání není platné. Konec okna musí být po začátku.",
 };
 
 type Props = {
@@ -156,6 +160,12 @@ export default function PoptavkaFormClient({
     misto_lat: initialValues?.misto_lat ?? null,
     misto_lng: initialValues?.misto_lng ?? null,
     setupy: initialValues?.setupy ?? [],
+    ...emptyLogistikaOknaValues(),
+    stavba_okno_od: initialValues?.stavba_okno_od ?? "",
+    stavba_okno_do: initialValues?.stavba_okno_do ?? "",
+    bourani_okno_od: initialValues?.bourani_okno_od ?? "",
+    bourani_okno_do: initialValues?.bourani_okno_do ?? "",
+    logistika_poznamka_klienta: initialValues?.logistika_poznamka_klienta ?? "",
   });
 
   const [technika, setTechnika] = useState<PoptavkaTechnikaFormValues>({
@@ -204,6 +214,18 @@ export default function PoptavkaFormClient({
     mode === "create" ? "Nová poptávka" : readOnly ? "Detail poptávky" : "Upravit poptávku";
 
   function updateField<K extends keyof PoptavkaFormValues>(key: K, value: PoptavkaFormValues[K]) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateLogistikaField(
+    key:
+      | "stavba_okno_od"
+      | "stavba_okno_do"
+      | "bourani_okno_od"
+      | "bourani_okno_do"
+      | "logistika_poznamka_klienta",
+    value: string
+  ) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
@@ -655,6 +677,19 @@ export default function PoptavkaFormClient({
                   className={inputClass}
                 />
               </label>
+
+              <PoptavkaLogistikaOknaPanel
+                mode="edit"
+                values={{
+                  stavba_okno_od: form.stavba_okno_od,
+                  stavba_okno_do: form.stavba_okno_do,
+                  bourani_okno_od: form.bourani_okno_od,
+                  bourani_okno_do: form.bourani_okno_do,
+                  logistika_poznamka_klienta: form.logistika_poznamka_klienta,
+                }}
+                readOnly={readOnly}
+                onChange={updateLogistikaField}
+              />
             </section>
           )}
 
