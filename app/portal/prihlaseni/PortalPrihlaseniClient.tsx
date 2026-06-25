@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useFormStatus } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
 import { portalSignInAction } from "@/app/portal/actions";
@@ -9,13 +9,28 @@ import { portalSignInAction } from "@/app/portal/actions";
 const ERROR_MESSAGES: Record<string, string> = {
   missing_fields: "Vyplň e-mail a heslo.",
   invalid_credentials: "Neplatný e-mail nebo heslo.",
+  email_provider_disabled:
+    "Přihlašování e-mailem není v systému zapnuté. Kontaktujte správce.",
 };
+
+function PortalSignInSubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="w-full rounded-xl border border-amber-500/60 bg-amber-500/20 px-4 py-3 text-sm font-bold text-amber-50 transition hover:bg-amber-500/30 disabled:opacity-60"
+    >
+      {pending ? "Přihlašuji…" : "Přihlásit se"}
+    </button>
+  );
+}
 
 export default function PortalPrihlaseniClient() {
   const searchParams = useSearchParams();
   const errorCode = searchParams.get("error");
   const next = searchParams.get("next") ?? "/portal";
-  const [loading, setLoading] = useState(false);
 
   return (
     <PortalShell>
@@ -32,10 +47,9 @@ export default function PortalPrihlaseniClient() {
         ) : null}
 
         <form
-          action={(formData) => {
-            setLoading(true);
+          action={async (formData) => {
             formData.set("next", next);
-            void portalSignInAction(formData);
+            await portalSignInAction(formData);
           }}
           className="mt-6 space-y-4"
         >
@@ -61,13 +75,7 @@ export default function PortalPrihlaseniClient() {
             />
           </label>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-xl border border-amber-500/60 bg-amber-500/20 px-4 py-3 text-sm font-bold text-amber-50 transition hover:bg-amber-500/30 disabled:opacity-60"
-          >
-            {loading ? "Přihlašuji…" : "Přihlásit se"}
-          </button>
+          <PortalSignInSubmitButton />
         </form>
 
         <p className="mt-6 text-center text-sm text-slate-400">

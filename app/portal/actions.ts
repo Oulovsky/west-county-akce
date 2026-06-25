@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { normalizeIco } from "@/lib/ares/klient-ares";
 import type { AresSubject } from "@/lib/ares/klient-ares";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
+import { mapPortalSignInErrorCode } from "@/lib/auth/portal-auth-errors";
 import { registerClientPortalAccount } from "@/lib/client-portal/portal-register-server";
 import { splitContactName } from "@/lib/client-portal/registration-snapshot";
 import { createClient } from "@/lib/supabase/server";
@@ -31,7 +32,15 @@ export async function portalSignInAction(formData: FormData) {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    redirect("/portal/prihlaseni?error=invalid_credentials");
+    console.info("[portal-sign-in] failed", {
+      email,
+      status: error.status,
+      code: error.code,
+      message: error.message,
+    });
+    redirect(
+      `/portal/prihlaseni?error=${encodeURIComponent(mapPortalSignInErrorCode(error))}`
+    );
   }
 
   const session = await loadClientPortalSession(supabase);

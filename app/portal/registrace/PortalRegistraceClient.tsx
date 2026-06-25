@@ -21,6 +21,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   client_create_failed:
     "Účet se podařilo založit, ale nepodařilo se dokončit údaje klienta. Kontaktujte nás.",
   env_missing: "Registrace není správně nakonfigurovaná. Kontaktujte nás.",
+  email_provider_disabled:
+    "Přihlašování e-mailem není v systému zapnuté. Kontaktujte správce.",
   sign_up_failed:
     "Registraci se nepodařilo dokončit. Zkuste to znovu, případně nás kontaktujte.",
   signup_failed:

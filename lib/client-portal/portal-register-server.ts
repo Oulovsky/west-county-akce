@@ -9,6 +9,7 @@ import {
 } from "@/lib/client-portal/registration-snapshot";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { isEmailProviderDisabledError } from "@/lib/auth/portal-auth-errors";
 
 export type PortalRegisterErrorCode =
   | "password_mismatch"
@@ -19,6 +20,7 @@ export type PortalRegisterErrorCode =
   | "client_create_failed"
   | "env_missing"
   | "sign_up_failed"
+  | "email_provider_disabled"
   | "invalid_ico"
   | "already_signed_in";
 
@@ -75,7 +77,6 @@ function mapAuthErrorToCode(error: AuthError | null | undefined): PortalRegister
   }
 
   const message = error.message.toLowerCase();
-  const status = error.status;
 
   if (
     error.code === "user_already_exists" ||
@@ -92,6 +93,10 @@ function mapAuthErrorToCode(error: AuthError | null | undefined): PortalRegister
     message.includes("password is too weak")
   ) {
     return "weak_password";
+  }
+
+  if (isEmailProviderDisabledError(error)) {
+    return "email_provider_disabled";
   }
 
   return "auth_failed";
@@ -172,21 +177,27 @@ async function createConfirmedAuthUser(
   return { ok: true, userId: data.user.id };
 }
 
-async function signInRegisteredUser(email: string, password: string) {
+async function signInRegisteredUser(
+  email: string,
+  password: string
+): Promise<{ ok: true } | { ok: false; code: PortalRegisterErrorCode }> {
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
+    const code = isEmailProviderDisabledError(error)
+      ? "email_provider_disabled"
+      : "auth_failed";
     logPortalRegister("[portal-register] auth sign-in after create failed", {
       email,
       status: error.status,
       code: error.code,
       message: error.message,
     });
-    return false;
+    return { ok: false, code };
   }
 
-  return true;
+  return { ok: true };
 }
 
 export function validatePortalRegisterInput(
@@ -268,9 +279,9 @@ export async function registerClientPortalAccount(
     createdAuthUser = true;
 
     const signedIn = await signInRegisteredUser(input.email, input.password);
-    if (!signedIn) {
+    if (!signedIn.ok) {
       await cleanupAuthUser(userId);
-      return { ok: false, code: "auth_failed" };
+      return { ok: false, code: signedIn.code };
     }
   }
 

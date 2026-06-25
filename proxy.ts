@@ -1,6 +1,10 @@
 ﻿import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
-import { checkSystemAdminEmail } from "@/lib/auth/admin-access";
+import {
+  isActiveClientOnlyUser,
+  isInternalEmployeeAllowed,
+  isInternalProtectedPath,
+} from "@/lib/auth/internal-access-server";
 import {
   isEmployeeLoginAllowed,
   loadEmployeeProfile,
@@ -129,6 +133,16 @@ export async function proxy(req: NextRequest) {
     return redirectToLogin(req, { next: nextPath });
   }
 
+  if (user && pathname === "/login") {
+    const email = user.email?.trim().toLowerCase();
+    if (email && (await isActiveClientOnlyUser(supabase, user.id, email))) {
+      const redirectUrl = req.nextUrl.clone();
+      redirectUrl.pathname = "/portal";
+      redirectUrl.search = "";
+      return NextResponse.redirect(redirectUrl);
+    }
+  }
+
   if (user && isProtectedPortalPath(pathname)) {
     const session = await loadClientPortalSession(supabase);
     if (session.kind !== "active") {
@@ -140,11 +154,18 @@ export async function proxy(req: NextRequest) {
     return res;
   }
 
-  if (user && !isPublicPath(pathname)) {
+  if (user && isInternalProtectedPath(pathname)) {
     const email = user.email?.trim().toLowerCase();
 
     if (!email) {
       return redirectToLogin(req, { error: "not_allowed" });
+    }
+
+    if (await isActiveClientOnlyUser(supabase, user.id, email)) {
+      const redirectUrl = req.nextUrl.clone();
+      redirectUrl.pathname = "/portal";
+      redirectUrl.search = "";
+      return NextResponse.redirect(redirectUrl);
     }
 
     let { data: profile } = await loadEmployeeProfile(supabase, user.id);
@@ -171,12 +192,7 @@ export async function proxy(req: NextRequest) {
       });
     }
 
-    const systemAdminCheck = await checkSystemAdminEmail(supabase, email);
-    const loginAllowed =
-      profile &&
-      isEmployeeLoginAllowed(profile, {
-        isSystemAdminEmail: systemAdminCheck.isSystemAdmin,
-      });
+    const loginAllowed = await isInternalEmployeeAllowed(supabase, user.id, email);
 
     if (!loginAllowed) {
       return redirectToLogin(req, { error: "not_allowed" });
