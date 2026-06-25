@@ -1,11 +1,13 @@
 import "server-only";
 
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 import { checkSystemAdminEmail } from "@/lib/auth/admin-access";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
 import {
+  getAuthProvidersFromUser,
   isEmployeeLoginAllowed,
+  isProvisionedInternalProfile,
   loadEmployeeProfile,
 } from "@/lib/auth/employee-access";
 import { isInternalProtectedPath } from "@/lib/auth/internal-routes";
@@ -21,11 +23,32 @@ export type InternalAccessDecision =
 export type AuthAccessContext = {
   userId: string | null;
   email: string | null;
+  authProviders: string[];
   hasProfile: boolean;
+  profileRole: string | null;
+  profileAktivni: boolean | null;
+  profileProvisioned: boolean;
+  employeeLoginAllowed: boolean;
   hasActiveClientAccount: boolean;
   isInternalEmployee: boolean;
   isClientOnly: boolean;
 };
+
+function emptyContext(): AuthAccessContext {
+  return {
+    userId: null,
+    email: null,
+    authProviders: [],
+    hasProfile: false,
+    profileRole: null,
+    profileAktivni: null,
+    profileProvisioned: false,
+    employeeLoginAllowed: false,
+    hasActiveClientAccount: false,
+    isInternalEmployee: false,
+    isClientOnly: false,
+  };
+}
 
 export function logInternalAccessGuard(
   path: string,
@@ -35,10 +58,54 @@ export function logInternalAccessGuard(
   console.info("[internal-access-guard]", {
     path,
     userId: context.userId,
+    email: context.email,
+    providers: context.authProviders,
     hasProfile: context.hasProfile,
+    profileRole: context.profileRole,
+    profileAktivni: context.profileAktivni,
+    profileProvisioned: context.profileProvisioned,
+    employeeLoginAllowed: context.employeeLoginAllowed,
     hasActiveClientAccount: context.hasActiveClientAccount,
     decision,
   });
+}
+
+function buildAuthAccessContext(
+  user: User | null,
+  profile: Awaited<ReturnType<typeof loadEmployeeProfile>>["data"],
+  hasActiveClientAccount: boolean,
+  isSystemAdminEmail: boolean
+): AuthAccessContext {
+  if (!user) {
+    return emptyContext();
+  }
+
+  const email = user.email?.trim().toLowerCase() ?? null;
+  const authProviders = getAuthProvidersFromUser(user);
+  const profileRole = profile?.role ?? null;
+  const profileProvisioned = isProvisionedInternalProfile(profile ?? null);
+  const employeeLoginAllowed = isEmployeeLoginAllowed(profile ?? null, {
+    isSystemAdminEmail,
+    authProviders,
+    hasActiveClientAccount,
+  });
+
+  const isInternalEmployee = employeeLoginAllowed;
+  const isClientOnly = hasActiveClientAccount && !isInternalEmployee;
+
+  return {
+    userId: user.id,
+    email,
+    authProviders,
+    hasProfile: Boolean(profile),
+    profileRole,
+    profileAktivni: profile?.aktivni ?? null,
+    profileProvisioned,
+    employeeLoginAllowed,
+    hasActiveClientAccount,
+    isInternalEmployee,
+    isClientOnly,
+  };
 }
 
 export async function resolveAuthAccessContext(
@@ -49,42 +116,24 @@ export async function resolveAuthAccessContext(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return {
-      userId: null,
-      email: null,
-      hasProfile: false,
-      hasActiveClientAccount: false,
-      isInternalEmployee: false,
-      isClientOnly: false,
-    };
+    return emptyContext();
   }
 
   const email = user.email?.trim().toLowerCase() ?? null;
-  const [{ data: profile }, clientSession] = await Promise.all([
+  const [{ data: profile }, clientSession, systemAdminCheck] = await Promise.all([
     loadEmployeeProfile(supabase, user.id),
     loadClientPortalSession(supabase),
+    email ? checkSystemAdminEmail(supabase, email) : Promise.resolve({ isSystemAdmin: false, error: null }),
   ]);
 
-  let isInternalEmployee = false;
-
-  if (email && profile) {
-    const systemAdminCheck = await checkSystemAdminEmail(supabase, email);
-    isInternalEmployee = isEmployeeLoginAllowed(profile, {
-      isSystemAdminEmail: systemAdminCheck.isSystemAdmin,
-    });
-  }
-
   const hasActiveClientAccount = clientSession.kind === "active";
-  const isClientOnly = hasActiveClientAccount && !isInternalEmployee;
 
-  return {
-    userId: user.id,
-    email,
-    hasProfile: Boolean(profile),
+  return buildAuthAccessContext(
+    user,
+    profile,
     hasActiveClientAccount,
-    isInternalEmployee,
-    isClientOnly,
-  };
+    systemAdminCheck.isSystemAdmin
+  );
 }
 
 export function decideInternalRouteAccess(
@@ -99,7 +148,7 @@ export function decideInternalRouteAccess(
     return "login_required";
   }
 
-  if (context.isClientOnly) {
+  if (context.hasActiveClientAccount && !context.isInternalEmployee) {
     return "client_redirect_portal";
   }
 
@@ -131,7 +180,7 @@ export async function requireInternalEmployeePage(sectionLabel = "internal-secti
     redirect("/login?error=not_allowed");
   }
 
-  if (context.isClientOnly) {
+  if (context.hasActiveClientAccount && !context.isInternalEmployee) {
     logInternalAccessGuard(sectionLabel, context, "client_redirect_portal");
     redirect("/portal");
   }
@@ -169,13 +218,14 @@ export async function assertInternalApiAccess(
   | { ok: false; status: 401 | 403; decision: InternalAccessDecision }
 > {
   const context = await resolveAuthAccessContext(supabase);
+  const decision = decideInternalRouteAccess("/api/internal", context);
 
   if (!context.userId) {
     logInternalAccessGuard("/api", context, "login_required");
     return { ok: false, status: 401, decision: "login_required" };
   }
 
-  if (context.isClientOnly) {
+  if (context.hasActiveClientAccount && !context.isInternalEmployee) {
     logInternalAccessGuard("/api", context, "client_redirect_portal");
     return { ok: false, status: 403, decision: "client_redirect_portal" };
   }

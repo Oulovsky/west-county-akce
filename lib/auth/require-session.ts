@@ -2,14 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
   assertInternalApiAccess,
-  logInternalAccessGuard,
   resolveAuthAccessContext,
 } from "@/lib/auth/internal-access-server";
-import {
-  isEmployeeLoginAllowed,
-  loadEmployeeProfile,
-} from "@/lib/auth/employee-access";
-import { checkSystemAdminEmail } from "@/lib/auth/admin-access";
 
 export type RequireSessionResult =
   | {
@@ -69,31 +63,8 @@ export async function requireSession(): Promise<RequireSessionResult> {
     };
   }
 
-  const { data: profile, error: profileError } = await loadEmployeeProfile(
-    supabase,
-    user.id
-  );
-
-  if (profileError) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        { error: "Authorization check failed" },
-        { status: 500 }
-      ),
-    };
-  }
-
-  const systemAdminCheck = await checkSystemAdminEmail(supabase, email);
-  const loginAllowed =
-    profile &&
-    isEmployeeLoginAllowed(profile, {
-      isSystemAdminEmail: systemAdminCheck.isSystemAdmin,
-    });
-
-  if (!loginAllowed) {
-    const context = await resolveAuthAccessContext(supabase);
-    logInternalAccessGuard("/api", context, "forbidden");
+  const context = await resolveAuthAccessContext(supabase);
+  if (!context.isInternalEmployee) {
     return {
       ok: false,
       response: NextResponse.json(

@@ -8,7 +8,18 @@ export type EmployeeProfileRow = {
   email: string | null;
   role: string;
   aktivni: boolean | null;
+  jmeno: string | null;
+  prijmeni: string | null;
 };
+
+export {
+  getAuthProvidersFromUser,
+  isEmployeeLoginAllowed,
+  isExplicitInternalRole,
+  isProvisionedInternalProfile,
+  usesEmailPasswordOnly,
+  type EmployeeLoginAllowedOptions,
+} from "@/lib/auth/internal-access-rules";
 
 /**
  * Přístup do aplikace: řádek v public.profiles pro daného auth uživatele.
@@ -20,17 +31,7 @@ export async function loadEmployeeProfile(
 ) {
   return supabase
     .from("profiles")
-    .select("user_id, email, role, aktivni")
+    .select("user_id, email, role, aktivni, jmeno, prijmeni")
     .eq("user_id", userId)
     .maybeSingle();
-}
-
-export function isEmployeeLoginAllowed(
-  profile: EmployeeProfileRow | null | undefined,
-  options?: { isSystemAdminEmail?: boolean }
-): boolean {
-  if (!profile) return false;
-  if (profile.role === "admin") return true;
-  if (options?.isSystemAdminEmail) return true;
-  return profile.aktivni !== false;
 }

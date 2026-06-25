@@ -7,7 +7,6 @@ import {
 } from "@/lib/auth/internal-access-server";
 import { isInternalProtectedPath } from "@/lib/auth/internal-routes";
 import {
-  isEmployeeLoginAllowed,
   loadEmployeeProfile,
   OAUTH_PROFILE_GATE_COOKIE,
 } from "@/lib/auth/employee-access";
@@ -191,19 +190,17 @@ export async function proxy(req: NextRequest) {
 
     let { data: profile } = await loadEmployeeProfile(supabase, user.id);
 
-    const oauthLoginAllowed =
-      profile &&
-      isEmployeeLoginAllowed(profile, {
-        isSystemAdminEmail: false,
-      });
-
-    if ((!profile || !oauthLoginAllowed) && oauthGate) {
+    if (!accessContext.isInternalEmployee && oauthGate) {
       await supabase.auth.getSession();
       const {
         data: { user: refreshedUser },
       } = await supabase.auth.getUser();
       if (refreshedUser) {
         user = refreshedUser;
+      }
+      const refreshedContext = await resolveAuthAccessContext(supabase);
+      if (!refreshedContext.isInternalEmployee) {
+        return redirectToLogin(req, { error: "not_allowed" });
       }
       const reread = await loadEmployeeProfile(supabase, user.id);
       profile = reread.data;

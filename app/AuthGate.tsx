@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { checkSystemAdminEmail } from "@/lib/auth/admin-access";
 import {
+  getAuthProvidersFromUser,
   isEmployeeLoginAllowed,
   loadEmployeeProfile,
 } from "@/lib/auth/employee-access";
@@ -39,15 +40,13 @@ export default function AuthGate({
 
       if (!mounted) return;
 
-      const publicPath = isPublicPath(pathname);
-
       if (pathname.startsWith("/dotaznik/") || isPublicPath(pathname)) {
         setStatus("public");
         return;
       }
 
       if (!session) {
-        if (publicPath) {
+        if (isPublicPath(pathname)) {
           setStatus("public");
           return;
         }
@@ -66,28 +65,27 @@ export default function AuthGate({
         return;
       }
 
-      const { data: clientAccount } = await supabase
-        .from("client_accounts")
-        .select("account_id, stav, klient_id")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
+      const [{ data: clientAccount }, { data: profile }] = await Promise.all([
+        supabase
+          .from("client_accounts")
+          .select("account_id, stav, klient_id")
+          .eq("user_id", session.user.id)
+          .maybeSingle(),
+        loadEmployeeProfile(supabase, session.user.id),
+      ]);
 
       const hasActiveClientAccount =
         clientAccount?.stav === "active" && Boolean(clientAccount.klient_id);
 
-      const { data: profile } = await loadEmployeeProfile(
-        supabase,
-        session.user.id
-      );
-
       const systemAdminCheck = await checkSystemAdminEmail(supabase, email);
-      const loginAllowed =
-        profile &&
-        isEmployeeLoginAllowed(profile, {
-          isSystemAdminEmail: systemAdminCheck.isSystemAdmin,
-        });
+      const authProviders = getAuthProvidersFromUser(session.user);
+      const employeeLoginAllowed = isEmployeeLoginAllowed(profile ?? null, {
+        isSystemAdminEmail: systemAdminCheck.isSystemAdmin,
+        authProviders,
+        hasActiveClientAccount,
+      });
 
-      const isClientOnly = hasActiveClientAccount && !loginAllowed;
+      const isClientOnly = hasActiveClientAccount && !employeeLoginAllowed;
 
       if (isClientOnly && isInternalProtectedPath(pathname)) {
         if (!mounted) return;
@@ -96,7 +94,14 @@ export default function AuthGate({
         return;
       }
 
-      if (!loginAllowed) {
+      if (!employeeLoginAllowed) {
+        if (hasActiveClientAccount) {
+          if (!mounted) return;
+          setStatus("unauthorized");
+          router.replace("/portal");
+          return;
+        }
+
         await supabase.auth.signOut();
         if (!mounted) return;
         setStatus("unauthorized");
@@ -109,7 +114,7 @@ export default function AuthGate({
         return;
       }
 
-      if (publicPath) {
+      if (isPublicPath(pathname)) {
         setStatus("public");
         return;
       }
