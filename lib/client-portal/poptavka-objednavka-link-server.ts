@@ -705,6 +705,25 @@ type DecisionLinkContext = {
   poptavka: PoptavkaObjednavkaLinkPoptavkaSummary;
 };
 
+type ConfirmPoptavkaObjednavkaZpusob = "token" | "portal";
+
+type PortalDecisionLoadError =
+  | "not_found"
+  | "forbidden"
+  | "revoked"
+  | "expired"
+  | "snapshot_invalid"
+  | "state_invalid";
+
+export type PortalPoptavkaObjednavkaDecisionView = {
+  canDecide: boolean;
+  viewState: PoptavkaObjednavkaPublicViewState;
+  snapshot: PoptavkaObjednavkaSnapshot;
+  rejectReason: string | null;
+  expiresAt: string | null;
+  cisloPoptavky: string;
+};
+
 function decisionErrorMessage(
   code:
     | "invalid_token"
@@ -736,6 +755,141 @@ function decisionErrorMessage(
   }
 }
 
+function portalDecisionErrorMessage(error: PortalDecisionLoadError): string {
+  switch (error) {
+    case "forbidden":
+      return "Nemáte oprávnění k této poptávce.";
+    case "not_found":
+      return "Závazná objednávka pro tuto poptávku nebyla nalezena.";
+    case "revoked":
+      return decisionErrorMessage("revoked");
+    case "expired":
+      return decisionErrorMessage("expired");
+    case "snapshot_invalid":
+      return "Obsah objednávky není k dispozici. Kontaktujte prosím WEST COUNTY.";
+    case "state_invalid":
+      return decisionErrorMessage("state_invalid");
+    default:
+      return "Objednávku nelze zpracovat.";
+  }
+}
+
+function mapDecisionLinkContextFromJoinedRow(
+  linkRaw: Record<string, unknown>
+): DecisionLinkContext | null {
+  const link = mapLinkRow(linkRaw);
+  const poptavkaRaw = linkRaw.poptavka;
+  const poptavkaRow = Array.isArray(poptavkaRaw) ? poptavkaRaw[0] : poptavkaRaw;
+  if (!poptavkaRow || typeof poptavkaRow !== "object") {
+    return null;
+  }
+
+  const snapshot = parseSnapshot(linkRaw.objednavka_snapshot);
+  if (!snapshot) {
+    return null;
+  }
+
+  const poptavka = poptavkaRow as PoptavkaObjednavkaLinkPoptavkaSummary;
+
+  return {
+    link: { ...link, objednavka_snapshot: snapshot },
+    poptavka,
+  };
+}
+
+
+async function loadPortalDecisionLinkContext(
+  poptavkaId: string,
+  klientId: string
+): Promise<
+  | { ok: true; context: DecisionLinkContext }
+  | { ok: false; error: PortalDecisionLoadError }
+> {
+  const supabase = createAdminClient();
+
+  const { data: poptavkaRaw, error: poptavkaError } = await supabase
+    .from("poptavky")
+    .select("poptavka_id, cislo_poptavky, stav, klient_id, misto_nazev")
+    .eq("poptavka_id", poptavkaId)
+    .maybeSingle();
+
+  if (poptavkaError || !poptavkaRaw) {
+    return { ok: false, error: "not_found" };
+  }
+
+  if (!poptavkaRaw.klient_id || poptavkaRaw.klient_id !== klientId) {
+    return { ok: false, error: "forbidden" };
+  }
+
+  const { data: linkRaw, error: linkError } = await supabase
+    .from("poptavka_objednavka_links")
+    .select(LINK_ROW_SELECT)
+    .eq("poptavka_id", poptavkaId)
+    .is("revoked_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (linkError || !linkRaw) {
+    return { ok: false, error: "not_found" };
+  }
+
+  const link = mapLinkRow(linkRaw as Record<string, unknown>);
+
+  if (link.revoked_at || link.stav === "revoked") {
+    return { ok: false, error: "revoked" };
+  }
+
+  if (isLinkExpired(link)) {
+    return { ok: false, error: "expired" };
+  }
+
+  const snapshot = parseSnapshot(linkRaw.objednavka_snapshot);
+  if (!snapshot) {
+    return { ok: false, error: "snapshot_invalid" };
+  }
+
+  const poptavka = poptavkaRaw as PoptavkaObjednavkaLinkPoptavkaSummary;
+
+  return {
+    ok: true,
+    context: {
+      link: { ...link, objednavka_snapshot: snapshot },
+      poptavka,
+    },
+  };
+}
+
+export async function loadPortalPoptavkaObjednavkaDecisionView(
+  poptavkaId: string,
+  klientId: string,
+  poptavkaStav: PoptavkaStav
+): Promise<PortalPoptavkaObjednavkaDecisionView | null> {
+  if (
+    poptavkaStav !== "objednavka_odeslana" &&
+    poptavkaStav !== "objednavka_potvrzena" &&
+    poptavkaStav !== "objednavka_odmitnuta"
+  ) {
+    return null;
+  }
+
+  const loaded = await loadPortalDecisionLinkContext(poptavkaId, klientId);
+  if (!loaded.ok) {
+    return null;
+  }
+
+  const { link, poptavka } = loaded.context;
+
+  return {
+    canDecide: canDecideOnPoptavkaObjednavkaLink(link, poptavka.stav),
+    viewState: getPoptavkaObjednavkaPublicViewState(link, poptavka.stav),
+    snapshot: link.objednavka_snapshot,
+    rejectReason: link.odmitnuto_duvod,
+    expiresAt: link.expires_at,
+    cisloPoptavky: poptavka.cislo_poptavky,
+  };
+}
+
 async function loadDecisionLinkContext(
   rawToken: string
 ): Promise<
@@ -752,7 +906,9 @@ async function loadDecisionLinkContext(
 
   const { data: linkRaw, error: linkError } = await supabase
     .from("poptavka_objednavka_links")
-    .select(`${LINK_ROW_SELECT}, poptavka:poptavky(poptavka_id, cislo_poptavky, stav, klient_id, misto_nazev)`)
+    .select(
+      `${LINK_ROW_SELECT}, poptavka:poptavky(poptavka_id, cislo_poptavky, stav, klient_id, misto_nazev)`
+    )
     .eq("token_hash", tokenHash)
     .maybeSingle();
 
@@ -770,38 +926,21 @@ async function loadDecisionLinkContext(
     return { ok: false, error: "expired" };
   }
 
-  const poptavkaRaw = (linkRaw as { poptavka?: unknown }).poptavka;
-  const poptavkaRow = Array.isArray(poptavkaRaw) ? poptavkaRaw[0] : poptavkaRaw;
-  if (!poptavkaRow || typeof poptavkaRow !== "object") {
-    return { ok: false, error: "invalid_token" };
-  }
-
-  const snapshot = parseSnapshot(linkRaw.objednavka_snapshot);
-  if (!snapshot) {
+  const context = mapDecisionLinkContextFromJoinedRow(linkRaw as Record<string, unknown>);
+  if (!context) {
     return { ok: false, error: "snapshot_invalid" };
   }
 
-  const poptavka = poptavkaRow as PoptavkaObjednavkaLinkPoptavkaSummary;
-
-  return {
-    ok: true,
-    context: {
-      link: { ...link, objednavka_snapshot: snapshot },
-      poptavka,
-    },
-  };
+  return { ok: true, context };
 }
 
-export async function confirmPoptavkaObjednavkaByToken(
-  rawToken: string,
-  meta: PoptavkaObjednavkaDecisionRequestMeta = {}
+async function confirmPoptavkaObjednavkaByContext(
+  context: DecisionLinkContext,
+  meta: PoptavkaObjednavkaDecisionRequestMeta,
+  zpusob: ConfirmPoptavkaObjednavkaZpusob,
+  reloadContext: () => Promise<DecisionLinkContext | null>
 ): Promise<PoptavkaObjednavkaDecisionClientResult> {
-  const loaded = await loadDecisionLinkContext(rawToken);
-  if (!loaded.ok) {
-    return { ok: false, errorMessage: decisionErrorMessage(loaded.error) };
-  }
-
-  const { link, poptavka } = loaded.context;
+  const { link, poptavka } = context;
 
   if (isPoptavkaObjednavkaLinkConfirmed(link)) {
     return {
@@ -850,12 +989,12 @@ export async function confirmPoptavkaObjednavkaByToken(
   }
 
   if (!updatedLink) {
-    const reload = await loadDecisionLinkContext(rawToken);
-    if (reload.ok && isPoptavkaObjednavkaLinkConfirmed(reload.context.link)) {
+    const reload = await reloadContext();
+    if (reload && isPoptavkaObjednavkaLinkConfirmed(reload.link)) {
       return {
         ok: true,
         status: "already_confirmed",
-        poptavkaId: reload.context.poptavka.poptavka_id,
+        poptavkaId: reload.poptavka.poptavka_id,
       };
     }
 
@@ -867,7 +1006,7 @@ export async function confirmPoptavkaObjednavkaByToken(
     .update({
       stav: "objednavka_potvrzena",
       objednavka_potvrzena_at: now,
-      objednavka_potvrzena_zpusob: "token",
+      objednavka_potvrzena_zpusob: zpusob,
       updated_at: now,
     })
     .eq("poptavka_id", poptavka.poptavka_id)
@@ -876,12 +1015,12 @@ export async function confirmPoptavkaObjednavkaByToken(
     .maybeSingle();
 
   if (poptavkaError || !updatedPoptavka) {
-    const reload = await loadDecisionLinkContext(rawToken);
-    if (reload.ok && reload.context.poptavka.stav === "objednavka_potvrzena") {
+    const reload = await reloadContext();
+    if (reload && reload.poptavka.stav === "objednavka_potvrzena") {
       return {
         ok: true,
         status: "already_confirmed",
-        poptavkaId: reload.context.poptavka.poptavka_id,
+        poptavkaId: reload.poptavka.poptavka_id,
       };
     }
 
@@ -895,17 +1034,12 @@ export async function confirmPoptavkaObjednavkaByToken(
   };
 }
 
-export async function rejectPoptavkaObjednavkaByToken(
-  rawToken: string,
+async function rejectPoptavkaObjednavkaByContext(
+  context: DecisionLinkContext,
   reason: string | null | undefined,
-  meta: PoptavkaObjednavkaDecisionRequestMeta = {}
+  reloadContext: () => Promise<DecisionLinkContext | null>
 ): Promise<PoptavkaObjednavkaDecisionClientResult> {
-  const loaded = await loadDecisionLinkContext(rawToken);
-  if (!loaded.ok) {
-    return { ok: false, errorMessage: decisionErrorMessage(loaded.error) };
-  }
-
-  const { link, poptavka } = loaded.context;
+  const { link, poptavka } = context;
   const trimmedReason = reason?.trim() || null;
 
   if (isPoptavkaObjednavkaLinkRejected(link)) {
@@ -956,13 +1090,13 @@ export async function rejectPoptavkaObjednavkaByToken(
   }
 
   if (!updatedLink) {
-    const reload = await loadDecisionLinkContext(rawToken);
-    if (reload.ok && isPoptavkaObjednavkaLinkRejected(reload.context.link)) {
+    const reload = await reloadContext();
+    if (reload && isPoptavkaObjednavkaLinkRejected(reload.link)) {
       return {
         ok: true,
         status: "already_rejected",
-        poptavkaId: reload.context.poptavka.poptavka_id,
-        reason: reload.context.link.odmitnuto_duvod ?? trimmedReason,
+        poptavkaId: reload.poptavka.poptavka_id,
+        reason: reload.link.odmitnuto_duvod ?? trimmedReason,
       };
     }
 
@@ -983,13 +1117,13 @@ export async function rejectPoptavkaObjednavkaByToken(
     .maybeSingle();
 
   if (poptavkaError || !updatedPoptavka) {
-    const reload = await loadDecisionLinkContext(rawToken);
-    if (reload.ok && reload.context.poptavka.stav === "objednavka_odmitnuta") {
+    const reload = await reloadContext();
+    if (reload && reload.poptavka.stav === "objednavka_odmitnuta") {
       return {
         ok: true,
         status: "already_rejected",
-        poptavkaId: reload.context.poptavka.poptavka_id,
-        reason: reload.context.link.odmitnuto_duvod ?? trimmedReason,
+        poptavkaId: reload.poptavka.poptavka_id,
+        reason: reload.link.odmitnuto_duvod ?? trimmedReason,
       };
     }
 
@@ -1002,6 +1136,77 @@ export async function rejectPoptavkaObjednavkaByToken(
     poptavkaId: poptavka.poptavka_id,
     reason: trimmedReason,
   };
+}
+
+export async function confirmPoptavkaObjednavkaFromPortal(
+  poptavkaId: string,
+  klientId: string,
+  meta: PoptavkaObjednavkaDecisionRequestMeta = {}
+): Promise<PoptavkaObjednavkaDecisionClientResult> {
+  const loaded = await loadPortalDecisionLinkContext(poptavkaId, klientId);
+  if (!loaded.ok) {
+    return { ok: false, errorMessage: portalDecisionErrorMessage(loaded.error) };
+  }
+
+  return confirmPoptavkaObjednavkaByContext(
+    loaded.context,
+    meta,
+    "portal",
+    async () => {
+      const reload = await loadPortalDecisionLinkContext(poptavkaId, klientId);
+      return reload.ok ? reload.context : null;
+    }
+  );
+}
+
+export async function rejectPoptavkaObjednavkaFromPortal(
+  poptavkaId: string,
+  klientId: string,
+  reason: string | null | undefined,
+  meta: PoptavkaObjednavkaDecisionRequestMeta = {}
+): Promise<PoptavkaObjednavkaDecisionClientResult> {
+  void meta;
+  const loaded = await loadPortalDecisionLinkContext(poptavkaId, klientId);
+  if (!loaded.ok) {
+    return { ok: false, errorMessage: portalDecisionErrorMessage(loaded.error) };
+  }
+
+  return rejectPoptavkaObjednavkaByContext(loaded.context, reason, async () => {
+    const reload = await loadPortalDecisionLinkContext(poptavkaId, klientId);
+    return reload.ok ? reload.context : null;
+  });
+}
+
+export async function confirmPoptavkaObjednavkaByToken(
+  rawToken: string,
+  meta: PoptavkaObjednavkaDecisionRequestMeta = {}
+): Promise<PoptavkaObjednavkaDecisionClientResult> {
+  const loaded = await loadDecisionLinkContext(rawToken);
+  if (!loaded.ok) {
+    return { ok: false, errorMessage: decisionErrorMessage(loaded.error) };
+  }
+
+  return confirmPoptavkaObjednavkaByContext(loaded.context, meta, "token", async () => {
+    const reload = await loadDecisionLinkContext(rawToken);
+    return reload.ok ? reload.context : null;
+  });
+}
+
+export async function rejectPoptavkaObjednavkaByToken(
+  rawToken: string,
+  reason: string | null | undefined,
+  meta: PoptavkaObjednavkaDecisionRequestMeta = {}
+): Promise<PoptavkaObjednavkaDecisionClientResult> {
+  void meta;
+  const loaded = await loadDecisionLinkContext(rawToken);
+  if (!loaded.ok) {
+    return { ok: false, errorMessage: decisionErrorMessage(loaded.error) };
+  }
+
+  return rejectPoptavkaObjednavkaByContext(loaded.context, reason, async () => {
+    const reload = await loadDecisionLinkContext(rawToken);
+    return reload.ok ? reload.context : null;
+  });
 }
 
 /** Poslední nezrušený odkaz závazné objednávky pro poptávku (interní přehled). */
