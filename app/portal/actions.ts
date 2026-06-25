@@ -3,13 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { normalizeIco } from "@/lib/ares/klient-ares";
-import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
-import { activateClientPortalRegistration } from "@/lib/client-portal/register-client-server";
-import {
-  buildClientRegistrationSnapshot,
-  splitContactName,
-} from "@/lib/client-portal/registration-snapshot";
 import type { AresSubject } from "@/lib/ares/klient-ares";
+import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
+import { registerClientPortalAccount } from "@/lib/client-portal/portal-register-server";
+import { splitContactName } from "@/lib/client-portal/registration-snapshot";
 import { createClient } from "@/lib/supabase/server";
 
 function revalidatePortalPaths() {
@@ -69,24 +66,7 @@ export async function portalRegisterAction(formData: FormData) {
   const poznamka = String(formData.get("poznamka") ?? "").trim();
   const aresSubjectRaw = String(formData.get("ares_subject_json") ?? "").trim();
 
-  if (!email || !password || !nazev || !ico || !kontaktJmeno || !telefon) {
-    redirect("/portal/registrace?error=missing_fields");
-  }
-
-  if (password.length < 8) {
-    redirect("/portal/registrace?error=weak_password");
-  }
-
-  if (password !== passwordConfirm) {
-    redirect("/portal/registrace?error=password_mismatch");
-  }
-
-  if (!/^\d{8}$/.test(ico)) {
-    redirect("/portal/registrace?error=invalid_ico");
-  }
-
   const supabase = await createClient();
-
   const {
     data: { user: existingUser },
   } = await supabase.auth.getUser();
@@ -98,23 +78,6 @@ export async function portalRegisterAction(formData: FormData) {
     }
   }
 
-  let userId: string;
-
-  if (existingUser) {
-    userId = existingUser.id;
-  } else {
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-
-    if (signUpError || !signUpData.user) {
-      redirect("/portal/registrace?error=signup_failed");
-    }
-
-    userId = signUpData.user.id;
-  }
-
   let aresSubject: AresSubject | null = null;
   if (aresSubjectRaw) {
     try {
@@ -124,34 +87,24 @@ export async function portalRegisterAction(formData: FormData) {
     }
   }
 
-  const snapshot = buildClientRegistrationSnapshot({
+  const result = await registerClientPortalAccount({
+    email,
+    password,
+    passwordConfirm,
+    ico,
+    nazev,
+    ulice,
+    mesto,
+    psc,
+    dic,
+    telefon,
+    kontaktJmeno,
+    poznamka,
     aresSubject,
-    form: {
-      nazev,
-      ulice,
-      mesto,
-      psc,
-      ico,
-      dic,
-      telefon,
-      email,
-      kontakt_jmeno: kontaktJmeno,
-      poznamka,
-    },
   });
 
-  try {
-    await activateClientPortalRegistration({
-      userId,
-      snapshot,
-      ico,
-      nazev,
-    });
-  } catch {
-    if (!existingUser) {
-      await supabase.auth.signOut();
-    }
-    redirect("/portal/registrace?error=registration_save_failed");
+  if (!result.ok) {
+    redirect(`/portal/registrace?error=${encodeURIComponent(result.code)}`);
   }
 
   revalidatePortalPaths();

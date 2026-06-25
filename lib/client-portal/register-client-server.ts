@@ -7,6 +7,18 @@ import { splitContactName } from "@/lib/client-portal/registration-snapshot";
 import type { ClientRegistrationSnapshot } from "@/lib/client-portal/registration-snapshot";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+function throwDbError(error: { message: string; code?: string; details?: string; hint?: string }) {
+  const err = new Error(error.message) as Error & {
+    code?: string;
+    details?: string;
+    hint?: string;
+  };
+  err.code = error.code;
+  err.details = error.details;
+  err.hint = error.hint;
+  throw err;
+}
+
 function nullable(value: string | null | undefined) {
   const trimmed = (value ?? "").trim();
   return trimmed || null;
@@ -26,7 +38,7 @@ export async function findOrCreateKlientFromRegistration(
       .maybeSingle();
 
     if (byIcoError) {
-      throw new Error(byIcoError.message);
+      throwDbError(byIcoError);
     }
 
     if (byIco?.klient_id) {
@@ -52,7 +64,10 @@ export async function findOrCreateKlientFromRegistration(
     .single();
 
   if (error || !created) {
-    throw new Error(error?.message ?? "Nepodařilo se vytvořit klienta.");
+    if (error) {
+      throwDbError(error);
+    }
+    throw new Error("Nepodařilo se vytvořit klienta.");
   }
 
   return created.klient_id as string;
@@ -81,7 +96,7 @@ export async function activateClientPortalRegistration({
     .maybeSingle();
 
   if (existingAccountError) {
-    throw new Error(existingAccountError.message);
+    throwDbError(existingAccountError);
   }
 
   if (existingAccount?.account_id) {
@@ -99,7 +114,7 @@ export async function activateClientPortalRegistration({
       .eq("account_id", existingAccount.account_id);
 
     if (accountError) {
-      throw new Error(accountError.message);
+      throwDbError(accountError);
     }
   } else {
     const { error: accountError } = await admin.from("client_accounts").insert({
@@ -114,7 +129,7 @@ export async function activateClientPortalRegistration({
     });
 
     if (accountError) {
-      throw new Error(accountError.message);
+      throwDbError(accountError);
     }
   }
 
@@ -129,7 +144,7 @@ export async function activateClientPortalRegistration({
   });
 
   if (registrationError) {
-    throw new Error(registrationError.message);
+    throwDbError(registrationError);
   }
 
   return { klientId };
