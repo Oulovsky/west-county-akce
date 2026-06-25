@@ -1,6 +1,7 @@
 import "./globals.css";
 import "leaflet/dist/leaflet.css";
 import AppShell from "./AppShell";
+import { InternalAccessGuard } from "./InternalAccessGuard";
 
 export default function RootLayout({
   children,
@@ -10,7 +11,9 @@ export default function RootLayout({
   return (
     <html lang="cs">
       <body className="min-h-screen bg-slate-950 text-slate-100">
-        <AppShell>{children}</AppShell>
+        <InternalAccessGuard>
+          <AppShell>{children}</AppShell>
+        </InternalAccessGuard>
       </body>
     </html>
   );

@@ -1,10 +1,11 @@
 ﻿import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 import {
-  isActiveClientOnlyUser,
-  isInternalEmployeeAllowed,
-  isInternalProtectedPath,
+  decideInternalRouteAccess,
+  logInternalAccessGuard,
+  resolveAuthAccessContext,
 } from "@/lib/auth/internal-access-server";
+import { isInternalProtectedPath } from "@/lib/auth/internal-routes";
 import {
   isEmployeeLoginAllowed,
   loadEmployeeProfile,
@@ -50,6 +51,32 @@ function redirectToLogin(req: NextRequest, params: Record<string, string>) {
     });
   }
   return res;
+}
+
+function redirectToPortal(req: NextRequest) {
+  const redirectUrl = req.nextUrl.clone();
+  redirectUrl.pathname = "/portal";
+  redirectUrl.search = "";
+  return NextResponse.redirect(redirectUrl);
+}
+
+function withPathnameHeader(req: NextRequest, res: NextResponse, pathname: string) {
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-wc-pathname", pathname);
+
+  const response = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
+
+  response.headers.set("x-wc-pathname", pathname);
+
+  for (const cookie of res.cookies.getAll()) {
+    response.cookies.set(cookie);
+  }
+
+  return response;
 }
 
 export async function proxy(req: NextRequest) {
@@ -133,39 +160,33 @@ export async function proxy(req: NextRequest) {
     return redirectToLogin(req, { next: nextPath });
   }
 
+  const accessContext = user ? await resolveAuthAccessContext(supabase) : null;
+
   if (user && pathname === "/login") {
-    const email = user.email?.trim().toLowerCase();
-    if (email && (await isActiveClientOnlyUser(supabase, user.id, email))) {
-      const redirectUrl = req.nextUrl.clone();
-      redirectUrl.pathname = "/portal";
-      redirectUrl.search = "";
-      return NextResponse.redirect(redirectUrl);
+    if (accessContext?.isClientOnly) {
+      logInternalAccessGuard(pathname, accessContext, "client_redirect_portal");
+      return redirectToPortal(req);
     }
   }
 
   if (user && isProtectedPortalPath(pathname)) {
     const session = await loadClientPortalSession(supabase);
     if (session.kind !== "active") {
-      const redirectUrl = req.nextUrl.clone();
-      redirectUrl.pathname = "/portal";
-      redirectUrl.search = "";
-      return NextResponse.redirect(redirectUrl);
+      return redirectToPortal(req);
     }
-    return res;
+    return withPathnameHeader(req, res, pathname);
   }
 
-  if (user && isInternalProtectedPath(pathname)) {
-    const email = user.email?.trim().toLowerCase();
+  if (user && isInternalProtectedPath(pathname) && accessContext) {
+    const decision = decideInternalRouteAccess(pathname, accessContext);
+    logInternalAccessGuard(pathname, accessContext, decision);
 
-    if (!email) {
-      return redirectToLogin(req, { error: "not_allowed" });
+    if (decision === "client_redirect_portal") {
+      return redirectToPortal(req);
     }
 
-    if (await isActiveClientOnlyUser(supabase, user.id, email)) {
-      const redirectUrl = req.nextUrl.clone();
-      redirectUrl.pathname = "/portal";
-      redirectUrl.search = "";
-      return NextResponse.redirect(redirectUrl);
+    if (decision === "login_required" || decision === "forbidden") {
+      return redirectToLogin(req, { error: "not_allowed" });
     }
 
     let { data: profile } = await loadEmployeeProfile(supabase, user.id);
@@ -192,12 +213,6 @@ export async function proxy(req: NextRequest) {
       });
     }
 
-    const loginAllowed = await isInternalEmployeeAllowed(supabase, user.id, email);
-
-    if (!loginAllowed) {
-      return redirectToLogin(req, { error: "not_allowed" });
-    }
-
     res.cookies.set(OAUTH_PROFILE_GATE_COOKIE, "", {
       path: "/",
       maxAge: 0,
@@ -213,9 +228,11 @@ export async function proxy(req: NextRequest) {
       redirectUrl.search = "";
       return NextResponse.redirect(redirectUrl);
     }
+
+    return withPathnameHeader(req, res, pathname);
   }
 
-  return res;
+  return withPathnameHeader(req, res, pathname);
 }
 
 export const config = {

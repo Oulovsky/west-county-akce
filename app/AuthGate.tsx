@@ -8,6 +8,7 @@ import {
   isEmployeeLoginAllowed,
   loadEmployeeProfile,
 } from "@/lib/auth/employee-access";
+import { isInternalProtectedPath } from "@/lib/auth/internal-routes";
 import { isPublicAppPath } from "@/lib/public-routes";
 
 type AuthStatus = "loading" | "authorized" | "public" | "unauthorized";
@@ -65,6 +66,15 @@ export default function AuthGate({
         return;
       }
 
+      const { data: clientAccount } = await supabase
+        .from("client_accounts")
+        .select("account_id, stav, klient_id")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+
+      const hasActiveClientAccount =
+        clientAccount?.stav === "active" && Boolean(clientAccount.klient_id);
+
       const { data: profile } = await loadEmployeeProfile(
         supabase,
         session.user.id
@@ -76,6 +86,15 @@ export default function AuthGate({
         isEmployeeLoginAllowed(profile, {
           isSystemAdminEmail: systemAdminCheck.isSystemAdmin,
         });
+
+      const isClientOnly = hasActiveClientAccount && !loginAllowed;
+
+      if (isClientOnly && isInternalProtectedPath(pathname)) {
+        if (!mounted) return;
+        setStatus("unauthorized");
+        router.replace("/portal");
+        return;
+      }
 
       if (!loginAllowed) {
         await supabase.auth.signOut();

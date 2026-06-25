@@ -1,16 +1,20 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
+  assertInternalApiAccess,
+  logInternalAccessGuard,
+  resolveAuthAccessContext,
+} from "@/lib/auth/internal-access-server";
+import {
   isEmployeeLoginAllowed,
   loadEmployeeProfile,
 } from "@/lib/auth/employee-access";
-
-type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+import { checkSystemAdminEmail } from "@/lib/auth/admin-access";
 
 export type RequireSessionResult =
   | {
       ok: true;
-      supabase: SupabaseServerClient;
+      supabase: Awaited<ReturnType<typeof createClient>>;
       user: {
         id: string;
         email?: string | null;
@@ -54,6 +58,17 @@ export async function requireSession(): Promise<RequireSessionResult> {
     };
   }
 
+  const apiAccess = await assertInternalApiAccess(supabase);
+  if (!apiAccess.ok) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: apiAccess.status === 401 ? "Unauthorized" : "Forbidden" },
+        { status: apiAccess.status }
+      ),
+    };
+  }
+
   const { data: profile, error: profileError } = await loadEmployeeProfile(
     supabase,
     user.id
@@ -69,7 +84,16 @@ export async function requireSession(): Promise<RequireSessionResult> {
     };
   }
 
-  if (!profile || !isEmployeeLoginAllowed(profile)) {
+  const systemAdminCheck = await checkSystemAdminEmail(supabase, email);
+  const loginAllowed =
+    profile &&
+    isEmployeeLoginAllowed(profile, {
+      isSystemAdminEmail: systemAdminCheck.isSystemAdmin,
+    });
+
+  if (!loginAllowed) {
+    const context = await resolveAuthAccessContext(supabase);
+    logInternalAccessGuard("/api", context, "forbidden");
     return {
       ok: false,
       response: NextResponse.json(
