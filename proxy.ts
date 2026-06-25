@@ -88,8 +88,7 @@ export async function proxy(req: NextRequest) {
     callbackUrl.search = "";
     callbackUrl.searchParams.set("code", oauthCode);
     const nextFromQuery = req.nextUrl.searchParams.get("next");
-    const nextFallback =
-      pathname === "/" ? "/" : `${pathname}${req.nextUrl.search}`;
+    const nextFallback = pathname === "/" ? "/" : pathname;
     callbackUrl.searchParams.set(
       "next",
       getSafeNextPath(nextFromQuery ?? nextFallback)

@@ -13,6 +13,9 @@ const ERROR_MESSAGES: Record<string, string> = {
     "Přihlašování e-mailem není v systému zapnuté. Kontaktujte správce.",
 };
 
+const PASSWORD_UPDATED_MESSAGE =
+  "Heslo bylo změněno. Nyní se můžete přihlásit.";
+
 function PortalSignInSubmitButton() {
   const { pending } = useFormStatus();
 
@@ -30,6 +33,7 @@ function PortalSignInSubmitButton() {
 export default function PortalPrihlaseniClient() {
   const searchParams = useSearchParams();
   const errorCode = searchParams.get("error");
+  const passwordUpdated = searchParams.get("password") === "updated";
   const next = searchParams.get("next") ?? "/portal";
 
   return (
@@ -39,6 +43,12 @@ export default function PortalPrihlaseniClient() {
           Přihlášení do klientské zóny WEST COUNTY. Interní přístup pro zaměstnance
           je na samostatné adrese a probíhá jinak.
         </p>
+
+        {passwordUpdated ? (
+          <p className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+            {PASSWORD_UPDATED_MESSAGE}
+          </p>
+        ) : null}
 
         {errorCode ? (
           <p className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
@@ -74,6 +84,15 @@ export default function PortalPrihlaseniClient() {
               className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none ring-amber-500/40 focus:ring-2"
             />
           </label>
+
+          <p className="text-right text-sm">
+            <Link
+              href="/portal/zapomenute-heslo"
+              className="font-medium text-amber-200/90 hover:text-amber-100"
+            >
+              Zapomenuté heslo?
+            </Link>
+          </p>
 
           <PortalSignInSubmitButton />
         </form>

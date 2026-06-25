@@ -3,9 +3,14 @@ export function isPublicLandingPath(pathname: string): boolean {
   return pathname === "/";
 }
 
-/** Portál: přihlášení / registrace bez auth. */
+/** Portál: přihlášení / registrace / obnova hesla bez aktivní klientské session. */
 export function isPublicPortalAuthPath(pathname: string): boolean {
-  return pathname === "/portal/prihlaseni" || pathname === "/portal/registrace";
+  return (
+    pathname === "/portal/prihlaseni" ||
+    pathname === "/portal/registrace" ||
+    pathname === "/portal/zapomenute-heslo" ||
+    pathname === "/portal/nove-heslo"
+  );
 }
 
 /** Portál: dashboard / — veřejný, stav řeší stránka. */

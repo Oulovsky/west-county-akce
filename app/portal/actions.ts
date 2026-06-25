@@ -6,6 +6,7 @@ import { normalizeIco } from "@/lib/ares/klient-ares";
 import type { AresSubject } from "@/lib/ares/klient-ares";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
 import { mapPortalSignInErrorCode } from "@/lib/auth/portal-auth-errors";
+import { buildPortalPasswordResetRedirectUrl } from "@/lib/auth/portal-password-reset";
 import { registerClientPortalAccount } from "@/lib/client-portal/portal-register-server";
 import { splitContactName } from "@/lib/client-portal/registration-snapshot";
 import { createClient } from "@/lib/supabase/server";
@@ -14,6 +15,8 @@ function revalidatePortalPaths() {
   revalidatePath("/portal");
   revalidatePath("/portal/prihlaseni");
   revalidatePath("/portal/registrace");
+  revalidatePath("/portal/zapomenute-heslo");
+  revalidatePath("/portal/nove-heslo");
   revalidatePath("/portal/profil");
   revalidatePath("/portal/poptavky");
   revalidatePath("/admin/client-registrace");
@@ -148,4 +151,72 @@ export async function portalUpdateProfilAction(formData: FormData) {
 
   revalidatePortalPaths();
   redirect("/portal/profil?saved=1");
+}
+
+export async function portalRequestPasswordResetAction(formData: FormData) {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+
+  if (!email) {
+    redirect("/portal/zapomenute-heslo?error=missing_fields");
+  }
+
+  let redirectTo: string;
+  try {
+    redirectTo = buildPortalPasswordResetRedirectUrl();
+  } catch {
+    redirect("/portal/zapomenute-heslo?error=env_missing");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo,
+  });
+
+  if (error) {
+    console.info("[portal-password-reset] request failed", {
+      email,
+      status: error.status,
+      code: error.code,
+      message: error.message,
+    });
+  }
+
+  redirect("/portal/zapomenute-heslo?status=reset_sent");
+}
+
+export async function portalUpdatePasswordAction(formData: FormData) {
+  const password = String(formData.get("password") ?? "");
+  const passwordConfirm = String(formData.get("password_confirm") ?? "");
+
+  if (password.length < 8) {
+    redirect("/portal/nove-heslo?error=weak_password");
+  }
+
+  if (password !== passwordConfirm) {
+    redirect("/portal/nove-heslo?error=password_mismatch");
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/portal/nove-heslo?error=reset_failed");
+  }
+
+  const { error } = await supabase.auth.updateUser({ password });
+
+  if (error) {
+    console.info("[portal-password-reset] update failed", {
+      status: error.status,
+      code: error.code,
+      message: error.message,
+    });
+    redirect("/portal/nove-heslo?error=reset_failed");
+  }
+
+  await supabase.auth.signOut();
+  revalidatePortalPaths();
+  redirect("/portal/prihlaseni?password=updated");
 }
