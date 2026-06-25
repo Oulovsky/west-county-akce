@@ -6,6 +6,10 @@ export type SchodyStrana = "vlevo" | "vpravo";
 
 export type KotveniTyp = "zatloukane" | "ibc_boxy";
 
+export type KotveniPovrch = "trava_hlina" | "asfalt_beton";
+
+export type SchodyVolba = "zadne" | "vlevo" | "vpravo" | "vlevo_vpravo";
+
 export type PraktikablTyp = "zadny" | "bicí" | "jiny";
 
 export type PraktikablUmisteni = "stred_vzadu" | "vlevo_vzadu" | "vpravo_vzadu" | "vlastni";
@@ -30,8 +34,10 @@ export type SestavaKonfiguratorState = {
   atypicka_poptavka_text: string;
   stage_typ: StageTyp | null;
   zastreseni_variant_id: string | null;
+  zastreseni_setup_id: string | null;
   zastreseni_sirka_m: number | null;
   zastreseni_hloubka_m: number | null;
+  mobilni_setup_id: string | null;
   cista_vyska_m: number | null;
   podium_sirka_m: number | null;
   podium_hloubka_m: number | null;
@@ -43,9 +49,10 @@ export type SestavaKonfiguratorState = {
   praktikabl_vyska_m: number | null;
   praktikabl_umisteni: PraktikablUmisteni | null;
   praktikabl_schudky: boolean;
+  praktikabl_mobilni: boolean;
   praktikabl_poznamka: string;
   kotveni_typ: KotveniTyp | null;
-  kotveni_povrch: string;
+  kotveni_povrch: KotveniPovrch | null;
   led_pozadovano: boolean;
   led_typ_kod: LedTypKod | null;
   led_sirka_m: number | null;
@@ -54,7 +61,9 @@ export type SestavaKonfiguratorState = {
   led_rohy: boolean;
   led_obsluha_obsahu: LedObsluhaObsahu | null;
   zvuk_preset: PresetVelikost | null;
+  zvuk_setup_id: string | null;
   svetla_preset: PresetVelikost | null;
+  svetla_setup_id: string | null;
   kamery_pocet: number;
   dron: boolean;
   poznamka: string;
@@ -71,6 +80,7 @@ export type PortalLedTypKatalog = {
   panel_vyska_m: number;
   panel_plocha_m2: number;
   je_mantinel: boolean;
+  podporuje_rohy: boolean;
   sklad_polozka_id: string | null;
   dostupnych_panelu: number;
   max_plocha_m2: number;
@@ -83,6 +93,9 @@ export type PortalZastreseniVarianta = {
   nazev: string;
   aktivni?: boolean;
   poradi?: number;
+  sirka_m: number;
+  hloubka_m: number;
+  setup_id?: string | null;
   min_sirka_m: number;
   max_sirka_m: number;
   min_hloubka_m: number;
@@ -135,6 +148,7 @@ export type PortalSestavaKatalog = {
     default_hloubka_m: number;
     max_cista_vyska_m: number;
     pa_na_stativech: true;
+    setup_id?: string | null;
   };
   praktikabl_varianty: PortalPraktikablVarianta[];
   podium_modul_sirka_m: number;

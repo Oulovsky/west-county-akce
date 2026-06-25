@@ -125,18 +125,13 @@ async function resolvePortalSetupsForSave(
 
 async function resolveSetupsWithSestava(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  formData: FormData,
-  manualSetups: PoptavkaFormValues["setupy"]
+  formData: FormData
 ) {
   const sestava = parseSestavaFormData(formData);
   const katalog = await loadPortalSestavaKatalog();
   const validation = validateSestavaKonfigurator(sestava, katalog);
 
-  if (sestava.rezim === "atypicka" && validation.errors.length > 0) {
-    return { ok: false as const, error: "invalid_sestava" as const };
-  }
-
-  if (sestava.rezim === "standard" && sestava.stage_typ && validation.errors.length > 0) {
+  if (validation.errors.length > 0) {
     return { ok: false as const, error: "invalid_sestava" as const };
   }
 
@@ -145,8 +140,7 @@ async function resolveSetupsWithSestava(
     sestava.rezim === "atypicka"
       ? []
       : deriveSetupSelectionsFromSestava(sestava, katalog, portalSetups);
-  const merged =
-    sestava.rezim === "atypicka" ? manualSetups : mergeSetupSelections(manualSetups, derived);
+  const merged = sestava.rezim === "atypicka" ? [] : mergeSetupSelections([], derived);
 
   return resolvePortalSetupsForSave(supabase, merged);
 }
@@ -199,7 +193,7 @@ export async function createPoptavkaAction(formData: FormData) {
     redirectWithError("/portal/poptavka/nova", mistoResult.error);
   }
 
-  const setupResult = await resolveSetupsWithSestava(supabase, formData, values.setupy);
+  const setupResult = await resolveSetupsWithSestava(supabase, formData);
   if (!setupResult.ok) {
     redirectWithError("/portal/poptavka/nova", setupResult.error);
   }
@@ -266,7 +260,7 @@ export async function updatePoptavkaAction(formData: FormData) {
     redirectWithError(`/portal/poptavka/${poptavkaId}`, mistoResult.error);
   }
 
-  const setupResult = await resolveSetupsWithSestava(supabase, formData, values.setupy);
+  const setupResult = await resolveSetupsWithSestava(supabase, formData);
   if (!setupResult.ok) {
     redirectWithError(`/portal/poptavka/${poptavkaId}`, setupResult.error);
   }

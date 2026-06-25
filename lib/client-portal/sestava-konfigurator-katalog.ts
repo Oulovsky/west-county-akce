@@ -1,4 +1,8 @@
 import type { PortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-types";
+import type { KotveniTyp } from "@/lib/client-portal/sestava-konfigurator-types";
+
+/** Standardní LED panel 1 × 0,5 m = 0,5 m². */
+export const STANDARD_LED_PANEL_PLOCHA_M2 = 0.5;
 
 /** Výchozí katalog — lze přepsat z DB tabulky portal_konfigurator_katalog. */
 export const DEFAULT_PORTAL_SESTAVA_KATALOG: PortalSestavaKatalog = {
@@ -8,40 +12,50 @@ export const DEFAULT_PORTAL_SESTAVA_KATALOG: PortalSestavaKatalog = {
     default_hloubka_m: 6,
     max_cista_vyska_m: 5.5,
     pa_na_stativech: true,
+    setup_id: null,
   },
   zastreseni_varianty: [
     {
-      id: "mala",
-      nazev: "Malé zastřešení",
-      min_sirka_m: 6,
-      max_sirka_m: 10,
-      min_hloubka_m: 4,
-      max_hloubka_m: 8,
+      id: "8x6",
+      nazev: "8 × 6 m",
+      sirka_m: 8,
+      hloubka_m: 6,
+      min_sirka_m: 8,
+      max_sirka_m: 8,
+      min_hloubka_m: 6,
+      max_hloubka_m: 6,
       max_cista_vyska_m: 5.0,
-      doporucena_sirky_m: [8, 10],
-      doporucene_hloubky_m: [6, 8],
+      doporucena_sirky_m: [8],
+      doporucene_hloubky_m: [6],
+      setup_id: null,
     },
     {
-      id: "velka",
-      nazev: "Velké zastřešení",
+      id: "10x8",
+      nazev: "10 × 8 m",
+      sirka_m: 10,
+      hloubka_m: 8,
       min_sirka_m: 10,
-      max_sirka_m: 14,
+      max_sirka_m: 10,
       min_hloubka_m: 8,
-      max_hloubka_m: 12,
-      max_cista_vyska_m: 6.5,
-      doporucena_sirky_m: [12, 14],
-      doporucene_hloubky_m: [10, 12],
+      max_hloubka_m: 8,
+      max_cista_vyska_m: 6.0,
+      doporucena_sirky_m: [10],
+      doporucene_hloubky_m: [8],
+      setup_id: null,
     },
     {
-      id: "nejvetsi",
-      nazev: "Největší zastřešení",
-      min_sirka_m: 14,
-      max_sirka_m: 20,
+      id: "15x10",
+      nazev: "15 × 10 m",
+      sirka_m: 15,
+      hloubka_m: 10,
+      min_sirka_m: 15,
+      max_sirka_m: 15,
       min_hloubka_m: 10,
-      max_hloubka_m: 16,
+      max_hloubka_m: 10,
       max_cista_vyska_m: 8.0,
-      doporucena_sirky_m: [16, 20],
-      doporucene_hloubky_m: [12, 16],
+      doporucena_sirky_m: [15],
+      doporucene_hloubky_m: [10],
+      setup_id: null,
     },
   ],
   podium_modul_sirka_m: 2,
@@ -58,12 +72,13 @@ export const DEFAULT_PORTAL_SESTAVA_KATALOG: PortalSestavaKatalog = {
       nazev: "P2 indoor",
       pixel_pitch: "P2",
       prostredi: "indoor",
-      panel_sirka_m: 0.5,
+      panel_sirka_m: 1,
       panel_vyska_m: 0.5,
-      panel_plocha_m2: 0.25,
+      panel_plocha_m2: 0.5,
       je_mantinel: false,
+      podporuje_rohy: true,
       sklad_polozka_id: null,
-      dostupnych_panelu: 98,
+      dostupnych_panelu: 49,
       max_plocha_m2: 24.5,
       default_sirka_m: 7,
       default_vyska_m: 3.5,
@@ -73,12 +88,13 @@ export const DEFAULT_PORTAL_SESTAVA_KATALOG: PortalSestavaKatalog = {
       nazev: "P2,6 outdoor",
       pixel_pitch: "P2,6",
       prostredi: "outdoor",
-      panel_sirka_m: 0.5,
+      panel_sirka_m: 1,
       panel_vyska_m: 0.5,
-      panel_plocha_m2: 0.25,
+      panel_plocha_m2: 0.5,
       je_mantinel: false,
+      podporuje_rohy: true,
       sklad_polozka_id: null,
-      dostupnych_panelu: 70,
+      dostupnych_panelu: 35,
       max_plocha_m2: 17.5,
       default_sirka_m: 7,
       default_vyska_m: 2.5,
@@ -88,12 +104,13 @@ export const DEFAULT_PORTAL_SESTAVA_KATALOG: PortalSestavaKatalog = {
       nazev: "P3,9 outdoor",
       pixel_pitch: "P3,9",
       prostredi: "outdoor",
-      panel_sirka_m: 0.5,
+      panel_sirka_m: 1,
       panel_vyska_m: 0.5,
-      panel_plocha_m2: 0.25,
+      panel_plocha_m2: 0.5,
       je_mantinel: false,
+      podporuje_rohy: true,
       sklad_polozka_id: null,
-      dostupnych_panelu: 180,
+      dostupnych_panelu: 90,
       max_plocha_m2: 45,
       default_sirka_m: 8,
       default_vyska_m: 4.5,
@@ -103,12 +120,13 @@ export const DEFAULT_PORTAL_SESTAVA_KATALOG: PortalSestavaKatalog = {
       nazev: "P4,8 outdoor",
       pixel_pitch: "P4,8",
       prostredi: "outdoor",
-      panel_sirka_m: 0.5,
+      panel_sirka_m: 1,
       panel_vyska_m: 0.5,
-      panel_plocha_m2: 0.25,
+      panel_plocha_m2: 0.5,
       je_mantinel: false,
+      podporuje_rohy: true,
       sklad_polozka_id: null,
-      dostupnych_panelu: 90,
+      dostupnych_panelu: 45,
       max_plocha_m2: 22.5,
       default_sirka_m: 7.5,
       default_vyska_m: 3,
@@ -118,10 +136,11 @@ export const DEFAULT_PORTAL_SESTAVA_KATALOG: PortalSestavaKatalog = {
       nazev: "P6,4 mantinel",
       pixel_pitch: "P6,4",
       prostredi: "outdoor",
-      panel_sirka_m: 0.96,
-      panel_vyska_m: 0.96,
-      panel_plocha_m2: 0.9216,
+      panel_sirka_m: 0.5,
+      panel_vyska_m: 0.5,
+      panel_plocha_m2: 0.25,
       je_mantinel: true,
+      podporuje_rohy: false,
       sklad_polozka_id: null,
       dostupnych_panelu: 22,
       max_plocha_m2: 21,
@@ -130,14 +149,35 @@ export const DEFAULT_PORTAL_SESTAVA_KATALOG: PortalSestavaKatalog = {
     },
   ],
   zvuk_presety: [
-    { kod: "mala", nazev: "Malá sestava", oblast: "sound", setup_id: null },
-    { kod: "stredni", nazev: "Střední sestava", oblast: "sound", setup_id: null },
-    { kod: "velka", nazev: "Velká sestava", oblast: "sound", setup_id: null },
+    { kod: "mala", nazev: "Malý PA systém", oblast: "sound", setup_id: null },
+    { kod: "stredni", nazev: "Střední PA systém", oblast: "sound", setup_id: null },
+    { kod: "velka", nazev: "Velký PA systém", oblast: "sound", setup_id: null },
   ],
   svetla_presety: [
-    { kod: "mala", nazev: "Malá sestava", oblast: "lights", setup_id: null, aktivni: true, poradi: 1 },
-    { kod: "stredni", nazev: "Střední sestava", oblast: "lights", setup_id: null, aktivni: true, poradi: 2 },
-    { kod: "velka", nazev: "Velká sestava", oblast: "lights", setup_id: null, aktivni: true, poradi: 3 },
+    {
+      kod: "mala",
+      nazev: "Malá světelná sestava",
+      oblast: "lights",
+      setup_id: null,
+      aktivni: true,
+      poradi: 1,
+    },
+    {
+      kod: "stredni",
+      nazev: "Střední světelná sestava",
+      oblast: "lights",
+      setup_id: null,
+      aktivni: true,
+      poradi: 2,
+    },
+    {
+      kod: "velka",
+      nazev: "Velká světelná sestava",
+      oblast: "lights",
+      setup_id: null,
+      aktivni: true,
+      poradi: 3,
+    },
   ],
   kamery_dron: {
     max_pocet_kamer: 3,
@@ -156,11 +196,23 @@ export function normalizePortalSestavaKatalog(
       ...DEFAULT_PORTAL_SESTAVA_KATALOG.kamery_dron,
       ...(input?.kamery_dron ?? {}),
     },
-    zastreseni_varianty: (input?.zastreseni_varianty ?? base.zastreseni_varianty).map((row, index) => ({
-      aktivni: true,
-      poradi: index + 1,
-      ...row,
-    })),
+    mobilni_stage: {
+      ...DEFAULT_PORTAL_SESTAVA_KATALOG.mobilni_stage,
+      ...(input?.mobilni_stage ?? {}),
+    },
+    zastreseni_varianty: (input?.zastreseni_varianty ?? base.zastreseni_varianty).map((row, index) => {
+      const fallback = DEFAULT_PORTAL_SESTAVA_KATALOG.zastreseni_varianty.find((v) => v.id === row.id);
+      const sirka = row.sirka_m ?? fallback?.sirka_m ?? row.min_sirka_m;
+      const hloubka = row.hloubka_m ?? fallback?.hloubka_m ?? row.min_hloubka_m;
+      return {
+        aktivni: true,
+        poradi: index + 1,
+        setup_id: null,
+        ...row,
+        sirka_m: sirka,
+        hloubka_m: hloubka,
+      };
+    }),
     praktikabl_varianty: (input?.praktikabl_varianty ?? base.praktikabl_varianty).map((row, index) => ({
       aktivni: true,
       poradi: index + 1,
@@ -170,6 +222,7 @@ export function normalizePortalSestavaKatalog(
       aktivni: true,
       poradi: index + 1,
       ...row,
+      podporuje_rohy: row.je_mantinel ? false : row.podporuje_rohy !== false,
     })),
     zvuk_presety: (input?.zvuk_presety ?? base.zvuk_presety).map((row, index) => ({
       aktivni: true,
@@ -219,13 +272,18 @@ export function getMaxCistaVyska(
   return variant?.max_cista_vyska_m ?? null;
 }
 
+/** Odhad počtu standardních LED panelů (1 × 0,5 m) ze skladu — interní. */
+export function computeStandardLedPanelCount(plochaM2: number): number {
+  if (plochaM2 <= 0) return 0;
+  return Math.round(plochaM2 / STANDARD_LED_PANEL_PLOCHA_M2);
+}
+
 export function computeLedMaxFromStock(
-  panelSirkaM: number,
-  panelVyskaM: number,
+  panelPlochaM2: number,
   dostupnychPanelu: number
 ): number {
-  if (panelSirkaM <= 0 || panelVyskaM <= 0 || dostupnychPanelu <= 0) return 0;
-  return dostupnychPanelu * panelSirkaM * panelVyskaM;
+  if (panelPlochaM2 <= 0 || dostupnychPanelu <= 0) return 0;
+  return dostupnychPanelu * panelPlochaM2;
 }
 
 export function computePodiumModuly(
@@ -242,4 +300,22 @@ export function computePodiumModuly(
 export function estimatePodiumLegs(modulu: number): number {
   if (modulu <= 0) return 0;
   return Math.max(4, Math.ceil(modulu / 2) + 2);
+}
+
+export function isIntegerMeter(value: number | null | undefined): boolean {
+  if (value == null) return false;
+  return Number.isInteger(value) && value > 0;
+}
+
+export function buildPodiumMeterOptions(maxM: number): number[] {
+  const limit = Math.max(1, Math.min(30, Math.floor(maxM)));
+  return Array.from({ length: limit }, (_, index) => index + 1);
+}
+
+export function getAvailableKotveniTypy(
+  povrch: "trava_hlina" | "asfalt_beton" | null
+): KotveniTyp[] {
+  if (!povrch) return [];
+  if (povrch === "trava_hlina") return ["zatloukane", "ibc_boxy"];
+  return ["ibc_boxy"];
 }

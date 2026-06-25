@@ -9,19 +9,16 @@ import {
 import PoptavkaFotkyClient from "@/components/portal/PoptavkaFotkyClient";
 import { emptyLogistikaOknaValues } from "@/lib/logistika-okna";
 import PoptavkaLogistikaOknaPanel from "@/components/portal/PoptavkaLogistikaOknaPanel";
-import PoptavkaPreviousTechnikaPanel from "@/components/portal/PoptavkaPreviousTechnikaPanel";
 import PoptavkaMistoKnowHowPanel from "@/components/portal/PoptavkaMistoKnowHowPanel";
 import PoptavkaSestavaKonfigurator from "@/components/portal/PoptavkaSestavaKonfigurator";
 import PoptavkaSubmitButton from "@/components/portal/PoptavkaSubmitButton";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
-import { SETUP_OBLAST_LABELS } from "@/lib/client-portal/labels";
 import {
   TYP_AKCE_OPTIONS,
   type PoptavkaFormValues,
   type PoptavkaPrefill,
   type PoptavkaSetupInput,
 } from "@/lib/client-portal/poptavka-form";
-import type { ClientPortalPreviousTechnikaOption } from "@/lib/client-portal/client-previous-technika-shared";
 import type { ClientPortalMistoSummary, ClientPortalMistoKnowHow } from "@/lib/client-portal/client-mista-shared";
 import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-server";
 import type { PortalSetupsByOblast } from "@/lib/client-portal/poptavka-server";
@@ -39,7 +36,6 @@ import type {
   PortalSestavaKatalog,
   SestavaKonfiguratorState,
 } from "@/lib/client-portal/sestava-konfigurator-types";
-import { SETUP_OBLASTI, type SetupOblast } from "@/lib/client-portal/types";
 
 const ERROR_MESSAGES: Record<string, string> = {
   missing_contact: "Vyplňte kontaktní osobu.",
@@ -72,7 +68,6 @@ type Props = {
   setupsByOblast: PortalSetupsByOblast;
   savedMista?: ClientPortalMistoSummary[];
   savedMistaKnowHowById?: Record<string, ClientPortalMistoKnowHow>;
-  previousTechnikaOptions?: ClientPortalPreviousTechnikaOption[];
   sestavaKatalog: PortalSestavaKatalog;
   initialSestava?: SestavaKonfiguratorState;
   initialValues?: Partial<PoptavkaFormValues>;
@@ -89,22 +84,14 @@ type Props = {
 const CREATE_STEPS = [
   { id: 1, title: "Kdo zadává" },
   { id: 2, title: "Kde a kdy" },
-  { id: 3, title: "Setupy" },
-  { id: 4, title: "Konfigurace sestavy" },
+  { id: 3, title: "Konfigurace sestavy" },
 ] as const;
 
 const EDIT_STEPS = [
   ...CREATE_STEPS,
-  { id: 5, title: "Technika místa" },
-  { id: 6, title: "Fotky" },
+  { id: 4, title: "Technika místa" },
+  { id: 5, title: "Fotky" },
 ] as const;
-
-function setupDescription(setup: {
-  portal_popis: string | null;
-  popis: string | null;
-}) {
-  return setup.portal_popis?.trim() || setup.popis?.trim() || "";
-}
 
 function emptySetupMap(): Record<string, PoptavkaSetupInput> {
   return {};
@@ -123,7 +110,6 @@ export default function PoptavkaFormClient({
   setupsByOblast,
   savedMista = [],
   savedMistaKnowHowById = {},
-  previousTechnikaOptions = [],
   sestavaKatalog,
   initialSestava,
   initialValues,
@@ -291,72 +277,6 @@ export default function PoptavkaFormClient({
     form.misto_source === "saved" && isSavedMistoInList(form.misto_id)
       ? (savedMistaKnowHowById[form.misto_id!] ?? { poznamky: [], fotky: [] })
       : null;
-
-  const visiblePreviousTechnikaOptions = useMemo(() => {
-    if (form.misto_source === "saved" && form.misto_id) {
-      const onMisto = previousTechnikaOptions.filter(
-        (option) => option.misto_id === form.misto_id
-      );
-      if (onMisto.length > 0) {
-        return onMisto;
-      }
-    }
-    return previousTechnikaOptions;
-  }, [form.misto_id, form.misto_source, previousTechnikaOptions]);
-
-  const previousTechnikaPanelTitle =
-    form.misto_source === "saved" && form.misto_id
-      ? "Předchozí technika na tomto místě"
-      : "Předchozí technika";
-
-  function applyPreviousTechnika(option: ClientPortalPreviousTechnikaOption) {
-    const next: Record<string, PoptavkaSetupInput> = {};
-    for (const row of option.setupy) {
-      next[row.setup_id] = {
-        setup_id: row.setup_id,
-        mnozstvi: row.mnozstvi,
-        poznamka_klienta: row.poznamka_klienta,
-      };
-    }
-    setSelectedSetups(next);
-  }
-
-  function toggleSetup(setupId: string, checked: boolean) {
-    setSelectedSetups((current) => {
-      const next = { ...current };
-      if (checked) {
-        next[setupId] = {
-          setup_id: setupId,
-          mnozstvi: current[setupId]?.mnozstvi ?? 1,
-          poznamka_klienta: current[setupId]?.poznamka_klienta ?? null,
-        };
-      } else {
-        delete next[setupId];
-      }
-      return next;
-    });
-  }
-
-  function updateSetupField(
-    setupId: string,
-    field: "mnozstvi" | "poznamka_klienta",
-    value: string
-  ) {
-    setSelectedSetups((current) => {
-      const row = current[setupId];
-      if (!row) return current;
-      return {
-        ...current,
-        [setupId]: {
-          ...row,
-          [field]:
-            field === "mnozstvi"
-              ? Math.max(1, Math.floor(Number(value) || 1))
-              : value.trim() || null,
-        },
-      };
-    });
-  }
 
   function updateTechnikaField<K extends keyof PoptavkaTechnikaFormValues>(
     key: K,
@@ -694,121 +614,17 @@ export default function PoptavkaFormClient({
           )}
 
           {(readOnly || step === 3) && (
-            <section className="space-y-6">
-              <div>
-                <h2 className="text-lg font-semibold text-white">3. Výběr setupů</h2>
-                <p className="mt-1 text-sm text-slate-400">
-                  Vyberte požadované setupy a zadejte množství. Skladové položky ani rozměry
-                  stage zadávat nemusíte.
-                </p>
-              </div>
-
-              <PoptavkaPreviousTechnikaPanel
-                title={previousTechnikaPanelTitle}
-                options={visiblePreviousTechnikaOptions}
-                readOnly={readOnly}
-                onApply={applyPreviousTechnika}
-              />
-
-              {SETUP_OBLASTI.map((oblast: SetupOblast) => {
-                const rows = setupsByOblast[oblast];
-                if (!rows.length) return null;
-
-                return (
-                  <div key={oblast} className="space-y-3">
-                    <h3 className="text-sm font-bold uppercase tracking-[0.14em] text-amber-200/90">
-                      {SETUP_OBLAST_LABELS[oblast]}
-                    </h3>
-                    <div className="space-y-3">
-                      {rows.map((setup) => {
-                        const selected = selectedSetups[setup.setup_id];
-                        const description = setupDescription(setup);
-
-                        return (
-                          <div
-                            key={setup.setup_id}
-                            className="rounded-xl border border-white/10 bg-white/[0.02] p-4"
-                          >
-                            <div className="flex items-start gap-3">
-                              {!readOnly ? (
-                                <input
-                                  type="checkbox"
-                                  checked={Boolean(selected)}
-                                  onChange={(e) =>
-                                    toggleSetup(setup.setup_id, e.target.checked)
-                                  }
-                                  className="mt-1 h-4 w-4 rounded border-white/20 bg-slate-950"
-                                />
-                              ) : null}
-                              <div className="min-w-0 flex-1">
-                                <div className="font-semibold text-white">{setup.nazev}</div>
-                                {description ? (
-                                  <p className="mt-1 text-sm text-slate-400">{description}</p>
-                                ) : null}
-
-                                {(selected || readOnly) && selected ? (
-                                  <div className="mt-3 grid gap-3 sm:grid-cols-[120px_1fr]">
-                                    <label className="block space-y-1">
-                                      <span className="text-xs text-slate-500">Množství</span>
-                                      <input
-                                        type="number"
-                                        min={1}
-                                        value={selected.mnozstvi}
-                                        onChange={(e) =>
-                                          updateSetupField(
-                                            setup.setup_id,
-                                            "mnozstvi",
-                                            e.target.value
-                                          )
-                                        }
-                                        disabled={readOnly}
-                                        className={inputClass}
-                                      />
-                                    </label>
-                                    <label className="block space-y-1">
-                                      <span className="text-xs text-slate-500">
-                                        Poznámka k setupu
-                                      </span>
-                                      <input
-                                        value={selected.poznamka_klienta ?? ""}
-                                        onChange={(e) =>
-                                          updateSetupField(
-                                            setup.setup_id,
-                                            "poznamka_klienta",
-                                            e.target.value
-                                          )
-                                        }
-                                        disabled={readOnly}
-                                        className={inputClass}
-                                      />
-                                    </label>
-                                  </div>
-                                ) : null}
-
-                                {readOnly && !selected ? null : null}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </section>
-          )}
-
-          {(readOnly || step === 4) && (
             <section className="space-y-4">
               <div>
-                <h2 className="text-lg font-semibold text-white">4. Konfigurace sestavy</h2>
+                <h2 className="text-lg font-semibold text-white">3. Konfigurace sestavy</h2>
                 <p className="mt-1 text-sm text-slate-400">
-                  Postupně poskládejte stage, pódium, LED, zvuk a světla. Schéma se aktualizuje podle
-                  vašich voleb.
+                  Poskládejte stage, pódium, LED, zvuk a světla. Volby vycházejí z našich
+                  sestav — schéma se aktualizuje podle vašich voleb.
                 </p>
               </div>
               <PoptavkaSestavaKonfigurator
                 katalog={sestavaKatalog}
+                setupsByOblast={setupsByOblast}
                 state={sestava}
                 onChange={setSestava}
                 readOnly={readOnly}
@@ -819,9 +635,9 @@ export default function PoptavkaFormClient({
             </section>
           )}
 
-          {mode === "edit" && (readOnly || step === 5) && (
+          {mode === "edit" && (readOnly || step === 4) && (
             <section className="space-y-4">
-              <h2 className="text-lg font-semibold text-white">5. Technické údaje místa</h2>
+              <h2 className="text-lg font-semibold text-white">4. Technické údaje místa</h2>
 
               <label className="block space-y-2">
                 <span className={labelClass}>Poznámka k příjezdu</span>
@@ -1063,7 +879,7 @@ export default function PoptavkaFormClient({
               </button>
             ) : null}
 
-            {!readOnly && step >= 3 && step <= (mode === "create" ? 4 : 5) ? (
+            {!readOnly && step >= 3 && step <= (mode === "create" ? 3 : 4) ? (
               <button
                 type="submit"
                 disabled={submitting}
@@ -1086,7 +902,7 @@ export default function PoptavkaFormClient({
           </div>
         </form>
 
-        {mode === "edit" && poptavkaId && (readOnly || step === 6) ? (
+        {mode === "edit" && poptavkaId && (readOnly || step === 5) ? (
           <div className="mt-8 space-y-6 border-t border-white/10 pt-8">
             <PoptavkaFotkyClient
               key={initialFotky.map((row) => row.id).join("-") || "empty"}

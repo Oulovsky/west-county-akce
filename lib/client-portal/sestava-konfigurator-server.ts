@@ -55,11 +55,7 @@ async function enrichLedStock(katalog: PortalSestavaKatalog): Promise<PortalSest
       led_typy: katalog.led_typy.map((led) => {
         if (!led.sklad_polozka_id) return led;
         const dostupnych = stockById.get(led.sklad_polozka_id) ?? 0;
-        const maxFromStock = computeLedMaxFromStock(
-          led.panel_sirka_m,
-          led.panel_vyska_m,
-          dostupnych
-        );
+        const maxFromStock = computeLedMaxFromStock(led.panel_plocha_m2, dostupnych);
         return {
           ...led,
           dostupnych_panelu: dostupnych,

@@ -24,7 +24,6 @@ import {
 import { loadPortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-server";
 import PoptavkaSestavaSchema from "@/components/portal/PoptavkaSestavaSchema";
 import { loadClientMistaKonaniForPortal, loadClientMistaKnowHowByIdForPortal } from "@/lib/client-portal/client-mista-server";
-import { loadClientPreviousTechnikaOptionsForPortal } from "@/lib/client-portal/client-previous-technika-server";
 import { loadPortalPoptavkaObjednavkaDecisionView } from "@/lib/client-portal/poptavka-objednavka-link-server";
 import {
   isPoptavkaEditable,
@@ -66,7 +65,7 @@ function SestavaReadOnlySection({
           Atypická technická poptávka — ruční návrh a nacenění
         </div>
         <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-          <PoptavkaSestavaSchema state={state} />
+          <PoptavkaSestavaSchema state={state} katalog={katalog} />
           <div className="whitespace-pre-wrap text-sm text-slate-200">
             {state.atypicka_poptavka_text || "Text atypické poptávky nebyl vyplněn."}
           </div>
@@ -87,7 +86,7 @@ function SestavaReadOnlySection({
     <section className="mt-8 space-y-4 border-t border-white/10 pt-6">
       <h2 className="text-lg font-semibold text-white">Konfigurace sestavy</h2>
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-        <PoptavkaSestavaSchema state={state} />
+        <PoptavkaSestavaSchema state={state} katalog={katalog} />
         <ul className="space-y-1 text-sm text-slate-200">
           {lines.map((line) => (
             <li key={line}>{line}</li>
@@ -176,13 +175,7 @@ export default async function PortalPoptavkaDetailPage({
   const editable = isPoptavkaEditable(detail);
 
   if (editable) {
-    const [
-      { data: klient },
-      setupsByOblast,
-      savedMista,
-      previousTechnikaOptions,
-      sestavaKatalog,
-    ] = await Promise.all([
+    const [{ data: klient }, setupsByOblast, savedMista, sestavaKatalog] = await Promise.all([
       supabase
         .from("klienti")
         .select("nazev, ico, email, telefon")
@@ -190,9 +183,6 @@ export default async function PortalPoptavkaDetailPage({
         .single(),
       loadPortalSetups(supabase),
       loadClientMistaKonaniForPortal(supabase),
-      loadClientPreviousTechnikaOptionsForPortal(supabase, {
-        excludePoptavkaId: detail.poptavka_id,
-      }),
       loadPortalSestavaKatalog(),
     ]);
 
@@ -219,7 +209,6 @@ export default async function PortalPoptavkaDetailPage({
         setupsByOblast={setupsByOblast}
         savedMista={savedMista}
         savedMistaKnowHowById={savedMistaKnowHowById}
-        previousTechnikaOptions={previousTechnikaOptions}
         sestavaKatalog={sestavaKatalog}
         initialSestava={sestavaFromOdpovediExtra(detail.technicke_udaje?.odpovedi_extra ?? {})}
         initialValues={{
