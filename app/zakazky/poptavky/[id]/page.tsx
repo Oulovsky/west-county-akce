@@ -83,7 +83,6 @@ const SAVED_TO_OUTBOUND_KIND: Partial<
 function canShowObjednavkaEditorLink(stav: PoptavkaStav) {
   return (
     stav === "odeslana" ||
-    stav === "v_revizi" ||
     stav === "objednavka_odeslana" ||
     stav === "objednavka_odmitnuta"
   );
@@ -219,6 +218,13 @@ export default async function ZakazkyPoptavkaDetailPage({
           </Link>
         </div>
       </div>
+
+      {detail.stav === "v_revizi" ? (
+        <p className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">
+          Poptávka čeká na doplnění klientem. Závaznou objednávku lze připravit až po opětovném
+          odeslání poptávky — zatím nepracujte s objednávkou ze zastaralých dat.
+        </p>
+      ) : null}
 
       {detail.stav === "objednavka_odeslana" ? (
         <div className="space-y-3">

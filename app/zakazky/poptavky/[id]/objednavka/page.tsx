@@ -22,7 +22,6 @@ import PoptavkaObjednavkaDraftEditor from "./PoptavkaObjednavkaDraftEditor";
 function canOpenObjednavkaEditor(stav: PoptavkaStav) {
   return (
     stav === "odeslana" ||
-    stav === "v_revizi" ||
     stav === "objednavka_odeslana" ||
     stav === "objednavka_odmitnuta"
   );
@@ -111,6 +110,19 @@ export default async function PoptavkaObjednavkaEditorPage({
           <p className="mt-4 rounded-lg border border-blue-500/30 bg-blue-950/20 px-4 py-3 text-sm text-blue-100">
             Poptávka je schválená k převodu. Novou objednávku nelze odeslat — pokračujte vytvořením
             zakázky z detailu poptávky.
+          </p>
+          {backLink}
+        </div>
+      );
+    }
+
+    if (detail.stav === "v_revizi") {
+      return (
+        <div className="p-6">
+          <h1 className="text-3xl font-bold text-white">Závazná objednávka</h1>
+          <p className="mt-4 rounded-lg border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">
+            Poptávka byla vrácena klientovi k doplnění. Závaznou objednávku lze připravit až po
+            opětovném odeslání poptávky klientem.
           </p>
           {backLink}
         </div>
