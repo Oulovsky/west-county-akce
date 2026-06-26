@@ -14,8 +14,11 @@ import {
   type TechnikaSectionPhotoKey,
 } from "@/lib/client-portal/poptavka-technika-podminky";
 import {
-  ELEKTRO_ZASUVKA_OPTIONS,
-  TRIZVOLBA_OPTIONS,
+  ANO_NE_OPTIONS,
+  ELEKTRO_ZDROJ_OPTIONS,
+  PRIPOJKA_COUNT_FIELDS,
+  SDILENA_PRIPOJKA_VAROVANI,
+  STAGE_PRIPOJKA_OPTIONS,
   type PoptavkaTechnikaFormValues,
 } from "@/lib/client-portal/poptavka-technika-form";
 import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-server";
@@ -156,6 +159,7 @@ export default function PoptavkaTechnickePodminkyStep({
         sectionKey={key}
         typ={config.typ}
         captureLabel={config.captureLabel}
+        uploadLabel={config.uploadLabel}
         poptavkaId={poptavkaId}
         readOnly={readOnly}
         state={state}
@@ -291,6 +295,27 @@ export default function PoptavkaTechnickePodminkyStep({
 
           <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
             <h3 className="font-semibold text-white">Elektro / rozvaděč</h3>
+
+            <div>
+              <span className={labelClass}>Typ zdroje elektřiny *</span>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {ELEKTRO_ZDROJ_OPTIONS.map((option) => (
+                  <label key={option.value} className={optionCardClass}>
+                    <input
+                      type="radio"
+                      name="elektro_zdroj_typ"
+                      value={option.value}
+                      checked={technika.elektro_zdroj_typ === option.value}
+                      onChange={() => updateField("elektro_zdroj_typ", option.value)}
+                      disabled={readOnly}
+                      required={!readOnly}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
             <label className="block space-y-2">
               <span className={labelClass}>Popis rozvaděče a elektro na místě</span>
               <textarea
@@ -302,58 +327,82 @@ export default function PoptavkaTechnickePodminkyStep({
                 className={inputClass}
               />
             </label>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block space-y-2">
-                <span className={labelClass}>Přípojka / proud</span>
-                <input
-                  name="elektro_pripojka"
-                  value={technika.elektro_pripojka}
-                  onChange={(e) => updateField("elektro_pripojka", e.target.value)}
-                  disabled={readOnly}
-                  className={inputClass}
-                />
-              </label>
-              <label className="block space-y-2">
-                <span className={labelClass}>Jištění / okruhy</span>
-                <input
-                  name="elektro_jisteni"
-                  value={technika.elektro_jisteni}
-                  onChange={(e) => updateField("elektro_jisteni", e.target.value)}
-                  disabled={readOnly}
-                  className={inputClass}
-                />
-              </label>
+
+            <label className="block space-y-2">
+              <span className={labelClass}>Hodnota hlavního chrániče větve *</span>
+              <input
+                name="hlavni_chranic_vetve"
+                value={technika.hlavni_chranic_vetve}
+                onChange={(e) => updateField("hlavni_chranic_vetve", e.target.value)}
+                disabled={readOnly}
+                className={inputClass}
+                placeholder="Např. 30 mA, 300 mA, bez chrániče"
+                required={!readOnly}
+              />
+            </label>
+
+            <div className="space-y-3">
+              <span className={labelClass}>Přípojky v rozvaděči — pouze 5PIN! *</span>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {PRIPOJKA_COUNT_FIELDS.map(({ key, label }) => (
+                  <label key={key} className="flex items-center gap-2 text-sm text-slate-200">
+                    <input
+                      name={key}
+                      type="number"
+                      min={0}
+                      step={1}
+                      inputMode="numeric"
+                      value={technika[key]}
+                      onChange={(e) => updateField(key, e.target.value)}
+                      disabled={readOnly}
+                      className={`${inputClass} w-20 shrink-0`}
+                      required={!readOnly}
+                    />
+                    <span>× {label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block space-y-2">
-                <span className={labelClass}>Typ zásuvky</span>
-                <select
-                  name="elektro_zasuvka"
-                  value={technika.elektro_zasuvka}
-                  onChange={(e) => updateField("elektro_zasuvka", e.target.value)}
-                  disabled={readOnly}
-                  className={inputClass}
-                >
-                  <option value="">—</option>
-                  {ELEKTRO_ZASUVKA_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block space-y-2">
-                <span className={labelClass}>Vzdálenost elektřiny (m)</span>
-                <input
-                  name="elektro_vzdalenost_m"
-                  inputMode="decimal"
-                  value={technika.elektro_vzdalenost_m}
-                  onChange={(e) => updateField("elektro_vzdalenost_m", e.target.value)}
-                  disabled={readOnly}
-                  className={inputClass}
-                />
-              </label>
+
+            <div>
+              <span className={labelClass}>Přípojka pro stage techniku *</span>
+              <div className="mt-2 space-y-2">
+                {STAGE_PRIPOJKA_OPTIONS.map((option) => (
+                  <label key={option.value} className={optionCardClass}>
+                    <input
+                      type="radio"
+                      name="stage_pripojka_rezim"
+                      value={option.value}
+                      checked={technika.stage_pripojka_rezim === option.value}
+                      onChange={() => updateField("stage_pripojka_rezim", option.value)}
+                      disabled={readOnly}
+                      required={!readOnly}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
+
+            {technika.stage_pripojka_rezim === "sdilena_s_dalsimi_odbery" ? (
+              <div className="rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                {SDILENA_PRIPOJKA_VAROVANI}
+              </div>
+            ) : null}
+
+            <label className="block space-y-2">
+              <span className={labelClass}>Vzdálenost od přípojky k síti / centrály (m)</span>
+              <input
+                name="elektro_vzdalenost_m"
+                inputMode="decimal"
+                value={technika.elektro_vzdalenost_m}
+                onChange={(e) => updateField("elektro_vzdalenost_m", e.target.value)}
+                disabled={readOnly}
+                className={inputClass}
+                placeholder="Metry od zdroje k místu stage techniky"
+              />
+            </label>
+
             {renderSectionPhoto("rozvadec")}
           </div>
 
@@ -373,8 +422,8 @@ export default function PoptavkaTechnickePodminkyStep({
             </label>
             <div>
               <span className={labelClass}>Lze zajet dodávkou až k místu?</span>
-              <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                {TRIZVOLBA_OPTIONS.map(([value, label]) => (
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {ANO_NE_OPTIONS.map(([value, label]) => (
                   <label key={value} className={optionCardClass}>
                     <input
                       type="radio"
@@ -412,8 +461,8 @@ export default function PoptavkaTechnickePodminkyStep({
             <h3 className="font-semibold text-white">Povrch a přístup pro techniku</h3>
             <div>
               <span className={labelClass}>Je místo zpevněné?</span>
-              <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                {TRIZVOLBA_OPTIONS.map(([value, label]) => (
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {ANO_NE_OPTIONS.map(([value, label]) => (
                   <label key={value} className={optionCardClass}>
                     <input
                       type="radio"
@@ -450,6 +499,7 @@ export default function PoptavkaTechnickePodminkyStep({
                 className={inputClass}
               />
             </label>
+            {renderSectionPhoto("povrch_pristup")}
           </div>
 
           <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
@@ -467,8 +517,8 @@ export default function PoptavkaTechnickePodminkyStep({
             </label>
             <div>
               <span className={labelClass}>Kabel přes silnici / veřejný průchod?</span>
-              <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                {TRIZVOLBA_OPTIONS.map(([value, label]) => (
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {ANO_NE_OPTIONS.map(([value, label]) => (
                   <label key={value} className={optionCardClass}>
                     <input
                       type="radio"

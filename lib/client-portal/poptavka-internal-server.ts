@@ -151,7 +151,7 @@ export async function loadInternalPoptavkaDetail(
     supabase
       .from("poptavka_technicke_udaje")
       .select(
-        "poptavka_id, prijezd_poznamka, parkovani_poznamka, elektro_pripojka, elektro_jisteni, elektro_zasuvka, elektro_vzdalenost_m, rozvadece_poznamka, kabelove_trasy, misto_stage, misto_foh, omezeni_hluku, casova_omezeni, dalsi_poznamky, pozadovan_vyjezd_technika, technicke_rezim, technicke_potvrzeni_odpovednosti_at, technicke_potvrzeni_vyjezd_ceny_at, rizika, odpovedi_extra, created_at, updated_at"
+        "poptavka_id, prijezd_poznamka, parkovani_poznamka, elektro_pripojka, elektro_jisteni, elektro_zasuvka, elektro_vzdalenost_m, elektro_zdroj_typ, hlavni_chranic_vetve, pripojky_16a_count, pripojky_32a_count, pripojky_64a_count, pripojky_125a_count, stage_pripojka_rezim, rozvadece_poznamka, kabelove_trasy, misto_stage, misto_foh, omezeni_hluku, casova_omezeni, dalsi_poznamky, pozadovan_vyjezd_technika, technicke_rezim, technicke_potvrzeni_odpovednosti_at, technicke_potvrzeni_vyjezd_ceny_at, rizika, odpovedi_extra, created_at, updated_at"
       )
       .eq("poptavka_id", poptavkaId)
       .maybeSingle(),

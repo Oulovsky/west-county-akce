@@ -85,6 +85,7 @@ export type PoptavkaFotkaTyp =
   | "rozvadec"
   | "prijezd"
   | "plocha_stage"
+  | "povrch_pristup"
   | "misto_akce"
   | "jina";
 
@@ -92,6 +93,7 @@ export const POPTAVKA_FOTKA_TYPY: readonly PoptavkaFotkaTyp[] = [
   "rozvadec",
   "prijezd",
   "plocha_stage",
+  "povrch_pristup",
   "misto_akce",
   "jina",
 ] as const;
@@ -223,6 +225,13 @@ export type PoptavkaTechnickeUdaje = {
   technicke_rezim: "klient_vyplni" | "vyjezd_technika" | null;
   technicke_potvrzeni_odpovednosti_at: string | null;
   technicke_potvrzeni_vyjezd_ceny_at: string | null;
+  elektro_zdroj_typ: "pevna_pripojka" | "elektrocentrala" | null;
+  hlavni_chranic_vetve: string | null;
+  pripojky_16a_count: number | null;
+  pripojky_32a_count: number | null;
+  pripojky_64a_count: number | null;
+  pripojky_125a_count: number | null;
+  stage_pripojka_rezim: "samostatna_pro_stage" | "sdilena_s_dalsimi_odbery" | null;
   rizika: string[];
   odpovedi_extra: Record<string, unknown>;
   created_at: string;

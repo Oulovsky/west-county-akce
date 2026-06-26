@@ -71,6 +71,14 @@ const ERROR_MESSAGES: Record<string, string> = {
     "Potvrďte odpovědnost za pravdivost technických informací.",
   technicke_missing_potvrzeni_vyjezd:
     "Potvrďte cenu a podmínky placeného výjezdu technika.",
+  technicke_elektro_missing_zdroj: "Zvolte typ zdroje elektřiny (pevná přípojka nebo elektrocentrála).",
+  technicke_elektro_missing_chranic: "Vyplňte hodnotu hlavního chrániče větve.",
+  technicke_elektro_missing_pripojky:
+    "Vyplňte počty všech přípojek v rozvaděči (16A, 32A, 64A, 125A) — minimálně 0.",
+  technicke_elektro_missing_stage_pripojka:
+    "Zvolte, zda je přípojka pro stage techniku samostatná nebo sdílená.",
+  technicke_missing_ano_ne:
+    "U technických otázek Ano/Ne vyberte vždy Ano nebo Ne. Pokud nevíte, zvolte výjezd technika.",
 };
 
 type Props = {
@@ -476,6 +484,23 @@ export default function PoptavkaFormClient({
                 type="hidden"
                 name="rozvadece_poznamka"
                 value={technika.rozvadece_poznamka}
+                readOnly
+              />
+              <input type="hidden" name="elektro_zdroj_typ" value={technika.elektro_zdroj_typ} readOnly />
+              <input
+                type="hidden"
+                name="hlavni_chranic_vetve"
+                value={technika.hlavni_chranic_vetve}
+                readOnly
+              />
+              <input type="hidden" name="pripojky_16a_count" value={technika.pripojky_16a_count} readOnly />
+              <input type="hidden" name="pripojky_32a_count" value={technika.pripojky_32a_count} readOnly />
+              <input type="hidden" name="pripojky_64a_count" value={technika.pripojky_64a_count} readOnly />
+              <input type="hidden" name="pripojky_125a_count" value={technika.pripojky_125a_count} readOnly />
+              <input
+                type="hidden"
+                name="stage_pripojka_rezim"
+                value={technika.stage_pripojka_rezim}
                 readOnly
               />
               <input type="hidden" name="elektro_pripojka" value={technika.elektro_pripojka} readOnly />

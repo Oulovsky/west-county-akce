@@ -54,8 +54,9 @@ const TECHNIKA_SECTION_PHOTO_KEYS: TechnikaSectionPhotoKey[] = [
   "rozvadec",
   "prijezd",
   "plocha_stage",
-  "misto_akce",
+  "povrch_pristup",
   "jina",
+  "misto_akce",
 ];
 
 function validateTechnickeForSave(formData: FormData, errorPath: string) {
@@ -66,6 +67,7 @@ function validateTechnickeForSave(formData: FormData, errorPath: string) {
     technickeRezim: technika.technicke_rezim,
     potvrzeniOdpovednosti: technika.technicke_potvrzeni_odpovednosti,
     potvrzeniVyjezdCeny: technika.technicke_potvrzeni_vyjezd_ceny,
+    technika,
   });
   if (technickeError) {
     redirectWithError(errorPath, technickeError);

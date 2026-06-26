@@ -7,21 +7,13 @@ import {
   formatObjednavkaTime,
   formatObjednavkaTriVolba,
 } from "@/lib/client-portal/poptavka-objednavka-document";
+import { POPTAVKA_FOTKA_TYP_LABELS } from "@/lib/client-portal/poptavka-fotky-shared";
 import type {
   PartyBlock,
   PoptavkaObjednavkaDocumentData,
   PoptavkaObjednavkaDocumentMeta,
   SmluvniPodminkyBlock,
 } from "@/lib/client-portal/poptavka-objednavka-types";
-import type { PoptavkaFotkaTyp } from "@/lib/client-portal/types";
-
-const FOTKA_TYP_LABELS: Record<PoptavkaFotkaTyp, string> = {
-  rozvadec: "Rozvaděč",
-  prijezd: "Příjezd",
-  plocha_stage: "Plocha stage",
-  misto_akce: "Místo akce",
-  jina: "Jiná",
-};
 
 function DocSection({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -236,7 +228,7 @@ export default function PoptavkaObjednavkaDocument({ data, meta }: Props) {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={fotka.imageUrl}
-                      alt={fotka.popis || FOTKA_TYP_LABELS[fotka.typ]}
+                      alt={fotka.popis || POPTAVKA_FOTKA_TYP_LABELS[fotka.typ]}
                       className="aspect-video w-full object-cover"
                     />
                   ) : (
@@ -245,7 +237,7 @@ export default function PoptavkaObjednavkaDocument({ data, meta }: Props) {
                     </div>
                   )}
                   <figcaption className="px-3 py-2 text-xs text-slate-600">
-                    {FOTKA_TYP_LABELS[fotka.typ]}
+                    {POPTAVKA_FOTKA_TYP_LABELS[fotka.typ]}
                     {fotka.popis ? ` — ${fotka.popis}` : null}
                   </figcaption>
                 </figure>

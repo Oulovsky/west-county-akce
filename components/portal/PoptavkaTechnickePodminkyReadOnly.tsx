@@ -5,6 +5,10 @@ import {
   formatTechnickePotvrzeni,
 } from "@/lib/client-portal/poptavka-technika-podminky";
 import {
+  SDILENA_PRIPOJKA_VAROVANI,
+  formatElektroZdrojTyp,
+  formatPripojkyCounts,
+  formatStagePripojkaRezim,
   formatTriVolba,
   technikaFromRecord,
 } from "@/lib/client-portal/poptavka-technika-form";
@@ -74,12 +78,27 @@ export default function PoptavkaTechnickePodminkyReadOnly({
 
       {rezim === "klient_vyplni" ? (
         <dl className="grid gap-4 text-sm sm:grid-cols-2">
-          <ReadOnlyField label="Rozvaděče / elektro" value={technika.rozvadece_poznamka} />
-          <ReadOnlyField label="Přípojka / proud" value={technika.elektro_pripojka} />
-          <ReadOnlyField label="Jištění" value={technika.elektro_jisteni} />
-          <ReadOnlyField label="Typ zásuvky" value={technika.elektro_zasuvka} />
           <ReadOnlyField
-            label="Vzdálenost elektřiny"
+            label="Typ zdroje elektřiny"
+            value={formatElektroZdrojTyp(row.elektro_zdroj_typ)}
+          />
+          <ReadOnlyField label="Rozvaděče / elektro — popis" value={technika.rozvadece_poznamka} />
+          <ReadOnlyField
+            label="Hodnota hlavního chrániče větve"
+            value={technika.hlavni_chranic_vetve}
+          />
+          <ReadOnlyField label="Přípojky v rozvaděči (5PIN)" value={formatPripojkyCounts(technika)} />
+          <ReadOnlyField
+            label="Přípojka pro stage techniku"
+            value={formatStagePripojkaRezim(row.stage_pripojka_rezim)}
+          />
+          {row.stage_pripojka_rezim === "sdilena_s_dalsimi_odbery" ? (
+            <div className="sm:col-span-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-red-100">
+              {SDILENA_PRIPOJKA_VAROVANI}
+            </div>
+          ) : null}
+          <ReadOnlyField
+            label="Vzdálenost od přípojky k síti / centrály"
             value={
               technika.elektro_vzdalenost_m ? `${technika.elektro_vzdalenost_m} m` : null
             }

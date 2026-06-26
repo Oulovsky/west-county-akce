@@ -15,6 +15,7 @@ export const POPTAVKA_FOTKA_TYP_LABELS: Record<PoptavkaFotkaTyp, string> = {
   rozvadec: "Rozvaděč",
   prijezd: "Příjezd",
   plocha_stage: "Plocha pro stage",
+  povrch_pristup: "Povrch a přístup",
   misto_akce: "Místo akce",
   jina: "Jiné",
 };

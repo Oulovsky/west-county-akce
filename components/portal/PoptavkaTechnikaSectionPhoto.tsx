@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { uploadPoptavkaFotkyAction } from "@/app/portal/poptavky/actions";
 import {
   POPTAVKA_FOTKY_ACCEPT,
@@ -49,6 +49,7 @@ export default function PoptavkaTechnikaSectionPhoto({
   sectionKey,
   typ,
   captureLabel,
+  uploadLabel,
   poptavkaId,
   readOnly,
   state,
@@ -57,12 +58,15 @@ export default function PoptavkaTechnikaSectionPhoto({
   sectionKey: TechnikaSectionPhotoKey;
   typ: PoptavkaFotkaTyp;
   captureLabel: string;
+  uploadLabel: string;
   poptavkaId?: string;
   readOnly?: boolean;
   state: SectionPhotoState;
   onPendingChange: (next: SectionPhotoState) => void;
 }) {
   const router = useRouter();
+  const captureInputRef = useRef<HTMLInputElement>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -127,13 +131,21 @@ export default function PoptavkaTechnikaSectionPhoto({
   }
 
   const hasPhotos = state.pending.length > 0 || state.saved.length > 0;
+  const actionButtonClass =
+    "inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-white/20 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-amber-500/40 hover:bg-white/[0.04]";
 
   return (
     <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.02] p-3">
       {!readOnly ? (
-        <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-white/20 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-amber-500/40 hover:bg-white/[0.04]">
-          {captureLabel}
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={actionButtonClass} onClick={() => captureInputRef.current?.click()}>
+            {captureLabel}
+          </button>
+          <button type="button" className={actionButtonClass} onClick={() => uploadInputRef.current?.click()}>
+            {uploadLabel}
+          </button>
           <input
+            ref={captureInputRef}
             type="file"
             accept={POPTAVKA_FOTKY_ACCEPT}
             capture="environment"
@@ -143,7 +155,17 @@ export default function PoptavkaTechnikaSectionPhoto({
               event.currentTarget.value = "";
             }}
           />
-        </label>
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept={POPTAVKA_FOTKY_ACCEPT}
+            className="sr-only"
+            onChange={(event) => {
+              addFiles(event.currentTarget.files);
+              event.currentTarget.value = "";
+            }}
+          />
+        </div>
       ) : null}
 
       {error ? <p className="text-xs text-red-300">{error}</p> : null}
@@ -196,13 +218,13 @@ export default function PoptavkaTechnikaSectionPhoto({
           onClick={uploadPending}
           className="mt-2 rounded-lg border border-amber-500/50 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-50 disabled:opacity-60"
         >
-          {isPending ? "Nahrávám…" : "Nahrát fotku"}
+          {isPending ? "Nahrávám…" : "Nahrát vybrané fotky"}
         </button>
       ) : null}
 
       {!readOnly && !poptavkaId && state.pending.length > 0 ? (
         <p className="text-[11px] text-slate-500">
-          Fotka se nahraje po uložení konceptu.
+          Fotky se nahrají po uložení konceptu.
         </p>
       ) : null}
 

@@ -25,44 +25,58 @@ export type TechnikaSectionPhotoKey =
   | "rozvadec"
   | "prijezd"
   | "plocha_stage"
-  | "misto_akce"
-  | "jina";
+  | "povrch_pristup"
+  | "jina"
+  | "misto_akce";
 
 export const TECHNIKA_SECTION_PHOTOS: {
   key: TechnikaSectionPhotoKey;
   typ: PoptavkaFotkaTyp;
   label: string;
   captureLabel: string;
+  uploadLabel: string;
 }[] = [
   {
     key: "rozvadec",
     typ: "rozvadec",
     label: "Fotka rozvaděče",
     captureLabel: "Vyfotit rozvaděč",
+    uploadLabel: "Nahrát fotku",
   },
   {
     key: "prijezd",
     typ: "prijezd",
     label: "Fotka příjezdu",
     captureLabel: "Vyfotit příjezd",
+    uploadLabel: "Nahrát fotku",
   },
   {
     key: "plocha_stage",
     typ: "plocha_stage",
     label: "Fotka místa stavby / stage",
     captureLabel: "Vyfotit místo stavby",
+    uploadLabel: "Nahrát fotku",
   },
   {
-    key: "misto_akce",
-    typ: "misto_akce",
-    label: "Fotka parkování / místa akce",
-    captureLabel: "Vyfotit parkování",
+    key: "povrch_pristup",
+    typ: "povrch_pristup",
+    label: "Fotka povrchu a přístupu",
+    captureLabel: "Vyfotit povrch a přístup",
+    uploadLabel: "Nahrát fotku",
   },
   {
     key: "jina",
     typ: "jina",
     label: "Fotka překážek / průjezdu",
     captureLabel: "Vyfotit překážky / průjezd",
+    uploadLabel: "Nahrát fotku",
+  },
+  {
+    key: "misto_akce",
+    typ: "misto_akce",
+    label: "Fotka parkování",
+    captureLabel: "Vyfotit parkování",
+    uploadLabel: "Nahrát fotku",
   },
 ];
 
@@ -93,11 +107,26 @@ export function formatTechnickePotvrzeni(value: string | null | undefined) {
   }
 }
 
+import type { PoptavkaTechnikaFormValues } from "@/lib/client-portal/poptavka-technika-form";
+import { PRIPOJKA_COUNT_FIELDS } from "@/lib/client-portal/poptavka-technika-form";
+
+function isValidCount(value: string) {
+  const text = value.trim();
+  if (!text) return false;
+  const number = Number(text);
+  return Number.isInteger(number) && number >= 0;
+}
+
+function isAnoNe(value: string) {
+  return value === "ano" || value === "ne";
+}
+
 export function validateTechnickePodminkyForSave(input: {
   wizardStep: number;
   technickeRezim: string;
   potvrzeniOdpovednosti: boolean;
   potvrzeniVyjezdCeny: boolean;
+  technika?: PoptavkaTechnikaFormValues;
 }): string | null {
   if (input.wizardStep < 4) return null;
 
@@ -112,6 +141,41 @@ export function validateTechnickePodminkyForSave(input: {
 
   if (rezim === "vyjezd_technika" && !input.potvrzeniVyjezdCeny) {
     return "technicke_missing_potvrzeni_vyjezd";
+  }
+
+  if (rezim !== "klient_vyplni" || !input.technika) {
+    return null;
+  }
+
+  const technika = input.technika;
+
+  if (technika.elektro_zdroj_typ !== "pevna_pripojka" && technika.elektro_zdroj_typ !== "elektrocentrala") {
+    return "technicke_elektro_missing_zdroj";
+  }
+
+  if (!technika.hlavni_chranic_vetve.trim()) {
+    return "technicke_elektro_missing_chranic";
+  }
+
+  for (const field of PRIPOJKA_COUNT_FIELDS) {
+    if (!isValidCount(technika[field.key])) {
+      return "technicke_elektro_missing_pripojky";
+    }
+  }
+
+  if (
+    technika.stage_pripojka_rezim !== "samostatna_pro_stage" &&
+    technika.stage_pripojka_rezim !== "sdilena_s_dalsimi_odbery"
+  ) {
+    return "technicke_elektro_missing_stage_pripojka";
+  }
+
+  if (
+    !isAnoNe(technika.lze_zajet_autem) ||
+    !isAnoNe(technika.misto_zpevnene) ||
+    !isAnoNe(technika.kabel_pres_silnici)
+  ) {
+    return "technicke_missing_ano_ne";
   }
 
   return null;
