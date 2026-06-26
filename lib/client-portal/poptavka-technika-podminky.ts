@@ -111,6 +111,8 @@ export function formatTechnickePotvrzeni(value: string | null | undefined) {
 
 import type { PoptavkaTechnikaFormValues } from "@/lib/client-portal/poptavka-technika-form";
 import { PRIPOJKA_COUNT_FIELDS } from "@/lib/client-portal/poptavka-technika-form";
+import type { PoptavkaFormValues } from "@/lib/client-portal/poptavka-form";
+import { validatePoptavkaFormForSave } from "@/lib/client-portal/poptavka-wizard-validation";
 
 function isValidCount(value: string) {
   const text = value.trim();
@@ -184,17 +186,19 @@ export function validateTechnickePodminkyForSave(input: {
 }
 
 export function validateTechnikVyjezdOrder(input: {
+  values: PoptavkaFormValues;
   technika: PoptavkaTechnikaFormValues;
-  mistoLat: number | null;
-  mistoLng: number | null;
 }): string | null {
+  const formError = validatePoptavkaFormForSave(input.values);
+  if (formError) return formError;
+
   if (input.technika.technicke_rezim !== "vyjezd_technika") {
     return "technicke_missing_rezim";
   }
   if (!input.technika.technicke_potvrzeni_vyjezd_ceny) {
     return "technicke_missing_potvrzeni_vyjezd";
   }
-  if (input.mistoLat == null || input.mistoLng == null) {
+  if (input.values.misto_lat == null || input.values.misto_lng == null) {
     return "technik_vyjezd_missing_gps";
   }
   if (!input.technika.technik_vyjezd_potvrzeni_fakturace) {

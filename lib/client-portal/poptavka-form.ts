@@ -1,9 +1,9 @@
 import type { SetupOblast } from "@/lib/client-portal/types";
+import { validatePoptavkaFormForSave } from "@/lib/client-portal/poptavka-wizard-validation";
 import {
   buildLogistikaOknaRowPayload,
   parseLogistikaOknaFromFormData,
   type LogistikaOknoValues,
-  validateLogistikaOkna,
 } from "@/lib/logistika-okna";
 
 export const TYP_AKCE_OPTIONS = [
@@ -139,19 +139,7 @@ export function parsePoptavkaFormData(formData: FormData): PoptavkaFormValues {
 }
 
 export function validatePoptavkaForm(values: PoptavkaFormValues): string | null {
-  if (!values.kontakt_jmeno) return "missing_contact";
-  if (!values.kontakt_email) return "missing_email";
-  if (!values.misto_nazev) return "missing_event_name";
-  if (!values.misto_adresa) return "missing_location";
-  if (values.misto_lat == null || values.misto_lng == null) return "missing_gps";
-  if (!values.presny_popis_mista.trim()) return "missing_presny_popis_mista";
-  if (!values.datum_od) return "missing_date_from";
-  if (!values.datum_do) return "missing_date_to";
-  if (values.datum_do < values.datum_od) return "invalid_date_range";
-  if (values.misto_source === "saved" && !values.misto_id) return "missing_saved_misto";
-  const oknaError = validateLogistikaOkna(values);
-  if (oknaError) return "invalid_logistika_okna";
-  return null;
+  return validatePoptavkaFormForSave(values);
 }
 
 export function buildPoptavkaRowPayload(values: PoptavkaFormValues) {

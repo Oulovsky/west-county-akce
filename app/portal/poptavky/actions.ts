@@ -15,7 +15,8 @@ import {
   buildTechnikaRowPayload,
   parseTechnikaFormData,
 } from "@/lib/client-portal/poptavka-technika-form";
-import { validateTechnickePodminkyForSave, validateTechnikVyjezdOrder } from "@/lib/client-portal/poptavka-technika-podminky";
+import { validateTechnickePodminkyForSave } from "@/lib/client-portal/poptavka-technika-podminky";
+import { validateTechnikVyjezdOrderComplete } from "@/lib/client-portal/poptavka-wizard-validation";
 import type { TechnikaSectionPhotoKey } from "@/lib/client-portal/poptavka-technika-podminky";
 import {
   buildSestavaOdpovediExtra,
@@ -646,15 +647,19 @@ export async function orderTechnikVyjezdAndSubmitPoptavkaAction(formData: FormDa
 
   const wizardStep = Number(String(formData.get("wizard_step") ?? "0"));
   if (wizardStep < 4) {
-    redirectWithError(errorPath, "technicke_missing_rezim");
+    redirectWithError(errorPath, "wizard_step_locked");
   }
 
   const values = parsePoptavkaFormData(formData);
   const technika = parseTechnikaFormData(formData);
-  const vyjezdError = validateTechnikVyjezdOrder({
+  const sestava = parseSestavaFormData(formData);
+  const katalog = await loadPortalSestavaKatalog();
+
+  const vyjezdError = validateTechnikVyjezdOrderComplete({
+    values,
     technika,
-    mistoLat: values.misto_lat,
-    mistoLng: values.misto_lng,
+    sestava,
+    katalog,
   });
   if (vyjezdError) {
     redirectWithError(errorPath, vyjezdError);

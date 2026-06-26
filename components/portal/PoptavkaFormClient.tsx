@@ -43,18 +43,21 @@ import type {
   PortalSestavaKatalog,
   SestavaKonfiguratorState,
 } from "@/lib/client-portal/sestava-konfigurator-types";
+import {
+  WIZARD_STEP_ERROR_MESSAGES,
+  computeMaxReachableStep,
+  getWizardStep3Errors,
+  validatePoptavkaFormForSave,
+  validateTechnikVyjezdOrderComplete,
+  validateWizardStep,
+  validateWizardStep3,
+  validateWizardStepsUpTo,
+  wizardErrorMessage,
+  wizardErrorStep,
+} from "@/lib/client-portal/poptavka-wizard-validation";
 
 const ERROR_MESSAGES: Record<string, string> = {
-  missing_contact: "Vyplňte kontaktní osobu.",
-  missing_email: "Vyplňte e-mail.",
-  missing_event_name: "Vyplňte název akce.",
-  missing_location: "Vyplňte místo nebo adresu akce.",
-  missing_gps: "Vyberte přesný bod akce na mapě v kroku Kde a kdy.",
-  missing_presny_popis_mista:
-    "Vyplňte přesný popis místa akce — kde má stát stage a technika.",
-  missing_date_from: "Vyplňte datum začátku akce.",
-  missing_date_to: "Vyplňte datum konce akce.",
-  invalid_date_range: "Datum konce musí být stejné nebo pozdější než začátek.",
+  ...WIZARD_STEP_ERROR_MESSAGES,
   save_failed: "Poptávku se nepodařilo uložit.",
   setups_failed: "Základ poptávky byl uložen, ale setupy se nepodařilo zapsat.",
   not_editable: "Tuto poptávku už nelze upravovat.",
@@ -63,34 +66,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   submit_failed: "Odeslání se nezdařilo.",
   invalid_misto:
     "Vybrané místo není dostupné pro váš účet. Vyberte jiné místo nebo zadejte nové.",
-  missing_saved_misto: "Vyberte uložené místo, nebo přepněte na Nové místo.",
   invalid_setups:
     "Vybrané setupy už nejsou v portálu dostupné. Upravte výběr techniky a uložte znovu.",
-  invalid_sestava:
-    "Konfigurace sestavy obsahuje chyby. Doplňte povinné volby ve kroku Konfigurace sestavy.",
-  invalid_logistika_okna:
-    "Časové okno stavby nebo bourání není platné. Konec okna musí být po začátku.",
-  technicke_missing_rezim:
-    "Zvolte, zda technické informace vyplníte sami, nebo požádáte o výjezd technika.",
-  technicke_missing_potvrzeni:
-    "Potvrďte odpovědnost za pravdivost technických informací.",
-  technicke_missing_potvrzeni_vyjezd:
-    "Potvrďte cenu a podmínky placeného výjezdu technika.",
-  technicke_elektro_missing_zdroj: "Zvolte typ zdroje elektřiny (pevná přípojka nebo elektrocentrála).",
-  technicke_elektro_missing_chranic: "Vyplňte hodnotu hlavního chrániče větve.",
-  technicke_elektro_missing_pripojky:
-    "Vyplňte počty všech přípojek v rozvaděči (16A, 32A, 64A, 125A) — minimálně 0.",
-  technicke_elektro_missing_stage_pripojka:
-    "Zvolte, zda je přípojka pro stage techniku samostatná nebo sdílená.",
-  technicke_missing_ano_ne:
-    "U technických otázek Ano/Ne vyberte vždy Ano nebo Ne. Pokud nevíte, zvolte výjezd technika.",
-  technik_vyjezd_missing_gps:
-    "Pro objednání výjezdu technika doplňte přesné místo akce v kroku Kde a kdy.",
-  technik_vyjezd_missing_fakturace:
-    "Potvrďte, že berete na vědomí fakturaci výjezdu technika i při nerealizaci akce.",
-  technik_vyjezd_missing_kontakt: "Vyplňte kontaktní osobu a e-mail pro výjezd technika.",
-  technik_vyjezd_missing_preference:
-    "Vyberte alespoň jeden preferovaný způsob kontaktu (telefon nebo e-mail).",
 };
 
 type Props = {
@@ -160,6 +137,8 @@ export default function PoptavkaFormClient({
   const router = useRouter();
   const pathname = usePathname();
   const [step, setStep] = useState(1);
+  const [stepError, setStepError] = useState<string | null>(null);
+  const [stepErrorDetails, setStepErrorDetails] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [technickeUiRezim, setTechnickeUiRezim] = useState<TechnickeRezim | null>(() => {
     const rezim = initialTechnika?.technicke_rezim;
@@ -230,6 +209,26 @@ export default function PoptavkaFormClient({
   const setupyJson = useMemo(
     () => JSON.stringify(Object.values(selectedSetups)),
     [selectedSetups]
+  );
+
+  const maxReachableStep = useMemo(
+    () =>
+      computeMaxReachableStep(maxStep, {
+        form,
+        sestava,
+        katalog: sestavaKatalog,
+      }),
+    [maxStep, form, sestava, sestavaKatalog]
+  );
+
+  const wizardInput = useMemo(
+    () => ({
+      form,
+      sestava,
+      katalog: sestavaKatalog,
+      technika,
+    }),
+    [form, sestava, sestavaKatalog, technika]
   );
 
   useEffect(() => {
@@ -336,13 +335,99 @@ export default function PoptavkaFormClient({
     }
   }
 
+  function showStepValidationError(code: string, details: string[] = []) {
+    setStepError(code);
+    setStepErrorDetails(details);
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
+  function clearStepValidationError() {
+    setStepError(null);
+    setStepErrorDetails([]);
+  }
+
+  function attemptGoToStep(targetStep: number) {
+    if (readOnly || targetStep === step) return;
+
+    if (targetStep < step) {
+      clearStepValidationError();
+      goToStep(targetStep);
+      return;
+    }
+
+    if (targetStep > maxReachableStep) {
+      showStepValidationError("wizard_step_locked");
+      return;
+    }
+
+    const blockError = validateWizardStepsUpTo(targetStep, wizardInput);
+    if (blockError) {
+      showStepValidationError(
+        blockError,
+        blockError === "invalid_sestava" ? getWizardStep3Errors(sestava, sestavaKatalog) : []
+      );
+      setStep(wizardErrorStep(blockError));
+      return;
+    }
+
+    clearStepValidationError();
+    goToStep(targetStep);
+  }
+
+  function attemptContinue() {
+    const error = validateWizardStep(step, wizardInput);
+    if (error) {
+      showStepValidationError(
+        error,
+        error === "invalid_sestava" ? getWizardStep3Errors(sestava, sestavaKatalog) : []
+      );
+      return;
+    }
+
+    clearStepValidationError();
+    goToStep(step + 1);
+  }
+
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (readOnly) return;
-    setSubmitting(true);
 
     const formData = new FormData(event.currentTarget);
     formData.set("wizard_step", String(step));
+    const intent = String(formData.get("save_intent") ?? "");
+
+    if (intent === "order_technik_vyjezd") {
+      const orderError = validateTechnikVyjezdOrderComplete({
+        values: form,
+        technika,
+        sestava,
+        katalog: sestavaKatalog,
+      });
+      if (orderError) {
+        showStepValidationError(
+          orderError,
+          orderError === "invalid_sestava" ? getWizardStep3Errors(sestava, sestavaKatalog) : []
+        );
+        setStep(wizardErrorStep(orderError));
+        return;
+      }
+    } else {
+      const saveError =
+        validatePoptavkaFormForSave(form) ??
+        (step >= 3 ? validateWizardStep3(sestava, sestavaKatalog) : null);
+      if (saveError) {
+        showStepValidationError(
+          saveError,
+          saveError === "invalid_sestava" ? getWizardStep3Errors(sestava, sestavaKatalog) : []
+        );
+        setStep(wizardErrorStep(saveError));
+        return;
+      }
+    }
+
+    setSubmitting(true);
 
     const pendingBySection: Partial<
       Record<TechnikaSectionPhotoKey, { id: string; file: File; previewUrl: string }[]>
@@ -354,7 +439,6 @@ export default function PoptavkaFormClient({
     }
     appendPendingSectionPhotos(formData, pendingBySection);
 
-    const intent = String(formData.get("save_intent") ?? "");
     if (intent === "order_technik_vyjezd") {
       void orderTechnikVyjezdAndSubmitPoptavkaAction(formData);
       return;
@@ -407,28 +491,52 @@ export default function PoptavkaFormClient({
             Poptávka byla uložena jako koncept.
           </p>
         ) : null}
-        {errorCode && ERROR_MESSAGES[errorCode] ? (
+        {errorCode && !stepError && ERROR_MESSAGES[errorCode] ? (
           <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
             {ERROR_MESSAGES[errorCode]}
           </p>
         ) : null}
+        {stepError ? (
+          <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+            <p>{wizardErrorMessage(stepError)}</p>
+            {stepErrorDetails.length > 0 ? (
+              <ul className="mt-2 list-inside list-disc space-y-1 text-red-100/90">
+                {stepErrorDetails.map((detail) => (
+                  <li key={detail}>{detail}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
 
         {!readOnly ? (
           <div className="mb-8 flex flex-wrap gap-2">
-            {steps.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => goToStep(item.id)}
-                className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
-                  step === item.id
-                    ? "bg-amber-500/25 text-amber-50 ring-1 ring-amber-500/50"
-                    : "bg-white/5 text-slate-400 hover:bg-white/10 hover:text-slate-200"
-                }`}
-              >
-                {item.id}. {item.title}
-              </button>
-            ))}
+            {steps.map((item) => {
+              const isActive = step === item.id;
+              const isLocked = item.id > maxReachableStep;
+              const isCompleted = item.id < step && item.id <= maxReachableStep;
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  disabled={isLocked}
+                  title={isLocked ? "Nejdřív dokončete předchozí krok." : undefined}
+                  onClick={() => attemptGoToStep(item.id)}
+                  className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
+                    isActive
+                      ? "bg-amber-500/25 text-amber-50 ring-1 ring-amber-500/50"
+                      : isLocked
+                        ? "cursor-not-allowed bg-white/[0.02] text-slate-600 opacity-60"
+                        : isCompleted
+                          ? "bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25"
+                          : "bg-white/5 text-slate-400 hover:bg-white/10 hover:text-slate-200"
+                  }`}
+                >
+                  {item.id}. {item.title}
+                </button>
+              );
+            })}
           </div>
         ) : null}
 
@@ -648,12 +756,13 @@ export default function PoptavkaFormClient({
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block space-y-2">
-                  <span className={labelClass}>Telefon</span>
+                  <span className={labelClass}>Telefon *</span>
                   <input
                     name="kontakt_telefon"
                     value={form.kontakt_telefon}
                     onChange={(e) => updateField("kontakt_telefon", e.target.value)}
                     disabled={readOnly}
+                    required
                     className={inputClass}
                   />
                 </label>
@@ -959,7 +1068,7 @@ export default function PoptavkaFormClient({
             {!readOnly && step < maxStep ? (
               <button
                 type="button"
-                onClick={() => goToStep((current) => current + 1)}
+                onClick={attemptContinue}
                 className="rounded-xl border border-amber-500/60 bg-amber-500/20 px-5 py-3 text-sm font-bold text-amber-50 transition hover:bg-amber-500/30"
               >
                 Pokračovat →
