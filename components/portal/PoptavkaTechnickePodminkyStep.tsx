@@ -343,9 +343,9 @@ export default function PoptavkaTechnickePodminkyStep({
 
             <div className="space-y-3">
               <span className={labelClass}>Přípojky v rozvaděči — pouze 5PIN! *</span>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {PRIPOJKA_COUNT_FIELDS.map(({ key, label }) => (
-                  <label key={key} className="flex items-center gap-2 text-sm text-slate-200">
+                  <div key={key} className="flex items-center gap-3">
                     <input
                       name={key}
                       type="number"
@@ -355,11 +355,13 @@ export default function PoptavkaTechnickePodminkyStep({
                       value={technika[key]}
                       onChange={(e) => updateField(key, e.target.value)}
                       disabled={readOnly}
-                      className={`${inputClass} w-20 shrink-0`}
+                      className={`${inputClass} !w-20 max-w-32 shrink-0 px-3`}
                       required={!readOnly}
                     />
-                    <span>× {label}</span>
-                  </label>
+                    <span className="whitespace-nowrap text-sm font-medium text-slate-200">
+                      × {label}
+                    </span>
+                  </div>
                 ))}
               </div>
             </div>
