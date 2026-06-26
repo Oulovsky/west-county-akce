@@ -152,6 +152,7 @@ export type Poptavka = {
   misto_id: string | null;
   misto_nazev: string | null;
   misto_adresa: string | null;
+  presny_popis_mista: string | null;
   misto_poznamka: string | null;
   misto_lat: number | null;
   misto_lng: number | null;
@@ -225,6 +226,16 @@ export type PoptavkaTechnickeUdaje = {
   technicke_rezim: "klient_vyplni" | "vyjezd_technika" | null;
   technicke_potvrzeni_odpovednosti_at: string | null;
   technicke_potvrzeni_vyjezd_ceny_at: string | null;
+  technik_vyjezd_objednan_at: string | null;
+  technik_vyjezd_potvrzeni_fakturace_at: string | null;
+  technik_vyjezd_kontakt_jmeno: string | null;
+  technik_vyjezd_kontakt_telefon: string | null;
+  technik_vyjezd_kontakt_email: string | null;
+  technik_vyjezd_preferuje_telefon: boolean;
+  technik_vyjezd_preferuje_email: boolean;
+  technik_vyjezd_vzdalenost_km: number | null;
+  technik_vyjezd_doprava_kc: number | null;
+  technik_vyjezd_vypocet_typ: "google_directions" | "orientacni_vzdusna_cara" | null;
   elektro_zdroj_typ: "pevna_pripojka" | "elektrocentrala" | null;
   hlavni_chranic_vetve: string | null;
   pripojky_16a_count: number | null;

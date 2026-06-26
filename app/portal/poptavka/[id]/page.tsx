@@ -12,6 +12,7 @@ import {
 } from "@/lib/client-portal/poptavka-form";
 import { logistikaOknaFromPoptavka } from "@/lib/logistika-okna";
 import PoptavkaLogistikaOknaPanel from "@/components/portal/PoptavkaLogistikaOknaPanel";
+import PoptavkaMistoReadOnly from "@/components/portal/PoptavkaMistoReadOnly";
 import PoptavkaTechnickePodminkyReadOnly from "@/components/portal/PoptavkaTechnickePodminkyReadOnly";
 import { PoptavkaObjednavkaPortalSection } from "@/components/portal/PoptavkaObjednavkaPortalSection";
 import { technikaFromRecord } from "@/lib/client-portal/poptavka-technika-form";
@@ -93,7 +94,7 @@ export default async function PortalPoptavkaDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ saved?: string; error?: string; submitted?: string }>;
+  searchParams?: Promise<{ saved?: string; error?: string; submitted?: string; technik_vyjezd_ordered?: string }>;
 }) {
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
@@ -156,6 +157,7 @@ export default async function PortalPoptavkaDetailPage({
           misto_nazev: detail.misto_nazev ?? "",
           typ_akce: detail.typ_akce ?? "",
           misto_adresa: detail.misto_adresa ?? "",
+          presny_popis_mista: detail.presny_popis_mista ?? "",
           datum_od: detail.datum_od ?? "",
           datum_do: detail.datum_do ?? "",
           cas_programu_od: trimTime(detail.cas_programu_od),
@@ -177,6 +179,7 @@ export default async function PortalPoptavkaDetailPage({
         errorCode={resolvedSearchParams?.error ?? null}
         saved={resolvedSearchParams?.saved === "1"}
         submitted={resolvedSearchParams?.submitted === "1"}
+        technikVyjezdOrdered={resolvedSearchParams?.technik_vyjezd_ordered === "1"}
         revisionNote={
           detail.stav === "v_revizi" ? detail.zamitnuto_duvod : null
         }
@@ -311,6 +314,16 @@ export default async function PortalPoptavkaDetailPage({
             <dt className="text-slate-500">Místo</dt>
             <dd className="text-slate-100">{detail.misto_adresa ?? "—"}</dd>
           </div>
+        </dl>
+
+        <PoptavkaMistoReadOnly
+          mistoAdresa={detail.misto_adresa}
+          presnyPopisMista={detail.presny_popis_mista}
+          mistoLat={detail.misto_lat}
+          mistoLng={detail.misto_lng}
+        />
+
+        <dl className="grid gap-4 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-slate-500">Program od / do</dt>
             <dd className="text-slate-100">

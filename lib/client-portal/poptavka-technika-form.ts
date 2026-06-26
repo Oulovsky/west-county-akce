@@ -29,6 +29,12 @@ export type PoptavkaTechnikaFormValues = {
   casova_omezeni: string;
   dalsi_poznamky: string;
   pozadovan_vyjezd_technika: boolean;
+  technik_vyjezd_kontakt_jmeno: string;
+  technik_vyjezd_kontakt_telefon: string;
+  technik_vyjezd_kontakt_email: string;
+  technik_vyjezd_preferuje_telefon: boolean;
+  technik_vyjezd_preferuje_email: boolean;
+  technik_vyjezd_potvrzeni_fakturace: boolean;
   lze_zajet_autem: string;
   misto_zpevnene: string;
   kabel_pres_silnici: string;
@@ -62,6 +68,12 @@ export const EMPTY_POPTAVKA_TECHNIKA: PoptavkaTechnikaFormValues = {
   casova_omezeni: "",
   dalsi_poznamky: "",
   pozadovan_vyjezd_technika: false,
+  technik_vyjezd_kontakt_jmeno: "",
+  technik_vyjezd_kontakt_telefon: "",
+  technik_vyjezd_kontakt_email: "",
+  technik_vyjezd_preferuje_telefon: false,
+  technik_vyjezd_preferuje_email: false,
+  technik_vyjezd_potvrzeni_fakturace: false,
   lze_zajet_autem: "",
   misto_zpevnene: "",
   kabel_pres_silnici: "",
@@ -205,6 +217,12 @@ export function technikaFromRecord(
     casova_omezeni: row.casova_omezeni ?? "",
     dalsi_poznamky: row.dalsi_poznamky ?? "",
     pozadovan_vyjezd_technika: row.pozadovan_vyjezd_technika,
+    technik_vyjezd_kontakt_jmeno: row.technik_vyjezd_kontakt_jmeno ?? "",
+    technik_vyjezd_kontakt_telefon: row.technik_vyjezd_kontakt_telefon ?? "",
+    technik_vyjezd_kontakt_email: row.technik_vyjezd_kontakt_email ?? "",
+    technik_vyjezd_preferuje_telefon: Boolean(row.technik_vyjezd_preferuje_telefon),
+    technik_vyjezd_preferuje_email: Boolean(row.technik_vyjezd_preferuje_email),
+    technik_vyjezd_potvrzeni_fakturace: Boolean(row.technik_vyjezd_potvrzeni_fakturace_at),
     lze_zajet_autem: normalizeLegacyAnoNe(extra.lze_zajet_autem),
     misto_zpevnene: normalizeLegacyAnoNe(extra.misto_zpevnene),
     kabel_pres_silnici: normalizeLegacyAnoNe(extra.kabel_pres_silnici),
@@ -243,6 +261,15 @@ export function parseTechnikaFormData(formData: FormData): PoptavkaTechnikaFormV
     dalsi_poznamky: String(formData.get("dalsi_poznamky") ?? "").trim(),
     pozadovan_vyjezd_technika:
       rezim === "vyjezd_technika" || formData.get("pozadovan_vyjezd_technika") === "on",
+    technik_vyjezd_kontakt_jmeno: String(formData.get("technik_vyjezd_kontakt_jmeno") ?? "").trim(),
+    technik_vyjezd_kontakt_telefon: String(
+      formData.get("technik_vyjezd_kontakt_telefon") ?? ""
+    ).trim(),
+    technik_vyjezd_kontakt_email: String(formData.get("technik_vyjezd_kontakt_email") ?? "").trim(),
+    technik_vyjezd_preferuje_telefon: formData.get("technik_vyjezd_preferuje_telefon") === "on",
+    technik_vyjezd_preferuje_email: formData.get("technik_vyjezd_preferuje_email") === "on",
+    technik_vyjezd_potvrzeni_fakturace:
+      formData.get("technik_vyjezd_potvrzeni_fakturace") === "on",
     lze_zajet_autem: parseAnoNe(formData.get("lze_zajet_autem")),
     misto_zpevnene: parseAnoNe(formData.get("misto_zpevnene")),
     kabel_pres_silnici: parseAnoNe(formData.get("kabel_pres_silnici")),

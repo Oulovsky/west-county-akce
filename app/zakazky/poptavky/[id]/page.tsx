@@ -2,6 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import PoptavkaFotkyClient from "@/components/portal/PoptavkaFotkyClient";
 import PoptavkaTechnickePodminkyReadOnly from "@/components/portal/PoptavkaTechnickePodminkyReadOnly";
+import PoptavkaMistoReadOnly from "@/components/portal/PoptavkaMistoReadOnly";
 import { verifyInternalPoptavkyReadPage } from "@/lib/auth/admin-access-server";
 import { loadSessionRolePermissions } from "@/lib/auth/internal-role-access-server";
 import { POPTAVKA_STAV_LABELS, SETUP_OBLAST_LABELS } from "@/lib/client-portal/labels";
@@ -404,6 +405,13 @@ export default async function ZakazkyPoptavkaDetailPage({
               />
             ) : null}
           </dl>
+          <PoptavkaMistoReadOnly
+            mistoAdresa={detail.misto_adresa}
+            presnyPopisMista={detail.presny_popis_mista}
+            mistoLat={detail.misto_lat}
+            mistoLng={detail.misto_lng}
+            variant="internal"
+          />
         </section>
 
         <section className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">

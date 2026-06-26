@@ -14,6 +14,13 @@ import {
   type TechnikaSectionPhotoKey,
 } from "@/lib/client-portal/poptavka-technika-podminky";
 import {
+  TECHNIK_VYJEZD_FAKTURACE_UPOZORNENI,
+  TECHNIK_VYJEZD_KM_SAZBA_KC,
+  TECHNIK_VYJEZD_KONECNA_CENA_UPOZORNENI,
+  TECHNIK_VYJEZD_MINIMUM_KC,
+  calculateTechnikVyjezdDoprava,
+} from "@/lib/client-portal/technik-vyjezd-pricing";
+import {
   ANO_NE_OPTIONS,
   ELEKTRO_ZDROJ_OPTIONS,
   PRIPOJKA_COUNT_FIELDS,
@@ -41,6 +48,12 @@ type Props = {
   inputClass: string;
   labelClass: string;
   optionCardClass: string;
+  mistoLat: number | null;
+  mistoLng: number | null;
+  kontaktJmeno: string;
+  kontaktTelefon: string;
+  kontaktEmail: string;
+  submitting?: boolean;
 };
 
 function buildInitialSectionPhotos(
@@ -91,6 +104,12 @@ export default function PoptavkaTechnickePodminkyStep({
   inputClass,
   labelClass,
   optionCardClass,
+  mistoLat,
+  mistoLng,
+  kontaktJmeno,
+  kontaktTelefon,
+  kontaktEmail,
+  submitting = false,
 }: Props) {
   const effectiveRezim = uiRezim ?? (technika.technicke_rezim || null);
   const effectivePotvrzeno =
@@ -147,8 +166,27 @@ export default function PoptavkaTechnickePodminkyStep({
       technicke_potvrzeni_odpovednosti: false,
       technicke_potvrzeni_vyjezd_ceny: true,
       pozadovan_vyjezd_technika: true,
+      technik_vyjezd_kontakt_jmeno:
+        technika.technik_vyjezd_kontakt_jmeno.trim() || kontaktJmeno,
+      technik_vyjezd_kontakt_telefon:
+        technika.technik_vyjezd_kontakt_telefon.trim() || kontaktTelefon,
+      technik_vyjezd_kontakt_email:
+        technika.technik_vyjezd_kontakt_email.trim() || kontaktEmail,
     });
   }
+
+  const vyjezdKalkulace = useMemo(() => {
+    if (mistoLat == null || mistoLng == null) return null;
+    return calculateTechnikVyjezdDoprava(mistoLat, mistoLng);
+  }, [mistoLat, mistoLng]);
+
+  const canOrderVyjezd =
+    mistoLat != null &&
+    mistoLng != null &&
+    technika.technik_vyjezd_potvrzeni_fakturace &&
+    technika.technik_vyjezd_kontakt_jmeno.trim() &&
+    technika.technik_vyjezd_kontakt_email.trim() &&
+    (technika.technik_vyjezd_preferuje_telefon || technika.technik_vyjezd_preferuje_email);
 
   function renderSectionPhoto(key: TechnikaSectionPhotoKey) {
     const config = sectionPhotoConfig[key];
@@ -580,7 +618,7 @@ export default function PoptavkaTechnickePodminkyStep({
       ) : null}
 
       {effectiveRezim === "vyjezd_technika" && effectivePotvrzeno ? (
-        <div className="space-y-4">
+        <div className="space-y-5">
           {!readOnly ? (
             <div className="flex flex-wrap gap-3">
               <button
@@ -607,26 +645,166 @@ export default function PoptavkaTechnickePodminkyStep({
           ) : null}
 
           <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-4 text-sm text-emerald-50">
-            <p className="font-semibold">Potvrzen placený výjezd technika</p>
+            <p className="font-semibold">Podmínky výjezdu technika</p>
             <ul className="mt-2 list-inside list-disc space-y-1 text-emerald-100/90">
               {VYJEZD_CENIK_LINES.map((line) => (
                 <li key={line}>{line}</li>
               ))}
             </ul>
+            <p className="mt-3 font-medium text-emerald-100">
+              Minimální cena výjezdu: {TECHNIK_VYJEZD_MINIMUM_KC.toLocaleString("cs-CZ")} Kč
+            </p>
           </div>
 
-          <label className="block space-y-2">
-            <span className={labelClass}>Volitelná poznámka k výjezdu technika</span>
-            <textarea
-              name="dalsi_poznamky"
-              value={technika.dalsi_poznamky}
-              onChange={(e) => updateField("dalsi_poznamky", e.target.value)}
-              disabled={readOnly}
-              rows={3}
-              className={inputClass}
-              placeholder="Kontakt na místě, preferovaný termín obhlídky…"
-            />
-          </label>
+          {mistoLat == null || mistoLng == null ? (
+            <div className="rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-4 text-sm text-red-100">
+              Pro objednání výjezdu technika nejdřív doplňte přesné místo akce v kroku „Kde a
+              kdy“ — vyberte GPS bod na mapě a vyplňte přesný popis místa.
+            </div>
+          ) : vyjezdKalkulace ? (
+            <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm text-slate-200">
+              <p>
+                Orientační vzdálenost z centrály na místo akce a zpět:{" "}
+                <span className="font-semibold text-white">
+                  {vyjezdKalkulace.roundTripKm.toLocaleString("cs-CZ")} km
+                </span>
+              </p>
+              <p>
+                Orientační doprava: {vyjezdKalkulace.roundTripKm.toLocaleString("cs-CZ")} ×{" "}
+                {TECHNIK_VYJEZD_KM_SAZBA_KC} Kč ={" "}
+                <span className="font-semibold text-white">
+                  {vyjezdKalkulace.dopravaKc.toLocaleString("cs-CZ")} Kč
+                </span>
+              </p>
+              <p className="text-xs text-slate-400">
+                Výpočet je orientační (vzdušná vzdálenost upravená koeficientem).{" "}
+                {TECHNIK_VYJEZD_KONECNA_CENA_UPOZORNENI}
+              </p>
+            </div>
+          ) : null}
+
+          {!readOnly ? (
+            <>
+              <div className={warningBoxClass}>
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    name="technik_vyjezd_potvrzeni_fakturace"
+                    checked={technika.technik_vyjezd_potvrzeni_fakturace}
+                    onChange={(e) =>
+                      updateField("technik_vyjezd_potvrzeni_fakturace", e.target.checked)
+                    }
+                    className="mt-1"
+                    required
+                  />
+                  <span>{TECHNIK_VYJEZD_FAKTURACE_UPOZORNENI}</span>
+                </label>
+              </div>
+
+              <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+                <h3 className="font-semibold text-white">Kontakt pro výjezd technika</h3>
+                <p className="text-sm text-slate-400">
+                  Údaje z kroku „Kdo zadává“ — můžete je upravit pro domluvu výjezdu.
+                </p>
+                <label className="block space-y-2">
+                  <span className={labelClass}>Kontaktní osoba *</span>
+                  <input
+                    name="technik_vyjezd_kontakt_jmeno"
+                    value={technika.technik_vyjezd_kontakt_jmeno}
+                    onChange={(e) => updateField("technik_vyjezd_kontakt_jmeno", e.target.value)}
+                    className={inputClass}
+                    required
+                  />
+                </label>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block space-y-2">
+                    <span className={labelClass}>Telefon</span>
+                    <input
+                      name="technik_vyjezd_kontakt_telefon"
+                      value={technika.technik_vyjezd_kontakt_telefon}
+                      onChange={(e) =>
+                        updateField("technik_vyjezd_kontakt_telefon", e.target.value)
+                      }
+                      className={inputClass}
+                    />
+                  </label>
+                  <label className="block space-y-2">
+                    <span className={labelClass}>E-mail *</span>
+                    <input
+                      name="technik_vyjezd_kontakt_email"
+                      type="email"
+                      value={technika.technik_vyjezd_kontakt_email}
+                      onChange={(e) => updateField("technik_vyjezd_kontakt_email", e.target.value)}
+                      className={inputClass}
+                      required
+                    />
+                  </label>
+                </div>
+                <div>
+                  <span className={labelClass}>Preferovaný způsob kontaktu *</span>
+                  <div className="mt-2 flex flex-wrap gap-4">
+                    <label className="flex items-center gap-2 text-sm text-slate-200">
+                      <input
+                        type="checkbox"
+                        name="technik_vyjezd_preferuje_telefon"
+                        checked={technika.technik_vyjezd_preferuje_telefon}
+                        onChange={(e) =>
+                          updateField("technik_vyjezd_preferuje_telefon", e.target.checked)
+                        }
+                      />
+                      Telefon
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-slate-200">
+                      <input
+                        type="checkbox"
+                        name="technik_vyjezd_preferuje_email"
+                        checked={technika.technik_vyjezd_preferuje_email}
+                        onChange={(e) =>
+                          updateField("technik_vyjezd_preferuje_email", e.target.checked)
+                        }
+                      />
+                      E-mail
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <label className="block space-y-2">
+                <span className={labelClass}>Volitelná poznámka k výjezdu technika</span>
+                <textarea
+                  name="dalsi_poznamky"
+                  value={technika.dalsi_poznamky}
+                  onChange={(e) => updateField("dalsi_poznamky", e.target.value)}
+                  rows={3}
+                  className={inputClass}
+                  placeholder="Preferovaný termín obhlídky, kontakt na místě…"
+                />
+              </label>
+
+              <button
+                type="submit"
+                name="save_intent"
+                value="order_technik_vyjezd"
+                disabled={submitting || !canOrderVyjezd}
+                className="w-full rounded-xl border border-emerald-500/60 bg-emerald-500/20 px-5 py-4 text-sm font-bold text-emerald-50 transition hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+              >
+                {submitting
+                  ? "Odesílám…"
+                  : "Odeslat poptávku a závazně objednat výjezd technika"}
+              </button>
+            </>
+          ) : (
+            <label className="block space-y-2">
+              <span className={labelClass}>Poznámka k výjezdu technika</span>
+              <textarea
+                name="dalsi_poznamky"
+                value={technika.dalsi_poznamky}
+                disabled
+                rows={3}
+                className={inputClass}
+              />
+            </label>
+          )}
         </div>
       ) : null}
     </section>

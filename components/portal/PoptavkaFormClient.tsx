@@ -5,8 +5,10 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   createPoptavkaAction,
+  orderTechnikVyjezdAndSubmitPoptavkaAction,
   updatePoptavkaAction,
 } from "@/app/portal/poptavky/actions";
+import PoptavkaGpsLocationPanel from "@/components/portal/PoptavkaGpsLocationPanel";
 import PoptavkaFotkyClient from "@/components/portal/PoptavkaFotkyClient";
 import { emptyLogistikaOknaValues } from "@/lib/logistika-okna";
 import PoptavkaLogistikaOknaPanel from "@/components/portal/PoptavkaLogistikaOknaPanel";
@@ -47,6 +49,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   missing_email: "Vyplňte e-mail.",
   missing_event_name: "Vyplňte název akce.",
   missing_location: "Vyplňte místo nebo adresu akce.",
+  missing_gps: "Vyberte přesný bod akce na mapě v kroku Kde a kdy.",
+  missing_presny_popis_mista:
+    "Vyplňte přesný popis místa akce — kde má stát stage a technika.",
   missing_date_from: "Vyplňte datum začátku akce.",
   missing_date_to: "Vyplňte datum konce akce.",
   invalid_date_range: "Datum konce musí být stejné nebo pozdější než začátek.",
@@ -79,6 +84,13 @@ const ERROR_MESSAGES: Record<string, string> = {
     "Zvolte, zda je přípojka pro stage techniku samostatná nebo sdílená.",
   technicke_missing_ano_ne:
     "U technických otázek Ano/Ne vyberte vždy Ano nebo Ne. Pokud nevíte, zvolte výjezd technika.",
+  technik_vyjezd_missing_gps:
+    "Pro objednání výjezdu technika doplňte přesné místo akce v kroku Kde a kdy.",
+  technik_vyjezd_missing_fakturace:
+    "Potvrďte, že berete na vědomí fakturaci výjezdu technika i při nerealizaci akce.",
+  technik_vyjezd_missing_kontakt: "Vyplňte kontaktní osobu a e-mail pro výjezd technika.",
+  technik_vyjezd_missing_preference:
+    "Vyberte alespoň jeden preferovaný způsob kontaktu (telefon nebo e-mail).",
 };
 
 type Props = {
@@ -97,6 +109,7 @@ type Props = {
   errorCode?: string | null;
   saved?: boolean;
   submitted?: boolean;
+  technikVyjezdOrdered?: boolean;
   revisionNote?: string | null;
 };
 
@@ -139,6 +152,7 @@ export default function PoptavkaFormClient({
   errorCode,
   saved,
   submitted,
+  technikVyjezdOrdered,
   revisionNote,
 }: Props) {
   const steps = mode === "create" ? CREATE_STEPS : EDIT_STEPS;
@@ -170,6 +184,7 @@ export default function PoptavkaFormClient({
     misto_nazev: initialValues?.misto_nazev ?? "",
     typ_akce: initialValues?.typ_akce ?? "",
     misto_adresa: initialValues?.misto_adresa ?? "",
+    presny_popis_mista: initialValues?.presny_popis_mista ?? "",
     datum_od: initialValues?.datum_od ?? "",
     datum_do: initialValues?.datum_do ?? "",
     cas_programu_od: initialValues?.cas_programu_od ?? "",
@@ -339,6 +354,12 @@ export default function PoptavkaFormClient({
     }
     appendPendingSectionPhotos(formData, pendingBySection);
 
+    const intent = String(formData.get("save_intent") ?? "");
+    if (intent === "order_technik_vyjezd") {
+      void orderTechnikVyjezdAndSubmitPoptavkaAction(formData);
+      return;
+    }
+
     void formAction(formData);
   }
 
@@ -373,6 +394,12 @@ export default function PoptavkaFormClient({
         {submitted ? (
           <p className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
             Poptávka byla odeslána a čeká na kontrolu WEST COUNTY.
+          </p>
+        ) : null}
+        {technikVyjezdOrdered ? (
+          <p className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+            Poptávka byla odeslána a závazná objednávka výjezdu technika byla přijata. Spojíme
+            se s vámi ohledně termínu výjezdu podle uvedených kontaktních údajů.
           </p>
         ) : null}
         {saved ? (
@@ -446,6 +473,12 @@ export default function PoptavkaFormClient({
               <input type="hidden" name="misto_nazev" value={form.misto_nazev} readOnly />
               <input type="hidden" name="typ_akce" value={form.typ_akce} readOnly />
               <input type="hidden" name="misto_adresa" value={form.misto_adresa} readOnly />
+              <input
+                type="hidden"
+                name="presny_popis_mista"
+                value={form.presny_popis_mista}
+                readOnly
+              />
               <input type="hidden" name="datum_od" value={form.datum_od} readOnly />
               <input type="hidden" name="datum_do" value={form.datum_do} readOnly />
               <input type="hidden" name="cas_programu_od" value={form.cas_programu_od} readOnly />
@@ -546,6 +579,38 @@ export default function PoptavkaFormClient({
               />
               {technika.pozadovan_vyjezd_technika ? (
                 <input type="hidden" name="pozadovan_vyjezd_technika" value="on" readOnly />
+              ) : null}
+              <input
+                type="hidden"
+                name="technik_vyjezd_kontakt_jmeno"
+                value={technika.technik_vyjezd_kontakt_jmeno}
+                readOnly
+              />
+              <input
+                type="hidden"
+                name="technik_vyjezd_kontakt_telefon"
+                value={technika.technik_vyjezd_kontakt_telefon}
+                readOnly
+              />
+              <input
+                type="hidden"
+                name="technik_vyjezd_kontakt_email"
+                value={technika.technik_vyjezd_kontakt_email}
+                readOnly
+              />
+              {technika.technik_vyjezd_preferuje_telefon ? (
+                <input type="hidden" name="technik_vyjezd_preferuje_telefon" value="on" readOnly />
+              ) : null}
+              {technika.technik_vyjezd_preferuje_email ? (
+                <input type="hidden" name="technik_vyjezd_preferuje_email" value="on" readOnly />
+              ) : null}
+              {technika.technik_vyjezd_potvrzeni_fakturace ? (
+                <input
+                  type="hidden"
+                  name="technik_vyjezd_potvrzeni_fakturace"
+                  value="on"
+                  readOnly
+                />
               ) : null}
             </>
           ) : null}
@@ -721,6 +786,37 @@ export default function PoptavkaFormClient({
                 />
               </label>
 
+              <label className="block space-y-2">
+                <span className={labelClass}>
+                  Přesný popis místa akce <span className="text-amber-300">*</span>
+                </span>
+                <textarea
+                  name="presny_popis_mista"
+                  value={form.presny_popis_mista}
+                  onChange={(e) => updateField("presny_popis_mista", e.target.value)}
+                  disabled={readOnly}
+                  required
+                  rows={3}
+                  className={inputClass}
+                  placeholder="Např. travnatá plocha vedle fotbalového hřiště, vjezd z ulice …"
+                />
+                <p className="text-xs text-slate-500">
+                  GPS bod nestačí — popište slovně, kde přesně má stát stage a technika.
+                </p>
+              </label>
+
+              {!readOnly || form.misto_lat != null ? (
+                <PoptavkaGpsLocationPanel
+                  placeQuery={[form.misto_adresa, form.misto_nazev].filter(Boolean).join(", ")}
+                  lat={form.misto_lat}
+                  lng={form.misto_lng}
+                  readOnly={readOnly}
+                  onCoordsChange={(lat, lng) => {
+                    setForm((current) => ({ ...current, misto_lat: lat, misto_lng: lng }));
+                  }}
+                />
+              ) : null}
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block space-y-2">
                   <span className={labelClass}>Datum od *</span>
@@ -840,6 +936,12 @@ export default function PoptavkaFormClient({
               inputClass={inputClass}
               labelClass={labelClass}
               optionCardClass={optionCardClass}
+              mistoLat={form.misto_lat}
+              mistoLng={form.misto_lng}
+              kontaktJmeno={form.kontakt_jmeno}
+              kontaktTelefon={form.kontakt_telefon}
+              kontaktEmail={form.kontakt_email}
+              submitting={submitting}
             />
           )}
 

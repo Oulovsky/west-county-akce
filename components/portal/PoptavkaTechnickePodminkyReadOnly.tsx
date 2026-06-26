@@ -3,7 +3,13 @@ import {
   VYJEZD_CENIK_LINES,
   technickeRezimFromRecord,
   formatTechnickePotvrzeni,
+  formatTechnikVyjezdPreferovanyKontakt,
+  formatTechnikVyjezdVypocetTyp,
 } from "@/lib/client-portal/poptavka-technika-podminky";
+import {
+  TECHNIK_VYJEZD_KM_SAZBA_KC,
+  TECHNIK_VYJEZD_MINIMUM_KC,
+} from "@/lib/client-portal/technik-vyjezd-pricing";
 import {
   SDILENA_PRIPOJKA_VAROVANI,
   formatElektroZdrojTyp,
@@ -130,7 +136,68 @@ export default function PoptavkaTechnickePodminkyReadOnly({
       ) : null}
 
       {rezim === "vyjezd_technika" ? (
-        <ReadOnlyField label="Poznámka k výjezdu" value={technika.dalsi_poznamky} />
+        <div className="space-y-4">
+          {row.technik_vyjezd_objednan_at ? (
+            <div className="rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-4 text-sm text-emerald-50">
+              <p className="font-semibold">Závazně objednaný výjezd technika</p>
+              <p className="mt-1">
+                Objednáno: {formatTechnickePotvrzeni(row.technik_vyjezd_objednan_at)}
+              </p>
+              <p className="mt-2 text-xs text-emerald-100/90">
+                Poptávka byla odeslána ke zpracování — technické podmínky čekají na výjezd
+                technika.
+              </p>
+            </div>
+          ) : null}
+
+          <ul className="list-inside list-disc space-y-1 text-sm text-slate-300">
+            {VYJEZD_CENIK_LINES.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+            <li>Minimální cena výjezdu: {TECHNIK_VYJEZD_MINIMUM_KC.toLocaleString("cs-CZ")} Kč</li>
+          </ul>
+
+          {row.technik_vyjezd_vzdalenost_km != null ? (
+            <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-slate-200">
+              <p>
+                Orientační vzdálenost tam i zpět:{" "}
+                <span className="font-semibold text-white">
+                  {Number(row.technik_vyjezd_vzdalenost_km).toLocaleString("cs-CZ")} km
+                </span>
+              </p>
+              {row.technik_vyjezd_doprava_kc != null ? (
+                <p className="mt-1">
+                  Orientační doprava ({TECHNIK_VYJEZD_KM_SAZBA_KC} Kč/km):{" "}
+                  <span className="font-semibold text-white">
+                    {Number(row.technik_vyjezd_doprava_kc).toLocaleString("cs-CZ")} Kč
+                  </span>
+                </p>
+              ) : null}
+              <p className="mt-2 text-xs text-slate-500">
+                Typ výpočtu: {formatTechnikVyjezdVypocetTyp(row.technik_vyjezd_vypocet_typ)}
+              </p>
+            </div>
+          ) : null}
+
+          {row.technik_vyjezd_potvrzeni_fakturace_at ? (
+            <p className="text-sm text-amber-100">
+              Potvrzena fakturace výjezdu i při nerealizaci akce (
+              {formatTechnickePotvrzeni(row.technik_vyjezd_potvrzeni_fakturace_at)})
+            </p>
+          ) : null}
+
+          <dl className="grid gap-3 text-sm sm:grid-cols-2">
+            <ReadOnlyField label="Kontakt pro výjezd" value={row.technik_vyjezd_kontakt_jmeno} />
+            <ReadOnlyField label="Telefon" value={row.technik_vyjezd_kontakt_telefon} />
+            <ReadOnlyField label="E-mail" value={row.technik_vyjezd_kontakt_email} />
+            <div>
+              <dt className="text-slate-500">Preferovaný kontakt</dt>
+              <dd className="text-slate-100">{formatTechnikVyjezdPreferovanyKontakt(row)}</dd>
+            </div>
+          </dl>
+
+          <ReadOnlyField label="Poznámka k výjezdu" value={technika.dalsi_poznamky} />
+        </div>
       ) : null}
 
       {fotky.length > 0 ? (

@@ -15,9 +15,11 @@ export const ODPovednosti_UPOZORNENI =
 export const VYJEZD_UPOZORNENI =
   "Požadujete výjezd technika WEST COUNTY pro kontrolu technických podmínek na místě. Výjezd technika je zpoplatněn částkou 500 Kč / hod práce na místě + cestovní náklady 7 Kč / km z centrály Karlovy Vary, minimálně však 3 000 Kč.";
 
+import { WEST_COUNTY_HQ } from "@/lib/locations/west-county-hq";
+
 export const VYJEZD_CENIK_LINES = [
   "500 Kč / hod práce technika na místě",
-  "7 Kč / km cestovní náklady z centrály Karlovy Vary",
+  `7 Kč / km cestovní náklady z ${WEST_COUNTY_HQ.name} tam i zpět`,
   "Minimální cena výjezdu: 3 000 Kč",
 ] as const;
 
@@ -179,4 +181,51 @@ export function validateTechnickePodminkyForSave(input: {
   }
 
   return null;
+}
+
+export function validateTechnikVyjezdOrder(input: {
+  technika: PoptavkaTechnikaFormValues;
+  mistoLat: number | null;
+  mistoLng: number | null;
+}): string | null {
+  if (input.technika.technicke_rezim !== "vyjezd_technika") {
+    return "technicke_missing_rezim";
+  }
+  if (!input.technika.technicke_potvrzeni_vyjezd_ceny) {
+    return "technicke_missing_potvrzeni_vyjezd";
+  }
+  if (input.mistoLat == null || input.mistoLng == null) {
+    return "technik_vyjezd_missing_gps";
+  }
+  if (!input.technika.technik_vyjezd_potvrzeni_fakturace) {
+    return "technik_vyjezd_missing_fakturace";
+  }
+  if (
+    !input.technika.technik_vyjezd_kontakt_jmeno.trim() ||
+    !input.technika.technik_vyjezd_kontakt_email.trim()
+  ) {
+    return "technik_vyjezd_missing_kontakt";
+  }
+  if (
+    !input.technika.technik_vyjezd_preferuje_telefon &&
+    !input.technika.technik_vyjezd_preferuje_email
+  ) {
+    return "technik_vyjezd_missing_preference";
+  }
+  return null;
+}
+
+export function formatTechnikVyjezdPreferovanyKontakt(row: PoptavkaTechnickeUdaje) {
+  const parts: string[] = [];
+  if (row.technik_vyjezd_preferuje_telefon) parts.push("Telefon");
+  if (row.technik_vyjezd_preferuje_email) parts.push("E-mail");
+  return parts.length ? parts.join(", ") : "—";
+}
+
+export function formatTechnikVyjezdVypocetTyp(
+  value: PoptavkaTechnickeUdaje["technik_vyjezd_vypocet_typ"]
+) {
+  if (value === "google_directions") return "Google Maps Directions (trasa)";
+  if (value === "orientacni_vzdusna_cara") return "Orientační (vzdušná čára × koeficient)";
+  return "—";
 }

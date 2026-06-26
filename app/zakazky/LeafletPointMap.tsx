@@ -3,15 +3,17 @@
 import { useEffect } from "react";
 import type { LatLngExpression } from "leaflet";
 import { CircleMarker, MapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { WEST_COUNTY_HQ_MAP_CENTER } from "@/lib/locations/west-county-hq";
 
 type LeafletPointMapProps = {
   lat: number | null;
   lng: number | null;
   onSelect: (lat: number, lng: number) => void;
   layer?: "map" | "satellite";
+  defaultCenter?: LatLngExpression;
 };
 
-const DEFAULT_CENTER: LatLngExpression = [50.1, 12.9];
+const DEFAULT_CENTER: LatLngExpression = WEST_COUNTY_HQ_MAP_CENTER;
 const DEFAULT_ZOOM = 8;
 const SELECTED_POINT_ZOOM = 15;
 
@@ -51,9 +53,15 @@ function MapCenterSync({
   return null;
 }
 
-export function LeafletPointMap({ lat, lng, onSelect, layer = "map" }: LeafletPointMapProps) {
+export function LeafletPointMap({
+  lat,
+  lng,
+  onSelect,
+  layer = "map",
+  defaultCenter = DEFAULT_CENTER,
+}: LeafletPointMapProps) {
   const hasPoint = isValidLat(lat) && isValidLng(lng);
-  const center: LatLngExpression = hasPoint ? [lat, lng] : DEFAULT_CENTER;
+  const center: LatLngExpression = hasPoint ? [lat, lng] : defaultCenter;
   const tileLayer =
     layer === "satellite"
       ? {

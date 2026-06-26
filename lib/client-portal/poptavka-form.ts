@@ -32,6 +32,7 @@ export type PoptavkaFormValues = {
   misto_nazev: string;
   typ_akce: string;
   misto_adresa: string;
+  presny_popis_mista: string;
   datum_od: string;
   datum_do: string;
   cas_programu_od: string;
@@ -122,6 +123,7 @@ export function parsePoptavkaFormData(formData: FormData): PoptavkaFormValues {
     misto_nazev: String(formData.get("misto_nazev") ?? "").trim(),
     typ_akce: String(formData.get("typ_akce") ?? "").trim(),
     misto_adresa: String(formData.get("misto_adresa") ?? "").trim(),
+    presny_popis_mista: String(formData.get("presny_popis_mista") ?? "").trim(),
     datum_od: String(formData.get("datum_od") ?? "").trim(),
     datum_do: String(formData.get("datum_do") ?? "").trim(),
     cas_programu_od: String(formData.get("cas_programu_od") ?? "").trim(),
@@ -141,6 +143,8 @@ export function validatePoptavkaForm(values: PoptavkaFormValues): string | null 
   if (!values.kontakt_email) return "missing_email";
   if (!values.misto_nazev) return "missing_event_name";
   if (!values.misto_adresa) return "missing_location";
+  if (values.misto_lat == null || values.misto_lng == null) return "missing_gps";
+  if (!values.presny_popis_mista.trim()) return "missing_presny_popis_mista";
   if (!values.datum_od) return "missing_date_from";
   if (!values.datum_do) return "missing_date_to";
   if (values.datum_do < values.datum_od) return "invalid_date_range";
@@ -161,6 +165,7 @@ export function buildPoptavkaRowPayload(values: PoptavkaFormValues) {
     misto_nazev: nullable(values.misto_nazev),
     typ_akce: nullable(values.typ_akce),
     misto_adresa: nullable(values.misto_adresa),
+    presny_popis_mista: nullable(values.presny_popis_mista),
     misto_lat: values.misto_lat,
     misto_lng: values.misto_lng,
     datum_od: nullable(values.datum_od),
