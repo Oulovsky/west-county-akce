@@ -22,7 +22,6 @@ import {
   sestavaFromOdpovediExtra,
 } from "@/lib/client-portal/sestava-konfigurator-form";
 import { loadPortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-server";
-import PoptavkaSestavaSchema from "@/components/portal/PoptavkaSestavaSchema";
 import { loadClientMistaKonaniForPortal, loadClientMistaKnowHowByIdForPortal } from "@/lib/client-portal/client-mista-server";
 import { loadPortalPoptavkaObjednavkaDecisionView } from "@/lib/client-portal/poptavka-objednavka-link-server";
 import {
@@ -64,11 +63,8 @@ function SestavaReadOnlySection({
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
           Atypická technická poptávka — ruční návrh a nacenění
         </div>
-        <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-          <PoptavkaSestavaSchema state={state} katalog={katalog} />
-          <div className="whitespace-pre-wrap text-sm text-slate-200">
-            {state.atypicka_poptavka_text || "Text atypické poptávky nebyl vyplněn."}
-          </div>
+        <div className="whitespace-pre-wrap text-sm text-slate-200">
+          {state.atypicka_poptavka_text || "Text atypické poptávky nebyl vyplněn."}
         </div>
       </section>
     );
@@ -85,14 +81,11 @@ function SestavaReadOnlySection({
   return (
     <section className="mt-8 space-y-4 border-t border-white/10 pt-6">
       <h2 className="text-lg font-semibold text-white">Konfigurace sestavy</h2>
-      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-        <PoptavkaSestavaSchema state={state} katalog={katalog} />
-        <ul className="space-y-1 text-sm text-slate-200">
-          {lines.map((line) => (
-            <li key={line}>{line}</li>
-          ))}
-        </ul>
-      </div>
+      <ul className="space-y-1 text-sm text-slate-200">
+        {lines.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
     </section>
   );
 }

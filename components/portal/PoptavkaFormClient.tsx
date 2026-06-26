@@ -290,6 +290,17 @@ export default function PoptavkaFormClient({
     setSubmitting(true);
   }
 
+  function handleFormKeyDown(event: React.KeyboardEvent<HTMLFormElement>) {
+    if (event.key !== "Enter") return;
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (target.tagName === "TEXTAREA") return;
+    if (target instanceof HTMLButtonElement && target.type === "submit") return;
+    if (target.tagName === "INPUT" || target.tagName === "SELECT") {
+      event.preventDefault();
+    }
+  }
+
   const formAction = mode === "create" ? createPoptavkaAction : updatePoptavkaAction;
 
   const inputClass =
@@ -342,7 +353,12 @@ export default function PoptavkaFormClient({
           </div>
         ) : null}
 
-        <form action={formAction} onSubmit={handleSubmit} className="space-y-8">
+        <form
+          action={formAction}
+          onSubmit={handleSubmit}
+          onKeyDown={handleFormKeyDown}
+          className="space-y-8"
+        >
           {mode === "edit" && poptavkaId ? (
             <input type="hidden" name="poptavka_id" value={poptavkaId} />
           ) : null}
@@ -362,6 +378,80 @@ export default function PoptavkaFormClient({
             value={form.misto_lng != null ? String(form.misto_lng) : ""}
             readOnly
           />
+
+          {!readOnly && step !== 1 ? (
+            <>
+              <input type="hidden" name="kontakt_jmeno" value={form.kontakt_jmeno} readOnly />
+              <input type="hidden" name="kontakt_telefon" value={form.kontakt_telefon} readOnly />
+              <input type="hidden" name="kontakt_email" value={form.kontakt_email} readOnly />
+            </>
+          ) : null}
+
+          {!readOnly && step !== 2 ? (
+            <>
+              <input type="hidden" name="misto_nazev" value={form.misto_nazev} readOnly />
+              <input type="hidden" name="typ_akce" value={form.typ_akce} readOnly />
+              <input type="hidden" name="misto_adresa" value={form.misto_adresa} readOnly />
+              <input type="hidden" name="datum_od" value={form.datum_od} readOnly />
+              <input type="hidden" name="datum_do" value={form.datum_do} readOnly />
+              <input type="hidden" name="cas_programu_od" value={form.cas_programu_od} readOnly />
+              <input type="hidden" name="cas_programu_do" value={form.cas_programu_do} readOnly />
+              <input type="hidden" name="misto_poznamka" value={form.misto_poznamka} readOnly />
+              <input type="hidden" name="stavba_okno_od" value={form.stavba_okno_od} readOnly />
+              <input type="hidden" name="stavba_okno_do" value={form.stavba_okno_do} readOnly />
+              <input type="hidden" name="bourani_okno_od" value={form.bourani_okno_od} readOnly />
+              <input type="hidden" name="bourani_okno_do" value={form.bourani_okno_do} readOnly />
+              <input
+                type="hidden"
+                name="logistika_poznamka_klienta"
+                value={form.logistika_poznamka_klienta}
+                readOnly
+              />
+            </>
+          ) : null}
+
+          {mode === "edit" && !readOnly && step !== 4 ? (
+            <>
+              <input type="hidden" name="prijezd_poznamka" value={technika.prijezd_poznamka} readOnly />
+              <input
+                type="hidden"
+                name="parkovani_poznamka"
+                value={technika.parkovani_poznamka}
+                readOnly
+              />
+              <input
+                type="hidden"
+                name="rozvadece_poznamka"
+                value={technika.rozvadece_poznamka}
+                readOnly
+              />
+              <input type="hidden" name="elektro_pripojka" value={technika.elektro_pripojka} readOnly />
+              <input type="hidden" name="elektro_jisteni" value={technika.elektro_jisteni} readOnly />
+              <input type="hidden" name="elektro_zasuvka" value={technika.elektro_zasuvka} readOnly />
+              <input
+                type="hidden"
+                name="elektro_vzdalenost_m"
+                value={technika.elektro_vzdalenost_m}
+                readOnly
+              />
+              <input type="hidden" name="kabelove_trasy" value={technika.kabelove_trasy} readOnly />
+              <input type="hidden" name="misto_stage" value={technika.misto_stage} readOnly />
+              <input type="hidden" name="misto_foh" value={technika.misto_foh} readOnly />
+              <input type="hidden" name="omezeni_hluku" value={technika.omezeni_hluku} readOnly />
+              <input type="hidden" name="casova_omezeni" value={technika.casova_omezeni} readOnly />
+              <input type="hidden" name="dalsi_poznamky" value={technika.dalsi_poznamky} readOnly />
+              <input type="hidden" name="lze_zajet_autem" value={technika.lze_zajet_autem} readOnly />
+              <input
+                type="hidden"
+                name="kabel_pres_silnici"
+                value={technika.kabel_pres_silnici}
+                readOnly
+              />
+              {technika.pozadovan_vyjezd_technika ? (
+                <input type="hidden" name="pozadovan_vyjezd_technika" value="on" readOnly />
+              ) : null}
+            </>
+          ) : null}
 
           {(readOnly || step === 1) && (
             <section className="space-y-4">

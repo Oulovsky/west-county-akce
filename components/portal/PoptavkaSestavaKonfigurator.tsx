@@ -1,13 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
-import PoptavkaSestavaSchema from "@/components/portal/PoptavkaSestavaSchema";
 import {
   applySchodyVolba,
   computeOdhadModulu,
   schodyVolbaFromState,
   validateSestavaKonfigurator,
-  buildSestavaSummaryLines,
 } from "@/lib/client-portal/sestava-konfigurator-form";
 import {
   buildMobilniStageVolby,
@@ -74,6 +72,9 @@ function NumberField({
         required={required}
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.preventDefault();
+        }}
         disabled={readOnly}
         className={inputClass}
       />
@@ -134,7 +135,6 @@ export default function PoptavkaSestavaKonfigurator({
   optionCardClass,
 }: Props) {
   const validation = useMemo(() => validateSestavaKonfigurator(state, katalog), [state, katalog]);
-  const summary = useMemo(() => buildSestavaSummaryLines(state, katalog), [state, katalog]);
   const odhad = useMemo(() => computeOdhadModulu(katalog, state), [katalog, state]);
   const maxCista = getMaxCistaVyska(katalog, state.stage_typ, state.zastreseni_variant_id);
   const selectedLed = findLedTyp(katalog, state.led_typ_kod);
@@ -185,8 +185,7 @@ export default function PoptavkaSestavaKonfigurator({
   }
 
   return (
-    <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_340px]">
-      <div className="min-w-0 space-y-6">
+    <div className="mx-auto w-full max-w-3xl space-y-6">
         <section className="space-y-3 rounded-xl border border-white/10 bg-white/[0.02] p-4">
           <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-amber-200/90">
             Režim konfigurace
@@ -856,23 +855,6 @@ export default function PoptavkaSestavaKonfigurator({
             ))}
           </div>
         ) : null}
-      </div>
-
-      <aside className="space-y-4 xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:self-start xl:overflow-y-auto">
-        <PoptavkaSestavaSchema state={state} katalog={katalog} />
-        {summary.length > 0 ? (
-          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-xs text-slate-300">
-            <div className="mb-2 font-semibold uppercase tracking-wide text-slate-400">
-              Shrnutí sestavy
-            </div>
-            <ul className="space-y-1">
-              {summary.map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </aside>
     </div>
   );
 }
