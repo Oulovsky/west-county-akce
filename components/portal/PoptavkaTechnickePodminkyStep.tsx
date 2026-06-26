@@ -1,0 +1,582 @@
+"use client";
+
+import { useMemo } from "react";
+import PoptavkaTechnikaSectionPhoto, {
+  emptySectionPhotoState,
+  type SectionPhotoState,
+} from "@/components/portal/PoptavkaTechnikaSectionPhoto";
+import {
+  ODPovednosti_UPOZORNENI,
+  TECHNIKA_SECTION_PHOTOS,
+  VYJEZD_CENIK_LINES,
+  VYJEZD_UPOZORNENI,
+  type TechnickeRezim,
+  type TechnikaSectionPhotoKey,
+} from "@/lib/client-portal/poptavka-technika-podminky";
+import {
+  ELEKTRO_ZASUVKA_OPTIONS,
+  TRIZVOLBA_OPTIONS,
+  type PoptavkaTechnikaFormValues,
+} from "@/lib/client-portal/poptavka-technika-form";
+import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-server";
+
+type Props = {
+  technika: PoptavkaTechnikaFormValues;
+  onChange: (next: PoptavkaTechnikaFormValues) => void;
+  uiRezim: TechnickeRezim | null;
+  uiPotvrzeno: boolean;
+  onUiRezimChange: (rezim: TechnickeRezim | null) => void;
+  onUiPotvrzenoChange: (potvrzeno: boolean) => void;
+  readOnly?: boolean;
+  poptavkaId?: string;
+  initialFotky?: PoptavkaFotkaWithUrl[];
+  sectionPhotos: Partial<Record<TechnikaSectionPhotoKey, SectionPhotoState>>;
+  onSectionPhotosChange: (
+    key: TechnikaSectionPhotoKey,
+    next: SectionPhotoState
+  ) => void;
+  inputClass: string;
+  labelClass: string;
+  optionCardClass: string;
+};
+
+function buildInitialSectionPhotos(
+  initialFotky: PoptavkaFotkaWithUrl[]
+): Partial<Record<TechnikaSectionPhotoKey, SectionPhotoState>> {
+  const map: Partial<Record<TechnikaSectionPhotoKey, SectionPhotoState>> = {};
+
+  for (const section of TECHNIKA_SECTION_PHOTOS) {
+    map[section.key] = {
+      ...emptySectionPhotoState(),
+      saved: initialFotky
+        .filter((row) => row.typ === section.typ)
+        .map((row) => ({
+          id: row.id,
+          typ: row.typ,
+          popis: row.popis,
+          original_filename: row.original_filename,
+          signedUrl: row.signedUrl,
+        })),
+    };
+  }
+
+  return map;
+}
+
+export function createInitialSectionPhotos(initialFotky: PoptavkaFotkaWithUrl[] = []) {
+  return buildInitialSectionPhotos(initialFotky);
+}
+
+const choiceCardClass =
+  "rounded-2xl border border-white/15 bg-white/[0.03] p-5 text-left transition hover:border-amber-500/40 hover:bg-white/[0.05]";
+
+const warningBoxClass =
+  "rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-4 text-sm leading-relaxed text-amber-50";
+
+export default function PoptavkaTechnickePodminkyStep({
+  technika,
+  onChange,
+  uiRezim,
+  uiPotvrzeno,
+  onUiRezimChange,
+  onUiPotvrzenoChange,
+  readOnly = false,
+  poptavkaId,
+  initialFotky = [],
+  sectionPhotos,
+  onSectionPhotosChange,
+  inputClass,
+  labelClass,
+  optionCardClass,
+}: Props) {
+  const effectiveRezim = uiRezim ?? (technika.technicke_rezim || null);
+  const effectivePotvrzeno =
+    uiPotvrzeno ||
+    technika.technicke_potvrzeni_odpovednosti ||
+    technika.technicke_potvrzeni_vyjezd_ceny;
+
+  const sectionPhotoConfig = useMemo(
+    () =>
+      Object.fromEntries(
+        TECHNIKA_SECTION_PHOTOS.map((section) => [section.key, section])
+      ) as Record<
+        TechnikaSectionPhotoKey,
+        (typeof TECHNIKA_SECTION_PHOTOS)[number]
+      >,
+    []
+  );
+
+  function updateField<K extends keyof PoptavkaTechnikaFormValues>(
+    key: K,
+    value: PoptavkaTechnikaFormValues[K]
+  ) {
+    onChange({ ...technika, [key]: value });
+  }
+
+  function selectRezim(rezim: TechnickeRezim) {
+    onUiRezimChange(rezim);
+    onUiPotvrzenoChange(false);
+    onChange({
+      ...technika,
+      technicke_rezim: rezim,
+      technicke_potvrzeni_odpovednosti: false,
+      technicke_potvrzeni_vyjezd_ceny: false,
+      pozadovan_vyjezd_technika: rezim === "vyjezd_technika",
+    });
+  }
+
+  function confirmKlientVyplni() {
+    onUiPotvrzenoChange(true);
+    onChange({
+      ...technika,
+      technicke_rezim: "klient_vyplni",
+      technicke_potvrzeni_odpovednosti: true,
+      technicke_potvrzeni_vyjezd_ceny: false,
+      pozadovan_vyjezd_technika: false,
+    });
+  }
+
+  function confirmVyjezdTechnika() {
+    onUiPotvrzenoChange(true);
+    onChange({
+      ...technika,
+      technicke_rezim: "vyjezd_technika",
+      technicke_potvrzeni_odpovednosti: false,
+      technicke_potvrzeni_vyjezd_ceny: true,
+      pozadovan_vyjezd_technika: true,
+    });
+  }
+
+  function renderSectionPhoto(key: TechnikaSectionPhotoKey) {
+    const config = sectionPhotoConfig[key];
+    const state = sectionPhotos[key] ?? emptySectionPhotoState();
+
+    return (
+      <PoptavkaTechnikaSectionPhoto
+        sectionKey={key}
+        typ={config.typ}
+        captureLabel={config.captureLabel}
+        poptavkaId={poptavkaId}
+        readOnly={readOnly}
+        state={state}
+        onPendingChange={(next) => onSectionPhotosChange(key, next)}
+      />
+    );
+  }
+
+  return (
+    <section className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold text-white">4. Technické podmínky</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          Zvolte, zda technické informace k místu vyplníte sami, nebo požádáte o placený výjezd
+          technika WEST COUNTY.
+        </p>
+      </div>
+
+      <input type="hidden" name="technicke_rezim" value={technika.technicke_rezim} readOnly />
+      {technika.technicke_potvrzeni_odpovednosti ? (
+        <input type="hidden" name="technicke_potvrzeni_odpovednosti" value="on" readOnly />
+      ) : null}
+      {technika.technicke_potvrzeni_vyjezd_ceny ? (
+        <input type="hidden" name="technicke_potvrzeni_vyjezd_ceny" value="on" readOnly />
+      ) : null}
+
+      {!effectiveRezim && !readOnly ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <button
+            type="button"
+            className={choiceCardClass}
+            onClick={() => selectRezim("klient_vyplni")}
+          >
+            <div className="text-base font-bold text-white">Zadám technické informace sám</div>
+            <p className="mt-2 text-sm text-slate-400">
+              Vyplníte elektro, příjezd, vzdálenosti a další podmínky. Nesete odpovědnost za
+              správnost údajů.
+            </p>
+          </button>
+          <button
+            type="button"
+            className={choiceCardClass}
+            onClick={() => selectRezim("vyjezd_technika")}
+          >
+            <div className="text-base font-bold text-white">
+              Požaduji výjezd technika pro kontrolu technických podmínek na místě
+            </div>
+            <p className="mt-2 text-sm text-slate-400">
+              Technik WEST COUNTY zkontroluje místo na místě. Výjezd je zpoplatněn dle ceníku.
+            </p>
+          </button>
+        </div>
+      ) : null}
+
+      {effectiveRezim === "klient_vyplni" && !effectivePotvrzeno && !readOnly ? (
+        <div className="space-y-4">
+          <div className={warningBoxClass}>{ODPovednosti_UPOZORNENI}</div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={confirmKlientVyplni}
+              className="rounded-xl border border-emerald-500/60 bg-emerald-500/20 px-5 py-3 text-sm font-bold text-emerald-50 transition hover:bg-emerald-500/30"
+            >
+              Potvrzuji a zadám technické informace
+            </button>
+            <button
+              type="button"
+              onClick={() => selectRezim("vyjezd_technika")}
+              className="rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm text-slate-200 transition hover:bg-white/10"
+            >
+              Raději požaduji výjezd technika
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {effectiveRezim === "vyjezd_technika" && !effectivePotvrzeno && !readOnly ? (
+        <div className="space-y-4">
+          <div className={warningBoxClass}>{VYJEZD_UPOZORNENI}</div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={confirmVyjezdTechnika}
+              className="rounded-xl border border-emerald-500/60 bg-emerald-500/20 px-5 py-3 text-sm font-bold text-emerald-50 transition hover:bg-emerald-500/30"
+            >
+              Potvrzuji placený výjezd technika
+            </button>
+            <button
+              type="button"
+              onClick={() => selectRezim("klient_vyplni")}
+              className="rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm text-slate-200 transition hover:bg-white/10"
+            >
+              Raději zadám technické informace sám
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {readOnly && effectiveRezim ? (
+        <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-slate-200">
+          {effectiveRezim === "klient_vyplni"
+            ? "Klient vyplňuje technické informace sám."
+            : "Klient požaduje placený výjezd technika."}
+        </div>
+      ) : null}
+
+      {effectiveRezim === "klient_vyplni" && effectivePotvrzeno ? (
+        <div className="space-y-6">
+          {!readOnly ? (
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  onUiPotvrzenoChange(false);
+                  onChange({
+                    ...technika,
+                    technicke_potvrzeni_odpovednosti: false,
+                  });
+                }}
+                className="text-xs text-slate-400 underline hover:text-slate-200"
+              >
+                Změnit volbu režimu
+              </button>
+              <button
+                type="button"
+                onClick={() => selectRezim("vyjezd_technika")}
+                className="text-xs text-amber-300 underline hover:text-amber-200"
+              >
+                Raději požaduji výjezd technika
+              </button>
+            </div>
+          ) : null}
+
+          <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+            <h3 className="font-semibold text-white">Elektro / rozvaděč</h3>
+            <label className="block space-y-2">
+              <span className={labelClass}>Popis rozvaděče a elektro na místě</span>
+              <textarea
+                name="rozvadece_poznamka"
+                value={technika.rozvadece_poznamka}
+                onChange={(e) => updateField("rozvadece_poznamka", e.target.value)}
+                disabled={readOnly}
+                rows={2}
+                className={inputClass}
+              />
+            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block space-y-2">
+                <span className={labelClass}>Přípojka / proud</span>
+                <input
+                  name="elektro_pripojka"
+                  value={technika.elektro_pripojka}
+                  onChange={(e) => updateField("elektro_pripojka", e.target.value)}
+                  disabled={readOnly}
+                  className={inputClass}
+                />
+              </label>
+              <label className="block space-y-2">
+                <span className={labelClass}>Jištění / okruhy</span>
+                <input
+                  name="elektro_jisteni"
+                  value={technika.elektro_jisteni}
+                  onChange={(e) => updateField("elektro_jisteni", e.target.value)}
+                  disabled={readOnly}
+                  className={inputClass}
+                />
+              </label>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block space-y-2">
+                <span className={labelClass}>Typ zásuvky</span>
+                <select
+                  name="elektro_zasuvka"
+                  value={technika.elektro_zasuvka}
+                  onChange={(e) => updateField("elektro_zasuvka", e.target.value)}
+                  disabled={readOnly}
+                  className={inputClass}
+                >
+                  <option value="">—</option>
+                  {ELEKTRO_ZASUVKA_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-2">
+                <span className={labelClass}>Vzdálenost elektřiny (m)</span>
+                <input
+                  name="elektro_vzdalenost_m"
+                  inputMode="decimal"
+                  value={technika.elektro_vzdalenost_m}
+                  onChange={(e) => updateField("elektro_vzdalenost_m", e.target.value)}
+                  disabled={readOnly}
+                  className={inputClass}
+                />
+              </label>
+            </div>
+            {renderSectionPhoto("rozvadec")}
+          </div>
+
+          <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+            <h3 className="font-semibold text-white">Příjezd na místo</h3>
+            <label className="block space-y-2">
+              <span className={labelClass}>Poznámka k příjezdu</span>
+              <textarea
+                name="prijezd_poznamka"
+                value={technika.prijezd_poznamka}
+                onChange={(e) => updateField("prijezd_poznamka", e.target.value)}
+                disabled={readOnly}
+                rows={2}
+                className={inputClass}
+                placeholder="Vjezd, brána, omezení pro dodávku…"
+              />
+            </label>
+            <div>
+              <span className={labelClass}>Lze zajet dodávkou až k místu?</span>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                {TRIZVOLBA_OPTIONS.map(([value, label]) => (
+                  <label key={value} className={optionCardClass}>
+                    <input
+                      type="radio"
+                      name="lze_zajet_autem"
+                      value={value}
+                      checked={technika.lze_zajet_autem === value}
+                      onChange={() => updateField("lze_zajet_autem", value)}
+                      disabled={readOnly}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            {renderSectionPhoto("prijezd")}
+          </div>
+
+          <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+            <h3 className="font-semibold text-white">Vzdálenost od vykládky ke stage</h3>
+            <label className="block space-y-2">
+              <span className={labelClass}>Vzdálenost / popis trasy</span>
+              <input
+                name="vzdalenost_vykladka_stage"
+                value={technika.vzdalenost_vykladka_stage}
+                onChange={(e) => updateField("vzdalenost_vykladka_stage", e.target.value)}
+                disabled={readOnly}
+                className={inputClass}
+                placeholder="Např. 45 m po zpevněné ploše"
+              />
+            </label>
+            {renderSectionPhoto("plocha_stage")}
+          </div>
+
+          <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+            <h3 className="font-semibold text-white">Povrch a přístup pro techniku</h3>
+            <div>
+              <span className={labelClass}>Je místo zpevněné?</span>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                {TRIZVOLBA_OPTIONS.map(([value, label]) => (
+                  <label key={value} className={optionCardClass}>
+                    <input
+                      type="radio"
+                      name="misto_zpevnene"
+                      value={value}
+                      checked={technika.misto_zpevnene === value}
+                      onChange={() => updateField("misto_zpevnene", value)}
+                      disabled={readOnly}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <label className="block space-y-2">
+              <span className={labelClass}>Přístup pro techniku / místo realizace</span>
+              <textarea
+                name="pristup_pro_techniku"
+                value={technika.pristup_pro_techniku}
+                onChange={(e) => updateField("pristup_pro_techniku", e.target.value)}
+                disabled={readOnly}
+                rows={2}
+                className={inputClass}
+              />
+            </label>
+            <label className="block space-y-2">
+              <span className={labelClass}>Místo pro stage</span>
+              <textarea
+                name="misto_stage"
+                value={technika.misto_stage}
+                onChange={(e) => updateField("misto_stage", e.target.value)}
+                disabled={readOnly}
+                rows={2}
+                className={inputClass}
+              />
+            </label>
+          </div>
+
+          <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+            <h3 className="font-semibold text-white">Omezení průjezdu / výšky / šířky</h3>
+            <label className="block space-y-2">
+              <span className={labelClass}>Popis omezení</span>
+              <textarea
+                name="omezeni_prujezdu"
+                value={technika.omezeni_prujezdu}
+                onChange={(e) => updateField("omezeni_prujezdu", e.target.value)}
+                disabled={readOnly}
+                rows={2}
+                className={inputClass}
+              />
+            </label>
+            <div>
+              <span className={labelClass}>Kabel přes silnici / veřejný průchod?</span>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                {TRIZVOLBA_OPTIONS.map(([value, label]) => (
+                  <label key={value} className={optionCardClass}>
+                    <input
+                      type="radio"
+                      name="kabel_pres_silnici"
+                      value={value}
+                      checked={technika.kabel_pres_silnici === value}
+                      onChange={() => updateField("kabel_pres_silnici", value)}
+                      disabled={readOnly}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <label className="block space-y-2">
+              <span className={labelClass}>Kabelové trasy</span>
+              <textarea
+                name="kabelove_trasy"
+                value={technika.kabelove_trasy}
+                onChange={(e) => updateField("kabelove_trasy", e.target.value)}
+                disabled={readOnly}
+                rows={2}
+                className={inputClass}
+              />
+            </label>
+            {renderSectionPhoto("jina")}
+          </div>
+
+          <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+            <h3 className="font-semibold text-white">Parkování techniky</h3>
+            <label className="block space-y-2">
+              <span className={labelClass}>Možnost parkování</span>
+              <textarea
+                name="parkovani_poznamka"
+                value={technika.parkovani_poznamka}
+                onChange={(e) => updateField("parkovani_poznamka", e.target.value)}
+                disabled={readOnly}
+                rows={2}
+                className={inputClass}
+              />
+            </label>
+            {renderSectionPhoto("misto_akce")}
+          </div>
+
+          <label className="block space-y-2">
+            <span className={labelClass}>Poznámka</span>
+            <textarea
+              name="dalsi_poznamky"
+              value={technika.dalsi_poznamky}
+              onChange={(e) => updateField("dalsi_poznamky", e.target.value)}
+              disabled={readOnly}
+              rows={3}
+              className={inputClass}
+            />
+          </label>
+        </div>
+      ) : null}
+
+      {effectiveRezim === "vyjezd_technika" && effectivePotvrzeno ? (
+        <div className="space-y-4">
+          {!readOnly ? (
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  onUiPotvrzenoChange(false);
+                  onChange({
+                    ...technika,
+                    technicke_potvrzeni_vyjezd_ceny: false,
+                  });
+                }}
+                className="text-xs text-slate-400 underline hover:text-slate-200"
+              >
+                Změnit volbu režimu
+              </button>
+              <button
+                type="button"
+                onClick={() => selectRezim("klient_vyplni")}
+                className="text-xs text-amber-300 underline hover:text-amber-200"
+              >
+                Raději zadám technické informace sám
+              </button>
+            </div>
+          ) : null}
+
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-4 text-sm text-emerald-50">
+            <p className="font-semibold">Potvrzen placený výjezd technika</p>
+            <ul className="mt-2 list-inside list-disc space-y-1 text-emerald-100/90">
+              {VYJEZD_CENIK_LINES.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </div>
+
+          <label className="block space-y-2">
+            <span className={labelClass}>Volitelná poznámka k výjezdu technika</span>
+            <textarea
+              name="dalsi_poznamky"
+              value={technika.dalsi_poznamky}
+              onChange={(e) => updateField("dalsi_poznamky", e.target.value)}
+              disabled={readOnly}
+              rows={3}
+              className={inputClass}
+              placeholder="Kontakt na místě, preferovaný termín obhlídky…"
+            />
+          </label>
+        </div>
+      ) : null}
+    </section>
+  );
+}

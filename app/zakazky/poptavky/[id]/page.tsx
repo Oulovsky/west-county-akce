@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import PoptavkaFotkyClient from "@/components/portal/PoptavkaFotkyClient";
+import PoptavkaTechnickePodminkyReadOnly from "@/components/portal/PoptavkaTechnickePodminkyReadOnly";
 import { verifyInternalPoptavkyReadPage } from "@/lib/auth/admin-access-server";
 import { loadSessionRolePermissions } from "@/lib/auth/internal-role-access-server";
 import { POPTAVKA_STAV_LABELS, SETUP_OBLAST_LABELS } from "@/lib/client-portal/labels";
@@ -10,10 +11,6 @@ import {
   formatTypAkce,
 } from "@/lib/client-portal/poptavka-form";
 import { formatLogistikaOknoRange } from "@/lib/logistika-okna";
-import {
-  formatTriVolba,
-  technikaFromRecord,
-} from "@/lib/client-portal/poptavka-technika-form";
 import {
   buildSestavaSummaryLines,
   sestavaFromOdpovediExtra,
@@ -133,7 +130,6 @@ export default async function ZakazkyPoptavkaDetailPage({
     );
   }
 
-  const technika = technikaFromRecord(detail.technicke_udaje);
   const extra = detail.technicke_udaje?.odpovedi_extra ?? {};
   const sestava = sestavaFromOdpovediExtra(extra);
   const sestavaKatalog = await loadPortalSestavaKatalog();
@@ -489,47 +485,9 @@ export default async function ZakazkyPoptavkaDetailPage({
         </section>
       ) : null}
 
-      <section className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
-        <h2 className="text-lg font-semibold text-white">Technické údaje místa</h2>
-        {!detail.technicke_udaje ? (
-          <p className="mt-3 text-sm text-slate-500">Technické údaje nebyly doplněny.</p>
-        ) : (
-          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-            <ReadOnlyField label="Příjezd" value={technika.prijezd_poznamka} />
-            <ReadOnlyField
-              label="Lze zajet dodávkou"
-              value={formatTriVolba(String(extra.lze_zajet_autem ?? ""))}
-            />
-            <ReadOnlyField label="Parkování" value={technika.parkovani_poznamka} />
-            <ReadOnlyField label="Rozvaděče" value={technika.rozvadece_poznamka} />
-            <ReadOnlyField label="Přípojka / proud" value={technika.elektro_pripojka} />
-            <ReadOnlyField label="Jištění" value={technika.elektro_jisteni} />
-            <ReadOnlyField label="Zásuvka" value={technika.elektro_zasuvka} />
-            <ReadOnlyField
-              label="Vzdálenost elektřiny"
-              value={
-                technika.elektro_vzdalenost_m ? `${technika.elektro_vzdalenost_m} m` : null
-              }
-            />
-            <ReadOnlyField label="Kabelové trasy" value={technika.kabelove_trasy} />
-            <ReadOnlyField
-              label="Kabel přes silnici"
-              value={formatTriVolba(String(extra.kabel_pres_silnici ?? ""))}
-            />
-            <ReadOnlyField label="Místo pro stage" value={technika.misto_stage} />
-            <ReadOnlyField label="Místo pro FOH" value={technika.misto_foh} />
-            <ReadOnlyField label="Omezení hluku" value={technika.omezeni_hluku} />
-            <ReadOnlyField label="Časová omezení" value={technika.casova_omezeni} />
-            <ReadOnlyField label="Další poznámky" value={technika.dalsi_poznamky} />
-            <div>
-              <dt className="text-slate-500">Výjezd technika</dt>
-              <dd className="text-slate-100">
-                {technika.pozadovan_vyjezd_technika ? "Ano" : "Ne"}
-              </dd>
-            </div>
-          </dl>
-        )}
-      </section>
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
+        <PoptavkaTechnickePodminkyReadOnly row={detail.technicke_udaje} fotky={detail.fotky} />
+      </div>
 
       <section className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
         <PoptavkaFotkyClient

@@ -15,6 +15,8 @@ import {
   buildTechnikaRowPayload,
   parseTechnikaFormData,
 } from "@/lib/client-portal/poptavka-technika-form";
+import { validateTechnickePodminkyForSave } from "@/lib/client-portal/poptavka-technika-podminky";
+import type { TechnikaSectionPhotoKey } from "@/lib/client-portal/poptavka-technika-podminky";
 import {
   buildSestavaOdpovediExtra,
   deriveSetupSelectionsFromSestava,
@@ -48,6 +50,110 @@ function getStringList(formData: FormData, name: string) {
   return formData.getAll(name).map((value) => String(value ?? "").trim());
 }
 
+const TECHNIKA_SECTION_PHOTO_KEYS: TechnikaSectionPhotoKey[] = [
+  "rozvadec",
+  "prijezd",
+  "plocha_stage",
+  "misto_akce",
+  "jina",
+];
+
+function validateTechnickeForSave(formData: FormData, errorPath: string) {
+  const wizardStep = Number(String(formData.get("wizard_step") ?? "0"));
+  const technika = parseTechnikaFormData(formData);
+  const technickeError = validateTechnickePodminkyForSave({
+    wizardStep,
+    technickeRezim: technika.technicke_rezim,
+    potvrzeniOdpovednosti: technika.technicke_potvrzeni_odpovednosti,
+    potvrzeniVyjezdCeny: technika.technicke_potvrzeni_vyjezd_ceny,
+  });
+  if (technickeError) {
+    redirectWithError(errorPath, technickeError);
+  }
+}
+
+async function uploadTechnickeSectionPhotosFromFormData(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  poptavkaId: string,
+  formData: FormData
+) {
+  const files: File[] = [];
+  const photoTypes: string[] = [];
+
+  for (const sectionKey of TECHNIKA_SECTION_PHOTO_KEYS) {
+    for (const value of formData.getAll(`technicke_foto_${sectionKey}`)) {
+      if (!(value instanceof File) || value.size <= 0) continue;
+      if (!(POPTAVKA_FOTKY_ALLOWED_MIME_TYPES as readonly string[]).includes(value.type)) {
+        continue;
+      }
+      if (value.size > POPTAVKA_FOTKY_MAX_SIZE_BYTES) {
+        continue;
+      }
+      files.push(value);
+      photoTypes.push(sectionKey);
+    }
+  }
+
+  if (files.length === 0) return;
+
+  await uploadPoptavkaFotkyForClient(
+    supabase,
+    poptavkaId,
+    files,
+    photoTypes,
+    photoTypes.map(() => "")
+  );
+}
+
+async function finalizePoptavkaSubmission(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  poptavkaId: string,
+  detail: NonNullable<Awaited<ReturnType<typeof loadPoptavkaDetail>>>
+) {
+  if (
+    !detail.kontakt_jmeno ||
+    !detail.kontakt_email ||
+    !detail.misto_nazev ||
+    !detail.datum_od ||
+    !detail.datum_do
+  ) {
+    redirectWithError(`/portal/poptavka/${poptavkaId}`, "submit_incomplete");
+  }
+
+  const wasRevision = detail.stav === "v_revizi";
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("poptavky")
+    .update({
+      stav: "odeslana",
+      odeslano_at: now,
+      zamitnuto_duvod: null,
+      updated_at: now,
+    })
+    .eq("poptavka_id", poptavkaId);
+
+  if (error) {
+    redirectWithError(`/portal/poptavka/${poptavkaId}`, "submit_failed");
+  }
+
+  try {
+    await notifyInternalTeamAboutSubmittedPoptavka({
+      poptavkaId,
+      cisloPoptavky: detail.cislo_poptavky,
+      mistoNazev: detail.misto_nazev,
+      isResubmit: wasRevision,
+    });
+  } catch (notifyError) {
+    console.warn("Poptavka submit notification failed:", notifyError);
+  }
+
+  revalidatePath("/portal/poptavky");
+  revalidatePath(`/portal/poptavka/${poptavkaId}`);
+  revalidatePath("/zakazky/poptavky");
+  revalidatePath(`/zakazky/poptavky/${poptavkaId}`);
+  redirect(`/portal/poptavka/${poptavkaId}?submitted=1`);
+}
+
 async function assertEditablePoptavka(
   supabase: Awaited<ReturnType<typeof createClient>>,
   poptavkaId: string
@@ -73,9 +179,27 @@ async function upsertTechnickeUdaje(
 
   const { data: existing } = await supabase
     .from("poptavka_technicke_udaje")
-    .select("poptavka_id")
+    .select(
+      "poptavka_id, technicke_potvrzeni_odpovednosti_at, technicke_potvrzeni_vyjezd_ceny_at"
+    )
     .eq("poptavka_id", poptavkaId)
     .maybeSingle();
+
+  if (
+    technikaValues.technicke_rezim === "klient_vyplni" &&
+    technikaValues.technicke_potvrzeni_odpovednosti &&
+    existing?.technicke_potvrzeni_odpovednosti_at
+  ) {
+    payload.technicke_potvrzeni_odpovednosti_at = existing.technicke_potvrzeni_odpovednosti_at;
+  }
+
+  if (
+    technikaValues.technicke_rezim === "vyjezd_technika" &&
+    technikaValues.technicke_potvrzeni_vyjezd_ceny &&
+    existing?.technicke_potvrzeni_vyjezd_ceny_at
+  ) {
+    payload.technicke_potvrzeni_vyjezd_ceny_at = existing.technicke_potvrzeni_vyjezd_ceny_at;
+  }
 
   if (existing?.poptavka_id) {
     const { error } = await supabase
@@ -220,9 +344,12 @@ export async function createPoptavkaAction(formData: FormData) {
     redirectWithError("/portal/poptavka/nova", "save_failed");
   }
 
+  validateTechnickeForSave(formData, "/portal/poptavka/nova");
+
   try {
     await replacePoptavkaSetups(supabase, created.poptavka_id, setupResult.setupy);
     await upsertTechnickeUdaje(supabase, created.poptavka_id, formData);
+    await uploadTechnickeSectionPhotosFromFormData(supabase, created.poptavka_id, formData);
   } catch {
     redirectWithError("/portal/poptavka/nova", "setups_failed");
   }
@@ -279,9 +406,12 @@ export async function updatePoptavkaAction(formData: FormData) {
     redirectWithError(`/portal/poptavka/${poptavkaId}`, "save_failed");
   }
 
+  validateTechnickeForSave(formData, `/portal/poptavka/${poptavkaId}`);
+
   try {
     await replacePoptavkaSetups(supabase, poptavkaId, setupResult.setupy);
     await upsertTechnickeUdaje(supabase, poptavkaId, formData);
+    await uploadTechnickeSectionPhotosFromFormData(supabase, poptavkaId, formData);
   } catch {
     redirectWithError(`/portal/poptavka/${poptavkaId}`, "setups_failed");
   }
@@ -375,40 +505,5 @@ export async function submitPoptavkaAction(formData: FormData) {
     redirectWithError(`/portal/poptavka/${poptavkaId}`, "not_editable");
   }
 
-  if (!detail.kontakt_jmeno || !detail.kontakt_email || !detail.misto_nazev || !detail.datum_od || !detail.datum_do) {
-    redirectWithError(`/portal/poptavka/${poptavkaId}`, "submit_incomplete");
-  }
-
-  const wasRevision = detail.stav === "v_revizi";
-  const now = new Date().toISOString();
-  const { error } = await supabase
-    .from("poptavky")
-    .update({
-      stav: "odeslana",
-      odeslano_at: now,
-      zamitnuto_duvod: null,
-      updated_at: now,
-    })
-    .eq("poptavka_id", poptavkaId);
-
-  if (error) {
-    redirectWithError(`/portal/poptavka/${poptavkaId}`, "submit_failed");
-  }
-
-  try {
-    await notifyInternalTeamAboutSubmittedPoptavka({
-      poptavkaId,
-      cisloPoptavky: detail.cislo_poptavky,
-      mistoNazev: detail.misto_nazev,
-      isResubmit: wasRevision,
-    });
-  } catch (notifyError) {
-    console.warn("Poptavka submit notification failed:", notifyError);
-  }
-
-  revalidatePath("/portal/poptavky");
-  revalidatePath(`/portal/poptavka/${poptavkaId}`);
-  revalidatePath("/zakazky/poptavky");
-  revalidatePath(`/zakazky/poptavky/${poptavkaId}`);
-  redirect(`/portal/poptavka/${poptavkaId}?submitted=1`);
+  await finalizePoptavkaSubmission(supabase, poptavkaId, detail);
 }

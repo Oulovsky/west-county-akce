@@ -220,6 +220,9 @@ export type PoptavkaTechnickeUdaje = {
   casova_omezeni: string | null;
   dalsi_poznamky: string | null;
   pozadovan_vyjezd_technika: boolean;
+  technicke_rezim: "klient_vyplni" | "vyjezd_technika" | null;
+  technicke_potvrzeni_odpovednosti_at: string | null;
+  technicke_potvrzeni_vyjezd_ceny_at: string | null;
   rizika: string[];
   odpovedi_extra: Record<string, unknown>;
   created_at: string;

@@ -12,11 +12,9 @@ import {
 } from "@/lib/client-portal/poptavka-form";
 import { logistikaOknaFromPoptavka } from "@/lib/logistika-okna";
 import PoptavkaLogistikaOknaPanel from "@/components/portal/PoptavkaLogistikaOknaPanel";
+import PoptavkaTechnickePodminkyReadOnly from "@/components/portal/PoptavkaTechnickePodminkyReadOnly";
 import { PoptavkaObjednavkaPortalSection } from "@/components/portal/PoptavkaObjednavkaPortalSection";
-import {
-  formatTriVolba,
-  technikaFromRecord,
-} from "@/lib/client-portal/poptavka-technika-form";
+import { technikaFromRecord } from "@/lib/client-portal/poptavka-technika-form";
 import {
   buildSestavaSummaryLines,
   sestavaFromOdpovediExtra,
@@ -29,7 +27,7 @@ import {
   loadPoptavkaDetail,
   loadPortalSetups,
 } from "@/lib/client-portal/poptavka-server";
-import { SETUP_OBLASTI, type PoptavkaTechnickeUdaje } from "@/lib/client-portal/types";
+import { SETUP_OBLASTI } from "@/lib/client-portal/types";
 import { createClient } from "@/lib/supabase/server";
 
 function trimTime(value: string | null | undefined) {
@@ -86,59 +84,6 @@ function SestavaReadOnlySection({
           <li key={line}>{line}</li>
         ))}
       </ul>
-    </section>
-  );
-}
-
-function TechnikaReadOnlySection({ row }: { row: PoptavkaTechnickeUdaje | null }) {
-  if (!row) {
-    return (
-      <section className="mt-8 space-y-3 border-t border-white/10 pt-6">
-        <h2 className="text-lg font-semibold text-white">Technické údaje místa</h2>
-        <p className="text-sm text-slate-500">Technické údaje nebyly doplněny.</p>
-      </section>
-    );
-  }
-
-  const extra = row.odpovedi_extra ?? {};
-
-  return (
-    <section className="mt-8 space-y-4 border-t border-white/10 pt-6">
-      <h2 className="text-lg font-semibold text-white">Technické údaje místa</h2>
-      <dl className="grid gap-4 text-sm sm:grid-cols-2">
-        <ReadOnlyField label="Příjezd" value={row.prijezd_poznamka} />
-        <ReadOnlyField
-          label="Lze zajet dodávkou"
-          value={formatTriVolba(String(extra.lze_zajet_autem ?? ""))}
-        />
-        <ReadOnlyField label="Parkování" value={row.parkovani_poznamka} />
-        <ReadOnlyField label="Rozvaděče" value={row.rozvadece_poznamka} />
-        <ReadOnlyField label="Přípojka / proud" value={row.elektro_pripojka} />
-        <ReadOnlyField label="Jištění / okruhy" value={row.elektro_jisteni} />
-        <ReadOnlyField label="Typ zásuvky" value={row.elektro_zasuvka} />
-        <ReadOnlyField
-          label="Vzdálenost elektřiny"
-          value={
-            row.elektro_vzdalenost_m != null ? `${row.elektro_vzdalenost_m} m` : null
-          }
-        />
-        <ReadOnlyField label="Kabelové trasy" value={row.kabelove_trasy} />
-        <ReadOnlyField
-          label="Kabel přes silnici"
-          value={formatTriVolba(String(extra.kabel_pres_silnici ?? ""))}
-        />
-        <ReadOnlyField label="Místo pro stage" value={row.misto_stage} />
-        <ReadOnlyField label="Místo pro FOH" value={row.misto_foh} />
-        <ReadOnlyField label="Omezení hluku" value={row.omezeni_hluku} />
-        <ReadOnlyField label="Časová omezení" value={row.casova_omezeni} />
-        <ReadOnlyField label="Další poznámky" value={row.dalsi_poznamky} />
-        <div>
-          <dt className="text-slate-500">Výjezd technika</dt>
-          <dd className="text-slate-100">
-            {row.pozadovan_vyjezd_technika ? "Ano" : "Ne"}
-          </dd>
-        </div>
-      </dl>
     </section>
   );
 }
@@ -424,7 +369,7 @@ export default async function PortalPoptavkaDetailPage({
           katalog={sestavaKatalog}
         />
 
-        <TechnikaReadOnlySection row={detail.technicke_udaje} />
+        <PoptavkaTechnickePodminkyReadOnly row={detail.technicke_udaje} fotky={detail.fotky} />
 
         <div className="mt-8 border-t border-white/10 pt-8">
           <PoptavkaFotkyClient

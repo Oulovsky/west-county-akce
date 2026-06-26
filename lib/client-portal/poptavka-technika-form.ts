@@ -1,6 +1,10 @@
 import type { PoptavkaTechnickeUdaje } from "@/lib/client-portal/types";
+import type { TechnickeRezim } from "@/lib/client-portal/poptavka-technika-podminky";
 
 export type PoptavkaTechnikaFormValues = {
+  technicke_rezim: TechnickeRezim | "";
+  technicke_potvrzeni_odpovednosti: boolean;
+  technicke_potvrzeni_vyjezd_ceny: boolean;
   prijezd_poznamka: string;
   parkovani_poznamka: string;
   rozvadece_poznamka: string;
@@ -18,9 +22,15 @@ export type PoptavkaTechnikaFormValues = {
   lze_zajet_autem: string;
   misto_zpevnene: string;
   kabel_pres_silnici: string;
+  vzdalenost_vykladka_stage: string;
+  pristup_pro_techniku: string;
+  omezeni_prujezdu: string;
 };
 
 export const EMPTY_POPTAVKA_TECHNIKA: PoptavkaTechnikaFormValues = {
+  technicke_rezim: "",
+  technicke_potvrzeni_odpovednosti: false,
+  technicke_potvrzeni_vyjezd_ceny: false,
   prijezd_poznamka: "",
   parkovani_poznamka: "",
   rozvadece_poznamka: "",
@@ -38,6 +48,9 @@ export const EMPTY_POPTAVKA_TECHNIKA: PoptavkaTechnikaFormValues = {
   lze_zajet_autem: "nevim",
   misto_zpevnene: "nevim",
   kabel_pres_silnici: "nevim",
+  vzdalenost_vykladka_stage: "",
+  pristup_pro_techniku: "",
+  omezeni_prujezdu: "",
 };
 
 export const ELEKTRO_ZASUVKA_OPTIONS = [
@@ -72,14 +85,29 @@ function normalizeChoice(value: FormDataEntryValue | null) {
   return text || "nevim";
 }
 
+function parseTechnickeRezim(value: FormDataEntryValue | null): TechnickeRezim | "" {
+  const text = String(value ?? "").trim();
+  if (text === "klient_vyplni" || text === "vyjezd_technika") return text;
+  return "";
+}
+
 export function technikaFromRecord(
   row: PoptavkaTechnickeUdaje | null | undefined
 ): PoptavkaTechnikaFormValues {
   if (!row) return { ...EMPTY_POPTAVKA_TECHNIKA };
 
   const extra = row.odpovedi_extra ?? {};
+  const rezim =
+    row.technicke_rezim === "klient_vyplni" || row.technicke_rezim === "vyjezd_technika"
+      ? row.technicke_rezim
+      : row.pozadovan_vyjezd_technika
+        ? "vyjezd_technika"
+        : "";
 
   return {
+    technicke_rezim: rezim,
+    technicke_potvrzeni_odpovednosti: Boolean(row.technicke_potvrzeni_odpovednosti_at),
+    technicke_potvrzeni_vyjezd_ceny: Boolean(row.technicke_potvrzeni_vyjezd_ceny_at),
     prijezd_poznamka: row.prijezd_poznamka ?? "",
     parkovani_poznamka: row.parkovani_poznamka ?? "",
     rozvadece_poznamka: row.rozvadece_poznamka ?? "",
@@ -98,11 +126,19 @@ export function technikaFromRecord(
     lze_zajet_autem: String(extra.lze_zajet_autem ?? "nevim"),
     misto_zpevnene: String(extra.misto_zpevnene ?? "nevim"),
     kabel_pres_silnici: String(extra.kabel_pres_silnici ?? "nevim"),
+    vzdalenost_vykladka_stage: String(extra.vzdalenost_vykladka_stage ?? ""),
+    pristup_pro_techniku: String(extra.pristup_pro_techniku ?? ""),
+    omezeni_prujezdu: String(extra.omezeni_prujezdu ?? ""),
   };
 }
 
 export function parseTechnikaFormData(formData: FormData): PoptavkaTechnikaFormValues {
+  const rezim = parseTechnickeRezim(formData.get("technicke_rezim"));
+
   return {
+    technicke_rezim: rezim,
+    technicke_potvrzeni_odpovednosti: formData.get("technicke_potvrzeni_odpovednosti") === "on",
+    technicke_potvrzeni_vyjezd_ceny: formData.get("technicke_potvrzeni_vyjezd_ceny") === "on",
     prijezd_poznamka: String(formData.get("prijezd_poznamka") ?? "").trim(),
     parkovani_poznamka: String(formData.get("parkovani_poznamka") ?? "").trim(),
     rozvadece_poznamka: String(formData.get("rozvadece_poznamka") ?? "").trim(),
@@ -116,10 +152,14 @@ export function parseTechnikaFormData(formData: FormData): PoptavkaTechnikaFormV
     omezeni_hluku: String(formData.get("omezeni_hluku") ?? "").trim(),
     casova_omezeni: String(formData.get("casova_omezeni") ?? "").trim(),
     dalsi_poznamky: String(formData.get("dalsi_poznamky") ?? "").trim(),
-    pozadovan_vyjezd_technika: formData.get("pozadovan_vyjezd_technika") === "on",
+    pozadovan_vyjezd_technika:
+      rezim === "vyjezd_technika" || formData.get("pozadovan_vyjezd_technika") === "on",
     lze_zajet_autem: normalizeChoice(formData.get("lze_zajet_autem")),
     misto_zpevnene: normalizeChoice(formData.get("misto_zpevnene")),
     kabel_pres_silnici: normalizeChoice(formData.get("kabel_pres_silnici")),
+    vzdalenost_vykladka_stage: String(formData.get("vzdalenost_vykladka_stage") ?? "").trim(),
+    pristup_pro_techniku: String(formData.get("pristup_pro_techniku") ?? "").trim(),
+    omezeni_prujezdu: String(formData.get("omezeni_prujezdu") ?? "").trim(),
   };
 }
 
@@ -128,6 +168,7 @@ export function buildTechnikaRowPayload(
   extraFields?: Record<string, unknown>
 ) {
   const now = new Date().toISOString();
+  const rezim = values.technicke_rezim || null;
 
   return {
     prijezd_poznamka: nullable(values.prijezd_poznamka),
@@ -143,12 +184,20 @@ export function buildTechnikaRowPayload(
     omezeni_hluku: nullable(values.omezeni_hluku),
     casova_omezeni: nullable(values.casova_omezeni),
     dalsi_poznamky: nullable(values.dalsi_poznamky),
-    pozadovan_vyjezd_technika: values.pozadovan_vyjezd_technika,
+    pozadovan_vyjezd_technika: rezim === "vyjezd_technika",
+    technicke_rezim: rezim,
+    technicke_potvrzeni_odpovednosti_at:
+      rezim === "klient_vyplni" && values.technicke_potvrzeni_odpovednosti ? now : null,
+    technicke_potvrzeni_vyjezd_ceny_at:
+      rezim === "vyjezd_technika" && values.technicke_potvrzeni_vyjezd_ceny ? now : null,
     rizika: [],
     odpovedi_extra: {
       lze_zajet_autem: values.lze_zajet_autem,
       misto_zpevnene: values.misto_zpevnene,
       kabel_pres_silnici: values.kabel_pres_silnici,
+      vzdalenost_vykladka_stage: nullable(values.vzdalenost_vykladka_stage),
+      pristup_pro_techniku: nullable(values.pristup_pro_techniku),
+      omezeni_prujezdu: nullable(values.omezeni_prujezdu),
       ...extraFields,
     },
     updated_at: now,
