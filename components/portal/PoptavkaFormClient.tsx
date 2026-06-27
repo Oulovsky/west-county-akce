@@ -99,6 +99,8 @@ type Props = {
   revisionNote?: string | null;
 };
 
+type PendingIntent = "draft" | "submit_klient" | "order_technik_vyjezd";
+
 const WIZARD_STEPS = [
   { id: 1, title: "Kdo zadává" },
   { id: 2, title: "Kde a kdy" },
@@ -144,7 +146,7 @@ export default function PoptavkaFormClient({
   const [mistoAdresaAuto, setMistoAdresaAuto] = useState(() => !initialValues?.misto_adresa?.trim());
   const [stepError, setStepError] = useState<string | null>(null);
   const [stepErrorDetails, setStepErrorDetails] = useState<string[]>([]);
-  const [submitting, setSubmitting] = useState(false);
+  const [pendingIntent, setPendingIntent] = useState<PendingIntent | null>(null);
   const [technickeUiRezim, setTechnickeUiRezim] = useState<TechnickeRezim | null>(() => {
     const rezim = initialTechnika?.technicke_rezim;
     return rezim === "klient_vyplni" || rezim === "vyjezd_technika" ? rezim : null;
@@ -254,6 +256,43 @@ export default function PoptavkaFormClient({
       })
     );
   }, [readOnly, mode, initialValues?.wizard_krok, form, sestava, sestavaKatalog]);
+
+  useEffect(() => {
+    if (saved || submitted || technikVyjezdOrdered || errorCode) {
+      setPendingIntent(null);
+    }
+  }, [saved, submitted, technikVyjezdOrdered, errorCode]);
+
+  const effectiveTechnickeRezim =
+    technickeUiRezim ??
+    (technika.technicke_rezim === "klient_vyplni" || technika.technicke_rezim === "vyjezd_technika"
+      ? technika.technicke_rezim
+      : null);
+  const effectiveTechnickePotvrzeno =
+    technickeUiPotvrzeno ||
+    technika.technicke_potvrzeni_odpovednosti ||
+    technika.technicke_potvrzeni_vyjezd_ceny;
+  const canOrderTechnikVyjezd =
+    form.misto_lat != null &&
+    form.misto_lng != null &&
+    technika.technik_vyjezd_potvrzeni_fakturace &&
+    Boolean(technika.technik_vyjezd_kontakt_jmeno.trim()) &&
+    Boolean(technika.technik_vyjezd_kontakt_email.trim()) &&
+    (technika.technik_vyjezd_preferuje_telefon || technika.technik_vyjezd_preferuje_email);
+
+  function submitWithIntent(intent: PendingIntent) {
+    const formEl = document.getElementById("poptavka-wizard-form") as HTMLFormElement | null;
+    if (!formEl || readOnly) return;
+    const intentInput = formEl.querySelector<HTMLInputElement>('input[name="save_intent"]');
+    if (intentInput) intentInput.value = intent;
+    formEl.requestSubmit();
+  }
+
+  function normalizeSubmitIntent(raw: string): PendingIntent {
+    if (raw === "submit_klient") return "submit_klient";
+    if (raw === "order_technik_vyjezd") return "order_technik_vyjezd";
+    return "draft";
+  }
 
   async function applyMapCoords(lat: number | null, lng: number | null) {
     setForm((current) => ({ ...current, misto_lat: lat, misto_lng: lng }));
@@ -436,7 +475,7 @@ export default function PoptavkaFormClient({
 
     const formData = new FormData(event.currentTarget);
     formData.set("wizard_step", String(step));
-    const intent = String(formData.get("save_intent") ?? "");
+    const intent = normalizeSubmitIntent(String(formData.get("save_intent") ?? "draft"));
 
     if (intent === "order_technik_vyjezd") {
       const orderError = validateTechnikVyjezdOrderComplete({
@@ -481,7 +520,7 @@ export default function PoptavkaFormClient({
       }
     }
 
-    setSubmitting(true);
+    setPendingIntent(intent);
 
     const pendingBySection: Partial<
       Record<TechnikaSectionPhotoKey, { id: string; file: File; previewUrl: string }[]>
@@ -626,7 +665,7 @@ export default function PoptavkaFormClient({
             readOnly
           />
 
-          <input type="hidden" name="save_intent" value="" readOnly />
+          <input type="hidden" name="save_intent" value="draft" readOnly />
 
           <input type="hidden" name="wizard_step" value={step} readOnly />
 
@@ -1125,15 +1164,7 @@ export default function PoptavkaFormClient({
               kontaktJmeno={form.kontakt_jmeno}
               kontaktTelefon={form.kontakt_telefon}
               kontaktEmail={form.kontakt_email}
-              submitting={submitting}
               highlightMissingPhotos={stepError === "technicke_missing_section_photos"}
-              onSubmitKlient={() => {
-                const formEl = document.getElementById("poptavka-wizard-form") as HTMLFormElement | null;
-                if (!formEl) return;
-                const intentInput = formEl.querySelector<HTMLInputElement>('input[name="save_intent"]');
-                if (intentInput) intentInput.value = "submit_klient";
-                formEl.requestSubmit();
-              }}
             />
           )}
 
@@ -1142,7 +1173,8 @@ export default function PoptavkaFormClient({
               <button
                 type="button"
                 onClick={() => goToStep((current) => current - 1)}
-                className="rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm text-slate-200 transition hover:bg-white/10"
+                disabled={pendingIntent !== null}
+                className="rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 ← Zpět
               </button>
@@ -1152,7 +1184,8 @@ export default function PoptavkaFormClient({
               <button
                 type="button"
                 onClick={attemptContinue}
-                className="rounded-xl border border-amber-500/60 bg-amber-500/20 px-5 py-3 text-sm font-bold text-amber-50 transition hover:bg-amber-500/30"
+                disabled={pendingIntent !== null}
+                className="rounded-xl border border-amber-500/60 bg-amber-500/20 px-5 py-3 text-sm font-bold text-amber-50 transition hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Pokračovat →
               </button>
@@ -1160,20 +1193,46 @@ export default function PoptavkaFormClient({
 
             {showSaveActions ? (
               <button
-                type="submit"
-                disabled={submitting}
-                onClick={() => {
-                  const formEl = document.getElementById("poptavka-wizard-form");
-                  const intentInput = formEl?.querySelector<HTMLInputElement>('input[name="save_intent"]');
-                  if (intentInput) intentInput.value = "";
-                }}
-                className="rounded-xl border border-amber-500/60 bg-amber-500/20 px-5 py-3 text-sm font-bold text-amber-50 transition hover:bg-amber-500/30 disabled:opacity-60"
+                type="button"
+                disabled={pendingIntent !== null}
+                onClick={() => submitWithIntent("draft")}
+                className="rounded-xl border border-amber-500/60 bg-amber-500/20 px-5 py-3 text-sm font-bold text-amber-50 transition hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {submitting
+                {pendingIntent === "draft"
                   ? "Ukládám…"
                   : mode === "create"
                     ? "Uložit koncept"
                     : "Uložit změny"}
+              </button>
+            ) : null}
+
+            {!readOnly &&
+            step === 4 &&
+            effectiveTechnickeRezim === "klient_vyplni" &&
+            effectiveTechnickePotvrzeno ? (
+              <button
+                type="button"
+                disabled={pendingIntent !== null}
+                onClick={() => submitWithIntent("submit_klient")}
+                className="rounded-xl border border-blue-500/60 bg-blue-500/20 px-5 py-3 text-sm font-bold text-blue-50 transition hover:bg-blue-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {pendingIntent === "submit_klient" ? "Odesílám…" : "Odeslat poptávku"}
+              </button>
+            ) : null}
+
+            {!readOnly &&
+            step === 4 &&
+            effectiveTechnickeRezim === "vyjezd_technika" &&
+            effectiveTechnickePotvrzeno ? (
+              <button
+                type="button"
+                disabled={pendingIntent !== null || !canOrderTechnikVyjezd}
+                onClick={() => submitWithIntent("order_technik_vyjezd")}
+                className="rounded-xl border border-emerald-500/60 bg-emerald-500/20 px-5 py-3 text-sm font-bold text-emerald-50 transition hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {pendingIntent === "order_technik_vyjezd"
+                  ? "Odesílám…"
+                  : "Odeslat poptávku a závazně objednat výjezd technika"}
               </button>
             ) : null}
 

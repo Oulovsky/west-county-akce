@@ -53,8 +53,6 @@ type Props = {
   kontaktJmeno: string;
   kontaktTelefon: string;
   kontaktEmail: string;
-  submitting?: boolean;
-  onSubmitKlient?: () => void;
   highlightMissingPhotos?: boolean;
 };
 
@@ -111,8 +109,6 @@ export default function PoptavkaTechnickePodminkyStep({
   kontaktJmeno,
   kontaktTelefon,
   kontaktEmail,
-  submitting = false,
-  onSubmitKlient,
   highlightMissingPhotos = false,
 }: Props) {
   const effectiveRezim = uiRezim ?? (technika.technicke_rezim || null);
@@ -183,14 +179,6 @@ export default function PoptavkaTechnickePodminkyStep({
     if (mistoLat == null || mistoLng == null) return null;
     return calculateTechnikVyjezdDoprava(mistoLat, mistoLng);
   }, [mistoLat, mistoLng]);
-
-  const canOrderVyjezd =
-    mistoLat != null &&
-    mistoLng != null &&
-    technika.technik_vyjezd_potvrzeni_fakturace &&
-    technika.technik_vyjezd_kontakt_jmeno.trim() &&
-    technika.technik_vyjezd_kontakt_email.trim() &&
-    (technika.technik_vyjezd_preferuje_telefon || technika.technik_vyjezd_preferuje_email);
 
   function sectionPhotoMissing(key: TechnikaSectionPhotoKey) {
     if (!highlightMissingPhotos) return false;
@@ -687,17 +675,6 @@ export default function PoptavkaTechnickePodminkyStep({
               className={inputClass}
             />
           </label>
-
-          {!readOnly && onSubmitKlient ? (
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={onSubmitKlient}
-              className="w-full rounded-xl border border-blue-500/60 bg-blue-500/20 px-5 py-4 text-sm font-bold text-blue-50 transition hover:bg-blue-500/30 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-            >
-              {submitting ? "Odesílám…" : "Odeslat poptávku"}
-            </button>
-          ) : null}
         </div>
       ) : null}
 
@@ -864,18 +841,6 @@ export default function PoptavkaTechnickePodminkyStep({
                   placeholder="Preferovaný termín obhlídky, kontakt na místě…"
                 />
               </label>
-
-              <button
-                type="submit"
-                name="save_intent"
-                value="order_technik_vyjezd"
-                disabled={submitting || !canOrderVyjezd}
-                className="w-full rounded-xl border border-emerald-500/60 bg-emerald-500/20 px-5 py-4 text-sm font-bold text-emerald-50 transition hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-              >
-                {submitting
-                  ? "Odesílám…"
-                  : "Odeslat poptávku a závazně objednat výjezd technika"}
-              </button>
             </>
           ) : (
             <label className="block space-y-2">
