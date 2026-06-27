@@ -70,7 +70,12 @@ export async function resolvePoptavkaClientEmail(
   return null;
 }
 
-export type PoptavkaOutboundKind = "revision" | "rejected" | "approved" | "binding_order";
+export type PoptavkaOutboundKind =
+  | "revision"
+  | "rejected"
+  | "approved"
+  | "binding_order"
+  | "submitted";
 
 export type PoptavkaOutboundMessage = {
   kind: PoptavkaOutboundKind;
@@ -113,9 +118,14 @@ export type SendRevisionEmailResult =
 
 const OUTBOUND_SUBJECTS: Record<Exclude<PoptavkaOutboundKind, "binding_order">, string> = {
   revision: "WEST COUNTY – poptávka vyžaduje doplnění",
-  rejected: "WEST COUNTY – poptávka byla zamítnuta",
+  rejected: "Vaše poptávka | WEST COUNTY",
   approved: "WEST COUNTY – poptávka byla schválena",
+  submitted: "Přijali jsme vaši poptávku | WEST COUNTY",
 };
+
+export function buildSubmittedConfirmationEmailSubject() {
+  return OUTBOUND_SUBJECTS.submitted;
+}
 
 export function buildBindingOrderEmailSubject(cisloPoptavky: string) {
   return `WEST COUNTY – závazná objednávka k poptávce ${cisloPoptavky}`;
@@ -157,29 +167,70 @@ function buildRevisionEmailBody(link: string, duvod: string | null | undefined) 
   return { text, html };
 }
 
-function buildRejectedEmailBody(
-  link: string,
-  duvod: string,
-  cisloPoptavky: string | null | undefined
-) {
-  const reference = cisloPoptavky?.trim()
-    ? ` (${cisloPoptavky.trim()})`
-    : "";
-
+function buildRejectedEmailBody(link: string) {
   const text = [
-    `Vaše poptávka${reference} bohužel nemůže být v tuto chvíli přijata.`,
+    "Děkujeme za Vaši poptávku.",
     "",
-    "Důvod:",
-    duvod.trim(),
+    "Bohužel Vám musíme sdělit, že z důvodu vytíženosti nejsme schopni Vaši poptávku realizovat.",
+    "",
+    "Děkujeme za pochopení.",
+    "",
+    "WEST COUNTY",
     "",
     `Stav poptávky můžete zkontrolovat v klientské zóně: ${link}`,
   ].join("\n");
 
   const html = `
-    <p>Vaše poptávka${escapeHtml(reference)} bohužel nemůže být v tuto chvíli přijata.</p>
-    <p><strong>Důvod:</strong><br>${escapeHtml(duvod.trim()).replace(/\n/g, "<br>")}</p>
+    <p>Děkujeme za Vaši poptávku.</p>
+    <p>Bohužel Vám musíme sdělit, že z důvodu vytíženosti nejsme schopni Vaši poptávku realizovat.</p>
+    <p>Děkujeme za pochopení.</p>
+    <p><strong>WEST COUNTY</strong></p>
     <p>Stav poptávky můžete zkontrolovat v klientské zóně:</p>
     <p><a href="${link}">${link}</a></p>
+  `.trim();
+
+  return { text, html };
+}
+
+function buildSubmittedConfirmationEmailBody(
+  link: string,
+  options: {
+    mistoNazev: string | null;
+    datumOd: string | null;
+    datumDo: string | null;
+    kontaktJmeno: string | null;
+    cisloPoptavky: string | null;
+  }
+) {
+  const akce = options.mistoNazev?.trim() || "—";
+  const termin =
+    options.datumOd && options.datumDo
+      ? options.datumOd === options.datumDo
+        ? options.datumOd
+        : `${options.datumOd} – ${options.datumDo}`
+      : options.datumOd || "—";
+  const kontakt = options.kontaktJmeno?.trim() || "—";
+  const reference = options.cisloPoptavky?.trim() ? ` (${options.cisloPoptavky.trim()})` : "";
+
+  const text = [
+    "Děkujeme za Váš zájem. Vaši poptávku jsme přijali a budeme Vás v nejbližší možné době kontaktovat.",
+    "",
+    `Poptávka${reference}`,
+    `Akce: ${akce}`,
+    `Termín: ${termin}`,
+    `Kontaktní osoba: ${kontakt}`,
+    "",
+    `Detail poptávky v klientské zóně: ${link}`,
+  ].join("\n");
+
+  const html = `
+    <p>Děkujeme za Váš zájem. Vaši poptávku jsme přijali a budeme Vás v nejbližší možné době kontaktovat.</p>
+    <ul>
+      <li><strong>Akce:</strong> ${escapeHtml(akce)}</li>
+      <li><strong>Termín:</strong> ${escapeHtml(termin)}</li>
+      <li><strong>Kontaktní osoba:</strong> ${escapeHtml(kontakt)}</li>
+    </ul>
+    <p><a href="${link}">Otevřít detail poptávky v klientské zóně</a></p>
   `.trim();
 
   return { text, html };
@@ -205,19 +256,17 @@ function buildApprovedEmailBody(link: string) {
 /** Závazná objednávka poptávky — odkaz na tokenovou stránku /poptavka-objednavka/{token}. */
 function buildBindingOrderEmailBody(link: string, cisloPoptavky: string) {
   const text = [
-    `zasíláme Vám závaznou objednávku k poptávce ${cisloPoptavky}.`,
+    `WEST COUNTY pro Vás připravilo návrh závazné objednávky k poptávce ${cisloPoptavky}.`,
     "",
-    "Prosíme o kontrolu obsahu a potvrzení objednávky prostřednictvím odkazu níže.",
-    "Potvrzením závazné objednávky souhlasíte s uvedeným rozsahem služeb a smluvními podmínkami.",
+    "Prosíme o kontrolu obsahu a závazné potvrzení objednávky v systému.",
     "",
-    `Odkaz k závazné objednávce: ${link}`,
+    `Závaznou objednávku potvrďte zde: ${link}`,
   ].join("\n");
 
   const html = `
-    <p>zasíláme Vám závaznou objednávku k poptávce <strong>${escapeHtml(cisloPoptavky)}</strong>.</p>
-    <p>Prosíme o kontrolu obsahu a potvrzení objednávky prostřednictvím odkazu níže.</p>
-    <p><strong>Potvrzením závazné objednávky</strong> souhlasíte s uvedeným rozsahem služeb a smluvními podmínkami.</p>
-    <p><a href="${link}">${link}</a></p>
+    <p>WEST COUNTY pro Vás připravilo návrh <strong>závazné objednávky</strong> k poptávce <strong>${escapeHtml(cisloPoptavky)}</strong>.</p>
+    <p>Prosíme o kontrolu obsahu a závazné potvrzení objednávky v systému.</p>
+    <p><a href="${link}">Závazně potvrdit objednávku</a></p>
   `.trim();
 
   return { text, html };
@@ -226,15 +275,30 @@ function buildBindingOrderEmailBody(link: string, cisloPoptavky: string) {
 function buildOutboundContent(
   kind: PoptavkaOutboundKind,
   link: string,
-  options: { duvod?: string | null; cisloPoptavky?: string | null }
+  options: {
+    duvod?: string | null;
+    cisloPoptavky?: string | null;
+    mistoNazev?: string | null;
+    datumOd?: string | null;
+    datumDo?: string | null;
+    kontaktJmeno?: string | null;
+  }
 ) {
   switch (kind) {
     case "revision":
       return buildRevisionEmailBody(link, options.duvod);
     case "rejected":
-      return buildRejectedEmailBody(link, options.duvod?.trim() || "—", options.cisloPoptavky);
+      return buildRejectedEmailBody(link);
     case "approved":
       return buildApprovedEmailBody(link);
+    case "submitted":
+      return buildSubmittedConfirmationEmailBody(link, {
+        mistoNazev: options.mistoNazev ?? null,
+        datumOd: options.datumOd ?? null,
+        datumDo: options.datumDo ?? null,
+        kontaktJmeno: options.kontaktJmeno ?? null,
+        cisloPoptavky: options.cisloPoptavky ?? null,
+      });
     case "binding_order":
       return buildBindingOrderEmailBody(link, options.cisloPoptavky?.trim() || "poptávky");
   }
@@ -259,6 +323,10 @@ export async function preparePoptavkaOutboundMessage({
   const { text, html } = buildOutboundContent(kind, link, {
     duvod: resolvedDuvod,
     cisloPoptavky: detail.cislo_poptavky,
+    mistoNazev: detail.misto_nazev,
+    datumOd: detail.datum_od,
+    datumDo: detail.datum_do,
+    kontaktJmeno: detail.kontakt_jmeno,
   });
 
   const emailTo = await resolvePoptavkaClientEmail(detail);
@@ -391,6 +459,21 @@ export async function trySendPoptavkaBindingOrderOutbound({
   }
 
   return { ok: true, sent: true, outbound };
+}
+
+/** Potvrzovací e-mail klientovi po odeslání poptávky — neblokuje submit při chybě. */
+export async function trySendPoptavkaSubmittedConfirmation({
+  detail,
+  baseUrl,
+}: {
+  detail: InternalPoptavkaDetail;
+  baseUrl: string;
+}): Promise<TrySendPoptavkaOutboundResult> {
+  return trySendPoptavkaOutbound({
+    kind: "submitted",
+    detail,
+    baseUrl,
+  });
 }
 
 export async function sendPoptavkaRevisionEmail({

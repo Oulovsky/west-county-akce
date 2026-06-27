@@ -208,9 +208,9 @@ export default async function PortalPoptavkaDetailPage({
   return (
     <PortalShell showBackToPortal showMainNav>
       <PortalCard title="Detail poptávky">
-        {detail.stav === "zamitnuta" && detail.zamitnuto_duvod ? (
+        {detail.stav === "zamitnuta" ? (
           <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-            <span className="font-semibold">Důvod zamítnutí:</span> {detail.zamitnuto_duvod}
+            Poptávka byla odmítnuta z důvodu vytíženosti. Děkujeme za pochopení.
           </p>
         ) : null}
         {detail.stav === "v_revizi" && detail.zamitnuto_duvod ? (

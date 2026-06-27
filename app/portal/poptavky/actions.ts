@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireActiveClientPortalSession } from "@/lib/auth/client-portal-access-server";
 import {
@@ -43,6 +44,11 @@ import {
 } from "@/lib/client-portal/poptavka-server";
 import type { PoptavkaFormValues } from "@/lib/client-portal/poptavka-form";
 import { notifyInternalTeamAboutSubmittedPoptavka } from "@/lib/client-portal/poptavka-notifications-server";
+import {
+  getPortalAppBaseUrl,
+  trySendPoptavkaSubmittedConfirmation,
+} from "@/lib/client-portal/poptavka-email-server";
+import { loadInternalPoptavkaDetail } from "@/lib/client-portal/poptavka-internal-server";
 import { calculateTechnikVyjezdDoprava } from "@/lib/client-portal/technik-vyjezd-pricing";
 import { createClient } from "@/lib/supabase/server";
 
@@ -155,6 +161,27 @@ async function finalizePoptavkaSubmission(
     });
   } catch (notifyError) {
     console.warn("Poptavka submit notification failed:", notifyError);
+  }
+
+  try {
+    const internalDetail = await loadInternalPoptavkaDetail(supabase, poptavkaId);
+    if (internalDetail) {
+      const emailResult = await trySendPoptavkaSubmittedConfirmation({
+        detail: internalDetail,
+        baseUrl: getPortalAppBaseUrl(await headers()),
+      });
+      if (!emailResult.ok || (emailResult.ok && !emailResult.sent)) {
+        const reason =
+          emailResult.ok && !emailResult.sent
+            ? emailResult.reason
+            : emailResult.ok
+              ? "unknown"
+              : emailResult.reason;
+        console.warn("Poptavka submit confirmation email not sent:", reason);
+      }
+    }
+  } catch (emailError) {
+    console.warn("Poptavka submit confirmation email failed:", emailError);
   }
 
   revalidatePath("/portal/poptavky");

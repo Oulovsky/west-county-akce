@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PoptavkaStav } from "@/lib/client-portal/types";
 import {
   INTERNAL_INBOX_POPTAVKA_STAVY,
+  INTERNAL_ACTIVE_POPTAVKA_STAVY,
+  INTERNAL_REJECTED_POPTAVKA_STAVY,
   PENDING_INTERNAL_POPTAVKA_STAVY,
   SEND_BINDING_ORDER_POPTAVKA_STAVY,
 } from "@/lib/client-portal/types";
@@ -17,12 +19,14 @@ import type {
 
 export {
   INTERNAL_INBOX_POPTAVKA_STAVY,
+  INTERNAL_ACTIVE_POPTAVKA_STAVY,
+  INTERNAL_REJECTED_POPTAVKA_STAVY,
   PENDING_INTERNAL_POPTAVKA_STAVY,
   SEND_BINDING_ORDER_POPTAVKA_STAVY,
 };
 
 const POPTAVKA_DETAIL_SELECT =
-  "poptavka_id, cislo_poptavky, klient_id, vytvoril_account_id, stav, kontakt_jmeno, kontakt_telefon, kontakt_email, misto_id, misto_nazev, misto_adresa, misto_poznamka, presny_popis_mista, misto_lat, misto_lng, datum_od, datum_do, cas_programu_od, cas_programu_do, cas_prijezd_orientacni, vice_denni, typ_akce, typ_akce_poznamka, stavba_datum, stavba_cas_od, stavba_cas_do, stavba_okno_od, stavba_okno_do, stavba_pristup_od, stavba_omezeni_vjezdu, stavba_poznamka, bourani_datum, bourani_cas_od, bourani_cas_do, bourani_okno_od, bourani_okno_do, bourani_misto_uvolneno_do, bourani_poznamka, logistika_poznamka_klienta, interni_poznamka, schvalil_user_id, schvaleno_at, zamitnuto_duvod, zakazka_id, odeslano_at, objednavka_odeslana_at, objednavka_odeslana_user_id, objednavka_potvrzena_at, objednavka_potvrzena_zpusob, objednavka_odmitnuta_at, objednavka_odmitnuta_duvod, created_at, updated_at" as const;
+  "poptavka_id, cislo_poptavky, klient_id, vytvoril_account_id, stav, kontakt_jmeno, kontakt_telefon, kontakt_email, misto_id, misto_nazev, misto_adresa, misto_poznamka, presny_popis_mista, misto_lat, misto_lng, datum_od, datum_do, cas_programu_od, cas_programu_do, cas_prijezd_orientacni, vice_denni, typ_akce, typ_akce_poznamka, stavba_datum, stavba_cas_od, stavba_cas_do, stavba_okno_od, stavba_okno_do, stavba_pristup_od, stavba_omezeni_vjezdu, stavba_poznamka, bourani_datum, bourani_cas_od, bourani_cas_do, bourani_okno_od, bourani_okno_do, bourani_misto_uvolneno_do, bourani_poznamka, logistika_poznamka_klienta, interni_poznamka, schvalil_user_id, schvaleno_at, zamitnuto_duvod, zakazka_id, odeslano_at, prijata_k_reseni_at, prijala_user_id, objednavka_odeslana_at, objednavka_odeslana_user_id, objednavka_potvrzena_at, objednavka_potvrzena_zpusob, objednavka_odmitnuta_at, objednavka_odmitnuta_duvod, created_at, updated_at" as const;
 
 export type InternalPoptavkaListRow = Pick<
   Poptavka,
@@ -34,6 +38,8 @@ export type InternalPoptavkaListRow = Pick<
   | "datum_od"
   | "datum_do"
   | "odeslano_at"
+  | "updated_at"
+  | "zamitnuto_duvod"
   | "created_at"
 > & {
   klient: { nazev: string | null; ico: string | null } | null;
@@ -55,14 +61,25 @@ export type InternalPoptavkaDetail = Poptavka & {
   fotky: Awaited<ReturnType<typeof loadPoptavkaFotkyWithUrls>>;
 };
 
-export async function loadInternalPoptavkyInbox(supabase: SupabaseClient) {
+export async function loadInternalPoptavkyInbox(
+  supabase: SupabaseClient,
+  tab: "active" | "rejected" = "active"
+) {
+  const stavy =
+    tab === "rejected"
+      ? [...INTERNAL_REJECTED_POPTAVKA_STAVY]
+      : [...INTERNAL_ACTIVE_POPTAVKA_STAVY];
+
   const { data, error } = await supabase
     .from("poptavky")
     .select(
-      "poptavka_id, cislo_poptavky, stav, misto_nazev, misto_adresa, datum_od, datum_do, odeslano_at, created_at, klient:klienti(nazev, ico)"
+      "poptavka_id, cislo_poptavky, stav, misto_nazev, misto_adresa, datum_od, datum_do, odeslano_at, updated_at, zamitnuto_duvod, created_at, klient:klienti(nazev, ico)"
     )
-    .in("stav", [...INTERNAL_INBOX_POPTAVKA_STAVY])
-    .order("odeslano_at", { ascending: false, nullsFirst: false })
+    .in("stav", stavy)
+    .order(tab === "rejected" ? "updated_at" : "odeslano_at", {
+      ascending: false,
+      nullsFirst: false,
+    })
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -81,6 +98,8 @@ export async function loadInternalPoptavkyInbox(supabase: SupabaseClient) {
       datum_od: row.datum_od,
       datum_do: row.datum_do,
       odeslano_at: row.odeslano_at,
+      updated_at: row.updated_at,
+      zamitnuto_duvod: row.zamitnuto_duvod,
       created_at: row.created_at,
       klient: klient as InternalPoptavkaListRow["klient"],
     };
@@ -167,7 +186,12 @@ export async function loadInternalPoptavkaDetail(
   };
 }
 
-/** První interní reakce: doplnění nebo odmítnutí (současné inbox akce). */
+/** Přijmout odeslanou poptávku k řešení (před návrhem závazné objednávky). */
+export function canAcceptPoptavkaForProcessing(stav: PoptavkaStav) {
+  return stav === "odeslana";
+}
+
+/** První interní reakce: doplnění, odmítnutí nebo přijetí k řešení. */
 export function canInternalFirstReactOnPoptavka(stav: PoptavkaStav) {
   return stav === "odeslana" || stav === "v_revizi";
 }
@@ -186,6 +210,7 @@ export function canInternalManagePoptavka(stav: PoptavkaStav) {
   return (
     stav === "odeslana" ||
     stav === "v_revizi" ||
+    stav === "prijata_k_reseni" ||
     stav === "objednavka_odeslana" ||
     stav === "objednavka_potvrzena" ||
     stav === "objednavka_odmitnuta" ||

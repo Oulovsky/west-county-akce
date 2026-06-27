@@ -27,6 +27,7 @@ export const POPTAVKA_STAV_LABELS: Record<PoptavkaStav, string> = {
   /** @deprecated V DB se nezapisuje; label jen pro kompatibilitu typů. */
   ceka_na_schvaleni: "Odeslána",
   v_revizi: "Zajímá — k doplnění",
+  prijata_k_reseni: "Přijata k řešení",
   schvalena: "Schváleno k převodu",
   zamitnuta: "Zamítnutá",
   prevadena_do_zakazky: "Převedena do zakázky",
@@ -42,6 +43,7 @@ export const CLIENT_POPTAVKA_STAV_LABELS: Record<PoptavkaStav, string> = {
   /** @deprecated V DB se nezapisuje; label jen pro kompatibilitu typů. */
   ceka_na_schvaleni: "Čeká na kontrolu",
   v_revizi: "Vráceno k doplnění",
+  prijata_k_reseni: "Přijato k řešení",
   schvalena: "Schváleno, připravujeme zakázku",
   zamitnuta: "Zamítnuto",
   prevadena_do_zakazky: "Převedeno na zakázku",

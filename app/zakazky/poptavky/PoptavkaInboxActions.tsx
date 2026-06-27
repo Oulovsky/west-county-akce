@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  acceptPoptavkaAction,
   approvePoptavkaAction,
   convertPoptavkaToZakazkaAction,
   rejectPoptavkaAction,
@@ -35,6 +36,7 @@ export default function PoptavkaInboxActions({
   poptavkaId,
   stav,
   canAct,
+  canAccept,
   canApprove,
   canConvert,
   zakazkaId,
@@ -44,6 +46,7 @@ export default function PoptavkaInboxActions({
   poptavkaId: string;
   stav: PoptavkaStav;
   canAct: boolean;
+  canAccept?: boolean;
   canApprove?: boolean;
   canConvert?: boolean;
   zakazkaId?: string | null;
@@ -80,12 +83,12 @@ export default function PoptavkaInboxActions({
             na zakázku.
           </p>
         </div>
-      ) : canAct ? (
+      ) : canAct || canAccept ? (
         <div>
           <h2 className="text-xl font-semibold text-white">První reakce na poptávku</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Rozhodněte, zda poptávka zajímá, potřebuje doplnění, nebo ji nelze realizovat. Schválení
-            k převodu přijde až po potvrzení závazné objednávky klientem.
+            Přijměte poptávku k řešení, požádejte klienta o doplnění, nebo poptávku odmítněte.
+            Návrh závazné objednávky připravíte až po přijetí k řešení.
           </p>
         </div>
       ) : (
@@ -169,10 +172,36 @@ export default function PoptavkaInboxActions({
         </form>
       ) : null}
 
+      {canAccept ? (
+        <form
+          action={acceptPoptavkaAction}
+          onSubmit={(event) => {
+            const confirmed = window.confirm(
+              "Přijmout poptávku k řešení? Budete moci připravit návrh závazné objednávky podle komunikace s klientem."
+            );
+            if (!confirmed) event.preventDefault();
+          }}
+          className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4"
+        >
+          <input type="hidden" name="poptavka_id" value={poptavkaId} />
+          <h3 className="font-semibold text-emerald-100">Přijmout k řešení</h3>
+          <p className="text-sm leading-relaxed text-slate-400">
+            Poptávka vás zajímá a chcete ji dál zpracovávat — připravit technický návrh, upravit
+            konfiguraci podle dostupnosti a následně odeslat závaznou objednávku klientovi.
+          </p>
+          <button
+            type="submit"
+            className="rounded-xl border border-emerald-500/50 bg-emerald-600/30 px-4 py-2 text-sm font-semibold text-emerald-50 hover:bg-emerald-600/40"
+          >
+            Přijmout k řešení
+          </button>
+        </form>
+      ) : null}
+
       {canAct ? (
         <div className="grid gap-6 lg:grid-cols-2">
           <form action={returnPoptavkaToRevisionAction} className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-950/10 p-4">
-            <h3 className="font-semibold text-amber-100">Zajímá nás — požádat o doplnění</h3>
+            <h3 className="font-semibold text-amber-100">Požádat o doplnění</h3>
             <input type="hidden" name="poptavka_id" value={poptavkaId} />
             <p className="text-sm leading-relaxed text-slate-400">
               Poptávka vás zajímá, ale potřebujete od klienta doplnit technické údaje nebo upřesnit
@@ -197,19 +226,19 @@ export default function PoptavkaInboxActions({
           </form>
 
           <form action={rejectPoptavkaAction} className="space-y-3 rounded-xl border border-red-500/20 bg-red-950/10 p-4">
-            <h3 className="font-semibold text-red-100">Nezajímá / odmítnout</h3>
+            <h3 className="font-semibold text-red-100">Odmítnout poptávku</h3>
             <input type="hidden" name="poptavka_id" value={poptavkaId} />
             <p className="text-sm leading-relaxed text-slate-400">
-              Poptávku nelze nebo nechcete realizovat. Klient dostane informaci s důvodem odmítnutí.
+              Poptávku nelze nebo nechcete realizovat. Klient obdrží standardní odmítací e-mail
+              (bez interního důvodu).
             </p>
             <label className="block text-sm text-slate-300">
-              Důvod pro klienta
+              Interní důvod (volitelné, nevidí klient)
               <textarea
                 name="duvod"
-                required
                 rows={4}
                 className={inputClass}
-                placeholder="Důvod, který uvidí klient…"
+                placeholder="Interní poznámka k odmítnutí…"
               />
             </label>
             <button

@@ -29,6 +29,7 @@ export type PoptavkaStav =
   | "odeslana"
   | "ceka_na_schvaleni"
   | "v_revizi"
+  | "prijata_k_reseni"
   | "schvalena"
   | "zamitnuta"
   | "prevadena_do_zakazky"
@@ -41,6 +42,7 @@ export const POPTAVKA_STAVY: readonly PoptavkaStav[] = [
   "odeslana",
   "ceka_na_schvaleni",
   "v_revizi",
+  "prijata_k_reseni",
   "schvalena",
   "zamitnuta",
   "prevadena_do_zakazky",
@@ -58,19 +60,29 @@ export const PENDING_INTERNAL_POPTAVKA_STAVY: readonly PoptavkaStav[] = [
 /** Stavy, ze kterých smí interní tým odeslat závaznou objednávku klientovi. */
 export const SEND_BINDING_ORDER_POPTAVKA_STAVY: readonly PoptavkaStav[] = [
   "odeslana",
+  "prijata_k_reseni",
   "objednavka_odmitnuta",
 ] as const;
 
-/** Stavy zobrazené v interním seznamu poptávek. */
-export const INTERNAL_INBOX_POPTAVKA_STAVY: readonly PoptavkaStav[] = [
+/** Aktivní poptávky v interním seznamu (karta Aktuální). */
+export const INTERNAL_ACTIVE_POPTAVKA_STAVY: readonly PoptavkaStav[] = [
   "odeslana",
   "v_revizi",
+  "prijata_k_reseni",
   "objednavka_odeslana",
   "objednavka_potvrzena",
   "objednavka_odmitnuta",
   "schvalena",
   "prevadena_do_zakazky",
-  "zamitnuta",
+] as const;
+
+/** Odmítnuté poptávky v interním seznamu (karta Odmítnuté). */
+export const INTERNAL_REJECTED_POPTAVKA_STAVY: readonly PoptavkaStav[] = ["zamitnuta"] as const;
+
+/** Stavy zobrazené v interním seznamu poptávek (aktivní + odmítnuté). */
+export const INTERNAL_INBOX_POPTAVKA_STAVY: readonly PoptavkaStav[] = [
+  ...INTERNAL_ACTIVE_POPTAVKA_STAVY,
+  ...INTERNAL_REJECTED_POPTAVKA_STAVY,
 ] as const;
 
 export type PoptavkaObjednavkaPotvrzenaZpusob = "token" | "portal";
@@ -193,6 +205,8 @@ export type Poptavka = {
   objednavka_potvrzena_zpusob: PoptavkaObjednavkaPotvrzenaZpusob | null;
   objednavka_odmitnuta_at: string | null;
   objednavka_odmitnuta_duvod: string | null;
+  prijata_k_reseni_at: string | null;
+  prijala_user_id: string | null;
   created_at: string;
   updated_at: string;
 };

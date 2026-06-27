@@ -10,6 +10,7 @@ import {
   trySendPoptavkaOutbound,
 } from "@/lib/client-portal/poptavka-email-server";
 import {
+  canAcceptPoptavkaForProcessing,
   canInternalActOnPoptavka,
   canInternalApproveForConvert,
   loadInternalPoptavkaDetail,
@@ -75,16 +76,51 @@ export async function returnPoptavkaToRevisionAction(formData: FormData) {
   redirect(`/zakazky/poptavky/${poptavkaId}?saved=revision&email=${encodeURIComponent(emailQuery)}`);
 }
 
+export async function acceptPoptavkaAction(formData: FormData) {
+  const poptavkaId = String(formData.get("poptavka_id") ?? "").trim();
+
+  if (!poptavkaId) {
+    redirectWithError("/zakazky/poptavky", "missing_id");
+  }
+
+  const { supabase, user } = await requireInternalWriteAdminOrSef();
+  const detail = await loadInternalPoptavkaDetail(supabase, poptavkaId);
+
+  if (!detail) {
+    redirectWithError("/zakazky/poptavky", "not_found");
+  }
+
+  if (!canAcceptPoptavkaForProcessing(detail.stav)) {
+    redirectWithError(`/zakazky/poptavky/${poptavkaId}`, "invalid_state");
+  }
+
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("poptavky")
+    .update({
+      stav: "prijata_k_reseni",
+      prijata_k_reseni_at: now,
+      prijala_user_id: user.id,
+      updated_at: now,
+    })
+    .eq("poptavka_id", poptavkaId);
+
+  if (error) {
+    redirectWithError(`/zakazky/poptavky/${poptavkaId}`, "save_failed");
+  }
+
+  revalidatePath("/zakazky/poptavky");
+  revalidatePath(`/zakazky/poptavky/${poptavkaId}`);
+  revalidatePath(`/portal/poptavka/${poptavkaId}`);
+  redirect(`/zakazky/poptavky/${poptavkaId}?saved=accepted`);
+}
+
 export async function rejectPoptavkaAction(formData: FormData) {
   const poptavkaId = String(formData.get("poptavka_id") ?? "").trim();
   const duvod = String(formData.get("duvod") ?? "").trim();
 
   if (!poptavkaId) {
     redirectWithError("/zakazky/poptavky", "missing_id");
-  }
-
-  if (!duvod) {
-    redirectWithError(`/zakazky/poptavky/${poptavkaId}`, "missing_reason");
   }
 
   const { supabase } = await requireInternalWriteAdminOrSef();
@@ -103,7 +139,7 @@ export async function rejectPoptavkaAction(formData: FormData) {
     .from("poptavky")
     .update({
       stav: "zamitnuta",
-      zamitnuto_duvod: duvod,
+      zamitnuto_duvod: duvod || null,
       schvalil_user_id: null,
       schvaleno_at: null,
       updated_at: now,
@@ -120,7 +156,6 @@ export async function rejectPoptavkaAction(formData: FormData) {
     kind: "rejected",
     detail: refreshedDetail,
     baseUrl: getPortalAppBaseUrl(await headers()),
-    duvod,
   });
 
   revalidatePath("/zakazky/poptavky");

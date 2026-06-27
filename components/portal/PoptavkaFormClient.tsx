@@ -553,6 +553,9 @@ export default function PoptavkaFormClient({
     if (target instanceof HTMLButtonElement && target.type === "submit") return;
     if (target.tagName === "INPUT" || target.tagName === "SELECT") {
       event.preventDefault();
+      if (target instanceof HTMLInputElement) {
+        target.blur();
+      }
     }
   }
 

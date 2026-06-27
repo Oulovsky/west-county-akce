@@ -26,6 +26,7 @@ import {
   type PoptavkaOutboundKind,
 } from "@/lib/client-portal/poptavka-email-server";
 import {
+  canAcceptPoptavkaForProcessing,
   canInternalActOnPoptavka,
   canInternalApproveForConvert,
   canSendPoptavkaBindingOrder,
@@ -54,6 +55,7 @@ function ReadOnlyField({ label, value }: { label: string; value: string | null |
 const SAVED_MESSAGES: Record<string, string> = {
   revision: "Klient byl požádán o doplnění poptávky.",
   rejected: "Poptávka byla odmítnuta.",
+  accepted: "Poptávka byla přijata k řešení.",
   approved: "Poptávka byla schválena k převodu na zakázku.",
   note: "Interní poznámka byla uložena.",
   converted: "Interní zakázka byla vytvořena.",
@@ -80,6 +82,7 @@ const SAVED_TO_OUTBOUND_KIND: Partial<
 function canShowObjednavkaEditorLink(stav: PoptavkaStav) {
   return (
     stav === "odeslana" ||
+    stav === "prijata_k_reseni" ||
     stav === "objednavka_odeslana" ||
     stav === "objednavka_odmitnuta"
   );
@@ -152,6 +155,7 @@ export default async function ZakazkyPoptavkaDetailPage({
         })
       : null;
   const canAct = canInternalActOnPoptavka(detail.stav);
+  const canAccept = canAcceptPoptavkaForProcessing(detail.stav);
   const canApprove = canInternalApproveForConvert(detail.stav);
   const canConvert = canConvertPoptavkaToZakazka(detail);
   const showObjednavkaLink = canShowObjednavkaEditorLink(detail.stav);
@@ -506,6 +510,7 @@ export default async function ZakazkyPoptavkaDetailPage({
         poptavkaId={detail.poptavka_id}
         stav={detail.stav}
         canAct={canAct && !readOnly}
+        canAccept={canAccept && !readOnly}
         canApprove={canApprove && !readOnly}
         canConvert={canConvert && !readOnly}
         zakazkaId={convertedZakazkaId}

@@ -27,6 +27,10 @@ import {
 import type { PoptavkaStav } from "@/lib/client-portal/types";
 import { SEND_BINDING_ORDER_POPTAVKA_STAVY } from "@/lib/client-portal/types";
 import { canSendPoptavkaBindingOrder } from "@/lib/client-portal/poptavka-internal-server";
+import {
+  notifyInternalTeamAboutPoptavkaObjednavkaConfirmed,
+  notifyInternalTeamAboutPoptavkaObjednavkaRejected,
+} from "@/lib/client-portal/poptavka-notifications-server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type PoptavkaObjednavkaLinkStav =
@@ -1027,6 +1031,16 @@ async function confirmPoptavkaObjednavkaByContext(
     return { ok: false, errorMessage: decisionErrorMessage("save_failed") };
   }
 
+  try {
+    await notifyInternalTeamAboutPoptavkaObjednavkaConfirmed({
+      poptavkaId: poptavka.poptavka_id,
+      cisloPoptavky: poptavka.cislo_poptavky,
+      mistoNazev: poptavka.misto_nazev,
+    });
+  } catch (notifyError) {
+    console.warn("Poptavka objednavka confirmed notification failed:", notifyError);
+  }
+
   return {
     ok: true,
     status: "confirmed",
@@ -1128,6 +1142,17 @@ async function rejectPoptavkaObjednavkaByContext(
     }
 
     return { ok: false, errorMessage: decisionErrorMessage("save_failed") };
+  }
+
+  try {
+    await notifyInternalTeamAboutPoptavkaObjednavkaRejected({
+      poptavkaId: poptavka.poptavka_id,
+      cisloPoptavky: poptavka.cislo_poptavky,
+      mistoNazev: poptavka.misto_nazev,
+      reason: trimmedReason,
+    });
+  } catch (notifyError) {
+    console.warn("Poptavka objednavka rejected notification failed:", notifyError);
   }
 
   return {
