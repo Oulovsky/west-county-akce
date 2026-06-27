@@ -16,11 +16,14 @@ import {
   buildZvukVolby,
 } from "@/lib/client-portal/sestava-konfigurator-options";
 import {
-  buildPodiumMeterOptions,
+  findPodiumVariant,
   findZastreseniVariant,
+  findZastreseniVariantByNazev,
   getAvailableKotveniTypy,
   getMaxCistaVyska,
+  getPodiumVolbyProZastreseni,
   getZastreseniHeightOptions,
+  sanitizePodiumForZastreseni,
 } from "@/lib/client-portal/sestava-konfigurator-katalog";
 import type {
   LedWallBlock,
@@ -54,11 +57,12 @@ function selectZastreseniFromVolba(
   katalog: PortalSestavaKatalog
 ): Partial<SestavaKonfiguratorState> {
   if (volba.source === "setup") {
+    const variant = findZastreseniVariantByNazev(katalog, volba.label);
     return {
       zastreseni_setup_id: volba.setup_id,
-      zastreseni_variant_id: null,
-      zastreseni_sirka_m: null,
-      zastreseni_hloubka_m: null,
+      zastreseni_variant_id: variant?.id ?? null,
+      zastreseni_sirka_m: variant?.sirka_m ?? null,
+      zastreseni_hloubka_m: variant?.hloubka_m ?? null,
     };
   }
 
@@ -68,6 +72,27 @@ function selectZastreseniFromVolba(
     zastreseni_setup_id: volba.setup_id,
     zastreseni_sirka_m: variant?.sirka_m ?? null,
     zastreseni_hloubka_m: variant?.hloubka_m ?? null,
+  };
+}
+
+function selectPodiumFromVariant(
+  katalog: PortalSestavaKatalog,
+  variantId: string | null
+): Partial<SestavaKonfiguratorState> {
+  const variant = findPodiumVariant(katalog, variantId);
+  if (!variant) {
+    return {
+      podium_variant_id: null,
+      podium_setup_id: null,
+      podium_sirka_m: null,
+      podium_hloubka_m: null,
+    };
+  }
+  return {
+    podium_variant_id: variant.id,
+    podium_setup_id: variant.setup_id ?? null,
+    podium_sirka_m: variant.sirka_m,
+    podium_hloubka_m: variant.hloubka_m,
   };
 }
 
@@ -127,10 +152,10 @@ export default function PoptavkaSestavaKonfigurator({
     [katalog, setupsByOblast]
   );
 
-  const roofW = isZastresene ? (state.zastreseni_sirka_m ?? 0) : 0;
-  const roofD = isZastresene ? (state.zastreseni_hloubka_m ?? 0) : 0;
-  const podiumSirkaOptions = isZastresene ? buildPodiumMeterOptions(roofW) : [];
-  const podiumHloubkaOptions = isZastresene ? buildPodiumMeterOptions(roofD) : [];
+  const podiumVolby = useMemo(
+    () => getPodiumVolbyProZastreseni(katalog, state.zastreseni_variant_id),
+    [katalog, state.zastreseni_variant_id]
+  );
   const kotveniOptions = getAvailableKotveniTypy(state.kotveni_povrch);
   const schodyVolba = schodyVolbaFromState(state);
 
@@ -241,6 +266,8 @@ export default function PoptavkaSestavaKonfigurator({
                             zastreseni_sirka_m: null,
                             zastreseni_hloubka_m: null,
                             cista_vyska_m: null,
+                            podium_variant_id: null,
+                            podium_setup_id: null,
                             podium_sirka_m: null,
                             podium_hloubka_m: null,
                             podium_vyska_m: null,
@@ -261,6 +288,11 @@ export default function PoptavkaSestavaKonfigurator({
                             mobilni_schody_strana: null,
                             mobilni_pozaduje_zvuk: false,
                             mobilni_pozaduje_svetla: false,
+                            podium_variant_id: null,
+                            podium_setup_id: null,
+                            podium_sirka_m: null,
+                            podium_hloubka_m: null,
+                            podium_vyska_m: null,
                             ...selectZastreseniFromVolba(first, katalog),
                           });
                         }
@@ -318,7 +350,14 @@ export default function PoptavkaSestavaKonfigurator({
                       ) {
                         partial.cista_vyska_m = null;
                       }
-                      patch(partial);
+                      const nextVariantId = partial.zastreseni_variant_id ?? null;
+                      patch({
+                        ...partial,
+                        ...sanitizePodiumForZastreseni(katalog, {
+                          ...state,
+                          zastreseni_variant_id: nextVariantId,
+                        }),
+                      });
                     }}
                     disabled={readOnly}
                     className={inputClass}
@@ -374,68 +413,50 @@ export default function PoptavkaSestavaKonfigurator({
             {isZastresene ? (
               <section className="space-y-3 rounded-xl border border-white/10 bg-white/[0.02] p-4">
                 <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-amber-200/90">
-                  4–5. Pódium — rozměry a výška
+                  4–5. Pódium — varianta a výška
                 </h3>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <label className="block space-y-1">
-                    <span className="text-xs text-slate-400">Šířka pódia (m)</span>
-                    <select
-                      value={state.podium_sirka_m ?? ""}
-                      onChange={(e) =>
-                        patch({
-                          podium_sirka_m: e.target.value ? Number(e.target.value) : null,
-                        })
-                      }
-                      disabled={readOnly}
-                      className={inputClass}
-                    >
-                      <option value="">—</option>
-                      {podiumSirkaOptions.map((m) => (
-                        <option key={m} value={m}>
-                          {m} m
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block space-y-1">
-                    <span className="text-xs text-slate-400">Hloubka pódia (m)</span>
-                    <select
-                      value={state.podium_hloubka_m ?? ""}
-                      onChange={(e) =>
-                        patch({
-                          podium_hloubka_m: e.target.value ? Number(e.target.value) : null,
-                        })
-                      }
-                      disabled={readOnly}
-                      className={inputClass}
-                    >
-                      <option value="">—</option>
-                      {podiumHloubkaOptions.map((m) => (
-                        <option key={m} value={m}>
-                          {m} m
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block space-y-1">
-                    <span className="text-xs text-slate-400">Výška pódia (m)</span>
-                    <select
-                      value={state.podium_vyska_m ?? ""}
-                      onChange={(e) =>
-                        patch({ podium_vyska_m: e.target.value ? Number(e.target.value) : null })
-                      }
-                      disabled={readOnly}
-                      className={inputClass}
-                    >
-                      <option value="">—</option>
-                      {katalog.podium_vysky_m.map((h) => (
-                        <option key={h} value={h}>
-                          {h} m
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
+                {!state.zastreseni_variant_id ? (
+                  <p className="text-xs text-slate-500">Nejdříve vyberte variantu zastřešení.</p>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block space-y-1">
+                      <span className="text-xs text-slate-400">Varianta pódia *</span>
+                      <select
+                        value={state.podium_variant_id ?? ""}
+                        onChange={(e) =>
+                          patch(selectPodiumFromVariant(katalog, e.target.value || null))
+                        }
+                        disabled={readOnly || podiumVolby.length === 0}
+                        className={inputClass}
+                      >
+                        <option value="">— vyberte variantu —</option>
+                        {podiumVolby.map((variant) => (
+                          <option key={variant.id} value={variant.id}>
+                            {variant.nazev}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block space-y-1">
+                      <span className="text-xs text-slate-400">Výška pódia (m) *</span>
+                      <select
+                        value={state.podium_vyska_m ?? ""}
+                        onChange={(e) =>
+                          patch({ podium_vyska_m: e.target.value ? Number(e.target.value) : null })
+                        }
+                        disabled={readOnly || !state.podium_variant_id}
+                        className={inputClass}
+                      >
+                        <option value="">—</option>
+                        {katalog.podium_vysky_m.map((h) => (
+                          <option key={h} value={h}>
+                            {h} m
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                )}
                 {odhad.podium_modulu > 0 ? (
                   <p className="text-xs text-slate-400">
                     Odhad: {odhad.podium_modulu} podlahových modulů ({katalog.podium_modul_sirka_m}×
@@ -508,7 +529,7 @@ export default function PoptavkaSestavaKonfigurator({
                       praktikabl_variant_id:
                         e.target.value === "zadny"
                           ? null
-                          : (katalog.praktikabl_varianty[1]?.id ?? null),
+                          : (katalog.praktikabl_varianty[0]?.id ?? null),
                       praktikabl_umisteni: e.target.value === "zadny" ? null : state.praktikabl_umisteni,
                       praktikabl_mobilni: e.target.value === "zadny" ? false : state.praktikabl_mobilni,
                     })

@@ -1,12 +1,15 @@
 import {
   computePodiumModuly,
   estimatePodiumLegs,
+  findPodiumVariant,
   findPraktikablVariant,
   findZastreseniVariant,
   getAvailableKotveniTypy,
   getMaxCistaVyska,
+  getPodiumVolbyProZastreseni,
   getZastreseniHeightOptions,
-  isIntegerMeter,
+  resolvePodiumVariantFromDimensions,
+  sanitizePodiumForZastreseni,
 } from "@/lib/client-portal/sestava-konfigurator-katalog";
 import { computeNakladkaFromSestava } from "@/lib/client-portal/sestava-nakladka";
 import type {
@@ -54,6 +57,8 @@ export const EMPTY_SESTAVA_KONFIGURATOR: SestavaKonfiguratorState = {
   zastreseni_hloubka_m: null,
   mobilni_setup_id: null,
   cista_vyska_m: null,
+  podium_variant_id: null,
+  podium_setup_id: null,
   podium_sirka_m: null,
   podium_hloubka_m: null,
   podium_vyska_m: null,
@@ -320,6 +325,8 @@ export function parseSestavaFormData(formData: FormData): SestavaKonfiguratorSta
     zastreseni_hloubka_m: parseNumber(formData.get("sestava_zastreseni_hloubka_m")),
     mobilni_setup_id: String(formData.get("sestava_mobilni_setup_id") ?? "").trim() || null,
     cista_vyska_m: parseNumber(formData.get("sestava_cista_vyska_m")),
+    podium_variant_id: String(formData.get("sestava_podium_variant_id") ?? "").trim() || null,
+    podium_setup_id: String(formData.get("sestava_podium_setup_id") ?? "").trim() || null,
     podium_sirka_m: parseNumber(formData.get("sestava_podium_sirka_m")),
     podium_hloubka_m: parseNumber(formData.get("sestava_podium_hloubka_m")),
     podium_vyska_m: parseNumber(formData.get("sestava_podium_vyska_m")),
@@ -460,20 +467,23 @@ export function validateSestavaKonfigurator(
       );
     }
 
-    if (state.podium_sirka_m != null && !isIntegerMeter(state.podium_sirka_m)) {
-      errors.push("Šířka pódia musí být celé číslo v metrech.");
-    }
-    if (state.podium_hloubka_m != null && !isIntegerMeter(state.podium_hloubka_m)) {
-      errors.push("Hloubka pódia musí být celé číslo v metrech.");
+    if (state.podium_variant_id || (state.podium_sirka_m && state.podium_hloubka_m)) {
+      const allowed = getPodiumVolbyProZastreseni(katalog, state.zastreseni_variant_id);
+      const podium =
+        findPodiumVariant(katalog, state.podium_variant_id) ??
+        resolvePodiumVariantFromDimensions(
+          katalog,
+          state.zastreseni_variant_id,
+          state.podium_sirka_m,
+          state.podium_hloubka_m
+        );
+      if (podium && !allowed.some((row) => row.id === podium.id)) {
+        errors.push("Vybrané pódium není povolené pro zvolené zastřešení.");
+      }
     }
 
-    const roofW = state.zastreseni_sirka_m;
-    const roofD = state.zastreseni_hloubka_m;
-    if (state.podium_sirka_m && roofW && state.podium_sirka_m > roofW) {
-      warnings.push("Pódium je širší než zastřešení — zkontrolujte rozměry.");
-    }
-    if (state.podium_hloubka_m && roofD && state.podium_hloubka_m > roofD) {
-      warnings.push("Pódium je hlubší než zastřešení — zkontrolujte rozměry.");
+    if (state.podium_vyska_m == null && state.podium_variant_id) {
+      errors.push("Vyberte výšku pódia.");
     }
 
     const schodyVolba = schodyVolbaFromState(state);
@@ -590,12 +600,20 @@ export function deriveSetupSelectionsFromSestava(
     }
   }
 
+  if (state.stage_typ === "zastresene") {
+    pushSetup(state.podium_setup_id);
+    if (!state.podium_setup_id) {
+      const podium = findPodiumVariant(katalog, state.podium_variant_id);
+      pushSetup(podium?.setup_id ?? findByOblastNazev("stage", podium?.nazev ?? ""));
+    }
+  }
+
   if (state.praktikabl_typ !== "zadny") {
     const variant = findPraktikablVariant(katalog, state.praktikabl_variant_id);
     pushSetup(
-      findByOblastNazev("stage", variant?.nazev ?? "praktikábl") ??
-        findByOblastNazev("stage", "praktikábl") ??
-        findByOblastNazev("stage", "riser")
+      variant?.setup_id ??
+        findByOblastNazev("stage", variant?.nazev ?? "praktikábl") ??
+        findByOblastNazev("stage", "praktikábl")
     );
   }
 
@@ -721,10 +739,11 @@ export function buildSestavaSummaryLines(
     if (migrated.cista_vyska_m) {
       lines.push(`Čistá výška nad pódiem: ${migrated.cista_vyska_m} m`);
     }
-    if (migrated.podium_sirka_m && migrated.podium_hloubka_m) {
-      lines.push(
-        `Pódium: ${migrated.podium_sirka_m} × ${migrated.podium_hloubka_m} m, výška ${migrated.podium_vyska_m ?? "—"} m`
-      );
+  if (state.podium_sirka_m && state.podium_hloubka_m) {
+    const podium = findPodiumVariant(katalog, migrated.podium_variant_id);
+    lines.push(
+      `Pódium: ${podium?.nazev ?? `${migrated.podium_sirka_m} × ${migrated.podium_hloubka_m} m`}, výška ${migrated.podium_vyska_m ?? "—"} m`
+    );
       const odhad = computeOdhadModulu(katalog, migrated);
       if (odhad.podium_modulu > 0) {
         lines.push(

@@ -57,6 +57,8 @@ export type SestavaKonfiguratorState = {
   zastreseni_hloubka_m: number | null;
   mobilni_setup_id: string | null;
   cista_vyska_m: number | null;
+  podium_variant_id: string | null;
+  podium_setup_id: string | null;
   podium_sirka_m: number | null;
   podium_hloubka_m: number | null;
   podium_vyska_m: number | null;
@@ -124,6 +126,8 @@ export type PortalZastreseniVarianta = {
   sirka_m: number;
   hloubka_m: number;
   setup_id?: string | null;
+  /** ID povolených variant pódia (viz podium_varianty v katalogu). */
+  povolene_podium_ids?: string[];
   min_sirka_m: number;
   max_sirka_m: number;
   min_hloubka_m: number;
@@ -131,6 +135,16 @@ export type PortalZastreseniVarianta = {
   max_cista_vyska_m: number;
   doporucena_sirky_m: number[];
   doporucene_hloubky_m: number[];
+};
+
+export type PortalPodiumVarianta = {
+  id: string;
+  nazev: string;
+  aktivni?: boolean;
+  poradi?: number;
+  sirka_m: number;
+  hloubka_m: number;
+  setup_id?: string | null;
 };
 
 export type PortalPraktikablVarianta = {
@@ -141,6 +155,7 @@ export type PortalPraktikablVarianta = {
   sirka_m: number;
   hloubka_m: number;
   vyska_m: number;
+  setup_id?: string | null;
 };
 
 export type PortalPresetKatalog = {
@@ -179,6 +194,7 @@ export type PortalSestavaKatalog = {
     setup_id?: string | null;
   };
   praktikabl_varianty: PortalPraktikablVarianta[];
+  podium_varianty: PortalPodiumVarianta[];
   podium_modul_sirka_m: number;
   podium_modul_hloubka_m: number;
   podium_vysky_m: number[];

@@ -13,6 +13,22 @@ type KatalogRow = {
   aktivni: boolean;
 };
 
+type SetupRow = {
+  setup_id: string;
+  nazev: string;
+  oblast: string;
+};
+
+function matchSetupByNazev(setupy: SetupRow[], nazev: string | null | undefined) {
+  if (!nazev?.trim()) return null;
+  const lower = nazev.toLowerCase().trim();
+  return (
+    setupy.find((row) => row.nazev.toLowerCase().trim() === lower)?.setup_id ??
+    setupy.find((row) => row.nazev.toLowerCase().includes(lower))?.setup_id ??
+    null
+  );
+}
+
 async function loadKatalogFromDb(): Promise<PortalSestavaKatalog | null> {
   try {
     const admin = createAdminClient();
@@ -68,7 +84,7 @@ async function enrichLedStock(katalog: PortalSestavaKatalog): Promise<PortalSest
   }
 }
 
-async function enrichPresetSetupIds(katalog: PortalSestavaKatalog): Promise<PortalSestavaKatalog> {
+async function enrichKatalogSetupIds(katalog: PortalSestavaKatalog): Promise<PortalSestavaKatalog> {
   try {
     const admin = createAdminClient();
     const { data: setupy } = await admin
@@ -79,27 +95,35 @@ async function enrichPresetSetupIds(katalog: PortalSestavaKatalog): Promise<Port
 
     if (!setupy?.length) return katalog;
 
-    const matchSetup = (oblast: string, kod: string) => {
-      const normalized = kod.toLowerCase();
-      const found = setupy.find(
-        (row) =>
-          row.oblast === oblast &&
-          String(row.nazev ?? "")
-            .toLowerCase()
-            .includes(normalized)
-      );
-      return found?.setup_id ?? null;
-    };
+    const rows = setupy as SetupRow[];
 
     return {
       ...katalog,
+      mobilni_stage: {
+        ...katalog.mobilni_stage,
+        setup_id:
+          katalog.mobilni_stage.setup_id ??
+          matchSetupByNazev(rows, katalog.mobilni_stage.nazev),
+      },
+      zastreseni_varianty: katalog.zastreseni_varianty.map((variant) => ({
+        ...variant,
+        setup_id: variant.setup_id ?? matchSetupByNazev(rows, variant.nazev),
+      })),
+      podium_varianty: katalog.podium_varianty.map((variant) => ({
+        ...variant,
+        setup_id: variant.setup_id ?? matchSetupByNazev(rows, variant.nazev),
+      })),
+      praktikabl_varianty: katalog.praktikabl_varianty.map((variant) => ({
+        ...variant,
+        setup_id: variant.setup_id ?? matchSetupByNazev(rows, variant.nazev),
+      })),
       zvuk_presety: katalog.zvuk_presety.map((preset) => ({
         ...preset,
-        setup_id: preset.setup_id ?? matchSetup("sound", preset.kod),
+        setup_id: preset.setup_id ?? matchSetupByNazev(rows, preset.nazev),
       })),
       svetla_presety: katalog.svetla_presety.map((preset) => ({
         ...preset,
-        setup_id: preset.setup_id ?? matchSetup("lights", preset.kod),
+        setup_id: preset.setup_id ?? matchSetupByNazev(rows, preset.nazev),
       })),
     };
   } catch {
@@ -122,6 +146,9 @@ function filterActiveKatalogForPortal(katalog: PortalSestavaKatalog): PortalSest
     zastreseni_varianty: sortByPoradi(
       katalog.zastreseni_varianty.filter((row) => isKatalogPolozkaAktivni(row.aktivni))
     ),
+    podium_varianty: sortByPoradi(
+      katalog.podium_varianty.filter((row) => isKatalogPolozkaAktivni(row.aktivni))
+    ),
     praktikabl_varianty: sortByPoradi(
       katalog.praktikabl_varianty.filter((row) => isKatalogPolozkaAktivni(row.aktivni))
     ),
@@ -141,7 +168,7 @@ export async function loadPortalSestavaKatalog(): Promise<PortalSestavaKatalog> 
   const fromDb = await loadKatalogFromDb();
   const base = normalizePortalSestavaKatalog(fromDb ?? DEFAULT_PORTAL_SESTAVA_KATALOG);
   const withStock = await enrichLedStock(base);
-  const withSetups = await enrichPresetSetupIds(withStock);
+  const withSetups = await enrichKatalogSetupIds(withStock);
   return filterActiveKatalogForPortal(withSetups);
 }
 

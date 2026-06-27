@@ -1,7 +1,5 @@
 import {
   computeLedPanelCountFromDimensions,
-  computePodiumModuly,
-  estimatePodiumLegs,
   findLedTyp,
 } from "@/lib/client-portal/sestava-konfigurator-katalog";
 import type {
@@ -78,45 +76,7 @@ export function computeNakladkaFromSestava(
 
   const polozky: SestavaNakladkaPolozka[] = [];
 
-  if (state.podium_sirka_m && state.podium_hloubka_m) {
-    const desky = computePodiumModuly(
-      katalog,
-      state.podium_sirka_m,
-      state.podium_hloubka_m
-    );
-    if (desky > 0) {
-      polozky.push({
-        kod: "nivtec_deska",
-        nazev: "Nivtec deska 1 × 2 m",
-        mnozstvi: desky,
-        jednotka: "ks",
-        metadata: {
-          sirka_m: state.podium_sirka_m,
-          hloubka_m: state.podium_hloubka_m,
-          modul_sirka_m: katalog.podium_modul_sirka_m,
-          modul_hloubka_m: katalog.podium_modul_hloubka_m,
-        },
-      });
-      polozky.push({
-        kod: "nivtec_noha",
-        nazev: "Nivtec noha",
-        mnozstvi: estimatePodiumLegs(desky),
-        jednotka: "ks",
-      });
-    }
-
-    if (state.schody_pocet > 0) {
-      polozky.push({
-        kod: "schody",
-        nazev: "Schody na pódium",
-        mnozstvi: state.schody_pocet,
-        jednotka: "ks",
-        metadata: {
-          strany: state.schody_strany.join(","),
-        },
-      });
-    }
-  }
+  // Pódium je katalogový setup — HW obsah se řeší v setup_polozky, ne výpočtem zde.
 
   for (const { key, block } of enabledLedWallBlocks(state)) {
     if (!block.typ_kod || !block.sirka_m || !block.vyska_m) continue;

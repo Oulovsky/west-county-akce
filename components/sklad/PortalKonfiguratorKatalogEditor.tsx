@@ -198,6 +198,7 @@ export default function PortalKonfiguratorKatalogEditor({ initialRow, options }:
           max_cista_vyska_m: 5,
           doporucena_sirky_m: [8],
           doporucene_hloubky_m: [6],
+          povolene_podium_ids: [],
           aktivni: true,
           poradi: obsah.zastreseni_varianty.length + 1,
         })}
@@ -233,6 +234,26 @@ export default function PortalKonfiguratorKatalogEditor({ initialRow, options }:
           </label>
         </div>
       </Section>
+
+      <VariantTable
+        title="Pódium — katalogové varianty"
+        rows={obsah.podium_varianty ?? []}
+        onChange={(rows) => setObsah({ ...obsah, podium_varianty: rows })}
+        columns={[
+          { key: "id", label: "ID", type: "text" },
+          { key: "nazev", label: "Název", type: "text" },
+          { key: "sirka_m", label: "Šířka (m)", type: "number" },
+          { key: "hloubka_m", label: "Hloubka (m)", type: "number" },
+        ]}
+        newRow={() => ({
+          id: `podium_${Date.now()}`,
+          nazev: "Pódium",
+          sirka_m: 6,
+          hloubka_m: 4,
+          aktivni: true,
+          poradi: (obsah.podium_varianty ?? []).length + 1,
+        })}
+      />
 
       <VariantTable
         title="Praktikábl / drum riser"

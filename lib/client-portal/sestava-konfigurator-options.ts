@@ -31,11 +31,16 @@ export function buildZastreseniVolby(
   const stageSetups = portalSetups.stage ?? [];
   const zastreseneSetups = stageSetups.filter((row) => {
     const text = `${row.nazev} ${row.portal_popis ?? ""}`.toLowerCase();
-    return (
-      text.includes("zastřeš") ||
-      text.includes("zastres") ||
-      /\d+\s*[×x]\s*\d+/.test(text)
-    );
+    if (
+      text.includes("pódium") ||
+      text.includes("podium") ||
+      text.includes("praktikábl") ||
+      text.includes("praktikabl") ||
+      text.includes("branka")
+    ) {
+      return false;
+    }
+    return text.includes("zastřeš") || text.includes("zastres");
   });
 
   if (zastreseneSetups.length > 0) {

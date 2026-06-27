@@ -1,4 +1,4 @@
-import type { PortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-types";
+import type { PortalSestavaKatalog, SestavaKonfiguratorState } from "@/lib/client-portal/sestava-konfigurator-types";
 import type { KotveniTyp } from "@/lib/client-portal/sestava-konfigurator-types";
 import { ZASTRESENI_CISTA_VYSKA_OPTIONS } from "@/lib/client-portal/sestava-konfigurator-types";
 
@@ -6,6 +6,16 @@ import { ZASTRESENI_CISTA_VYSKA_OPTIONS } from "@/lib/client-portal/sestava-konf
 export const STANDARD_LED_PANEL_PLOCHA_M2 = 0.5;
 
 /** Výchozí katalog — lze přepsat z DB tabulky portal_konfigurator_katalog. */
+export const DEFAULT_PODIUM_VARIANTY = [
+  { id: "6x2", nazev: "Pódium 6 × 2", sirka_m: 6, hloubka_m: 2, poradi: 1 },
+  { id: "6x3", nazev: "Pódium 6 × 3", sirka_m: 6, hloubka_m: 3, poradi: 2 },
+  { id: "6x4", nazev: "Pódium 6 × 4", sirka_m: 6, hloubka_m: 4, poradi: 3 },
+  { id: "6x6", nazev: "Pódium 6 × 6", sirka_m: 6, hloubka_m: 6, poradi: 4 },
+  { id: "8x5", nazev: "Pódium 8 × 5", sirka_m: 8, hloubka_m: 5, poradi: 5 },
+  { id: "8x6", nazev: "Pódium 8 × 6", sirka_m: 8, hloubka_m: 6, poradi: 6 },
+  { id: "8x8", nazev: "Pódium 8 × 8", sirka_m: 8, hloubka_m: 8, poradi: 7 },
+] as const;
+
 export const DEFAULT_PORTAL_SESTAVA_KATALOG: PortalSestavaKatalog = {
   mobilni_stage: {
     nazev: "Mobilní stage",
@@ -28,6 +38,7 @@ export const DEFAULT_PORTAL_SESTAVA_KATALOG: PortalSestavaKatalog = {
       max_cista_vyska_m: 5.0,
       doporucena_sirky_m: [8],
       doporucene_hloubky_m: [3],
+      povolene_podium_ids: ["6x2"],
       setup_id: null,
     },
     {
@@ -42,6 +53,7 @@ export const DEFAULT_PORTAL_SESTAVA_KATALOG: PortalSestavaKatalog = {
       max_cista_vyska_m: 5.0,
       doporucena_sirky_m: [8],
       doporucene_hloubky_m: [4],
+      povolene_podium_ids: ["6x3"],
       setup_id: null,
     },
     {
@@ -56,6 +68,7 @@ export const DEFAULT_PORTAL_SESTAVA_KATALOG: PortalSestavaKatalog = {
       max_cista_vyska_m: 6.0,
       doporucena_sirky_m: [8],
       doporucene_hloubky_m: [6],
+      povolene_podium_ids: ["6x4", "6x6", "8x5"],
       setup_id: null,
     },
     {
@@ -70,6 +83,7 @@ export const DEFAULT_PORTAL_SESTAVA_KATALOG: PortalSestavaKatalog = {
       max_cista_vyska_m: 6.0,
       doporucena_sirky_m: [8],
       doporucene_hloubky_m: [7],
+      povolene_podium_ids: ["6x6"],
       setup_id: null,
     },
     {
@@ -84,16 +98,18 @@ export const DEFAULT_PORTAL_SESTAVA_KATALOG: PortalSestavaKatalog = {
       max_cista_vyska_m: 7.0,
       doporucena_sirky_m: [10],
       doporucene_hloubky_m: [8],
+      povolene_podium_ids: ["8x6", "8x8"],
       setup_id: null,
     },
   ],
+  podium_varianty: DEFAULT_PODIUM_VARIANTY.map((row) => ({ ...row, setup_id: null })),
   podium_modul_sirka_m: 2,
   podium_modul_hloubka_m: 1,
   podium_vysky_m: [0.4, 0.6, 0.8, 1.0, 1.2, 1.4],
   praktikabl_varianty: [
-    { id: "maly", nazev: "Malý (2×2 m)", sirka_m: 2, hloubka_m: 2, vyska_m: 0.4 },
-    { id: "standard", nazev: "Standard (3×2 m)", sirka_m: 3, hloubka_m: 2, vyska_m: 0.4 },
-    { id: "velky", nazev: "Velký (4×2 m)", sirka_m: 4, hloubka_m: 2, vyska_m: 0.6 },
+    { id: "2x1", nazev: "Praktikábl 2 × 1", sirka_m: 2, hloubka_m: 1, vyska_m: 0.4, setup_id: null },
+    { id: "2x2", nazev: "Praktikábl 2 × 2", sirka_m: 2, hloubka_m: 2, vyska_m: 0.4, setup_id: null },
+    { id: "2x3", nazev: "Praktikábl 2 × 3", sirka_m: 2, hloubka_m: 3, vyska_m: 0.4, setup_id: null },
   ],
   led_typy: [
     {
@@ -237,11 +253,24 @@ export function normalizePortalSestavaKatalog(
         aktivni: true,
         poradi: index + 1,
         setup_id: null,
+        povolene_podium_ids: fallback?.povolene_podium_ids ?? row.povolene_podium_ids ?? [],
         ...row,
         sirka_m: sirka,
         hloubka_m: hloubka,
       };
     }),
+    podium_varianty: (input?.podium_varianty ?? base.podium_varianty ?? DEFAULT_PODIUM_VARIANTY).map(
+      (row, index) => {
+        const fallback = DEFAULT_PODIUM_VARIANTY.find((v) => v.id === row.id);
+        return {
+          aktivni: true,
+          poradi: index + 1,
+          setup_id: null,
+          ...fallback,
+          ...row,
+        };
+      }
+    ),
     praktikabl_varianty: (input?.praktikabl_varianty ?? base.praktikabl_varianty).map((row, index) => ({
       aktivni: true,
       poradi: index + 1,
@@ -289,6 +318,89 @@ export function findPraktikablVariant(
 ) {
   if (!id) return null;
   return katalog.praktikabl_varianty.find((row) => row.id === id) ?? null;
+}
+
+export function findPodiumVariant(
+  katalog: PortalSestavaKatalog,
+  id: string | null | undefined
+) {
+  if (!id) return null;
+  return katalog.podium_varianty.find((row) => row.id === id) ?? null;
+}
+
+export function findZastreseniVariantByNazev(
+  katalog: PortalSestavaKatalog,
+  nazev: string | null | undefined
+) {
+  if (!nazev?.trim()) return null;
+  const lower = nazev.toLowerCase().trim();
+  return (
+    katalog.zastreseni_varianty.find((row) => row.nazev.toLowerCase().trim() === lower) ?? null
+  );
+}
+
+export function getPodiumVolbyProZastreseni(
+  katalog: PortalSestavaKatalog,
+  zastreseniVariantId: string | null | undefined
+) {
+  if (!zastreseniVariantId) return [];
+  const variant = findZastreseniVariant(katalog, zastreseniVariantId);
+  if (!variant) return [];
+  const allowed = new Set(variant.povolene_podium_ids ?? []);
+  return katalog.podium_varianty.filter(
+    (row) => allowed.has(row.id) && isKatalogPolozkaAktivni(row.aktivni)
+  );
+}
+
+export function resolvePodiumVariantFromDimensions(
+  katalog: PortalSestavaKatalog,
+  zastreseniVariantId: string | null | undefined,
+  sirkaM: number | null,
+  hloubkaM: number | null
+) {
+  if (!sirkaM || !hloubkaM) return null;
+  return (
+    getPodiumVolbyProZastreseni(katalog, zastreseniVariantId).find(
+      (row) => row.sirka_m === sirkaM && row.hloubka_m === hloubkaM
+    ) ?? null
+  );
+}
+
+export function sanitizePodiumForZastreseni(
+  katalog: PortalSestavaKatalog,
+  state: Pick<
+    SestavaKonfiguratorState,
+    "zastreseni_variant_id" | "podium_variant_id" | "podium_setup_id" | "podium_sirka_m" | "podium_hloubka_m"
+  >
+): Pick<
+  SestavaKonfiguratorState,
+  "podium_variant_id" | "podium_setup_id" | "podium_sirka_m" | "podium_hloubka_m"
+> {
+  const allowed = getPodiumVolbyProZastreseni(katalog, state.zastreseni_variant_id);
+  const current =
+    findPodiumVariant(katalog, state.podium_variant_id) ??
+    resolvePodiumVariantFromDimensions(
+      katalog,
+      state.zastreseni_variant_id,
+      state.podium_sirka_m,
+      state.podium_hloubka_m
+    );
+
+  if (current && allowed.some((row) => row.id === current.id)) {
+    return {
+      podium_variant_id: current.id,
+      podium_setup_id: current.setup_id ?? null,
+      podium_sirka_m: current.sirka_m,
+      podium_hloubka_m: current.hloubka_m,
+    };
+  }
+
+  return {
+    podium_variant_id: null,
+    podium_setup_id: null,
+    podium_sirka_m: null,
+    podium_hloubka_m: null,
+  };
 }
 
 export function getMaxCistaVyska(
