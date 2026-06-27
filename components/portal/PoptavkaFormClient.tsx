@@ -8,10 +8,16 @@ import { rethrowIfNextRedirect } from "@/lib/next/isRedirectError";
 import {
   createPoptavkaAction,
   orderTechnikVyjezdAndSubmitPoptavkaAction,
+  saveDraftPoptavkaReturnIdAction,
   submitKlientPoptavkaAction,
   updatePoptavkaAction,
 } from "@/app/portal/poptavky/actions";
-import { uploadPendingSectionPhotosForPoptavka } from "@/lib/client-portal/poptavka-section-photo-upload-client";
+import {
+  applySectionPhotoUploadResults,
+  collectPendingPhotosBySection,
+  markPendingPhotosUploading,
+  uploadPendingSectionPhotosForPoptavka,
+} from "@/lib/client-portal/poptavka-section-photo-upload-client";
 import PoptavkaGpsLocationPanel from "@/components/portal/PoptavkaGpsLocationPanel";
 import {
   formatCoordsFallbackLabel,
@@ -25,7 +31,6 @@ import PoptavkaTechnickePodminkyStep, {
   createInitialSectionPhotos,
 } from "@/components/portal/PoptavkaTechnickePodminkyStep";
 import {
-  appendPendingSectionPhotos,
   emptySectionPhotoState,
 } from "@/components/portal/PoptavkaTechnikaSectionPhoto";
 import { TECHNIKA_SECTION_PHOTOS } from "@/lib/client-portal/poptavka-technika-podminky";
@@ -708,49 +713,80 @@ export default function PoptavkaFormClient({
 
     setPendingIntent(intent);
 
-    const pendingBySection: Partial<
-      Record<TechnikaSectionPhotoKey, { id: string; file: File; previewUrl: string }[]>
-    > = {};
-    for (const [key, state] of Object.entries(sectionPhotos)) {
-      if (state?.pending.length) {
-        pendingBySection[key as TechnikaSectionPhotoKey] = state.pending;
-      }
-    }
-
+    let workingSectionPhotos = sectionPhotos;
+    let activePoptavkaId = poptavkaId;
+    const pendingBySection = collectPendingPhotosBySection(workingSectionPhotos);
     const hasPendingPhotos = Object.values(pendingBySection).some(
       (photos) => (photos?.length ?? 0) > 0
     );
 
-    let pendingUploadedViaClient = false;
-    if (poptavkaId && hasPendingPhotos) {
-      try {
-        await uploadPendingSectionPhotosForPoptavka(poptavkaId, pendingBySection);
-        pendingUploadedViaClient = true;
-        router.refresh();
-      } catch {
+    async function uploadPendingPhotosForId(targetPoptavkaId: string) {
+      const pending = collectPendingPhotosBySection(workingSectionPhotos);
+      if (!Object.values(pending).some((photos) => (photos?.length ?? 0) > 0)) {
+        return { totalErrors: 0, totalUploaded: 0 };
+      }
+
+      setSectionPhotos((current) => markPendingPhotosUploading(current, pending));
+      const uploadResult = await uploadPendingSectionPhotosForPoptavka(
+        targetPoptavkaId,
+        pending
+      );
+      workingSectionPhotos = applySectionPhotoUploadResults(workingSectionPhotos, uploadResult.bySection);
+      setSectionPhotos(workingSectionPhotos);
+      return {
+        totalErrors: uploadResult.totalErrors,
+        totalUploaded: uploadResult.totalUploaded,
+      };
+    }
+
+    if (intent === "draft" && mode === "create" && !activePoptavkaId) {
+      const saveResult = await saveDraftPoptavkaReturnIdAction(formData);
+      if (!saveResult.ok) {
         setPendingIntent(null);
-        if (intent === "draft") {
-          showDraftValidationError("draft_photo_upload_failed");
-        } else {
-          showSubmitValidationFailure({
-            ok: false,
-            code: "submit_failed",
-            message: resolvePoptavkaFormError("submit_failed"),
-            issues: [
-              {
-                step: 4,
-                code: "submit_failed",
-                label: resolvePoptavkaFormError("submit_failed"),
-              },
-            ],
-          });
-        }
+        showDraftValidationError(saveResult.error);
         return;
+      }
+      activePoptavkaId = saveResult.poptavkaId;
+      if (hasPendingPhotos) {
+        await uploadPendingPhotosForId(activePoptavkaId);
+      }
+      setPendingIntent(null);
+      router.push(`/portal/poptavka/${activePoptavkaId}?saved=1`);
+      router.refresh();
+      return;
+    }
+
+    if (hasPendingPhotos && activePoptavkaId) {
+      const uploadStats = await uploadPendingPhotosForId(activePoptavkaId);
+      if (uploadStats.totalUploaded > 0) {
+        router.refresh();
       }
     }
 
-    if (!pendingUploadedViaClient) {
-      appendPendingSectionPhotos(formData, pendingBySection);
+    if (intent === "submit_klient" && !activePoptavkaId) {
+      const saveResult = await saveDraftPoptavkaReturnIdAction(formData);
+      if (!saveResult.ok) {
+        setPendingIntent(null);
+        showSubmitValidationFailure({
+          ok: false,
+          code: saveResult.error,
+          message: resolvePoptavkaFormError(saveResult.error),
+          issues: [
+            {
+              step: wizardErrorStep(saveResult.error),
+              code: saveResult.error,
+              label: resolvePoptavkaFormError(saveResult.error),
+            },
+          ],
+        });
+        return;
+      }
+      activePoptavkaId = saveResult.poptavkaId;
+      formData.set("poptavka_id", activePoptavkaId);
+      if (hasPendingPhotos) {
+        await uploadPendingPhotosForId(activePoptavkaId);
+        router.refresh();
+      }
     }
 
     try {

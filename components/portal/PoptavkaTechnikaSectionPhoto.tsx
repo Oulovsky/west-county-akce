@@ -1,13 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
-import { uploadPoptavkaFotkyAction } from "@/app/portal/poptavky/actions";
+import { useRef, useState } from "react";
 import {
-  POPTAVKA_FOTKY_MAX_SIZE_BYTES,
-  POPTAVKA_FOTKY_MAX_SIZE_LABEL,
   POPTAVKA_FOTKY_ACCEPT,
+  POPTAVKA_FOTKY_MAX_SIZE_LABEL,
   POPTAVKA_FOTKA_TYP_LABELS,
+  validatePoptavkaPhotoFile,
 } from "@/lib/client-portal/poptavka-fotky-shared";
 import type { TechnikaSectionPhotoKey } from "@/lib/client-portal/poptavka-technika-podminky";
 import type { PoptavkaFotkaTyp } from "@/lib/client-portal/types";
@@ -20,10 +18,12 @@ type SavedFotka = {
   signedUrl: string | null;
 };
 
-type PendingPhoto = {
+export type PendingPhoto = {
   id: string;
   file: File;
   previewUrl: string;
+  status?: "pending" | "uploading" | "failed";
+  errorMessage?: string;
 };
 
 export type SectionPhotoState = {
@@ -33,17 +33,6 @@ export type SectionPhotoState = {
 
 export function emptySectionPhotoState(): SectionPhotoState {
   return { pending: [], saved: [] };
-}
-
-export function appendPendingSectionPhotos(
-  formData: FormData,
-  pendingBySection: Partial<Record<TechnikaSectionPhotoKey, PendingPhoto[]>>
-) {
-  for (const [sectionKey, photos] of Object.entries(pendingBySection)) {
-    for (const photo of photos ?? []) {
-      formData.append(`technicke_foto_${sectionKey}`, photo.file, photo.file.name);
-    }
-  }
 }
 
 export default function PoptavkaTechnikaSectionPhoto({
@@ -65,11 +54,9 @@ export default function PoptavkaTechnikaSectionPhoto({
   state: SectionPhotoState;
   onPendingChange: (next: SectionPhotoState) => void;
 }) {
-  const router = useRouter();
   const captureInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
 
   function addFiles(files: FileList | null) {
     if (!files || readOnly) return;
@@ -77,18 +64,16 @@ export default function PoptavkaTechnikaSectionPhoto({
 
     const nextPending = [...state.pending];
     for (const file of Array.from(files)) {
-      if (!POPTAVKA_FOTKY_ACCEPT.split(",").includes(file.type)) {
-        setError("Povolené formáty: JPG, PNG, WebP.");
-        continue;
-      }
-      if (file.size > POPTAVKA_FOTKY_MAX_SIZE_BYTES) {
-        setError(`Fotka může mít maximálně ${POPTAVKA_FOTKY_MAX_SIZE_LABEL}.`);
+      const validation = validatePoptavkaPhotoFile(file);
+      if (!validation.ok) {
+        setError(validation.message);
         continue;
       }
       nextPending.push({
-        id: `${file.name}-${file.size}-${crypto.randomUUID()}`,
+        id: `${sectionKey}-${file.name}-${file.size}-${crypto.randomUUID()}`,
         file,
         previewUrl: URL.createObjectURL(file),
+        status: "pending",
       });
     }
 
@@ -106,34 +91,9 @@ export default function PoptavkaTechnikaSectionPhoto({
     });
   }
 
-  function uploadPending() {
-    if (!poptavkaId || !state.pending.length || readOnly) return;
-
-    const formData = new FormData();
-    formData.set("poptavka_id", poptavkaId);
-    for (const photo of state.pending) {
-      formData.append("photo_files", photo.file, photo.file.name);
-      formData.append("photo_types", typ);
-      formData.append("photo_descriptions", "");
-    }
-
-    startTransition(async () => {
-      const result = await uploadPoptavkaFotkyAction(formData);
-      if (!result.ok) {
-        setError("Nahrání fotky se nezdařilo.");
-        return;
-      }
-      for (const photo of state.pending) {
-        URL.revokeObjectURL(photo.previewUrl);
-      }
-      onPendingChange({ ...state, pending: [] });
-      router.refresh();
-    });
-  }
-
   const hasPhotos = state.pending.length > 0 || state.saved.length > 0;
   const actionButtonClass =
-    "inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-white/20 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-amber-500/40 hover:bg-white/[0.04]";
+    "inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-amber-500/40 hover:bg-white/[0.04]";
 
   return (
     <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.02] p-3">
@@ -173,16 +133,41 @@ export default function PoptavkaTechnikaSectionPhoto({
 
       {error ? <p className="text-xs text-red-300">{error}</p> : null}
 
-      {(state.pending.length > 0 || state.saved.length > 0) ? (
+      {state.pending.length > 0 || state.saved.length > 0 ? (
         <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
           {state.pending.map((photo) => (
-            <div key={photo.id} className="relative overflow-hidden rounded-lg border border-white/10">
+            <div
+              key={photo.id}
+              className={`relative overflow-hidden rounded-lg border ${
+                photo.status === "failed"
+                  ? "border-red-500/50"
+                  : photo.status === "uploading"
+                    ? "border-amber-500/50"
+                    : "border-white/10"
+              }`}
+            >
               <img
                 src={photo.previewUrl}
                 alt={photo.file.name}
-                className="aspect-square w-full object-cover"
+                className={`aspect-square w-full object-cover ${
+                  photo.status === "uploading" ? "opacity-60" : ""
+                }`}
               />
-              {!readOnly ? (
+              {photo.status === "uploading" ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-[10px] font-semibold text-amber-100">
+                  Ukládám…
+                </div>
+              ) : null}
+              {photo.status === "failed" ? (
+                <div className="absolute inset-x-0 bottom-0 bg-red-950/90 px-1 py-1 text-[10px] leading-tight text-red-100">
+                  {photo.errorMessage ?? "Nepodařilo se uložit"}
+                </div>
+              ) : photo.status === "pending" || !photo.status ? (
+                <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5 text-[10px] text-slate-200">
+                  Čeká na uložení
+                </div>
+              ) : null}
+              {!readOnly && photo.status !== "uploading" ? (
                 <button
                   type="button"
                   onClick={() => removePending(photo.id)}
@@ -195,7 +180,7 @@ export default function PoptavkaTechnikaSectionPhoto({
           ))}
 
           {state.saved.map((fotka) => (
-            <div key={fotka.id} className="overflow-hidden rounded-lg border border-white/10">
+            <div key={fotka.id} className="relative overflow-hidden rounded-lg border border-emerald-500/30">
               {fotka.signedUrl ? (
                 <img
                   src={fotka.signedUrl}
@@ -207,25 +192,17 @@ export default function PoptavkaTechnikaSectionPhoto({
                   Náhled
                 </div>
               )}
+              <div className="absolute inset-x-0 bottom-0 bg-emerald-950/80 px-1 py-0.5 text-[10px] text-emerald-100">
+                Uložená
+              </div>
             </div>
           ))}
         </div>
       ) : null}
 
-      {!readOnly && poptavkaId && state.pending.length > 0 ? (
-        <button
-          type="button"
-          disabled={isPending}
-          onClick={uploadPending}
-          className="mt-2 rounded-lg border border-amber-500/50 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-50 disabled:opacity-60"
-        >
-          {isPending ? "Nahrávám…" : "Nahrát vybrané fotky"}
-        </button>
-      ) : null}
-
       {!readOnly && !poptavkaId && state.pending.length > 0 ? (
         <p className="text-[11px] text-slate-500">
-          Fotky se nahrají po uložení konceptu.
+          Fotky se uloží spolu s konceptem.
         </p>
       ) : null}
 

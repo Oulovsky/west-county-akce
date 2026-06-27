@@ -11,6 +11,7 @@ import {
 import {
   deletePoptavkaFotkaForClient,
   uploadPoptavkaFotkyForClient,
+  uploadPoptavkaFotkyForClientLegacy,
 } from "@/lib/client-portal/poptavka-fotky-server";
 import {
   buildTechnikaRowPayload,
@@ -113,7 +114,7 @@ async function uploadTechnickeSectionPhotosFromFormData(
     return;
   }
 
-  await uploadPoptavkaFotkyForClient(
+  await uploadPoptavkaFotkyForClientLegacy(
     supabase,
     poptavkaId,
     files,
@@ -344,17 +345,18 @@ function readWizardKrok(formData: FormData) {
   return Math.min(4, Math.max(1, Math.floor(step)));
 }
 
-async function saveDraftPoptavkaFromFormData(
+type SaveDraftResult =
+  | { ok: true; poptavkaId: string }
+  | { ok: false; error: string };
+
+async function saveDraftPoptavkaCore(
   supabase: Awaited<ReturnType<typeof createClient>>,
   session: Awaited<ReturnType<typeof requireActiveClientPortalSession>>,
   formData: FormData,
   existingPoptavkaId?: string
-) {
+): Promise<SaveDraftResult> {
   const values = parsePoptavkaFormData(formData);
   const wizardKrok = readWizardKrok(formData);
-  const errorPath = existingPoptavkaId
-    ? `/portal/poptavka/${existingPoptavkaId}`
-    : "/portal/poptavka/nova";
 
   console.info("[poptavka draft] start", {
     poptavkaId: existingPoptavkaId ?? "new",
@@ -368,7 +370,7 @@ async function saveDraftPoptavkaFromFormData(
       poptavkaId: existingPoptavkaId ?? "new",
       code: validationError,
     });
-    redirectWithError(errorPath, validationError);
+    return { ok: false, error: validationError };
   }
 
   const mistoResult = await resolveValidatedMistoIdForSave(supabase, values, { draft: true });
@@ -377,7 +379,7 @@ async function saveDraftPoptavkaFromFormData(
       poptavkaId: existingPoptavkaId ?? "new",
       code: mistoResult.error,
     });
-    redirectWithError(errorPath, mistoResult.error);
+    return { ok: false, error: mistoResult.error };
   }
 
   const setupResult = await resolveSetupsForDraft(supabase, formData);
@@ -391,9 +393,9 @@ async function saveDraftPoptavkaFromFormData(
       poptavkaId: existingPoptavkaId ?? "new",
       code: setupResult.error,
     });
-    redirectWithError(errorPath, setupResult.error);
+    return { ok: false, error: setupResult.error };
   } else {
-    redirectWithError(errorPath, "invalid_setups");
+    return { ok: false, error: "invalid_setups" };
   }
 
   const payload = buildPoptavkaRowPayload(
@@ -406,9 +408,9 @@ async function saveDraftPoptavkaFromFormData(
 
   if (existingPoptavkaId) {
     const detail = await loadPoptavkaDetail(supabase, existingPoptavkaId);
-    if (!detail) redirectWithError("/portal/poptavky", "not_found");
+    if (!detail) return { ok: false, error: "not_found" };
     if (!isPoptavkaEditable(detail)) {
-      redirectWithError(`/portal/poptavka/${existingPoptavkaId}`, "not_editable");
+      return { ok: false, error: "not_editable" };
     }
 
     const { error } = await supabase
@@ -421,16 +423,15 @@ async function saveDraftPoptavkaFromFormData(
         poptavkaId: existingPoptavkaId,
         message: error.message,
       });
-      redirectWithError(`/portal/poptavka/${existingPoptavkaId}`, "draft_save_failed");
+      return { ok: false, error: "draft_save_failed" };
     }
 
     if (draftSetups !== null) {
       await replacePoptavkaSetups(supabase, existingPoptavkaId, draftSetups);
     }
     await upsertTechnickeUdaje(supabase, existingPoptavkaId, formData);
-    await uploadTechnickeSectionPhotosFromFormData(supabase, existingPoptavkaId, formData);
     console.info("[poptavka draft] saved", { poptavkaId: existingPoptavkaId });
-    return existingPoptavkaId;
+    return { ok: true, poptavkaId: existingPoptavkaId };
   }
 
   const cisloPoptavky = await generateCisloPoptavky(supabase);
@@ -450,16 +451,32 @@ async function saveDraftPoptavkaFromFormData(
     console.error("[poptavka draft] db insert failed", {
       message: error?.message ?? "no row returned",
     });
-    redirectWithError("/portal/poptavka/nova", "draft_save_failed");
+    return { ok: false, error: "draft_save_failed" };
   }
 
   if (draftSetups !== null) {
     await replacePoptavkaSetups(supabase, created.poptavka_id, draftSetups);
   }
   await upsertTechnickeUdaje(supabase, created.poptavka_id, formData);
-  await uploadTechnickeSectionPhotosFromFormData(supabase, created.poptavka_id, formData);
   console.info("[poptavka draft] saved", { poptavkaId: created.poptavka_id });
-  return created.poptavka_id;
+  return { ok: true, poptavkaId: created.poptavka_id };
+}
+
+async function saveDraftPoptavkaFromFormData(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  session: Awaited<ReturnType<typeof requireActiveClientPortalSession>>,
+  formData: FormData,
+  existingPoptavkaId?: string
+) {
+  const errorPath = existingPoptavkaId
+    ? `/portal/poptavka/${existingPoptavkaId}`
+    : "/portal/poptavka/nova";
+
+  const result = await saveDraftPoptavkaCore(supabase, session, formData, existingPoptavkaId);
+  if (!result.ok) {
+    redirectWithError(errorPath, result.error);
+  }
+  return result.poptavkaId;
 }
 
 async function persistPoptavkaFromFormData(
@@ -508,7 +525,6 @@ async function persistPoptavkaFromFormData(
 
     await replacePoptavkaSetups(supabase, existingPoptavkaId, setupResult.setupy);
     await upsertTechnickeUdaje(supabase, existingPoptavkaId, formData);
-    await uploadTechnickeSectionPhotosFromFormData(supabase, existingPoptavkaId, formData);
     return existingPoptavkaId;
   }
 
@@ -531,7 +547,6 @@ async function persistPoptavkaFromFormData(
 
   await replacePoptavkaSetups(supabase, created.poptavka_id, setupResult.setupy);
   await upsertTechnickeUdaje(supabase, created.poptavka_id, formData);
-  await uploadTechnickeSectionPhotosFromFormData(supabase, created.poptavka_id, formData);
   return created.poptavka_id;
 }
 
@@ -671,6 +686,29 @@ async function replacePoptavkaSetups(
   }
 }
 
+export async function saveDraftPoptavkaReturnIdAction(formData: FormData): Promise<
+  | { ok: true; poptavkaId: string }
+  | { ok: false; error: string }
+> {
+  const supabase = await createClient();
+  let session;
+  try {
+    session = await requireActiveClientPortalSession(supabase);
+  } catch {
+    return { ok: false, error: "forbidden" };
+  }
+
+  const existingPoptavkaId = String(formData.get("poptavka_id") ?? "").trim() || undefined;
+  const result = await saveDraftPoptavkaCore(supabase, session, formData, existingPoptavkaId);
+  if (!result.ok) {
+    return result;
+  }
+
+  revalidatePath("/portal/poptavky");
+  revalidatePath(`/portal/poptavka/${result.poptavkaId}`);
+  return result;
+}
+
 export async function createPoptavkaAction(formData: FormData) {
   const supabase = await createClient();
   const session = await requireActiveClientPortalSession(supabase);
@@ -727,20 +765,35 @@ export async function uploadPoptavkaFotkyAction(formData: FormData) {
     .filter((value) => value.size > 0);
   const photoTypes = getStringList(formData, "photo_types");
   const photoDescriptions = getStringList(formData, "photo_descriptions");
+  const clientIds = getStringList(formData, "photo_client_ids");
 
   if (files.length === 0) {
     return { ok: false as const, error: "no_files" };
   }
 
-  for (const file of files) {
-    if (!isValidPoptavkaUploadFile(file)) {
-      return { ok: false as const, error: "invalid_type" };
-    }
-  }
-
   try {
-    await uploadPoptavkaFotkyForClient(supabase, poptavkaId, files, photoTypes, photoDescriptions);
-  } catch {
+    const results = await uploadPoptavkaFotkyForClient(
+      supabase,
+      poptavkaId,
+      files,
+      photoTypes,
+      photoDescriptions,
+      clientIds
+    );
+    const uploaded = results.filter((row) => row.ok);
+    const errors = results.filter((row): row is Extract<typeof row, { ok: false }> => !row.ok);
+    if (uploaded.length === 0 && errors.length > 0) {
+      console.warn("[poptavka fotky] action upload all failed", {
+        poptavkaId,
+        codes: errors.map((row) => row.code),
+      });
+      return { ok: false as const, error: errors[0]?.code ?? "upload_failed" };
+    }
+  } catch (error) {
+    console.error("[poptavka fotky] action upload failed", {
+      poptavkaId,
+      message: error instanceof Error ? error.message : "unknown",
+    });
     return { ok: false as const, error: "upload_failed" };
   }
 

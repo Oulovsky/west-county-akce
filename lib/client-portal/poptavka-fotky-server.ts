@@ -6,6 +6,7 @@ import {
   getPoptavkaFotkaExtension,
   isAllowedPoptavkaFotkaTyp,
   resolvePoptavkaPhotoMimeType,
+  validatePoptavkaPhotoFile,
 } from "@/lib/client-portal/poptavka-fotky-shared";
 import type { PoptavkaFotka } from "@/lib/client-portal/types";
 import { POPTAVKA_FOTKY_BUCKET } from "@/lib/client-portal/types";
@@ -49,53 +50,164 @@ export async function loadPoptavkaFotkyWithUrls(
   );
 }
 
+async function signPoptavkaFotkaRow(row: PoptavkaFotka): Promise<PoptavkaFotkaWithUrl> {
+  const admin = createAdminClient();
+  const { data: signed } = await admin.storage
+    .from(row.storage_bucket || POPTAVKA_FOTKY_BUCKET)
+    .createSignedUrl(row.storage_path, 60 * 60);
+  return {
+    ...row,
+    signedUrl: signed?.signedUrl ?? null,
+  };
+}
+
+export type UploadPoptavkaFotkaInput = {
+  file: File;
+  typ: string;
+  popis?: string;
+  clientId?: string;
+};
+
+export type UploadPoptavkaFotkaItemResult =
+  | { ok: true; clientId: string | null; fotka: PoptavkaFotkaWithUrl }
+  | { ok: false; clientId: string | null; code: string; message: string };
+
 export async function uploadPoptavkaFotkyForClient(
+  supabase: SupabaseClient,
+  poptavkaId: string,
+  files: File[],
+  types: string[],
+  descriptions: string[],
+  clientIds?: string[]
+): Promise<UploadPoptavkaFotkaItemResult[]> {
+  const admin = createAdminClient();
+  const results: UploadPoptavkaFotkaItemResult[] = [];
+
+  const { count, error: countError } = await supabase
+    .from("poptavka_fotky")
+    .select("id", { count: "exact", head: true })
+    .eq("poptavka_id", poptavkaId);
+
+  if (countError) {
+    throw new Error(countError.message);
+  }
+
+  let poradi = count ?? 0;
+
+  for (const [index, file] of files.entries()) {
+    const clientId = clientIds?.[index] ?? null;
+    const validation = validatePoptavkaPhotoFile(file);
+    if (!validation.ok) {
+      results.push({
+        ok: false,
+        clientId,
+        code: validation.code,
+        message: validation.message,
+      });
+      continue;
+    }
+
+    const typ = isAllowedPoptavkaFotkaTyp(types[index] ?? "") ? types[index]! : "jina";
+    const mimeType = validation.mimeType;
+    const extension = getPoptavkaFotkaExtension(mimeType);
+    const storagePath = `poptavka/${poptavkaId}/${randomUUID()}.${extension}`;
+
+    try {
+      const body = await file.arrayBuffer();
+      const { error: uploadError } = await admin.storage
+        .from(POPTAVKA_FOTKY_BUCKET)
+        .upload(storagePath, body, {
+          contentType: mimeType,
+          upsert: false,
+        });
+
+      if (uploadError) {
+        console.error("[poptavka fotky] storage upload failed", {
+          poptavkaId,
+          message: uploadError.message,
+        });
+        results.push({
+          ok: false,
+          clientId,
+          code: "storage_upload_failed",
+          message: "Nahrání fotky do úložiště se nezdařilo.",
+        });
+        continue;
+      }
+
+      const metadataRow = {
+        poptavka_id: poptavkaId,
+        storage_bucket: POPTAVKA_FOTKY_BUCKET,
+        storage_path: storagePath,
+        typ,
+        popis: descriptions[index]?.trim() || null,
+        poradi,
+        original_filename: file.name || null,
+        mime_type: mimeType,
+        size_bytes: file.size,
+      };
+      poradi += 1;
+
+      const { data: inserted, error: insertError } = await supabase
+        .from("poptavka_fotky")
+        .insert(metadataRow)
+        .select(
+          "id, poptavka_id, storage_bucket, storage_path, typ, popis, poradi, original_filename, mime_type, size_bytes, created_at"
+        )
+        .single();
+
+      if (insertError || !inserted) {
+        console.error("[poptavka fotky] db insert failed", {
+          poptavkaId,
+          message: insertError?.message ?? "no row",
+        });
+        await admin.storage.from(POPTAVKA_FOTKY_BUCKET).remove([storagePath]);
+        results.push({
+          ok: false,
+          clientId,
+          code: "db_insert_failed",
+          message: "Uložení fotky do databáze se nezdařilo.",
+        });
+        continue;
+      }
+
+      const fotka = await signPoptavkaFotkaRow(inserted as PoptavkaFotka);
+      results.push({ ok: true, clientId, fotka });
+    } catch (error) {
+      console.error("[poptavka fotky] upload item failed", {
+        poptavkaId,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+      results.push({
+        ok: false,
+        clientId,
+        code: "upload_failed",
+        message: "Nahrání fotky se nezdařilo.",
+      });
+    }
+  }
+
+  return results;
+}
+
+/** @deprecated Prefer uploadPoptavkaFotkyForClient s návratovou hodnotou. */
+export async function uploadPoptavkaFotkyForClientLegacy(
   supabase: SupabaseClient,
   poptavkaId: string,
   files: File[],
   types: string[],
   descriptions: string[]
 ) {
-  const admin = createAdminClient();
-  const metadataRows = [];
-
-  for (const [index, file] of files.entries()) {
-    const typ = isAllowedPoptavkaFotkaTyp(types[index] ?? "") ? types[index] : "jina";
-    const mimeType = resolvePoptavkaPhotoMimeType(file) ?? "image/jpeg";
-    const extension = getPoptavkaFotkaExtension(mimeType);
-    const storagePath = `poptavka/${poptavkaId}/${randomUUID()}.${extension}`;
-
-    const { error: uploadError } = await admin.storage
-      .from(POPTAVKA_FOTKY_BUCKET)
-      .upload(storagePath, file, {
-        contentType: mimeType,
-        upsert: false,
-      });
-
-    if (uploadError) {
-      throw new Error(uploadError.message);
-    }
-
-    metadataRows.push({
-      poptavka_id: poptavkaId,
-      storage_bucket: POPTAVKA_FOTKY_BUCKET,
-      storage_path: storagePath,
-      typ,
-      popis: descriptions[index]?.trim() || null,
-      poradi: index,
-      original_filename: file.name || null,
-      mime_type: mimeType || null,
-      size_bytes: file.size,
-    });
-  }
-
-  if (metadataRows.length === 0) {
-    return;
-  }
-
-  const { error: insertError } = await supabase.from("poptavka_fotky").insert(metadataRows);
-  if (insertError) {
-    throw new Error(insertError.message);
+  const results = await uploadPoptavkaFotkyForClient(
+    supabase,
+    poptavkaId,
+    files,
+    types,
+    descriptions
+  );
+  const failed = results.find((row) => !row.ok);
+  if (failed && !failed.ok) {
+    throw new Error(failed.message);
   }
 }
 
@@ -132,3 +244,5 @@ export async function deletePoptavkaFotkaForClient(
     throw new Error(deleteError.message);
   }
 }
+
+export { resolvePoptavkaPhotoMimeType };

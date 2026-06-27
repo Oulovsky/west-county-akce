@@ -1,32 +1,253 @@
-import { uploadPoptavkaFotkyAction } from "@/app/portal/poptavky/actions";
 import { TECHNIKA_SECTION_PHOTOS } from "@/lib/client-portal/poptavka-technika-podminky";
 import type { TechnikaSectionPhotoKey } from "@/lib/client-portal/poptavka-technika-podminky";
+import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-server";
+import type { SectionPhotoState } from "@/components/portal/PoptavkaTechnikaSectionPhoto";
+import { emptySectionPhotoState } from "@/components/portal/PoptavkaTechnikaSectionPhoto";
 
-type PendingSectionPhoto = {
+export type PendingSectionPhoto = {
   id: string;
   file: File;
   previewUrl: string;
+  status?: "pending" | "uploading" | "failed";
+  errorMessage?: string;
 };
+
+export type SectionPhotoUploadItemResult =
+  | { ok: true; clientId: string; fotka: PoptavkaFotkaWithUrl }
+  | { ok: false; clientId: string; code: string; message: string };
+
+export type SectionPhotoUploadResult = {
+  uploaded: Extract<SectionPhotoUploadItemResult, { ok: true }>[];
+  errors: Extract<SectionPhotoUploadItemResult, { ok: false }>[];
+  hadPending: boolean;
+};
+
+export type AllSectionsPhotoUploadResult = {
+  bySection: Partial<Record<TechnikaSectionPhotoKey, SectionPhotoUploadResult>>;
+  totalUploaded: number;
+  totalErrors: number;
+  anyPendingRemaining: boolean;
+};
+
+type UploadApiResponse = {
+  ok: boolean;
+  uploaded?: Array<{ clientId: string | null; fotka: PoptavkaFotkaWithUrl }>;
+  errors?: Array<{ clientId: string | null; code: string; message: string }>;
+  error?: string;
+};
+
+async function uploadSectionPhotosViaApi(
+  poptavkaId: string,
+  sectionKey: TechnikaSectionPhotoKey,
+  typ: string,
+  photos: PendingSectionPhoto[]
+): Promise<SectionPhotoUploadResult> {
+  if (photos.length === 0) {
+    return { uploaded: [], errors: [], hadPending: false };
+  }
+
+  const formData = new FormData();
+  formData.set("poptavka_id", poptavkaId);
+  for (const photo of photos) {
+    formData.append("photo_files", photo.file, photo.file.name);
+    formData.append("photo_types", typ);
+    formData.append("photo_descriptions", "");
+    formData.append("photo_client_ids", photo.id);
+  }
+
+  const response = await fetch("/api/portal/poptavka-fotky/upload", {
+    method: "POST",
+    body: formData,
+  });
+
+  let payload: UploadApiResponse;
+  try {
+    payload = (await response.json()) as UploadApiResponse;
+  } catch {
+    return {
+      hadPending: true,
+      uploaded: [],
+      errors: photos.map((photo) => ({
+        ok: false as const,
+        clientId: photo.id,
+        code: "upload_failed",
+        message: "Nahrání fotky se nezdařilo.",
+      })),
+    };
+  }
+
+  if (!response.ok && !payload.uploaded?.length) {
+    const message =
+      payload.error === "no_files"
+        ? "Soubor se na server nedostal. Zkuste nahrát znovu."
+        : "Nahrání fotky se nezdařilo.";
+    return {
+      hadPending: true,
+      uploaded: [],
+      errors: photos.map((photo) => ({
+        ok: false as const,
+        clientId: photo.id,
+        code: payload.error ?? "upload_failed",
+        message,
+      })),
+    };
+  }
+
+  const uploaded: SectionPhotoUploadResult["uploaded"] = [];
+  const errors: SectionPhotoUploadResult["errors"] = [];
+
+  for (const row of payload.uploaded ?? []) {
+    if (!row.clientId) continue;
+    uploaded.push({ ok: true, clientId: row.clientId, fotka: row.fotka });
+  }
+
+  for (const row of payload.errors ?? []) {
+    if (!row.clientId) continue;
+    errors.push({
+      ok: false,
+      clientId: row.clientId,
+      code: row.code,
+      message: row.message,
+    });
+  }
+
+  const handled = new Set([
+    ...uploaded.map((row) => row.clientId),
+    ...errors.map((row) => row.clientId),
+  ]);
+  for (const photo of photos) {
+    if (handled.has(photo.id)) continue;
+    errors.push({
+      ok: false,
+      clientId: photo.id,
+      code: "upload_failed",
+      message: "Nahrání fotky se nezdařilo.",
+    });
+  }
+
+  return { hadPending: true, uploaded, errors };
+}
 
 export async function uploadPendingSectionPhotosForPoptavka(
   poptavkaId: string,
   pendingBySection: Partial<Record<TechnikaSectionPhotoKey, PendingSectionPhoto[]>>
-) {
-  for (const section of TECHNIKA_SECTION_PHOTOS) {
-    const photos = pendingBySection[section.key];
-    if (!photos?.length) continue;
+): Promise<AllSectionsPhotoUploadResult> {
+  const bySection: Partial<Record<TechnikaSectionPhotoKey, SectionPhotoUploadResult>> = {};
+  let totalUploaded = 0;
+  let totalErrors = 0;
 
-    const formData = new FormData();
-    formData.set("poptavka_id", poptavkaId);
-    for (const photo of photos) {
-      formData.append("photo_files", photo.file, photo.file.name);
-      formData.append("photo_types", section.typ);
-      formData.append("photo_descriptions", "");
+  for (const section of TECHNIKA_SECTION_PHOTOS) {
+    const photos = (pendingBySection[section.key] ?? []).filter(
+      (photo) => photo.status !== "uploading"
+    );
+    if (!photos.length) continue;
+
+    const result = await uploadSectionPhotosViaApi(poptavkaId, section.key, section.typ, photos);
+    bySection[section.key] = result;
+    totalUploaded += result.uploaded.length;
+    totalErrors += result.errors.length;
+  }
+
+  const anyPendingRemaining = Object.values(pendingBySection).some(
+    (photos) => (photos?.length ?? 0) > 0
+  );
+
+  return {
+    bySection,
+    totalUploaded,
+    totalErrors,
+    anyPendingRemaining,
+  };
+}
+
+export function applySectionPhotoUploadResults(
+  current: Partial<Record<TechnikaSectionPhotoKey, SectionPhotoState>>,
+  uploadResults: Partial<Record<TechnikaSectionPhotoKey, SectionPhotoUploadResult>>
+): Partial<Record<TechnikaSectionPhotoKey, SectionPhotoState>> {
+  const next = { ...current };
+
+  for (const section of TECHNIKA_SECTION_PHOTOS) {
+    const result = uploadResults[section.key];
+    if (!result) continue;
+
+    const state = next[section.key] ?? emptySectionPhotoState();
+    const uploadedIds = new Set(result.uploaded.map((row) => row.clientId));
+    const errorByClientId = new Map(
+      result.errors.map((row) => [row.clientId, row.message] as const)
+    );
+
+    const remainingPending = state.pending
+      .filter((photo) => !uploadedIds.has(photo.id))
+      .map((photo) => {
+        const errorMessage = errorByClientId.get(photo.id);
+        if (!errorMessage) return photo;
+        return {
+          ...photo,
+          status: "failed" as const,
+          errorMessage,
+        };
+      });
+
+    for (const photo of state.pending) {
+      if (uploadedIds.has(photo.id)) {
+        URL.revokeObjectURL(photo.previewUrl);
+      }
     }
 
-    const result = await uploadPoptavkaFotkyAction(formData);
-    if (!result.ok) {
-      throw new Error(result.error ?? "upload_failed");
+    const newSaved = result.uploaded.map((row) => ({
+      id: row.fotka.id,
+      typ: row.fotka.typ,
+      popis: row.fotka.popis,
+      original_filename: row.fotka.original_filename,
+      signedUrl: row.fotka.signedUrl,
+    }));
+
+    next[section.key] = {
+      pending: remainingPending,
+      saved: [...state.saved, ...newSaved],
+    };
+  }
+
+  return next;
+}
+
+export function markPendingPhotosUploading(
+  current: Partial<Record<TechnikaSectionPhotoKey, SectionPhotoState>>,
+  pendingBySection: Partial<Record<TechnikaSectionPhotoKey, PendingSectionPhoto[]>>
+): Partial<Record<TechnikaSectionPhotoKey, SectionPhotoState>> {
+  const next = { ...current };
+
+  for (const [key, photos] of Object.entries(pendingBySection)) {
+    if (!photos?.length) continue;
+    const sectionKey = key as TechnikaSectionPhotoKey;
+    const state = next[sectionKey] ?? emptySectionPhotoState();
+    const uploadingIds = new Set(photos.map((photo) => photo.id));
+    next[sectionKey] = {
+      ...state,
+      pending: state.pending.map((photo) =>
+        uploadingIds.has(photo.id)
+          ? { ...photo, status: "uploading" as const, errorMessage: undefined }
+          : photo
+      ),
+    };
+  }
+
+  return next;
+}
+
+export function collectPendingPhotosBySection(
+  sectionPhotos: Partial<Record<TechnikaSectionPhotoKey, SectionPhotoState>>
+): Partial<Record<TechnikaSectionPhotoKey, PendingSectionPhoto[]>> {
+  const pendingBySection: Partial<Record<TechnikaSectionPhotoKey, PendingSectionPhoto[]>> = {};
+
+  for (const [key, state] of Object.entries(sectionPhotos)) {
+    const uploadable = (state?.pending ?? []).filter(
+      (photo) => photo.status !== "uploading"
+    );
+    if (uploadable.length) {
+      pendingBySection[key as TechnikaSectionPhotoKey] = uploadable;
     }
   }
+
+  return pendingBySection;
 }

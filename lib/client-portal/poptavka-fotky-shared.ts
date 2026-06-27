@@ -9,9 +9,12 @@ export const POPTAVKA_FOTKY_ALLOWED_MIME_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp",
+  "image/heic",
+  "image/heif",
 ] as const;
 
-export const POPTAVKA_FOTKY_ACCEPT = POPTAVKA_FOTKY_ALLOWED_MIME_TYPES.join(",");
+export const POPTAVKA_FOTKY_ACCEPT =
+  ".jpg,.jpeg,.png,.webp,.heic,.heif,image/jpeg,image/png,image/webp,image/heic,image/heif";
 
 export const POPTAVKA_FOTKA_TYP_LABELS: Record<PoptavkaFotkaTyp, string> = {
   rozvadec: "Rozvaděč",
@@ -21,6 +24,8 @@ export const POPTAVKA_FOTKA_TYP_LABELS: Record<PoptavkaFotkaTyp, string> = {
   misto_akce: "Místo akce",
   jina: "Jiné",
 };
+
+export type PoptavkaPhotoValidationError = "file_too_large" | "invalid_type" | "empty_file";
 
 export function isAllowedPoptavkaFotkaTyp(value: string): value is PoptavkaFotkaTyp {
   return (POPTAVKA_FOTKA_TYPY as readonly string[]).includes(value);
@@ -35,29 +40,65 @@ export function isFormDataUploadFile(value: FormDataEntryValue): value is File {
   return (
     typeof file.size === "number" &&
     file.size > 0 &&
-    typeof file.arrayBuffer === "function"
+    (typeof file.arrayBuffer === "function" ||
+      typeof file.stream === "function" ||
+      typeof (file as Blob).arrayBuffer === "function")
   );
 }
 
-export function resolvePoptavkaPhotoMimeType(file: File): string | null {
-  if ((POPTAVKA_FOTKY_ALLOWED_MIME_TYPES as readonly string[]).includes(file.type)) {
-    return file.type;
+export function resolvePoptavkaPhotoMimeType(file: Pick<File, "type" | "name">): string | null {
+  const normalizedType = file.type.trim().toLowerCase();
+  if ((POPTAVKA_FOTKY_ALLOWED_MIME_TYPES as readonly string[]).includes(normalizedType)) {
+    return normalizedType;
   }
   const extension = file.name.split(".").pop()?.toLowerCase();
   if (extension === "jpg" || extension === "jpeg") return "image/jpeg";
   if (extension === "png") return "image/png";
   if (extension === "webp") return "image/webp";
+  if (extension === "heic") return "image/heic";
+  if (extension === "heif") return "image/heif";
   return null;
 }
 
+export function validatePoptavkaPhotoFile(
+  file: Pick<File, "type" | "name" | "size">
+):
+  | { ok: true; mimeType: string }
+  | { ok: false; code: PoptavkaPhotoValidationError; message: string } {
+  if (file.size <= 0) {
+    return { ok: false, code: "empty_file", message: "Soubor je prázdný." };
+  }
+  if (file.size > POPTAVKA_FOTKY_MAX_SIZE_BYTES) {
+    return {
+      ok: false,
+      code: "file_too_large",
+      message: "Soubor je větší než 25 MB.",
+    };
+  }
+  const mimeType = resolvePoptavkaPhotoMimeType(file);
+  if (!mimeType) {
+    return {
+      ok: false,
+      code: "invalid_type",
+      message: "Povolené formáty: JPG, PNG, WebP, HEIC.",
+    };
+  }
+  return { ok: true, mimeType };
+}
+
 export function isValidPoptavkaUploadFile(file: File): boolean {
-  return (
-    resolvePoptavkaPhotoMimeType(file) !== null && file.size <= POPTAVKA_FOTKY_MAX_SIZE_BYTES
-  );
+  return validatePoptavkaPhotoFile(file).ok;
 }
 
 export function getPoptavkaFotkaExtension(mimeType: string) {
   if (mimeType === "image/png") return "png";
   if (mimeType === "image/webp") return "webp";
+  if (mimeType === "image/heic" || mimeType === "image/heif") return "heic";
   return "jpg";
+}
+
+export function poptavkaPhotoValidationMessage(code: PoptavkaPhotoValidationError): string {
+  if (code === "file_too_large") return "Soubor je větší než 25 MB.";
+  if (code === "empty_file") return "Soubor je prázdný.";
+  return "Povolené formáty: JPG, PNG, WebP, HEIC.";
 }
