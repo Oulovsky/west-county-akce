@@ -103,11 +103,20 @@ export default function PoptavkaObjednavkaDocument({ data, meta }: Props) {
           {akce.nazevAkce || meta?.nazevAkce || "Objednávka akce"}
         </h1>
         {meta?.cisloPoptavky ? (
-          <p className="mt-2 text-sm text-slate-500">Reference: {meta.cisloPoptavky}</p>
+          <p className="mt-2 text-sm text-slate-500">
+            Reference: {meta.cisloPoptavky}
+            {meta.navrhVerze ? ` · verze ${meta.navrhVerze}` : null}
+          </p>
         ) : null}
       </header>
 
       <div className="space-y-8">
+        {meta?.upravenoOprotiPoptavce ? (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-950">
+            Na základě naší komunikace byly v poptávce provedeny změny.
+          </div>
+        ) : null}
+
         {data.textProKlienta.uvod ? (
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-relaxed text-slate-700">
             {data.textProKlienta.uvod}

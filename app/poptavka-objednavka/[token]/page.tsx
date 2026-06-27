@@ -167,6 +167,8 @@ export default async function PoptavkaObjednavkaTokenPage({ params }: PageProps)
           meta={{
             cisloPoptavky: poptavka.cislo_poptavky,
             nazevAkce: poptavka.misto_nazev ?? snapshot.akce.nazevAkce,
+            navrhVerze: snapshot.meta.navrhVerze ?? null,
+            upravenoOprotiPoptavce: snapshot.meta.upravenoOprotiPoptavce ?? false,
           }}
         />
 

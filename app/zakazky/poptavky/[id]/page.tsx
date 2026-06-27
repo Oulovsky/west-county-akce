@@ -29,12 +29,12 @@ import {
   canAcceptPoptavkaForProcessing,
   canInternalActOnPoptavka,
   canInternalApproveForConvert,
+  canOpenObjednavkaEditor,
   canSendPoptavkaBindingOrder,
   loadInternalPoptavkaDetail,
 } from "@/lib/client-portal/poptavka-internal-server";
 import { loadPoptavkaObjednavkaDraft } from "@/lib/client-portal/poptavka-objednavka-draft-server";
 import { loadActivePoptavkaObjednavkaLink } from "@/lib/client-portal/poptavka-objednavka-link-server";
-import type { PoptavkaStav } from "@/lib/client-portal/types";
 import { SETUP_OBLASTI } from "@/lib/client-portal/types";
 import { createClient } from "@/lib/supabase/server";
 import PoptavkaInboxActions, {
@@ -78,15 +78,6 @@ const SAVED_TO_OUTBOUND_KIND: Partial<
   revision: "revision",
   rejected: "rejected",
 };
-
-function canShowObjednavkaEditorLink(stav: PoptavkaStav) {
-  return (
-    stav === "odeslana" ||
-    stav === "prijata_k_reseni" ||
-    stav === "objednavka_odeslana" ||
-    stav === "objednavka_odmitnuta"
-  );
-}
 
 export default async function ZakazkyPoptavkaDetailPage({
   params,
@@ -158,7 +149,7 @@ export default async function ZakazkyPoptavkaDetailPage({
   const canAccept = canAcceptPoptavkaForProcessing(detail.stav);
   const canApprove = canInternalApproveForConvert(detail.stav);
   const canConvert = canConvertPoptavkaToZakazka(detail);
-  const showObjednavkaLink = canShowObjednavkaEditorLink(detail.stav);
+  const showObjednavkaLink = canOpenObjednavkaEditor(detail.stav);
   const existingObjednavkaDraft = showObjednavkaLink
     ? await loadPoptavkaObjednavkaDraft(supabase, id)
     : null;

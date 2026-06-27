@@ -6,6 +6,7 @@ import {
   INTERNAL_INBOX_POPTAVKA_STAVY,
   INTERNAL_ACTIVE_POPTAVKA_STAVY,
   INTERNAL_REJECTED_POPTAVKA_STAVY,
+  OPEN_OBJEDNAVKA_EDITOR_POPTAVKA_STAVY,
   PENDING_INTERNAL_POPTAVKA_STAVY,
   SEND_BINDING_ORDER_POPTAVKA_STAVY,
 } from "@/lib/client-portal/types";
@@ -199,6 +200,11 @@ export function canInternalFirstReactOnPoptavka(stav: PoptavkaStav) {
 /** Odeslání závazné objednávky klientovi. */
 export function canSendPoptavkaBindingOrder(stav: PoptavkaStav) {
   return (SEND_BINDING_ORDER_POPTAVKA_STAVY as readonly string[]).includes(stav);
+}
+
+/** Otevření editoru / náhledu závazné objednávky (včetně čekání na klienta). */
+export function canOpenObjednavkaEditor(stav: PoptavkaStav) {
+  return (OPEN_OBJEDNAVKA_EDITOR_POPTAVKA_STAVY as readonly string[]).includes(stav);
 }
 
 /** Finální interní schválení k převodu — jen po potvrzení závazné objednávky klientem. */

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { verifyInternalPoptavkyReadPage } from "@/lib/auth/admin-access-server";
 import { loadSessionRolePermissions } from "@/lib/auth/internal-role-access-server";
-import { canSendPoptavkaBindingOrder, loadInternalPoptavkaDetail } from "@/lib/client-portal/poptavka-internal-server";
+import { canSendPoptavkaBindingOrder, canOpenObjednavkaEditor, loadInternalPoptavkaDetail } from "@/lib/client-portal/poptavka-internal-server";
 import {
   formatPoptavkaOutboundForCopy,
   getPortalAppBaseUrl,
@@ -13,19 +13,10 @@ import {
   createOrLoadPoptavkaObjednavkaDraft,
   loadPoptavkaObjednavkaDraft,
 } from "@/lib/client-portal/poptavka-objednavka-draft-server";
-import { buildPoptavkaObjednavkaUrl } from "@/lib/client-portal/poptavka-objednavka-link-server";
-import type { PoptavkaStav } from "@/lib/client-portal/types";
+import { buildPoptavkaObjednavkaUrl, countPoptavkaObjednavkaLinkVersions } from "@/lib/client-portal/poptavka-objednavka-link-server";
 import { createClient } from "@/lib/supabase/server";
 import PoptavkaOutboundMessagePanel from "../../PoptavkaOutboundMessagePanel";
 import PoptavkaObjednavkaDraftEditor from "./PoptavkaObjednavkaDraftEditor";
-
-function canOpenObjednavkaEditor(stav: PoptavkaStav) {
-  return (
-    stav === "odeslana" ||
-    stav === "objednavka_odeslana" ||
-    stav === "objednavka_odmitnuta"
-  );
-}
 
 const ORDER_EMAIL_STATUS_MESSAGES: Record<string, string> = {
   sent: "Klientovi byl odeslán e-mail s odkazem na závaznou objednávku.",
@@ -268,6 +259,8 @@ export default async function PoptavkaObjednavkaEditorPage({
       : null;
 
   const canSend = canSendPoptavkaBindingOrder(detail.stav);
+  const odeslanychVerzi = await countPoptavkaObjednavkaLinkVersions(supabase, poptavkaId);
+  const dalsiNavrhVerze = odeslanychVerzi + 1;
 
   return (
     <div className="space-y-6 p-6">
@@ -332,6 +325,8 @@ export default async function PoptavkaObjednavkaEditorPage({
         readOnly={readOnly}
         canEdit={canEdit}
         canSend={canSend}
+        odeslanychVerzi={odeslanychVerzi}
+        dalsiNavrhVerze={dalsiNavrhVerze}
         saved={resolvedSearchParams?.saved === "1"}
         errorCode={resolvedSearchParams?.error ?? null}
       />

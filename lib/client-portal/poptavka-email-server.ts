@@ -258,6 +258,7 @@ function buildBindingOrderEmailBody(link: string, cisloPoptavky: string) {
   const text = [
     `WEST COUNTY pro Vás připravilo návrh závazné objednávky k poptávce ${cisloPoptavky}.`,
     "",
+    "Součástí návrhu jsou smluvní / obchodní podmínky a technický rozsah služeb.",
     "Prosíme o kontrolu obsahu a závazné potvrzení objednávky v systému.",
     "",
     `Závaznou objednávku potvrďte zde: ${link}`,
@@ -265,8 +266,9 @@ function buildBindingOrderEmailBody(link: string, cisloPoptavky: string) {
 
   const html = `
     <p>WEST COUNTY pro Vás připravilo návrh <strong>závazné objednávky</strong> k poptávce <strong>${escapeHtml(cisloPoptavky)}</strong>.</p>
+    <p>Součástí návrhu jsou <strong>smluvní / obchodní podmínky</strong> a technický rozsah služeb.</p>
     <p>Prosíme o kontrolu obsahu a závazné potvrzení objednávky v systému.</p>
-    <p><a href="${link}">Závazně potvrdit objednávku</a></p>
+    <p><a href="${link}">Závaznou objednávku potvrďte zde</a></p>
   `.trim();
 
   return { text, html };

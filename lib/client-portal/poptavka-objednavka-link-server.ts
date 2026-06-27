@@ -140,9 +140,17 @@ export type PoptavkaObjednavkaDecisionClientResult =
     }
   | { ok: false; errorMessage: string };
 
+export type PoptavkaObjednavkaConfirmAcknowledgements = {
+  readOrder: boolean;
+  agreeTerms: boolean;
+  truthfulness: boolean;
+  acknowledgeExtraCosts: boolean;
+};
+
 export type PoptavkaObjednavkaDecisionRequestMeta = {
   ip?: string | null;
   userAgent?: string | null;
+  acknowledgements?: PoptavkaObjednavkaConfirmAcknowledgements;
 };
 
 const DEFAULT_EXPIRES_IN_DAYS = 30;
@@ -176,6 +184,23 @@ function addDaysIso(days: number, from = new Date()) {
   const expires = new Date(from.getTime());
   expires.setUTCDate(expires.getUTCDate() + days);
   return expires.toISOString();
+}
+
+/** Počet dříve vytvořených verzí (linků) závazné objednávky pro poptávku. */
+export async function countPoptavkaObjednavkaLinkVersions(
+  supabase: SupabaseClient,
+  poptavkaId: string
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("poptavka_objednavka_links")
+    .select("link_id", { count: "exact", head: true })
+    .eq("poptavka_id", poptavkaId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return count ?? 0;
 }
 
 function parseSnapshot(raw: unknown): PoptavkaObjednavkaSnapshot | null {
@@ -472,6 +497,9 @@ export async function createPoptavkaObjednavkaLinkFromDraft(
     fotkaSignedSeconds
   );
 
+  const previousVersionCount = await countPoptavkaObjednavkaLinkVersions(supabase, poptavkaId);
+  const navrhVerze = previousVersionCount + 1;
+
   const snapshot = draftToPoptavkaObjednavkaSnapshot({
     draft: normalizedDraft,
     draftId: draftRow.draft_id,
@@ -479,6 +507,7 @@ export async function createPoptavkaObjednavkaLinkFromDraft(
     meta: {
       poptavkaId,
       cisloPoptavky: poptavka.cislo_poptavky,
+      navrhVerze,
     },
     sources: {
       poptavkaUpdatedAt: (poptavka.updated_at as string | null | undefined) ?? null,
@@ -970,6 +999,20 @@ async function confirmPoptavkaObjednavkaByContext(
     return { ok: false, errorMessage: decisionErrorMessage("state_invalid") };
   }
 
+  const ack = meta.acknowledgements;
+  if (
+    !ack?.readOrder ||
+    !ack?.agreeTerms ||
+    !ack?.truthfulness ||
+    !ack?.acknowledgeExtraCosts
+  ) {
+    return {
+      ok: false,
+      errorMessage:
+        "Pro potvrzení objednávky je nutné zaškrtnout všechna potvrzení níže.",
+    };
+  }
+
   const supabase = createAdminClient();
   const now = new Date().toISOString();
 
@@ -1055,6 +1098,13 @@ async function rejectPoptavkaObjednavkaByContext(
 ): Promise<PoptavkaObjednavkaDecisionClientResult> {
   const { link, poptavka } = context;
   const trimmedReason = reason?.trim() || null;
+
+  if (!trimmedReason) {
+    return {
+      ok: false,
+      errorMessage: "Pro odmítnutí objednávky je nutné uvést důvod.",
+    };
+  }
 
   if (isPoptavkaObjednavkaLinkRejected(link)) {
     return {

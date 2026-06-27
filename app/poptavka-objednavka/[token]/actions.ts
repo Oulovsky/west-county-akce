@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import {
   confirmPoptavkaObjednavkaByToken,
   rejectPoptavkaObjednavkaByToken,
+  type PoptavkaObjednavkaConfirmAcknowledgements,
   type PoptavkaObjednavkaDecisionClientResult,
 } from "@/lib/client-portal/poptavka-objednavka-link-server";
 
@@ -43,10 +44,17 @@ async function runDecision(
   return result;
 }
 
-export async function confirmPoptavkaObjednavkaAction(rawToken: string) {
+export async function confirmPoptavkaObjednavkaAction(
+  rawToken: string,
+  acknowledgements: PoptavkaObjednavkaConfirmAcknowledgements
+) {
+  const requestMeta = await readRequestMeta();
   return runDecision(
     rawToken,
-    confirmPoptavkaObjednavkaByToken(rawToken, await readRequestMeta())
+    confirmPoptavkaObjednavkaByToken(rawToken, {
+      ...requestMeta,
+      acknowledgements,
+    })
   );
 }
 

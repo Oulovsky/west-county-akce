@@ -220,6 +220,7 @@ function emptyPartyBlock(): PartyBlock {
 export function createEmptyPoptavkaObjednavkaDraftData(): PoptavkaObjednavkaDraftData {
   return {
     draftVersion: POPTAVKA_OBJEDNAVKA_DRAFT_DATA_VERSION,
+    upravenoOprotiPoptavce: false,
     klient: emptyPartyBlock(),
     dodavatel: emptyPartyBlock(),
     akce: {
@@ -545,6 +546,7 @@ export function normalizePoptavkaObjednavkaDraftData(
 ): PoptavkaObjednavkaDraftData {
   const draft: PoptavkaObjednavkaDraftData = {
     draftVersion: POPTAVKA_OBJEDNAVKA_DRAFT_DATA_VERSION,
+    upravenoOprotiPoptavce: Boolean(input.upravenoOprotiPoptavce),
     klient: normalizePartyBlock(input.klient),
     dodavatel: normalizePartyBlock(input.dodavatel),
     akce: {
@@ -793,6 +795,8 @@ export function draftToPoptavkaObjednavkaSnapshot(
       poptavkaId: params.meta.poptavkaId,
       cisloPoptavky: params.meta.cisloPoptavky,
       linkId: params.linkId,
+      navrhVerze: params.meta.navrhVerze,
+      upravenoOprotiPoptavce: normalizedDraft.upravenoOprotiPoptavce,
     },
     ...blocks,
     fotky: draftFotkyToSnapshot(normalizedDraft, params.fotkaPublicUrls),

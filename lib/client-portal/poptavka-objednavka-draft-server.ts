@@ -116,8 +116,9 @@ function mergeDraftDataFromJson(raw: unknown): PoptavkaObjednavkaDraftData {
     },
     smluvniPodminky: { ...base.smluvniPodminky, ...src.smluvniPodminky },
     textProKlienta: { ...base.textProKlienta, ...src.textProKlienta },
-    fotky: src.fotky ?? base.fotky,
+    fotky: base.fotky,
     pricing: null,
+    upravenoOprotiPoptavce: Boolean(src.upravenoOprotiPoptavce),
     validationWarnings: [],
   };
 }

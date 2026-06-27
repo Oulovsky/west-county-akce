@@ -101,6 +101,7 @@ export default async function PoptavkaObjednavkaNahledPage({
           meta={{
             cisloPoptavky: detail.cislo_poptavky,
             nazevAkce: detail.misto_nazev,
+            upravenoOprotiPoptavce: draft.draftData.upravenoOprotiPoptavce,
           }}
         />
       </div>

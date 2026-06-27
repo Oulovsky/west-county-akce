@@ -59,8 +59,14 @@ export const PENDING_INTERNAL_POPTAVKA_STAVY: readonly PoptavkaStav[] = [
 
 /** Stavy, ze kterých smí interní tým odeslat závaznou objednávku klientovi. */
 export const SEND_BINDING_ORDER_POPTAVKA_STAVY: readonly PoptavkaStav[] = [
-  "odeslana",
   "prijata_k_reseni",
+  "objednavka_odmitnuta",
+] as const;
+
+/** Stavy, ve kterých smí interní tým otevřít editor / náhled závazné objednávky. */
+export const OPEN_OBJEDNAVKA_EDITOR_POPTAVKA_STAVY: readonly PoptavkaStav[] = [
+  "prijata_k_reseni",
+  "objednavka_odeslana",
   "objednavka_odmitnuta",
 ] as const;
 

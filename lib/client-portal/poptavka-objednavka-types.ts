@@ -153,6 +153,8 @@ export type FotkaSnapshot = {
 
 export type PoptavkaObjednavkaDraftData = {
   draftVersion: typeof POPTAVKA_OBJEDNAVKA_DRAFT_DATA_VERSION;
+  /** Ruční příznak — v dokumentu pro klienta se zobrazí upozornění na změny oproti poptávce. */
+  upravenoOprotiPoptavce: boolean;
   klient: PartyBlock;
   dodavatel: PartyBlock;
   akce: AkceBlock;
@@ -170,6 +172,10 @@ export type PoptavkaObjednavkaSnapshotMeta = {
   poptavkaId: string;
   cisloPoptavky: string;
   linkId: string;
+  /** Pořadí verze návrhu závazné objednávky (1 = první odeslání). */
+  navrhVerze?: number;
+  /** Zda šéf označil změny oproti původní klientské poptávce. */
+  upravenoOprotiPoptavce?: boolean;
 };
 
 export type PoptavkaObjednavkaSnapshotSources = {
@@ -202,7 +208,7 @@ export type DraftToSnapshotParams = {
   draft: PoptavkaObjednavkaDraftData;
   draftId: string;
   linkId: string;
-  meta: Pick<PoptavkaObjednavkaSnapshotMeta, "poptavkaId" | "cisloPoptavky">;
+  meta: Pick<PoptavkaObjednavkaSnapshotMeta, "poptavkaId" | "cisloPoptavky" | "navrhVerze">;
   sources: PoptavkaObjednavkaSnapshotSources;
   fotkaPublicUrls?: Record<string, string | null | undefined>;
   frozenAt?: string;
@@ -235,4 +241,6 @@ export type PoptavkaObjednavkaDocumentData = {
 export type PoptavkaObjednavkaDocumentMeta = {
   cisloPoptavky?: string | null;
   nazevAkce?: string | null;
+  navrhVerze?: number | null;
+  upravenoOprotiPoptavce?: boolean;
 };

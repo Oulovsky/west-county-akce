@@ -36,6 +36,8 @@ type Props = {
   readOnly: boolean;
   canEdit: boolean;
   canSend: boolean;
+  odeslanychVerzi: number;
+  dalsiNavrhVerze: number;
   saved: boolean;
   errorCode: string | null;
 };
@@ -186,6 +188,8 @@ export default function PoptavkaObjednavkaDraftEditor({
   readOnly,
   canEdit,
   canSend,
+  odeslanychVerzi,
+  dalsiNavrhVerze,
   saved,
   errorCode,
 }: Props) {
@@ -199,8 +203,17 @@ export default function PoptavkaObjednavkaDraftEditor({
         <p className="mt-2 text-indigo-200/90">
           Klient zatím nic nevidí. Po odeslání se z návrhu vytvoří zmrazená verze ke schválení.
           Setupy v objednávce jsou konfigurace služeb, ne rezervace konkrétních kusů ze skladu.
+          {odeslanychVerzi > 0
+            ? ` Dříve odeslaných verzí: ${odeslanychVerzi}. Další odeslání bude verze ${dalsiNavrhVerze}.`
+            : ` Při odeslání vznikne verze ${dalsiNavrhVerze}.`}
         </p>
       </div>
+
+      {d.upravenoOprotiPoptavce ? (
+        <p className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">
+          Na základě naší komunikace byly v poptávce provedeny změny.
+        </p>
+      ) : null}
 
       {saved ? (
         <p className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
@@ -234,6 +247,25 @@ export default function PoptavkaObjednavkaDraftEditor({
       <form action={savePoptavkaObjednavkaDraftAction} className="space-y-6">
         <input type="hidden" name="draft_id" value={draftId} />
         <input type="hidden" name="poptavka_id" value={poptavkaId} />
+
+        <Section title="Změny oproti poptávce klienta">
+          <label className="flex items-start gap-3 text-sm text-slate-300">
+            <input
+              type="checkbox"
+              name="upraveno_oproti_poptavce"
+              defaultChecked={d.upravenoOprotiPoptavce}
+              disabled={disabled}
+              className="mt-1 rounded border-slate-600"
+            />
+            <span>
+              V návrhu byly provedeny změny oproti původní poptávce
+              <span className="mt-1 block text-xs text-slate-500">
+                Pokud zaškrtnete, klient uvidí text: „Na základě naší komunikace byly v poptávce
+                provedeny změny.“ Původní klientská poptávka zůstává v systému beze změny.
+              </span>
+            </span>
+          </label>
+        </Section>
 
         <Section title="Klient">
           <PartyFields prefix="klient" party={d.klient} disabled={disabled} />
@@ -442,7 +474,10 @@ export default function PoptavkaObjednavkaDraftEditor({
         </Section>
 
         <Section title="Smluvní podmínky">
-          <div className="space-y-4">
+          <p className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">
+            Text smluvních podmínek je pracovní šablona a musí projít právní kontrolou.
+          </p>
+          <div className="mt-4 space-y-4">
             <TextArea label="Závaznost objednávky" name="smluvni_zavaznost" defaultValue={d.smluvniPodminky.zavaznost} rows={4} disabled={disabled} />
             <TextArea label="Součinnost klienta" name="smluvni_soucinnost" defaultValue={d.smluvniPodminky.soucinnostKlienta} rows={4} disabled={disabled} />
             <TextArea label="Elektro a technické podmínky" name="smluvni_elektro" defaultValue={d.smluvniPodminky.elektroTechnicke} rows={4} disabled={disabled} />
@@ -492,7 +527,7 @@ export default function PoptavkaObjednavkaDraftEditor({
               }}
               className="rounded-xl border border-emerald-500/50 bg-emerald-950/40 px-5 py-2.5 text-sm font-semibold text-emerald-100 hover:bg-emerald-900/50"
             >
-              Odeslat klientovi
+              Odeslat klientovi ke schválení
             </button>
           ) : null}
           <Link

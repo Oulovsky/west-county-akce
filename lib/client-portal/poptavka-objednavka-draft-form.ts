@@ -41,6 +41,7 @@ export function mergeObjednavkaDraftFromFormData(
 ): PoptavkaObjednavkaDraftData {
   return {
     draftVersion: POPTAVKA_OBJEDNAVKA_DRAFT_DATA_VERSION,
+    upravenoOprotiPoptavce: formData.get("upraveno_oproti_poptavce") === "on",
     klient: {
       nazev: nullableField(formData, "klient_nazev"),
       ico: nullableField(formData, "klient_ico"),
