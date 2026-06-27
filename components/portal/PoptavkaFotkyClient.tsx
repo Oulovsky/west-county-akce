@@ -6,11 +6,10 @@ import {
   deletePoptavkaFotkaAction,
   uploadPoptavkaFotkyAction,
 } from "@/app/portal/poptavky/actions";
-import { POPTAVKA_FOTKA_TYP_LABELS } from "@/lib/client-portal/poptavka-fotky-shared";
 import {
   POPTAVKA_FOTKY_ACCEPT,
-  POPTAVKA_FOTKY_MAX_SIZE_BYTES,
-  POPTAVKA_FOTKY_MAX_SIZE_LABEL,
+  POPTAVKA_FOTKA_TYP_LABELS,
+  validatePoptavkaPhotoFile,
 } from "@/lib/client-portal/poptavka-fotky-shared";
 import type { PoptavkaFotkaTyp } from "@/lib/client-portal/types";
 import { POPTAVKA_FOTKA_TYPY } from "@/lib/client-portal/types";
@@ -32,8 +31,7 @@ type PendingPhoto = {
 };
 
 const UPLOAD_ERRORS: Record<string, string> = {
-  invalid_type: "Povolené formáty: JPG, PNG, WebP.",
-  file_too_large: `Jedna fotka může mít maximálně ${POPTAVKA_FOTKY_MAX_SIZE_LABEL}.`,
+  invalid_type: "Povolené formáty: JPG, PNG, WebP, HEIC.",
   upload_failed: "Nahrání fotek se nezdařilo.",
   no_files: "Vyberte alespoň jednu fotku.",
   not_editable: "Poptávku už nelze upravovat.",
@@ -63,12 +61,9 @@ export default function PoptavkaFotkyClient({
 
     const next: PendingPhoto[] = [];
     for (const file of Array.from(files)) {
-      if (!POPTAVKA_FOTKY_ACCEPT.split(",").includes(file.type)) {
-        setError(UPLOAD_ERRORS.invalid_type);
-        continue;
-      }
-      if (file.size > POPTAVKA_FOTKY_MAX_SIZE_BYTES) {
-        setError(UPLOAD_ERRORS.file_too_large);
+      const validation = validatePoptavkaPhotoFile(file);
+      if (!validation.ok) {
+        setError(validation.message);
         continue;
       }
       next.push({
@@ -142,9 +137,7 @@ export default function PoptavkaFotkyClient({
       <div>
         <h2 className="text-lg font-semibold text-white">5. Fotografie místa</h2>
         <p className="mt-1 text-sm text-slate-400">
-          Přiložte fotky rozvaděče, příjezdu, plochy pro stage nebo místa akce. Max.{" "}
-          {POPTAVKA_FOTKY_MAX_SIZE_LABEL} na
-          soubor.
+          Přiložte fotky rozvaděče, příjezdu, plochy pro stage nebo místa akce.
         </p>
       </div>
 

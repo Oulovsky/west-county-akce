@@ -190,27 +190,6 @@ export async function uploadPoptavkaFotkyForClient(
   return results;
 }
 
-/** @deprecated Prefer uploadPoptavkaFotkyForClient s návratovou hodnotou. */
-export async function uploadPoptavkaFotkyForClientLegacy(
-  supabase: SupabaseClient,
-  poptavkaId: string,
-  files: File[],
-  types: string[],
-  descriptions: string[]
-) {
-  const results = await uploadPoptavkaFotkyForClient(
-    supabase,
-    poptavkaId,
-    files,
-    types,
-    descriptions
-  );
-  const failed = results.find((row) => !row.ok);
-  if (failed && !failed.ok) {
-    throw new Error(failed.message);
-  }
-}
-
 export async function deletePoptavkaFotkaForClient(
   supabase: SupabaseClient,
   poptavkaId: string,

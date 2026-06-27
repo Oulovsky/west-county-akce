@@ -487,12 +487,17 @@ export function validateTechnikVyjezdOrderComplete(input: {
 }
 
 export function countSectionPhotos(
-  sectionPhotos: Partial<Record<string, { pending: unknown[]; saved: unknown[] }>>
+  sectionPhotos: Partial<
+    Record<string, { pending: { status?: string }[]; saved: unknown[] }>
+  >
 ): SectionPhotoCounts {
   const counts: SectionPhotoCounts = {};
   for (const key of REQUIRED_SECTION_PHOTO_KEYS) {
     const state = sectionPhotos[key];
-    counts[key] = (state?.pending.length ?? 0) + (state?.saved.length ?? 0);
+    const pendingCount = (state?.pending ?? []).filter(
+      (photo) => photo.status !== "failed"
+    ).length;
+    counts[key] = (state?.saved.length ?? 0) + pendingCount;
   }
   return counts;
 }

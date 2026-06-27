@@ -6,12 +6,11 @@ import { redirect } from "next/navigation";
 import { requireActiveClientPortalSession } from "@/lib/auth/client-portal-access-server";
 import {
   isFormDataUploadFile,
-  isValidPoptavkaUploadFile,
+  stripFilesFromFormData,
 } from "@/lib/client-portal/poptavka-fotky-shared";
 import {
   deletePoptavkaFotkaForClient,
   uploadPoptavkaFotkyForClient,
-  uploadPoptavkaFotkyForClientLegacy,
 } from "@/lib/client-portal/poptavka-fotky-server";
 import {
   buildTechnikaRowPayload,
@@ -84,43 +83,6 @@ function validateTechnickeForSave(formData: FormData, errorPath: string) {
   if (technickeError) {
     redirectWithError(errorPath, technickeError);
   }
-}
-
-async function uploadTechnickeSectionPhotosFromFormData(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  poptavkaId: string,
-  formData: FormData
-) {
-  const files: File[] = [];
-  const photoTypes: string[] = [];
-  let rejectedEntries = 0;
-
-  for (const sectionKey of TECHNIKA_SECTION_PHOTO_KEYS) {
-    for (const value of formData.getAll(`technicke_foto_${sectionKey}`)) {
-      if (!isFormDataUploadFile(value)) continue;
-      if (!isValidPoptavkaUploadFile(value)) {
-        rejectedEntries += 1;
-        continue;
-      }
-      files.push(value);
-      photoTypes.push(sectionKey);
-    }
-  }
-
-  if (files.length === 0) {
-    if (rejectedEntries > 0) {
-      throw new Error("Invalid section photo upload");
-    }
-    return;
-  }
-
-  await uploadPoptavkaFotkyForClientLegacy(
-    supabase,
-    poptavkaId,
-    files,
-    photoTypes,
-    photoTypes.map(() => "")
-  );
 }
 
 async function finalizePoptavkaSubmission(
@@ -355,6 +317,7 @@ async function saveDraftPoptavkaCore(
   formData: FormData,
   existingPoptavkaId?: string
 ): Promise<SaveDraftResult> {
+  formData = stripFilesFromFormData(formData);
   const values = parsePoptavkaFormData(formData);
   const wizardKrok = readWizardKrok(formData);
 
@@ -485,6 +448,7 @@ async function persistPoptavkaFromFormData(
   formData: FormData,
   existingPoptavkaId?: string
 ) {
+  formData = stripFilesFromFormData(formData);
   const values = parsePoptavkaFormData(formData);
   const wizardKrok = readWizardKrok(formData);
   const errorPath = existingPoptavkaId
@@ -552,20 +516,13 @@ async function persistPoptavkaFromFormData(
 
 async function countSectionPhotosForSubmit(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  poptavkaId: string,
-  formData: FormData
+  poptavkaId: string
 ) {
   const detail = await loadPoptavkaDetail(supabase, poptavkaId);
   const counts: Partial<Record<TechnikaSectionPhotoKey, number>> = {};
 
   for (const key of TECHNIKA_SECTION_PHOTO_KEYS) {
-    const saved =
-      detail?.fotky.filter((row) => row.typ === key).length ?? 0;
-    const pending = formData
-      .getAll(`technicke_foto_${key}`)
-      .filter(isFormDataUploadFile)
-      .filter((value) => value.size > 0).length;
-    counts[key] = saved + pending;
+    counts[key] = detail?.fotky.filter((row) => row.typ === key).length ?? 0;
   }
 
   return counts;
@@ -825,6 +782,7 @@ export async function deletePoptavkaFotkaAction(formData: FormData) {
 }
 
 export async function submitKlientPoptavkaAction(formData: FormData) {
+  formData = stripFilesFromFormData(formData);
   const supabase = await createClient();
   const session = await requireActiveClientPortalSession(supabase);
 
@@ -852,14 +810,7 @@ export async function submitKlientPoptavkaAction(formData: FormData) {
 
   let photoCounts: Partial<Record<TechnikaSectionPhotoKey, number>> = {};
   if (existingPoptavkaId) {
-    photoCounts = await countSectionPhotosForSubmit(supabase, existingPoptavkaId, formData);
-  } else {
-    for (const key of TECHNIKA_SECTION_PHOTO_KEYS) {
-      photoCounts[key] = formData
-        .getAll(`technicke_foto_${key}`)
-        .filter(isFormDataUploadFile)
-        .filter((value) => value.size > 0).length;
-    }
+    photoCounts = await countSectionPhotosForSubmit(supabase, existingPoptavkaId);
   }
 
   const validationInput = {
@@ -895,7 +846,7 @@ export async function submitKlientPoptavkaAction(formData: FormData) {
 
   console.info("[poptavka submit] persisted", { poptavkaId });
 
-  photoCounts = await countSectionPhotosForSubmit(supabase, poptavkaId, formData);
+  photoCounts = await countSectionPhotosForSubmit(supabase, poptavkaId);
   const photoRecheck = validateKlientSubmitComplete({
     form: values,
     sestava,
@@ -948,6 +899,7 @@ export async function submitPoptavkaAction(formData: FormData) {
 }
 
 export async function orderTechnikVyjezdAndSubmitPoptavkaAction(formData: FormData) {
+  formData = stripFilesFromFormData(formData);
   const supabase = await createClient();
   const session = await requireActiveClientPortalSession(supabase);
 

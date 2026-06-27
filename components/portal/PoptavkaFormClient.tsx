@@ -18,6 +18,7 @@ import {
   markPendingPhotosUploading,
   uploadPendingSectionPhotosForPoptavka,
 } from "@/lib/client-portal/poptavka-section-photo-upload-client";
+import { stripFilesFromFormData } from "@/lib/client-portal/poptavka-fotky-shared";
 import PoptavkaGpsLocationPanel from "@/components/portal/PoptavkaGpsLocationPanel";
 import {
   formatCoordsFallbackLabel,
@@ -177,6 +178,7 @@ export default function PoptavkaFormClient({
     Partial<Record<TechnikaSectionPhotoKey, SectionPhotoState>>
   >(() => createInitialSectionPhotos(initialFotky));
 
+  const urlPhotosFailed = searchParams.get("photos_failed") === "1";
   const showSaveActions = !readOnly;
 
   const [form, setForm] = useState<PoptavkaFormValues>({
@@ -663,7 +665,7 @@ export default function PoptavkaFormClient({
 
     clearUrlError();
 
-    const formData = new FormData(event.currentTarget);
+    const formData = stripFilesFromFormData(new FormData(event.currentTarget));
     formData.set("wizard_step", String(step));
     formData.set("sestava_konfigurator_json", sestavaJson);
     formData.set("setupy_json", setupyJson);
@@ -747,20 +749,41 @@ export default function PoptavkaFormClient({
         return;
       }
       activePoptavkaId = saveResult.poptavkaId;
+      let photosFailed = false;
       if (hasPendingPhotos) {
-        await uploadPendingPhotosForId(activePoptavkaId);
+        const uploadStats = await uploadPendingPhotosForId(activePoptavkaId);
+        photosFailed = uploadStats.totalErrors > 0;
       }
       setPendingIntent(null);
-      router.push(`/portal/poptavka/${activePoptavkaId}?saved=1`);
+      router.push(
+        `/portal/poptavka/${activePoptavkaId}?saved=1${photosFailed ? "&photos_failed=1" : ""}`
+      );
       router.refresh();
       return;
     }
 
-    if (hasPendingPhotos && activePoptavkaId) {
+    let draftPhotosFailed = false;
+    if (intent === "draft" && activePoptavkaId && hasPendingPhotos) {
       const uploadStats = await uploadPendingPhotosForId(activePoptavkaId);
+      draftPhotosFailed = uploadStats.totalErrors > 0;
       if (uploadStats.totalUploaded > 0) {
         router.refresh();
       }
+    }
+
+    if (intent === "draft") {
+      const saveResult = await saveDraftPoptavkaReturnIdAction(formData);
+      if (!saveResult.ok) {
+        setPendingIntent(null);
+        showDraftValidationError(saveResult.error);
+        return;
+      }
+      setPendingIntent(null);
+      router.push(
+        `/portal/poptavka/${saveResult.poptavkaId}?saved=1${draftPhotosFailed ? "&photos_failed=1" : ""}`
+      );
+      router.refresh();
+      return;
     }
 
     if (intent === "submit_klient" && !activePoptavkaId) {
@@ -787,22 +810,25 @@ export default function PoptavkaFormClient({
         await uploadPendingPhotosForId(activePoptavkaId);
         router.refresh();
       }
+    } else if (
+      (intent === "submit_klient" || intent === "order_technik_vyjezd") &&
+      activePoptavkaId &&
+      hasPendingPhotos
+    ) {
+      await uploadPendingPhotosForId(activePoptavkaId);
+      router.refresh();
     }
 
     try {
       if (intent === "order_technik_vyjezd") {
         await orderTechnikVyjezdAndSubmitPoptavkaAction(formData);
-      } else if (intent === "submit_klient") {
-        await submitKlientPoptavkaAction(formData);
       } else {
-        await formAction(formData);
+        await submitKlientPoptavkaAction(formData);
       }
     } catch (error) {
       rethrowIfNextRedirect(error);
       setPendingIntent(null);
-      if (intent === "draft") {
-        showDraftValidationError("save_failed");
-      } else if (intent === "submit_klient") {
+      if (intent === "submit_klient") {
         showSubmitValidationFailure({
           ok: false,
           code: "submit_failed",
@@ -863,9 +889,14 @@ export default function PoptavkaFormClient({
             se s vámi ohledně termínu výjezdu podle uvedených kontaktních údajů.
           </p>
         ) : null}
-        {saved ? (
+        {saved && !urlPhotosFailed ? (
           <p className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
             Poptávka byla uložena jako koncept.
+          </p>
+        ) : null}
+        {saved && urlPhotosFailed ? (
+          <p className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            Text konceptu byl uložen, ale fotky nejsou uložené.
           </p>
         ) : null}
         {showDraftErrorBox && activeDraftErrorCode ? (

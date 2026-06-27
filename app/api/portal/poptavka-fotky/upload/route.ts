@@ -12,6 +12,8 @@ function getStringList(formData: FormData, name: string) {
   return formData.getAll(name).map((value) => String(value ?? "").trim());
 }
 
+export const maxDuration = 300;
+
 export async function POST(request: Request) {
   const supabase = await createClient();
 

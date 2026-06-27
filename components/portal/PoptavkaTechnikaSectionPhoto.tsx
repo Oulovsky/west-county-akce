@@ -3,7 +3,6 @@
 import { useRef, useState } from "react";
 import {
   POPTAVKA_FOTKY_ACCEPT,
-  POPTAVKA_FOTKY_MAX_SIZE_LABEL,
   POPTAVKA_FOTKA_TYP_LABELS,
   validatePoptavkaPhotoFile,
 } from "@/lib/client-portal/poptavka-fotky-shared";
@@ -127,7 +126,6 @@ export default function PoptavkaTechnikaSectionPhoto({
               event.currentTarget.value = "";
             }}
           />
-          <p className="w-full text-[11px] text-slate-500">Max. {POPTAVKA_FOTKY_MAX_SIZE_LABEL} na soubor.</p>
         </div>
       ) : null}
 

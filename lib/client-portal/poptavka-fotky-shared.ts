@@ -1,10 +1,6 @@
 import type { PoptavkaFotkaTyp } from "@/lib/client-portal/types";
 import { POPTAVKA_FOTKA_TYPY } from "@/lib/client-portal/types";
 
-export const POPTAVKA_FOTKY_MAX_SIZE_BYTES = 25 * 1024 * 1024;
-
-export const POPTAVKA_FOTKY_MAX_SIZE_LABEL = "25 MB";
-
 export const POPTAVKA_FOTKY_ALLOWED_MIME_TYPES = [
   "image/jpeg",
   "image/png",
@@ -25,7 +21,7 @@ export const POPTAVKA_FOTKA_TYP_LABELS: Record<PoptavkaFotkaTyp, string> = {
   jina: "Jiné",
 };
 
-export type PoptavkaPhotoValidationError = "file_too_large" | "invalid_type" | "empty_file";
+export type PoptavkaPhotoValidationError = "invalid_type" | "empty_file";
 
 export function isAllowedPoptavkaFotkaTyp(value: string): value is PoptavkaFotkaTyp {
   return (POPTAVKA_FOTKA_TYPY as readonly string[]).includes(value);
@@ -44,6 +40,16 @@ export function isFormDataUploadFile(value: FormDataEntryValue): value is File {
       typeof file.stream === "function" ||
       typeof (file as Blob).arrayBuffer === "function")
   );
+}
+
+/** Odstraní všechny File/Blob položky — hlavní formulář nesmí posílat fotky. */
+export function stripFilesFromFormData(formData: FormData): FormData {
+  const clean = new FormData();
+  for (const [key, value] of formData.entries()) {
+    if (isFormDataUploadFile(value)) continue;
+    clean.append(key, value);
+  }
+  return clean;
 }
 
 export function resolvePoptavkaPhotoMimeType(file: Pick<File, "type" | "name">): string | null {
@@ -68,13 +74,6 @@ export function validatePoptavkaPhotoFile(
   if (file.size <= 0) {
     return { ok: false, code: "empty_file", message: "Soubor je prázdný." };
   }
-  if (file.size > POPTAVKA_FOTKY_MAX_SIZE_BYTES) {
-    return {
-      ok: false,
-      code: "file_too_large",
-      message: "Soubor je větší než 25 MB.",
-    };
-  }
   const mimeType = resolvePoptavkaPhotoMimeType(file);
   if (!mimeType) {
     return {
@@ -98,7 +97,6 @@ export function getPoptavkaFotkaExtension(mimeType: string) {
 }
 
 export function poptavkaPhotoValidationMessage(code: PoptavkaPhotoValidationError): string {
-  if (code === "file_too_large") return "Soubor je větší než 25 MB.";
   if (code === "empty_file") return "Soubor je prázdný.";
   return "Povolené formáty: JPG, PNG, WebP, HEIC.";
 }
