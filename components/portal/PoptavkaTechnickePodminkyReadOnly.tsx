@@ -1,5 +1,6 @@
 import {
   TECHNICKE_REZIM_LABELS,
+  TECHNIKA_SECTION_PHOTOS,
   VYJEZD_CENIK_LINES,
   technickeRezimFromRecord,
   formatTechnickePotvrzeni,
@@ -15,6 +16,7 @@ import {
   formatElektroZdrojTyp,
   formatPripojkyCounts,
   formatStagePripojkaRezim,
+  formatPrijezdAzKeStage,
   formatTriVolba,
   technikaFromRecord,
 } from "@/lib/client-portal/poptavka-technika-form";
@@ -109,10 +111,10 @@ export default function PoptavkaTechnickePodminkyReadOnly({
               technika.elektro_vzdalenost_m ? `${technika.elektro_vzdalenost_m} m` : null
             }
           />
-          <ReadOnlyField label="Příjezd" value={technika.prijezd_poznamka} />
+          <ReadOnlyField label="Příjezd — poznámka" value={technika.prijezd_poznamka} />
           <ReadOnlyField
-            label="Lze zajet dodávkou"
-            value={formatTriVolba(String(extra.lze_zajet_autem ?? ""))}
+            label="Příjezd až k místu stavby stage"
+            value={formatPrijezdAzKeStage(technika, extra)}
           />
           <ReadOnlyField
             label="Vzdálenost od vykládky"
@@ -201,31 +203,44 @@ export default function PoptavkaTechnickePodminkyReadOnly({
       ) : null}
 
       {fotky.length > 0 ? (
-        <div className="space-y-2">
+        <div className="space-y-4">
           <h3 className="text-sm font-semibold text-slate-300">Fotodokumentace sekcí</h3>
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {fotky.map((fotka) => (
-              <li
-                key={fotka.id}
-                className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.02]"
-              >
-                {fotka.signedUrl ? (
-                  <img
-                    src={fotka.signedUrl}
-                    alt={fotka.original_filename ?? POPTAVKA_FOTKA_TYP_LABELS[fotka.typ]}
-                    className="aspect-[4/3] w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex aspect-[4/3] items-center justify-center text-sm text-slate-500">
-                    Náhled nedostupný
-                  </div>
-                )}
-                <div className="px-3 py-2 text-xs text-slate-400">
-                  {POPTAVKA_FOTKA_TYP_LABELS[fotka.typ]}
-                </div>
-              </li>
-            ))}
-          </ul>
+          {TECHNIKA_SECTION_PHOTOS.map((section) => {
+            const sectionFotky = fotky.filter((fotka) => fotka.typ === section.typ);
+            if (sectionFotky.length === 0) return null;
+            return (
+              <div key={section.key} className="space-y-2">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {section.label}
+                </h4>
+                <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {sectionFotky.map((fotka) => (
+                    <li
+                      key={fotka.id}
+                      className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.02]"
+                    >
+                      {fotka.signedUrl ? (
+                        <img
+                          src={fotka.signedUrl}
+                          alt={fotka.original_filename ?? POPTAVKA_FOTKA_TYP_LABELS[fotka.typ]}
+                          className="aspect-[4/3] w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex aspect-[4/3] items-center justify-center text-sm text-slate-500">
+                          Náhled nedostupný
+                        </div>
+                      )}
+                      {fotka.original_filename ? (
+                        <div className="truncate px-3 py-2 text-xs text-slate-400">
+                          {fotka.original_filename}
+                        </div>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <p className="text-sm text-slate-500">K technickým sekcím nejsou připojené fotky.</p>

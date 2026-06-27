@@ -10,6 +10,7 @@ import { POPTAVKA_FOTKA_TYP_LABELS } from "@/lib/client-portal/poptavka-fotky-sh
 import {
   POPTAVKA_FOTKY_ACCEPT,
   POPTAVKA_FOTKY_MAX_SIZE_BYTES,
+  POPTAVKA_FOTKY_MAX_SIZE_LABEL,
 } from "@/lib/client-portal/poptavka-fotky-shared";
 import type { PoptavkaFotkaTyp } from "@/lib/client-portal/types";
 import { POPTAVKA_FOTKA_TYPY } from "@/lib/client-portal/types";
@@ -32,7 +33,7 @@ type PendingPhoto = {
 
 const UPLOAD_ERRORS: Record<string, string> = {
   invalid_type: "Povolené formáty: JPG, PNG, WebP.",
-  file_too_large: "Jedna fotka může mít maximálně 10 MB.",
+  file_too_large: `Jedna fotka může mít maximálně ${POPTAVKA_FOTKY_MAX_SIZE_LABEL}.`,
   upload_failed: "Nahrání fotek se nezdařilo.",
   no_files: "Vyberte alespoň jednu fotku.",
   not_editable: "Poptávku už nelze upravovat.",
@@ -141,7 +142,8 @@ export default function PoptavkaFotkyClient({
       <div>
         <h2 className="text-lg font-semibold text-white">5. Fotografie místa</h2>
         <p className="mt-1 text-sm text-slate-400">
-          Přiložte fotky rozvaděče, příjezdu, plochy pro stage nebo místa akce. Max. 10 MB na
+          Přiložte fotky rozvaděče, příjezdu, plochy pro stage nebo místa akce. Max.{" "}
+          {POPTAVKA_FOTKY_MAX_SIZE_LABEL} na
           soubor.
         </p>
       </div>

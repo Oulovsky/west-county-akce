@@ -164,6 +164,7 @@ export type Poptavka = {
   vice_denni: boolean;
   typ_akce: string | null;
   typ_akce_poznamka: string | null;
+  wizard_krok: number | null;
   stavba_datum: string | null;
   stavba_cas_od: string | null;
   stavba_cas_do: string | null;

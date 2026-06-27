@@ -16,6 +16,10 @@ export type PoptavkaTechnikaFormValues = {
   pripojky_125a_count: string;
   stage_pripojka_rezim: StagePripojkaRezim | "";
   prijezd_poznamka: string;
+  prijezd_az_ke_stage: string;
+  prijezd_dodavka_35t: boolean;
+  prijezd_nakladni_12t: boolean;
+  prijezd_vzdalenost_od_stage_m: string;
   parkovani_poznamka: string;
   rozvadece_poznamka: string;
   elektro_pripojka: string;
@@ -55,6 +59,10 @@ export const EMPTY_POPTAVKA_TECHNIKA: PoptavkaTechnikaFormValues = {
   pripojky_125a_count: "",
   stage_pripojka_rezim: "",
   prijezd_poznamka: "",
+  prijezd_az_ke_stage: "",
+  prijezd_dodavka_35t: false,
+  prijezd_nakladni_12t: false,
+  prijezd_vzdalenost_od_stage_m: "",
   parkovani_poznamka: "",
   rozvadece_poznamka: "",
   elektro_pripojka: "",
@@ -203,6 +211,15 @@ export function technikaFromRecord(
       row.pripojky_125a_count != null ? String(row.pripojky_125a_count) : "",
     stage_pripojka_rezim: stagePripojka,
     prijezd_poznamka: row.prijezd_poznamka ?? "",
+    prijezd_az_ke_stage:
+      normalizeLegacyAnoNe(extra.prijezd_az_ke_stage) ||
+      normalizeLegacyAnoNe(extra.lze_zajet_autem),
+    prijezd_dodavka_35t: Boolean(extra.prijezd_dodavka_35t),
+    prijezd_nakladni_12t: Boolean(extra.prijezd_nakladni_12t),
+    prijezd_vzdalenost_od_stage_m:
+      extra.prijezd_vzdalenost_od_stage_m != null
+        ? String(extra.prijezd_vzdalenost_od_stage_m)
+        : "",
     parkovani_poznamka: row.parkovani_poznamka ?? "",
     rozvadece_poznamka: row.rozvadece_poznamka ?? "",
     elektro_pripojka: row.elektro_pripojka ?? "",
@@ -247,6 +264,12 @@ export function parseTechnikaFormData(formData: FormData): PoptavkaTechnikaFormV
     pripojky_125a_count: String(formData.get("pripojky_125a_count") ?? "").trim(),
     stage_pripojka_rezim: parseStagePripojka(formData.get("stage_pripojka_rezim")),
     prijezd_poznamka: String(formData.get("prijezd_poznamka") ?? "").trim(),
+    prijezd_az_ke_stage: parseAnoNe(formData.get("prijezd_az_ke_stage")),
+    prijezd_dodavka_35t: formData.get("prijezd_dodavka_35t") === "on",
+    prijezd_nakladni_12t: formData.get("prijezd_nakladni_12t") === "on",
+    prijezd_vzdalenost_od_stage_m: String(
+      formData.get("prijezd_vzdalenost_od_stage_m") ?? ""
+    ).trim(),
     parkovani_poznamka: String(formData.get("parkovani_poznamka") ?? "").trim(),
     rozvadece_poznamka: String(formData.get("rozvadece_poznamka") ?? "").trim(),
     elektro_pripojka: String(formData.get("elektro_pripojka") ?? "").trim(),
@@ -315,7 +338,11 @@ export function buildTechnikaRowPayload(
       rezim === "vyjezd_technika" && values.technicke_potvrzeni_vyjezd_ceny ? now : null,
     rizika: [],
     odpovedi_extra: {
-      lze_zajet_autem: values.lze_zajet_autem || null,
+      prijezd_az_ke_stage: values.prijezd_az_ke_stage || null,
+      prijezd_dodavka_35t: values.prijezd_dodavka_35t,
+      prijezd_nakladni_12t: values.prijezd_nakladni_12t,
+      prijezd_vzdalenost_od_stage_m: toOptionalNumber(values.prijezd_vzdalenost_od_stage_m),
+      lze_zajet_autem: values.prijezd_az_ke_stage || values.lze_zajet_autem || null,
       misto_zpevnene: values.misto_zpevnene || null,
       kabel_pres_silnici: values.kabel_pres_silnici || null,
       vzdalenost_vykladka_stage: nullable(values.vzdalenost_vykladka_stage),
@@ -331,6 +358,42 @@ export function formatTriVolba(value: string | null | undefined) {
   if (value === "ano") return "Ano";
   if (value === "ne") return "Ne";
   return value || "—";
+}
+
+export function formatPrijezdAzKeStage(
+  technika: PoptavkaTechnikaFormValues,
+  extra?: Record<string, unknown> | null
+) {
+  const volba =
+    technika.prijezd_az_ke_stage ||
+    (extra?.prijezd_az_ke_stage === "ano" || extra?.prijezd_az_ke_stage === "ne"
+      ? String(extra.prijezd_az_ke_stage)
+      : "") ||
+    (extra?.lze_zajet_autem === "ano" || extra?.lze_zajet_autem === "ne"
+      ? String(extra.lze_zajet_autem)
+      : "");
+
+  if (volba === "ano") {
+    const vehicles: string[] = [];
+    if (technika.prijezd_dodavka_35t || extra?.prijezd_dodavka_35t) {
+      vehicles.push("dodávka do 3,5 t");
+    }
+    if (technika.prijezd_nakladni_12t || extra?.prijezd_nakladni_12t) {
+      vehicles.push("nákladní vozidlo 12 t");
+    }
+    return vehicles.length ? `Ano — ${vehicles.join(", ")}` : "Ano";
+  }
+
+  if (volba === "ne") {
+    const distance =
+      technika.prijezd_vzdalenost_od_stage_m.trim() ||
+      (extra?.prijezd_vzdalenost_od_stage_m != null
+        ? String(extra.prijezd_vzdalenost_od_stage_m)
+        : "");
+    return distance ? `Ne — vzdálenost ${distance} m` : "Ne";
+  }
+
+  return null;
 }
 
 export function formatElektroZdrojTyp(value: string | null | undefined) {

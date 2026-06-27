@@ -15,9 +15,11 @@ import {
   buildTechnikaRowPayload,
   parseTechnikaFormData,
 } from "@/lib/client-portal/poptavka-technika-form";
-import { validateTechnickePodminkyForSave } from "@/lib/client-portal/poptavka-technika-podminky";
-import { validateTechnikVyjezdOrderComplete } from "@/lib/client-portal/poptavka-wizard-validation";
-import type { TechnikaSectionPhotoKey } from "@/lib/client-portal/poptavka-technika-podminky";
+import { validateTechnickePodminkyForSave, type TechnikaSectionPhotoKey } from "@/lib/client-portal/poptavka-technika-podminky";
+import {
+  validateKlientSubmitComplete,
+  validateTechnikVyjezdOrderComplete,
+} from "@/lib/client-portal/poptavka-wizard-validation";
 import {
   buildSestavaOdpovediExtra,
   deriveSetupSelectionsFromSestava,
@@ -29,7 +31,7 @@ import { loadPortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurat
 import {
   buildPoptavkaRowPayload,
   parsePoptavkaFormData,
-  validatePoptavkaForm,
+  validatePoptavkaDraftMinima,
 } from "@/lib/client-portal/poptavka-form";
 import { assertClientCanUseMistoId } from "@/lib/client-portal/client-mista-server";
 import {
@@ -275,36 +277,46 @@ async function upsertTechnikVyjezdOrder(
   if (error) throw new Error(error.message);
 }
 
-async function persistPoptavkaFromFormData(
+function readWizardKrok(formData: FormData) {
+  const step = Number(String(formData.get("wizard_step") ?? "1"));
+  if (!Number.isFinite(step)) return 1;
+  return Math.min(4, Math.max(1, Math.floor(step)));
+}
+
+async function saveDraftPoptavkaFromFormData(
   supabase: Awaited<ReturnType<typeof createClient>>,
   session: Awaited<ReturnType<typeof requireActiveClientPortalSession>>,
   formData: FormData,
   existingPoptavkaId?: string
 ) {
   const values = parsePoptavkaFormData(formData);
-  const validationError = validatePoptavkaForm(values);
+  const wizardKrok = readWizardKrok(formData);
   const errorPath = existingPoptavkaId
     ? `/portal/poptavka/${existingPoptavkaId}`
     : "/portal/poptavka/nova";
 
+  const validationError = validatePoptavkaDraftMinima(values);
   if (validationError) {
     redirectWithError(errorPath, validationError);
   }
 
-  const mistoResult = await resolveValidatedMistoIdForSave(supabase, values);
+  const mistoResult = await resolveValidatedMistoIdForSave(supabase, values, { draft: true });
   if (!mistoResult.ok) {
     redirectWithError(errorPath, mistoResult.error);
   }
 
-  const setupResult = await resolveSetupsWithSestava(supabase, formData);
+  const setupResult = await resolveSetupsForDraft(supabase, formData);
   if (!setupResult.ok) {
     redirectWithError(errorPath, setupResult.error);
   }
 
-  const payload = buildPoptavkaRowPayload({
-    ...values,
-    misto_id: mistoResult.mistoId,
-  });
+  const payload = buildPoptavkaRowPayload(
+    {
+      ...values,
+      misto_id: mistoResult.mistoId,
+    },
+    { wizardKrok }
+  );
 
   if (existingPoptavkaId) {
     const detail = await loadPoptavkaDetail(supabase, existingPoptavkaId);
@@ -321,6 +333,8 @@ async function persistPoptavkaFromFormData(
     if (error) redirectWithError(`/portal/poptavka/${existingPoptavkaId}`, "save_failed");
 
     await replacePoptavkaSetups(supabase, existingPoptavkaId, setupResult.setupy);
+    await upsertTechnickeUdaje(supabase, existingPoptavkaId, formData);
+    await uploadTechnickeSectionPhotosFromFormData(supabase, existingPoptavkaId, formData);
     return existingPoptavkaId;
   }
 
@@ -342,13 +356,116 @@ async function persistPoptavkaFromFormData(
   }
 
   await replacePoptavkaSetups(supabase, created.poptavka_id, setupResult.setupy);
+  await upsertTechnickeUdaje(supabase, created.poptavka_id, formData);
+  await uploadTechnickeSectionPhotosFromFormData(supabase, created.poptavka_id, formData);
   return created.poptavka_id;
+}
+
+async function persistPoptavkaFromFormData(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  session: Awaited<ReturnType<typeof requireActiveClientPortalSession>>,
+  formData: FormData,
+  existingPoptavkaId?: string
+) {
+  const values = parsePoptavkaFormData(formData);
+  const wizardKrok = readWizardKrok(formData);
+  const errorPath = existingPoptavkaId
+    ? `/portal/poptavka/${existingPoptavkaId}`
+    : "/portal/poptavka/nova";
+
+  const mistoResult = await resolveValidatedMistoIdForSave(supabase, values);
+  if (!mistoResult.ok) {
+    redirectWithError(errorPath, mistoResult.error);
+  }
+
+  const setupResult = await resolveSetupsWithSestava(supabase, formData);
+  if (!setupResult.ok) {
+    redirectWithError(errorPath, setupResult.error);
+  }
+
+  const payload = buildPoptavkaRowPayload(
+    {
+      ...values,
+      misto_id: mistoResult.mistoId,
+    },
+    { wizardKrok }
+  );
+
+  if (existingPoptavkaId) {
+    const detail = await loadPoptavkaDetail(supabase, existingPoptavkaId);
+    if (!detail) redirectWithError("/portal/poptavky", "not_found");
+    if (!isPoptavkaEditable(detail)) {
+      redirectWithError(`/portal/poptavka/${existingPoptavkaId}`, "not_editable");
+    }
+
+    const { error } = await supabase
+      .from("poptavky")
+      .update(payload)
+      .eq("poptavka_id", existingPoptavkaId);
+
+    if (error) redirectWithError(`/portal/poptavka/${existingPoptavkaId}`, "save_failed");
+
+    await replacePoptavkaSetups(supabase, existingPoptavkaId, setupResult.setupy);
+    await upsertTechnickeUdaje(supabase, existingPoptavkaId, formData);
+    await uploadTechnickeSectionPhotosFromFormData(supabase, existingPoptavkaId, formData);
+    return existingPoptavkaId;
+  }
+
+  const cisloPoptavky = await generateCisloPoptavky(supabase);
+  const { data: created, error } = await supabase
+    .from("poptavky")
+    .insert({
+      ...payload,
+      cislo_poptavky: cisloPoptavky,
+      klient_id: session.account.klient_id!,
+      vytvoril_account_id: session.account.account_id,
+      stav: "koncept",
+    })
+    .select("poptavka_id")
+    .single();
+
+  if (error || !created) {
+    redirectWithError("/portal/poptavka/nova", "save_failed");
+  }
+
+  await replacePoptavkaSetups(supabase, created.poptavka_id, setupResult.setupy);
+  await upsertTechnickeUdaje(supabase, created.poptavka_id, formData);
+  await uploadTechnickeSectionPhotosFromFormData(supabase, created.poptavka_id, formData);
+  return created.poptavka_id;
+}
+
+async function countSectionPhotosForSubmit(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  poptavkaId: string,
+  formData: FormData
+) {
+  const detail = await loadPoptavkaDetail(supabase, poptavkaId);
+  const counts: Partial<Record<TechnikaSectionPhotoKey, number>> = {};
+
+  for (const key of TECHNIKA_SECTION_PHOTO_KEYS) {
+    const saved =
+      detail?.fotky.filter((row) => row.typ === key).length ?? 0;
+    const pending = formData
+      .getAll(`technicke_foto_${key}`)
+      .filter((value): value is File => value instanceof File && value.size > 0).length;
+    counts[key] = saved + pending;
+  }
+
+  return counts;
 }
 
 async function resolveValidatedMistoIdForSave(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  values: PoptavkaFormValues
+  values: PoptavkaFormValues,
+  options?: { draft?: boolean }
 ) {
+  if (values.misto_source === "saved" && !values.misto_id) {
+    if (options?.draft) {
+      return { ok: true as const, mistoId: null };
+    }
+    return { ok: false as const, error: "missing_saved_misto" as const };
+  }
+
   const mistoIdCandidate = values.misto_source === "saved" ? values.misto_id : null;
   const access = await assertClientCanUseMistoId(supabase, mistoIdCandidate);
 
@@ -373,6 +490,28 @@ async function resolvePortalSetupsForSave(
   }
 
   return { ok: true as const, setupy: filtered, rejectedCount };
+}
+
+async function resolveSetupsForDraft(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  formData: FormData
+) {
+  const sestava = parseSestavaFormData(formData);
+  const katalog = await loadPortalSestavaKatalog();
+  const validation = validateSestavaKonfigurator(sestava, katalog);
+
+  if (validation.errors.length > 0) {
+    return resolvePortalSetupsForSave(supabase, []);
+  }
+
+  const portalSetups = await loadPortalSetups(supabase);
+  const derived =
+    sestava.rezim === "atypicka"
+      ? []
+      : deriveSetupSelectionsFromSestava(sestava, katalog, portalSetups);
+  const merged = sestava.rezim === "atypicka" ? [] : mergeSetupSelections([], derived);
+
+  return resolvePortalSetupsForSave(supabase, merged);
 }
 
 async function resolveSetupsWithSestava(
@@ -433,57 +572,9 @@ async function replacePoptavkaSetups(
 export async function createPoptavkaAction(formData: FormData) {
   const supabase = await createClient();
   const session = await requireActiveClientPortalSession(supabase);
-
-  const values = parsePoptavkaFormData(formData);
-  const validationError = validatePoptavkaForm(values);
-  if (validationError) {
-    redirectWithError("/portal/poptavka/nova", validationError);
-  }
-
-  const mistoResult = await resolveValidatedMistoIdForSave(supabase, values);
-  if (!mistoResult.ok) {
-    redirectWithError("/portal/poptavka/nova", mistoResult.error);
-  }
-
-  const setupResult = await resolveSetupsWithSestava(supabase, formData);
-  if (!setupResult.ok) {
-    redirectWithError("/portal/poptavka/nova", setupResult.error);
-  }
-
-  const cisloPoptavky = await generateCisloPoptavky(supabase);
-  const payload = buildPoptavkaRowPayload({
-    ...values,
-    misto_id: mistoResult.mistoId,
-  });
-
-  const { data: created, error } = await supabase
-    .from("poptavky")
-    .insert({
-      ...payload,
-      cislo_poptavky: cisloPoptavky,
-      klient_id: session.account.klient_id!,
-      vytvoril_account_id: session.account.account_id,
-      stav: "koncept",
-    })
-    .select("poptavka_id")
-    .single();
-
-  if (error || !created) {
-    redirectWithError("/portal/poptavka/nova", "save_failed");
-  }
-
-  validateTechnickeForSave(formData, "/portal/poptavka/nova");
-
-  try {
-    await replacePoptavkaSetups(supabase, created.poptavka_id, setupResult.setupy);
-    await upsertTechnickeUdaje(supabase, created.poptavka_id, formData);
-    await uploadTechnickeSectionPhotosFromFormData(supabase, created.poptavka_id, formData);
-  } catch {
-    redirectWithError("/portal/poptavka/nova", "setups_failed");
-  }
-
+  const poptavkaId = await saveDraftPoptavkaFromFormData(supabase, session, formData);
   revalidatePath("/portal/poptavky");
-  redirect(`/portal/poptavka/${created.poptavka_id}?saved=1`);
+  redirect(`/portal/poptavka/${poptavkaId}?saved=1`);
 }
 
 export async function updatePoptavkaAction(formData: FormData) {
@@ -495,54 +586,7 @@ export async function updatePoptavkaAction(formData: FormData) {
     redirectWithError("/portal/poptavky", "missing_id");
   }
 
-  const detail = await loadPoptavkaDetail(supabase, poptavkaId);
-  if (!detail) {
-    redirectWithError("/portal/poptavky", "not_found");
-  }
-
-  if (!isPoptavkaEditable(detail)) {
-    redirectWithError(`/portal/poptavka/${poptavkaId}`, "not_editable");
-  }
-
-  const values = parsePoptavkaFormData(formData);
-  const validationError = validatePoptavkaForm(values);
-  if (validationError) {
-    redirectWithError(`/portal/poptavka/${poptavkaId}`, validationError);
-  }
-
-  const mistoResult = await resolveValidatedMistoIdForSave(supabase, values);
-  if (!mistoResult.ok) {
-    redirectWithError(`/portal/poptavka/${poptavkaId}`, mistoResult.error);
-  }
-
-  const setupResult = await resolveSetupsWithSestava(supabase, formData);
-  if (!setupResult.ok) {
-    redirectWithError(`/portal/poptavka/${poptavkaId}`, setupResult.error);
-  }
-
-  const payload = buildPoptavkaRowPayload({
-    ...values,
-    misto_id: mistoResult.mistoId,
-  });
-
-  const { error } = await supabase
-    .from("poptavky")
-    .update(payload)
-    .eq("poptavka_id", poptavkaId);
-
-  if (error) {
-    redirectWithError(`/portal/poptavka/${poptavkaId}`, "save_failed");
-  }
-
-  validateTechnickeForSave(formData, `/portal/poptavka/${poptavkaId}`);
-
-  try {
-    await replacePoptavkaSetups(supabase, poptavkaId, setupResult.setupy);
-    await upsertTechnickeUdaje(supabase, poptavkaId, formData);
-    await uploadTechnickeSectionPhotosFromFormData(supabase, poptavkaId, formData);
-  } catch {
-    redirectWithError(`/portal/poptavka/${poptavkaId}`, "setups_failed");
-  }
+  await saveDraftPoptavkaFromFormData(supabase, await requireActiveClientPortalSession(supabase), formData, poptavkaId);
 
   revalidatePath("/portal/poptavky");
   revalidatePath(`/portal/poptavka/${poptavkaId}`);
@@ -615,6 +659,73 @@ export async function deletePoptavkaFotkaAction(formData: FormData) {
 
   revalidatePath(`/portal/poptavka/${poptavkaId}`);
   return { ok: true as const, error: null };
+}
+
+export async function submitKlientPoptavkaAction(formData: FormData) {
+  const supabase = await createClient();
+  const session = await requireActiveClientPortalSession(supabase);
+
+  const existingPoptavkaId = String(formData.get("poptavka_id") ?? "").trim() || undefined;
+  const errorPath = existingPoptavkaId
+    ? `/portal/poptavka/${existingPoptavkaId}`
+    : "/portal/poptavka/nova";
+
+  if (readWizardKrok(formData) < 4) {
+    redirectWithError(errorPath, "wizard_step_locked");
+  }
+
+  const values = parsePoptavkaFormData(formData);
+  const technika = parseTechnikaFormData(formData);
+  const sestava = parseSestavaFormData(formData);
+  const katalog = await loadPortalSestavaKatalog();
+
+  let photoCounts: Partial<Record<TechnikaSectionPhotoKey, number>> = {};
+  if (existingPoptavkaId) {
+    photoCounts = await countSectionPhotosForSubmit(supabase, existingPoptavkaId, formData);
+  } else {
+    for (const key of TECHNIKA_SECTION_PHOTO_KEYS) {
+      photoCounts[key] = formData
+        .getAll(`technicke_foto_${key}`)
+        .filter((value): value is File => value instanceof File && value.size > 0).length;
+    }
+  }
+
+  const submitError = validateKlientSubmitComplete({
+    form: values,
+    sestava,
+    katalog,
+    technika,
+    photoCounts,
+  });
+  if (submitError) {
+    redirectWithError(errorPath, submitError);
+  }
+
+  let poptavkaId: string;
+  try {
+    poptavkaId = await persistPoptavkaFromFormData(supabase, session, formData, existingPoptavkaId);
+  } catch {
+    redirectWithError(errorPath, "setups_failed");
+  }
+
+  photoCounts = await countSectionPhotosForSubmit(supabase, poptavkaId, formData);
+  const photoRecheck = validateKlientSubmitComplete({
+    form: values,
+    sestava,
+    katalog,
+    technika,
+    photoCounts,
+  });
+  if (photoRecheck) {
+    redirectWithError(`/portal/poptavka/${poptavkaId}`, photoRecheck);
+  }
+
+  const detail = await loadPoptavkaDetail(supabase, poptavkaId);
+  if (!detail) {
+    redirectWithError(errorPath, "save_failed");
+  }
+
+  await finalizePoptavkaSubmission(supabase, poptavkaId, detail);
 }
 
 export async function submitPoptavkaAction(formData: FormData) {

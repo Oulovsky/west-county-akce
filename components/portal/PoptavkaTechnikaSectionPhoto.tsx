@@ -4,8 +4,9 @@ import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { uploadPoptavkaFotkyAction } from "@/app/portal/poptavky/actions";
 import {
-  POPTAVKA_FOTKY_ACCEPT,
   POPTAVKA_FOTKY_MAX_SIZE_BYTES,
+  POPTAVKA_FOTKY_MAX_SIZE_LABEL,
+  POPTAVKA_FOTKY_ACCEPT,
   POPTAVKA_FOTKA_TYP_LABELS,
 } from "@/lib/client-portal/poptavka-fotky-shared";
 import type { TechnikaSectionPhotoKey } from "@/lib/client-portal/poptavka-technika-podminky";
@@ -81,7 +82,7 @@ export default function PoptavkaTechnikaSectionPhoto({
         continue;
       }
       if (file.size > POPTAVKA_FOTKY_MAX_SIZE_BYTES) {
-        setError("Fotka může mít maximálně 10 MB.");
+        setError(`Fotka může mít maximálně ${POPTAVKA_FOTKY_MAX_SIZE_LABEL}.`);
         continue;
       }
       nextPending.push({
@@ -159,57 +160,57 @@ export default function PoptavkaTechnikaSectionPhoto({
             ref={uploadInputRef}
             type="file"
             accept={POPTAVKA_FOTKY_ACCEPT}
+            multiple
             className="sr-only"
             onChange={(event) => {
               addFiles(event.currentTarget.files);
               event.currentTarget.value = "";
             }}
           />
+          <p className="w-full text-[11px] text-slate-500">Max. {POPTAVKA_FOTKY_MAX_SIZE_LABEL} na soubor.</p>
         </div>
       ) : null}
 
       {error ? <p className="text-xs text-red-300">{error}</p> : null}
 
-      {state.pending.map((photo) => (
-        <div key={photo.id} className="mt-2 flex items-center gap-3">
-          <img
-            src={photo.previewUrl}
-            alt={photo.file.name}
-            className="h-16 w-16 rounded-lg object-cover"
-          />
-          <div className="min-w-0 flex-1 text-xs text-slate-300">
-            <div className="truncate">{photo.file.name}</div>
-            {!readOnly ? (
-              <button
-                type="button"
-                onClick={() => removePending(photo.id)}
-                className="mt-1 text-red-300 hover:text-red-200"
-              >
-                Odebrat
-              </button>
-            ) : null}
-          </div>
-        </div>
-      ))}
-
-      {state.saved.map((fotka) => (
-        <div key={fotka.id} className="mt-2 flex items-center gap-3">
-          {fotka.signedUrl ? (
-            <img
-              src={fotka.signedUrl}
-              alt={fotka.original_filename ?? POPTAVKA_FOTKA_TYP_LABELS[fotka.typ]}
-              className="h-16 w-16 rounded-lg object-cover"
-            />
-          ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-white/5 text-[10px] text-slate-500">
-              Náhled
+      {(state.pending.length > 0 || state.saved.length > 0) ? (
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {state.pending.map((photo) => (
+            <div key={photo.id} className="relative overflow-hidden rounded-lg border border-white/10">
+              <img
+                src={photo.previewUrl}
+                alt={photo.file.name}
+                className="aspect-square w-full object-cover"
+              />
+              {!readOnly ? (
+                <button
+                  type="button"
+                  onClick={() => removePending(photo.id)}
+                  className="absolute right-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-red-200 hover:bg-black/80"
+                >
+                  Odebrat
+                </button>
+              ) : null}
             </div>
-          )}
-          <div className="text-xs text-slate-400">
-            {POPTAVKA_FOTKA_TYP_LABELS[fotka.typ]}
-          </div>
+          ))}
+
+          {state.saved.map((fotka) => (
+            <div key={fotka.id} className="overflow-hidden rounded-lg border border-white/10">
+              {fotka.signedUrl ? (
+                <img
+                  src={fotka.signedUrl}
+                  alt={fotka.original_filename ?? POPTAVKA_FOTKA_TYP_LABELS[fotka.typ]}
+                  className="aspect-square w-full object-cover"
+                />
+              ) : (
+                <div className="flex aspect-square items-center justify-center bg-white/5 text-[10px] text-slate-500">
+                  Náhled
+                </div>
+              )}
+            </div>
+          ))}
         </div>
-      ))}
+      ) : null}
 
       {!readOnly && poptavkaId && state.pending.length > 0 ? (
         <button

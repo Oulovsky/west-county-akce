@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import PoptavkaFormClient from "@/components/portal/PoptavkaFormClient";
-import PoptavkaFotkyClient from "@/components/portal/PoptavkaFotkyClient";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
 import { CLIENT_POPTAVKA_STAV_LABELS, SETUP_OBLAST_LABELS } from "@/lib/client-portal/labels";
@@ -151,6 +150,7 @@ export default async function PortalPoptavkaDetailPage({
         sestavaKatalog={sestavaKatalog}
         initialSestava={sestavaFromOdpovediExtra(detail.technicke_udaje?.odpovedi_extra ?? {})}
         initialValues={{
+          wizard_krok: detail.wizard_krok ?? 1,
           kontakt_jmeno: detail.kontakt_jmeno ?? "",
           kontakt_telefon: detail.kontakt_telefon ?? "",
           kontakt_email: detail.kontakt_email ?? "",
@@ -383,14 +383,6 @@ export default async function PortalPoptavkaDetailPage({
         />
 
         <PoptavkaTechnickePodminkyReadOnly row={detail.technicke_udaje} fotky={detail.fotky} />
-
-        <div className="mt-8 border-t border-white/10 pt-8">
-          <PoptavkaFotkyClient
-            poptavkaId={detail.poptavka_id}
-            initialFotky={detail.fotky}
-            readOnly
-          />
-        </div>
 
         <div className="mt-8 flex flex-wrap gap-3">
           <Link

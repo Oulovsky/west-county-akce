@@ -1,7 +1,9 @@
 import type { PoptavkaFotkaTyp } from "@/lib/client-portal/types";
 import { POPTAVKA_FOTKA_TYPY } from "@/lib/client-portal/types";
 
-export const POPTAVKA_FOTKY_MAX_SIZE_BYTES = 10 * 1024 * 1024;
+export const POPTAVKA_FOTKY_MAX_SIZE_BYTES = 25 * 1024 * 1024;
+
+export const POPTAVKA_FOTKY_MAX_SIZE_LABEL = "25 MB";
 
 export const POPTAVKA_FOTKY_ALLOWED_MIME_TYPES = [
   "image/jpeg",

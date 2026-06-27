@@ -54,6 +54,8 @@ type Props = {
   kontaktTelefon: string;
   kontaktEmail: string;
   submitting?: boolean;
+  onSubmitKlient?: () => void;
+  highlightMissingPhotos?: boolean;
 };
 
 function buildInitialSectionPhotos(
@@ -110,6 +112,8 @@ export default function PoptavkaTechnickePodminkyStep({
   kontaktTelefon,
   kontaktEmail,
   submitting = false,
+  onSubmitKlient,
+  highlightMissingPhotos = false,
 }: Props) {
   const effectiveRezim = uiRezim ?? (technika.technicke_rezim || null);
   const effectivePotvrzeno =
@@ -188,21 +192,35 @@ export default function PoptavkaTechnickePodminkyStep({
     technika.technik_vyjezd_kontakt_email.trim() &&
     (technika.technik_vyjezd_preferuje_telefon || technika.technik_vyjezd_preferuje_email);
 
-  function renderSectionPhoto(key: TechnikaSectionPhotoKey) {
+  function sectionPhotoMissing(key: TechnikaSectionPhotoKey) {
+    if (!highlightMissingPhotos) return false;
+    const state = sectionPhotos[key] ?? emptySectionPhotoState();
+    return state.pending.length === 0 && state.saved.length === 0;
+  }
+
+  function renderSectionPhoto(key: TechnikaSectionPhotoKey, missingPhoto?: boolean) {
     const config = sectionPhotoConfig[key];
     const state = sectionPhotos[key] ?? emptySectionPhotoState();
+    const hasPhoto = state.pending.length > 0 || state.saved.length > 0;
 
     return (
-      <PoptavkaTechnikaSectionPhoto
-        sectionKey={key}
-        typ={config.typ}
-        captureLabel={config.captureLabel}
-        uploadLabel={config.uploadLabel}
-        poptavkaId={poptavkaId}
-        readOnly={readOnly}
-        state={state}
-        onPendingChange={(next) => onSectionPhotosChange(key, next)}
-      />
+      <div className={missingPhoto && !hasPhoto ? "rounded-xl ring-2 ring-red-400/70" : undefined}>
+        {missingPhoto && !hasPhoto ? (
+          <p className="mb-2 text-xs font-semibold text-red-300">
+            Povinná fotka — nahrajte alespoň jednu fotku této sekce.
+          </p>
+        ) : null}
+        <PoptavkaTechnikaSectionPhoto
+          sectionKey={key}
+          typ={config.typ}
+          captureLabel={config.captureLabel}
+          uploadLabel={config.uploadLabel}
+          poptavkaId={poptavkaId}
+          readOnly={readOnly}
+          state={state}
+          onPendingChange={(next) => onSectionPhotosChange(key, next)}
+        />
+      </div>
     );
   }
 
@@ -443,7 +461,7 @@ export default function PoptavkaTechnickePodminkyStep({
               />
             </label>
 
-            {renderSectionPhoto("rozvadec")}
+            {renderSectionPhoto("rozvadec", sectionPhotoMissing("rozvadec"))}
           </div>
 
           <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
@@ -461,16 +479,25 @@ export default function PoptavkaTechnickePodminkyStep({
               />
             </label>
             <div>
-              <span className={labelClass}>Lze zajet dodávkou až k místu?</span>
+              <span className={labelClass}>Je možný příjezd až k místu stavby stage? *</span>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 {ANO_NE_OPTIONS.map(([value, label]) => (
                   <label key={value} className={optionCardClass}>
                     <input
                       type="radio"
-                      name="lze_zajet_autem"
+                      name="prijezd_az_ke_stage"
                       value={value}
-                      checked={technika.lze_zajet_autem === value}
-                      onChange={() => updateField("lze_zajet_autem", value)}
+                      checked={technika.prijezd_az_ke_stage === value}
+                      onChange={() => {
+                        onChange({
+                          ...technika,
+                          prijezd_az_ke_stage: value,
+                          prijezd_dodavka_35t: value === "ano" ? technika.prijezd_dodavka_35t : false,
+                          prijezd_nakladni_12t: value === "ano" ? technika.prijezd_nakladni_12t : false,
+                          prijezd_vzdalenost_od_stage_m:
+                            value === "ne" ? technika.prijezd_vzdalenost_od_stage_m : "",
+                        });
+                      }}
                       disabled={readOnly}
                     />
                     <span>{label}</span>
@@ -478,7 +505,53 @@ export default function PoptavkaTechnickePodminkyStep({
                 ))}
               </div>
             </div>
-            {renderSectionPhoto("prijezd")}
+            {technika.prijezd_az_ke_stage === "ano" ? (
+              <div>
+                <span className={labelClass}>Která vozidla projedou až ke stage? *</span>
+                <div className="mt-2 flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-sm text-slate-200">
+                    <input
+                      type="checkbox"
+                      name="prijezd_dodavka_35t"
+                      checked={technika.prijezd_dodavka_35t}
+                      onChange={(e) => updateField("prijezd_dodavka_35t", e.target.checked)}
+                      disabled={readOnly}
+                    />
+                    Dodávka do 3,5 t
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-200">
+                    <input
+                      type="checkbox"
+                      name="prijezd_nakladni_12t"
+                      checked={technika.prijezd_nakladni_12t}
+                      onChange={(e) => updateField("prijezd_nakladni_12t", e.target.checked)}
+                      disabled={readOnly}
+                    />
+                    Nákladní vozidlo 12 t
+                  </label>
+                </div>
+              </div>
+            ) : null}
+            {technika.prijezd_az_ke_stage === "ne" ? (
+              <label className="block space-y-2">
+                <span className={labelClass}>
+                  Vzdálenost možného příjezdu od místa stavby stage *
+                </span>
+                <div className="flex items-center gap-2">
+                  <input
+                    name="prijezd_vzdalenost_od_stage_m"
+                    inputMode="decimal"
+                    value={technika.prijezd_vzdalenost_od_stage_m}
+                    onChange={(e) => updateField("prijezd_vzdalenost_od_stage_m", e.target.value)}
+                    disabled={readOnly}
+                    className={`${inputClass} max-w-[10rem]`}
+                    placeholder="0"
+                  />
+                  <span className="text-sm text-slate-400">m</span>
+                </div>
+              </label>
+            ) : null}
+            {renderSectionPhoto("prijezd", sectionPhotoMissing("prijezd"))}
           </div>
 
           <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
@@ -494,7 +567,7 @@ export default function PoptavkaTechnickePodminkyStep({
                 placeholder="Např. 45 m po zpevněné ploše"
               />
             </label>
-            {renderSectionPhoto("plocha_stage")}
+            {renderSectionPhoto("plocha_stage", sectionPhotoMissing("plocha_stage"))}
           </div>
 
           <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
@@ -539,7 +612,7 @@ export default function PoptavkaTechnickePodminkyStep({
                 className={inputClass}
               />
             </label>
-            {renderSectionPhoto("povrch_pristup")}
+            {renderSectionPhoto("povrch_pristup", sectionPhotoMissing("povrch_pristup"))}
           </div>
 
           <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
@@ -584,7 +657,7 @@ export default function PoptavkaTechnickePodminkyStep({
                 className={inputClass}
               />
             </label>
-            {renderSectionPhoto("jina")}
+            {renderSectionPhoto("jina", sectionPhotoMissing("jina"))}
           </div>
 
           <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
@@ -600,7 +673,7 @@ export default function PoptavkaTechnickePodminkyStep({
                 className={inputClass}
               />
             </label>
-            {renderSectionPhoto("misto_akce")}
+            {renderSectionPhoto("misto_akce", sectionPhotoMissing("misto_akce"))}
           </div>
 
           <label className="block space-y-2">
@@ -614,6 +687,17 @@ export default function PoptavkaTechnickePodminkyStep({
               className={inputClass}
             />
           </label>
+
+          {!readOnly && onSubmitKlient ? (
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={onSubmitKlient}
+              className="w-full rounded-xl border border-blue-500/60 bg-blue-500/20 px-5 py-4 text-sm font-bold text-blue-50 transition hover:bg-blue-500/30 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            >
+              {submitting ? "Odesílám…" : "Odeslat poptávku"}
+            </button>
+          ) : null}
         </div>
       ) : null}
 

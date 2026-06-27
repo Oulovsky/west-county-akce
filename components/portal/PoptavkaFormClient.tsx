@@ -2,19 +2,22 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createPoptavkaAction,
   orderTechnikVyjezdAndSubmitPoptavkaAction,
+  submitKlientPoptavkaAction,
   updatePoptavkaAction,
 } from "@/app/portal/poptavky/actions";
 import PoptavkaGpsLocationPanel from "@/components/portal/PoptavkaGpsLocationPanel";
-import PoptavkaFotkyClient from "@/components/portal/PoptavkaFotkyClient";
+import {
+  formatCoordsFallbackLabel,
+  reverseGeocodePlaceLabel,
+} from "@/lib/client-portal/nominatim-place-label";
 import { emptyLogistikaOknaValues } from "@/lib/logistika-okna";
 import PoptavkaLogistikaOknaPanel from "@/components/portal/PoptavkaLogistikaOknaPanel";
 import PoptavkaMistoKnowHowPanel from "@/components/portal/PoptavkaMistoKnowHowPanel";
 import PoptavkaSestavaKonfigurator from "@/components/portal/PoptavkaSestavaKonfigurator";
-import PoptavkaSubmitButton from "@/components/portal/PoptavkaSubmitButton";
 import PoptavkaTechnickePodminkyStep, {
   createInitialSectionPhotos,
 } from "@/components/portal/PoptavkaTechnickePodminkyStep";
@@ -49,8 +52,12 @@ import {
   WIZARD_STEP_ERROR_MESSAGES,
   computeMaxReachableStep,
   getWizardStep3Errors,
-  validatePoptavkaFormForSave,
+  validatePoptavkaDraftMinima,
   validateTechnikVyjezdOrderComplete,
+  validateKlientSubmitComplete,
+  countSectionPhotos,
+  getMissingSectionPhotoLabels,
+  resolveWizardResumeStep,
   validateWizardStep,
   validateWizardStep3,
   validateWizardStepsUpTo,
@@ -80,7 +87,7 @@ type Props = {
   savedMistaKnowHowById?: Record<string, ClientPortalMistoKnowHow>;
   sestavaKatalog: PortalSestavaKatalog;
   initialSestava?: SestavaKonfiguratorState;
-  initialValues?: Partial<PoptavkaFormValues>;
+  initialValues?: Partial<PoptavkaFormValues> & { wizard_krok?: number | null };
   initialTechnika?: PoptavkaTechnikaFormValues;
   initialFotky?: PoptavkaFotkaWithUrl[];
   poptavkaId?: string;
@@ -92,16 +99,11 @@ type Props = {
   revisionNote?: string | null;
 };
 
-const CREATE_STEPS = [
+const WIZARD_STEPS = [
   { id: 1, title: "Kdo zadává" },
   { id: 2, title: "Kde a kdy" },
   { id: 3, title: "Konfigurace sestavy" },
   { id: 4, title: "Technické podmínky" },
-] as const;
-
-const EDIT_STEPS = [
-  ...CREATE_STEPS,
-  { id: 5, title: "Fotky" },
 ] as const;
 
 function emptySetupMap(): Record<string, PoptavkaSetupInput> {
@@ -134,11 +136,12 @@ export default function PoptavkaFormClient({
   technikVyjezdOrdered,
   revisionNote,
 }: Props) {
-  const steps = mode === "create" ? CREATE_STEPS : EDIT_STEPS;
+  const steps = WIZARD_STEPS;
   const maxStep = steps.length;
   const router = useRouter();
   const pathname = usePathname();
   const [step, setStep] = useState(1);
+  const [mistoAdresaAuto, setMistoAdresaAuto] = useState(() => !initialValues?.misto_adresa?.trim());
   const [stepError, setStepError] = useState<string | null>(null);
   const [stepErrorDetails, setStepErrorDetails] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -156,7 +159,7 @@ export default function PoptavkaFormClient({
     Partial<Record<TechnikaSectionPhotoKey, SectionPhotoState>>
   >(() => createInitialSectionPhotos(initialFotky));
 
-  const showSaveActions = !readOnly && step >= 3 && step <= 4;
+  const showSaveActions = !readOnly;
 
   const [form, setForm] = useState<PoptavkaFormValues>({
     kontakt_jmeno: initialValues?.kontakt_jmeno ?? prefill.kontakt_jmeno,
@@ -234,9 +237,39 @@ export default function PoptavkaFormClient({
       sestava,
       katalog: sestavaKatalog,
       technika,
+      photoCounts: countSectionPhotos(sectionPhotos),
     }),
-    [form, sestava, sestavaKatalog, technika]
+    [form, sestava, sestavaKatalog, technika, sectionPhotos]
   );
+
+  const resumedRef = useRef(false);
+  useEffect(() => {
+    if (readOnly || resumedRef.current || mode !== "edit") return;
+    resumedRef.current = true;
+    setStep(
+      resolveWizardResumeStep(initialValues?.wizard_krok, {
+        form,
+        sestava,
+        katalog: sestavaKatalog,
+      })
+    );
+  }, [readOnly, mode, initialValues?.wizard_krok, form, sestava, sestavaKatalog]);
+
+  async function applyMapCoords(lat: number | null, lng: number | null) {
+    setForm((current) => ({ ...current, misto_lat: lat, misto_lng: lng }));
+    if (lat == null || lng == null) return;
+
+    const label = (await reverseGeocodePlaceLabel(lat, lng)) ?? formatCoordsFallbackLabel(lat, lng);
+    setForm((current) => {
+      if (!mistoAdresaAuto && current.misto_adresa.trim()) {
+        return { ...current, misto_lat: lat, misto_lng: lng };
+      }
+      return { ...current, misto_lat: lat, misto_lng: lng, misto_adresa: label };
+    });
+    if (mistoAdresaAuto || !form.misto_adresa.trim()) {
+      setMistoAdresaAuto(true);
+    }
+  }
 
   useEffect(() => {
     if (sestava.rezim === "atypicka" || !sestava.stage_typ) return;
@@ -420,15 +453,29 @@ export default function PoptavkaFormClient({
         setStep(wizardErrorStep(orderError));
         return;
       }
+    } else if (intent === "submit_klient") {
+      const submitError = validateKlientSubmitComplete({
+        form,
+        sestava,
+        katalog: sestavaKatalog,
+        technika,
+        photoCounts: countSectionPhotos(sectionPhotos),
+      });
+      if (submitError) {
+        const details =
+          submitError === "invalid_sestava"
+            ? getWizardStep3Errors(sestava, sestavaKatalog)
+            : submitError === "technicke_missing_section_photos"
+              ? getMissingSectionPhotoLabels(countSectionPhotos(sectionPhotos))
+              : [];
+        showStepValidationError(submitError, details);
+        setStep(wizardErrorStep(submitError));
+        return;
+      }
     } else {
-      const saveError =
-        validatePoptavkaFormForSave(form) ??
-        (step >= 3 ? validateWizardStep3(sestava, sestavaKatalog) : null);
+      const saveError = validatePoptavkaDraftMinima(form);
       if (saveError) {
-        showStepValidationError(
-          saveError,
-          saveError === "invalid_sestava" ? getWizardStep3Errors(sestava, sestavaKatalog) : []
-        );
+        showStepValidationError(saveError);
         setStep(wizardErrorStep(saveError));
         return;
       }
@@ -448,6 +495,11 @@ export default function PoptavkaFormClient({
 
     if (intent === "order_technik_vyjezd") {
       void orderTechnikVyjezdAndSubmitPoptavkaAction(formData);
+      return;
+    }
+
+    if (intent === "submit_klient") {
+      void submitKlientPoptavkaAction(formData);
       return;
     }
 
@@ -548,6 +600,7 @@ export default function PoptavkaFormClient({
         ) : null}
 
         <form
+          id="poptavka-wizard-form"
           action={formAction}
           onSubmit={handleSubmit}
           onKeyDown={handleFormKeyDown}
@@ -572,6 +625,8 @@ export default function PoptavkaFormClient({
             value={form.misto_lng != null ? String(form.misto_lng) : ""}
             readOnly
           />
+
+          <input type="hidden" name="save_intent" value="" readOnly />
 
           <input type="hidden" name="wizard_step" value={step} readOnly />
 
@@ -666,7 +721,19 @@ export default function PoptavkaFormClient({
               <input type="hidden" name="omezeni_hluku" value={technika.omezeni_hluku} readOnly />
               <input type="hidden" name="casova_omezeni" value={technika.casova_omezeni} readOnly />
               <input type="hidden" name="dalsi_poznamky" value={technika.dalsi_poznamky} readOnly />
-              <input type="hidden" name="lze_zajet_autem" value={technika.lze_zajet_autem} readOnly />
+              <input type="hidden" name="prijezd_az_ke_stage" value={technika.prijezd_az_ke_stage} readOnly />
+              {technika.prijezd_dodavka_35t ? (
+                <input type="hidden" name="prijezd_dodavka_35t" value="on" readOnly />
+              ) : null}
+              {technika.prijezd_nakladni_12t ? (
+                <input type="hidden" name="prijezd_nakladni_12t" value="on" readOnly />
+              ) : null}
+              <input
+                type="hidden"
+                name="prijezd_vzdalenost_od_stage_m"
+                value={technika.prijezd_vzdalenost_od_stage_m}
+                readOnly
+              />
               <input type="hidden" name="misto_zpevnene" value={technika.misto_zpevnene} readOnly />
               <input
                 type="hidden"
@@ -895,7 +962,10 @@ export default function PoptavkaFormClient({
                 <input
                   name="misto_adresa"
                   value={form.misto_adresa}
-                  onChange={(e) => updateField("misto_adresa", e.target.value)}
+                  onChange={(e) => {
+                    setMistoAdresaAuto(false);
+                    updateField("misto_adresa", e.target.value);
+                  }}
                   disabled={readOnly}
                   required
                   className={inputClass}
@@ -927,9 +997,7 @@ export default function PoptavkaFormClient({
                   lat={form.misto_lat}
                   lng={form.misto_lng}
                   readOnly={readOnly}
-                  onCoordsChange={(lat, lng) => {
-                    setForm((current) => ({ ...current, misto_lat: lat, misto_lng: lng }));
-                  }}
+                  onCoordsChange={applyMapCoords}
                 />
               ) : null}
 
@@ -1058,6 +1126,14 @@ export default function PoptavkaFormClient({
               kontaktTelefon={form.kontakt_telefon}
               kontaktEmail={form.kontakt_email}
               submitting={submitting}
+              highlightMissingPhotos={stepError === "technicke_missing_section_photos"}
+              onSubmitKlient={() => {
+                const formEl = document.getElementById("poptavka-wizard-form") as HTMLFormElement | null;
+                if (!formEl) return;
+                const intentInput = formEl.querySelector<HTMLInputElement>('input[name="save_intent"]');
+                if (intentInput) intentInput.value = "submit_klient";
+                formEl.requestSubmit();
+              }}
             />
           )}
 
@@ -1086,6 +1162,11 @@ export default function PoptavkaFormClient({
               <button
                 type="submit"
                 disabled={submitting}
+                onClick={() => {
+                  const formEl = document.getElementById("poptavka-wizard-form");
+                  const intentInput = formEl?.querySelector<HTMLInputElement>('input[name="save_intent"]');
+                  if (intentInput) intentInput.value = "";
+                }}
                 className="rounded-xl border border-amber-500/60 bg-amber-500/20 px-5 py-3 text-sm font-bold text-amber-50 transition hover:bg-amber-500/30 disabled:opacity-60"
               >
                 {submitting
@@ -1104,18 +1185,6 @@ export default function PoptavkaFormClient({
             </Link>
           </div>
         </form>
-
-        {mode === "edit" && poptavkaId && (readOnly || step === 5) ? (
-          <div className="mt-8 space-y-6 border-t border-white/10 pt-8">
-            <PoptavkaFotkyClient
-              key={initialFotky.map((row) => row.id).join("-") || "empty"}
-              poptavkaId={poptavkaId}
-              initialFotky={initialFotky}
-              readOnly={readOnly}
-            />
-            {!readOnly ? <PoptavkaSubmitButton poptavkaId={poptavkaId} /> : null}
-          </div>
-        ) : null}
       </PortalCard>
     </PortalShell>
   );

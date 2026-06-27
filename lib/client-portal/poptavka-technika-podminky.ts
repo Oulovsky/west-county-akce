@@ -112,7 +112,6 @@ export function formatTechnickePotvrzeni(value: string | null | undefined) {
 import type { PoptavkaTechnikaFormValues } from "@/lib/client-portal/poptavka-technika-form";
 import { PRIPOJKA_COUNT_FIELDS } from "@/lib/client-portal/poptavka-technika-form";
 import type { PoptavkaFormValues } from "@/lib/client-portal/poptavka-form";
-import { validatePoptavkaFormForSave } from "@/lib/client-portal/poptavka-wizard-validation";
 
 function isValidCount(value: string) {
   const text = value.trim();
@@ -125,34 +124,46 @@ function isAnoNe(value: string) {
   return value === "ano" || value === "ne";
 }
 
-export function validateTechnickePodminkyForSave(input: {
-  wizardStep: number;
-  technickeRezim: string;
-  potvrzeniOdpovednosti: boolean;
-  potvrzeniVyjezdCeny: boolean;
-  technika?: PoptavkaTechnikaFormValues;
-}): string | null {
-  if (input.wizardStep < 4) return null;
+export type SectionPhotoCounts = Partial<Record<TechnikaSectionPhotoKey, number>>;
 
-  const rezim = input.technickeRezim.trim();
-  if (rezim !== "klient_vyplni" && rezim !== "vyjezd_technika") {
-    return "technicke_missing_rezim";
+export const REQUIRED_SECTION_PHOTO_KEYS: TechnikaSectionPhotoKey[] = TECHNIKA_SECTION_PHOTOS.map(
+  (section) => section.key
+);
+
+function countForSection(counts: SectionPhotoCounts | undefined, key: TechnikaSectionPhotoKey) {
+  return counts?.[key] ?? 0;
+}
+
+function validateRequiredSectionPhotos(counts: SectionPhotoCounts | undefined): string | null {
+  for (const key of REQUIRED_SECTION_PHOTO_KEYS) {
+    if (countForSection(counts, key) < 1) {
+      return "technicke_missing_section_photos";
+    }
   }
+  return null;
+}
 
-  if (rezim === "klient_vyplni" && !input.potvrzeniOdpovednosti) {
-    return "technicke_missing_potvrzeni";
+function validatePrijezdFields(technika: PoptavkaTechnikaFormValues): string | null {
+  if (technika.prijezd_az_ke_stage !== "ano" && technika.prijezd_az_ke_stage !== "ne") {
+    return "technicke_prijezd_missing_volba";
   }
-
-  if (rezim === "vyjezd_technika" && !input.potvrzeniVyjezdCeny) {
-    return "technicke_missing_potvrzeni_vyjezd";
-  }
-
-  if (rezim !== "klient_vyplni" || !input.technika) {
+  if (technika.prijezd_az_ke_stage === "ano") {
+    if (!technika.prijezd_dodavka_35t && !technika.prijezd_nakladni_12t) {
+      return "technicke_prijezd_missing_vozidlo";
+    }
     return null;
   }
+  const distance = Number(String(technika.prijezd_vzdalenost_od_stage_m ?? "").replace(",", "."));
+  if (!Number.isFinite(distance) || distance <= 0) {
+    return "technicke_prijezd_missing_vzdalenost";
+  }
+  return null;
+}
 
-  const technika = input.technika;
-
+export function validateTechnickePodminkyCore(
+  technika: PoptavkaTechnikaFormValues,
+  options?: { requireSectionPhotos?: boolean; photoCounts?: SectionPhotoCounts }
+): string | null {
   if (technika.elektro_zdroj_typ !== "pevna_pripojka" && technika.elektro_zdroj_typ !== "elektrocentrala") {
     return "technicke_elektro_missing_zdroj";
   }
@@ -174,23 +185,84 @@ export function validateTechnickePodminkyForSave(input: {
     return "technicke_elektro_missing_stage_pripojka";
   }
 
-  if (
-    !isAnoNe(technika.lze_zajet_autem) ||
-    !isAnoNe(technika.misto_zpevnene) ||
-    !isAnoNe(technika.kabel_pres_silnici)
-  ) {
+  const prijezdError = validatePrijezdFields(technika);
+  if (prijezdError) return prijezdError;
+
+  if (!isAnoNe(technika.misto_zpevnene) || !isAnoNe(technika.kabel_pres_silnici)) {
     return "technicke_missing_ano_ne";
   }
 
+  if (options?.requireSectionPhotos) {
+    const photoError = validateRequiredSectionPhotos(options.photoCounts);
+    if (photoError) return photoError;
+  }
+
   return null;
+}
+
+export function validateTechnickePodminkyForSave(input: {
+  wizardStep: number;
+  technickeRezim: string;
+  potvrzeniOdpovednosti: boolean;
+  potvrzeniVyjezdCeny: boolean;
+  technika?: PoptavkaTechnikaFormValues;
+  requireSectionPhotos?: boolean;
+  photoCounts?: SectionPhotoCounts;
+}): string | null {
+  if (input.wizardStep < 4) return null;
+
+  const rezim = input.technickeRezim.trim();
+  if (rezim !== "klient_vyplni" && rezim !== "vyjezd_technika") {
+    return "technicke_missing_rezim";
+  }
+
+  if (rezim === "klient_vyplni" && !input.potvrzeniOdpovednosti) {
+    return "technicke_missing_potvrzeni";
+  }
+
+  if (rezim === "vyjezd_technika" && !input.potvrzeniVyjezdCeny) {
+    return "technicke_missing_potvrzeni_vyjezd";
+  }
+
+  if (rezim !== "klient_vyplni" || !input.technika) {
+    return null;
+  }
+
+  return validateTechnickePodminkyCore(input.technika, {
+    requireSectionPhotos: input.requireSectionPhotos ?? false,
+    photoCounts: input.photoCounts,
+  });
+}
+
+export function validateTechnickePodminkyForSubmit(input: {
+  technickeRezim: string;
+  potvrzeniOdpovednosti: boolean;
+  technika: PoptavkaTechnikaFormValues;
+  photoCounts: SectionPhotoCounts;
+}): string | null {
+  if (input.technickeRezim !== "klient_vyplni") {
+    return "technicke_missing_rezim";
+  }
+  if (!input.potvrzeniOdpovednosti) {
+    return "technicke_missing_potvrzeni";
+  }
+  return validateTechnickePodminkyCore(input.technika, {
+    requireSectionPhotos: true,
+    photoCounts: input.photoCounts,
+  });
 }
 
 export function validateTechnikVyjezdOrder(input: {
   values: PoptavkaFormValues;
   technika: PoptavkaTechnikaFormValues;
 }): string | null {
-  const formError = validatePoptavkaFormForSave(input.values);
-  if (formError) return formError;
+  const draftError =
+    !input.values.misto_nazev.trim()
+      ? "missing_event_name"
+      : !input.values.datum_od
+        ? "missing_date"
+        : null;
+  if (draftError) return draftError;
 
   if (input.technika.technicke_rezim !== "vyjezd_technika") {
     return "technicke_missing_rezim";

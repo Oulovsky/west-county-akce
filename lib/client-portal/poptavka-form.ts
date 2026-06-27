@@ -1,5 +1,4 @@
 import type { SetupOblast } from "@/lib/client-portal/types";
-import { validatePoptavkaFormForSave } from "@/lib/client-portal/poptavka-wizard-validation";
 import {
   buildLogistikaOknaRowPayload,
   parseLogistikaOknaFromFormData,
@@ -138,12 +137,21 @@ export function parsePoptavkaFormData(formData: FormData): PoptavkaFormValues {
   };
 }
 
-export function validatePoptavkaForm(values: PoptavkaFormValues): string | null {
-  return validatePoptavkaFormForSave(values);
+export function validatePoptavkaDraftMinima(values: PoptavkaFormValues): string | null {
+  if (!values.misto_nazev.trim()) return "missing_event_name";
+  if (!values.datum_od) return "missing_date";
+  return null;
 }
 
-export function buildPoptavkaRowPayload(values: PoptavkaFormValues) {
-  const viceDenni = values.datum_od !== values.datum_do;
+export function validatePoptavkaForm(values: PoptavkaFormValues): string | null {
+  return validatePoptavkaDraftMinima(values);
+}
+
+export function buildPoptavkaRowPayload(
+  values: PoptavkaFormValues,
+  options?: { wizardKrok?: number | null }
+) {
+  const viceDenni = values.datum_od && values.datum_do ? values.datum_od !== values.datum_do : false;
 
   return {
     kontakt_jmeno: nullable(values.kontakt_jmeno),
@@ -162,6 +170,7 @@ export function buildPoptavkaRowPayload(values: PoptavkaFormValues) {
     cas_programu_do: normalizeTime(values.cas_programu_do),
     misto_poznamka: nullable(values.misto_poznamka),
     vice_denni: viceDenni,
+    wizard_krok: options?.wizardKrok ?? null,
     ...buildLogistikaOknaRowPayload(values),
     updated_at: new Date().toISOString(),
   };

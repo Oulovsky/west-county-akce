@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { headers } from "next/headers";
-import PoptavkaFotkyClient from "@/components/portal/PoptavkaFotkyClient";
 import PoptavkaTechnickePodminkyReadOnly from "@/components/portal/PoptavkaTechnickePodminkyReadOnly";
 import PoptavkaMistoReadOnly from "@/components/portal/PoptavkaMistoReadOnly";
 import { verifyInternalPoptavkyReadPage } from "@/lib/auth/admin-access-server";
@@ -496,14 +495,6 @@ export default async function ZakazkyPoptavkaDetailPage({
       <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
         <PoptavkaTechnickePodminkyReadOnly row={detail.technicke_udaje} fotky={detail.fotky} />
       </div>
-
-      <section className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
-        <PoptavkaFotkyClient
-          poptavkaId={detail.poptavka_id}
-          initialFotky={detail.fotky}
-          readOnly
-        />
-      </section>
 
       <PoptavkaInterniPoznamkaForm
         poptavkaId={detail.poptavka_id}
