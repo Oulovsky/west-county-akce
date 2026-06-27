@@ -135,6 +135,8 @@ export default function PoptavkaObjednavkaDocument({ data, meta }: Props) {
             <DocRow label="Čas programu" value={casAkce} />
             <DocRow label="Vícedenní" value={akce.viceDenni ? "Ano" : "Ne"} />
             <DocRow label="Poznámka" value={akce.poznamka} />
+            <DocRow label="Přesný popis místa" value={akce.presnyPopisMista} />
+            <DocRow label="Poznámka k logistice" value={akce.logistikaPoznamkaKlienta} />
           </dl>
         </DocSection>
 
@@ -197,8 +199,12 @@ export default function PoptavkaObjednavkaDocument({ data, meta }: Props) {
           </dl>
         </DocSection>
 
-        <DocSection title="Technické plnění">
-          {data.technickePlneni.setupy.length > 0 ? (
+        <DocSection title="Konfigurace sestavy">
+          {data.sestavaSummary ? (
+            <div className="mb-4 whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-relaxed text-slate-800">
+              {data.sestavaSummary}
+            </div>
+          ) : data.technickePlneni.setupy.length > 0 ? (
             <ul className="mb-4 space-y-2">
               {data.technickePlneni.setupy.map((row) => (
                 <li
@@ -213,16 +219,12 @@ export default function PoptavkaObjednavkaDocument({ data, meta }: Props) {
                   {row.poznamkaKlienta ? (
                     <p className="mt-1 text-slate-600">Poznámka klienta: {row.poznamkaKlienta}</p>
                   ) : null}
-                  {row.poznamkaInterni ? (
-                    <p className="mt-1 text-slate-600">Interní: {row.poznamkaInterni}</p>
-                  ) : null}
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="mb-4 text-sm text-slate-500">Bez vybraných setupů.</p>
+            <p className="mb-4 text-sm text-slate-500">Konfigurace sestavy není uvedena.</p>
           )}
-          <ProseBlock title="Shrnutí techniky" text={data.technickePlneni.poznamkaKTechnice} />
         </DocSection>
 
         {data.fotky.length > 0 ? (

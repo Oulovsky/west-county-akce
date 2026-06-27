@@ -5,9 +5,17 @@ import { formatTypAkce } from "@/lib/client-portal/poptavka-form";
 import type { InternalPoptavkaDetail } from "@/lib/client-portal/poptavka-internal-server";
 import { DEFAULT_PORTAL_SESTAVA_KATALOG } from "@/lib/client-portal/sestava-konfigurator-katalog";
 import {
+  EMPTY_SESTAVA_KONFIGURATOR,
   formatSestavaSummaryText,
+  hasSestavaKonfigurace,
+  migrateLegacySestavaState,
   sestavaFromOdpovediExtra,
 } from "@/lib/client-portal/sestava-konfigurator-form";
+import { syncPoptavkaObjednavkaDraftDerived } from "@/lib/client-portal/poptavka-objednavka-draft-sync";
+import {
+  EMPTY_POPTAVKA_TECHNIKA,
+  technikaFromRecord,
+} from "@/lib/client-portal/poptavka-technika-form";
 import { loadInternalPoptavkaDetail } from "@/lib/client-portal/poptavka-internal-server";
 import { cloneVychoziSmluvniPodminky } from "@/lib/client-portal/poptavka-objednavka-sablony";
 import {
@@ -234,6 +242,8 @@ export function createEmptyPoptavkaObjednavkaDraftData(): PoptavkaObjednavkaDraf
       casProgramuDo: null,
       viceDenni: false,
       poznamka: null,
+      presnyPopisMista: null,
+      logistikaPoznamkaKlienta: null,
     },
     misto: emptyMistoBlock(),
     organizace: {
@@ -246,6 +256,8 @@ export function createEmptyPoptavkaObjednavkaDraftData(): PoptavkaObjednavkaDraf
     smluvniPodminky: cloneVychoziSmluvniPodminky(),
     textProKlienta: emptyTextProKlienta(),
     fotky: [],
+    sestava: { ...EMPTY_SESTAVA_KONFIGURATOR },
+    technika: { ...EMPTY_POPTAVKA_TECHNIKA },
     pricing: null,
     validationWarnings: [],
   };
@@ -292,6 +304,8 @@ function buildAkceBlock(detail: InternalPoptavkaDetail): AkceBlock {
     casProgramuDo: normalizeTime(detail.cas_programu_do),
     viceDenni: detail.vice_denni,
     poznamka: nullableText(detail.misto_poznamka),
+    presnyPopisMista: nullableText(detail.presny_popis_mista),
+    logistikaPoznamkaKlienta: nullableText(detail.logistika_poznamka_klienta),
   };
 }
 
@@ -493,8 +507,10 @@ export function getPoptavkaObjednavkaDraftWarnings(
   ) {
     warnings.push("Chybí technické údaje o místě akce.");
   }
-  if (draft.technickePlneni.setupy.length === 0) {
-    warnings.push("Objednávka neobsahuje žádné vybrané setupy.");
+  if (draft.technickePlneni.setupy.length === 0 && !hasSestavaKonfigurace(draft.sestava)) {
+    warnings.push("Chybí konfigurace sestavy nebo vybrané skladové setupy.");
+  } else if (draft.technickePlneni.setupy.length === 0 && hasSestavaKonfigurace(draft.sestava)) {
+    warnings.push("Konkrétní skladové setupy zatím nejsou přiřazené.");
   }
 
   return warnings;
@@ -560,6 +576,8 @@ export function normalizePoptavkaObjednavkaDraftData(
       casProgramuDo: normalizeTime(input.akce.casProgramuDo),
       viceDenni: input.akce.viceDenni,
       poznamka: nullableText(input.akce.poznamka),
+      presnyPopisMista: nullableText(input.akce.presnyPopisMista),
+      logistikaPoznamkaKlienta: nullableText(input.akce.logistikaPoznamkaKlienta),
     },
     misto: {
       nazev: nullableText(input.misto.nazev),
@@ -638,12 +656,20 @@ export function normalizePoptavkaObjednavkaDraftData(
       poradi: Number.isFinite(row.poradi) ? row.poradi : 0,
       zahrnoutDoObjednavky: row.zahrnoutDoObjednavky !== false,
     })),
+    sestava: migrateLegacySestavaState(
+      (input.sestava as Partial<typeof EMPTY_SESTAVA_KONFIGURATOR> | undefined) ??
+        EMPTY_SESTAVA_KONFIGURATOR
+    ),
+    technika: {
+      ...EMPTY_POPTAVKA_TECHNIKA,
+      ...(input.technika ?? {}),
+    },
     pricing: null,
     validationWarnings: [],
   };
 
   draft.validationWarnings = getPoptavkaObjednavkaDraftWarnings(draft);
-  return draft;
+  return syncPoptavkaObjednavkaDraftDerived(draft);
 }
 
 export function buildPoptavkaObjednavkaDraftFromDetail(
@@ -666,8 +692,10 @@ export function buildPoptavkaObjednavkaDraftFromDetail(
   draft.smluvniPodminky = cloneVychoziSmluvniPodminky();
   draft.textProKlienta = emptyTextProKlienta();
   draft.fotky = buildFotkyDraft(detail);
+  draft.sestava = sestavaFromOdpovediExtra(technika?.odpovedi_extra ?? {});
+  draft.technika = technikaFromRecord(technika);
 
-  return normalizePoptavkaObjednavkaDraftData(draft);
+  return syncPoptavkaObjednavkaDraftDerived(normalizePoptavkaObjednavkaDraftData(draft));
 }
 
 async function loadMistoKonani(
@@ -747,6 +775,8 @@ function snapshotBlocksFromDraft(draft: PoptavkaObjednavkaDraftData): Pick<
   | "smluvniPodminky"
   | "textProKlienta"
   | "pricing"
+  | "sestava"
+  | "technika"
 > {
   return {
     klient: draft.klient,
@@ -757,6 +787,8 @@ function snapshotBlocksFromDraft(draft: PoptavkaObjednavkaDraftData): Pick<
     technickePlneni: draft.technickePlneni,
     smluvniPodminky: draft.smluvniPodminky,
     textProKlienta: draft.textProKlienta,
+    sestava: draft.sestava,
+    technika: draft.technika,
     pricing: null,
   };
 }

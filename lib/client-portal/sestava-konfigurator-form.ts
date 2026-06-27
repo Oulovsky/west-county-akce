@@ -276,6 +276,13 @@ export function applySchodyVolba(volba: SchodyVolba): Pick<SestavaKonfiguratorSt
   }
 }
 
+export function hasSestavaKonfigurace(sestava: SestavaKonfiguratorState): boolean {
+  if (sestava.rezim === "atypicka") {
+    return Boolean(sestava.atypicka_poptavka_text?.trim());
+  }
+  return sestava.stage_typ != null;
+}
+
 export function sestavaFromOdpovediExtra(
   extra: Record<string, unknown> | null | undefined
 ): SestavaKonfiguratorState {

@@ -479,3 +479,13 @@ export function formatPripojkyCounts(values: PoptavkaTechnikaFormValues) {
   }).filter(Boolean);
   return parts.length ? parts.join(", ") : null;
 }
+
+export function parseTechnikaJson(raw: string | null | undefined): PoptavkaTechnikaFormValues | null {
+  if (!raw?.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<PoptavkaTechnikaFormValues>;
+    return { ...EMPTY_POPTAVKA_TECHNIKA, ...parsed };
+  } catch {
+    return null;
+  }
+}

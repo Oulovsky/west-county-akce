@@ -14,6 +14,10 @@ import type {
   TerminBlock,
 } from "@/lib/client-portal/poptavka-objednavka-types";
 import { SETUP_OBLASTI } from "@/lib/client-portal/types";
+import {
+  buildSestavaOdpovediExtra,
+  EMPTY_SESTAVA_KONFIGURATOR,
+} from "@/lib/client-portal/sestava-konfigurator-form";
 
 function normalizeTime(value: string | null | undefined) {
   if (!value?.trim()) return null;
@@ -176,6 +180,7 @@ export function buildDotaznikPayloadFromSnapshot(
       cislo_poptavky: snapshot.meta.cisloPoptavky,
       objednavka_link_id: snapshot.meta.linkId,
       snapshot_frozen_at: snapshot.frozenAt,
+      ...buildSestavaOdpovediExtra(snapshot.sestava ?? EMPTY_SESTAVA_KONFIGURATOR),
       rozvadece_poznamka: misto.elektro.rozvadecePoznamka,
       kabelove_trasy: misto.elektro.kabeloveTrasy,
       misto_stage: misto.mistoStage,

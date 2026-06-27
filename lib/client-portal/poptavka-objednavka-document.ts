@@ -6,6 +6,12 @@ import type {
   PoptavkaObjednavkaSnapshot,
   TerminBlock,
 } from "@/lib/client-portal/poptavka-objednavka-types";
+import { DEFAULT_PORTAL_SESTAVA_KATALOG } from "@/lib/client-portal/sestava-konfigurator-katalog";
+import {
+  EMPTY_SESTAVA_KONFIGURATOR,
+  formatSestavaSummaryText,
+  hasSestavaKonfigurace,
+} from "@/lib/client-portal/sestava-konfigurator-form";
 
 function mapDraftFotky(
   fotky: FotkaDraft[],
@@ -37,12 +43,16 @@ export function draftDataToDocumentData(
     smluvniPodminky: draft.smluvniPodminky,
     textProKlienta: draft.textProKlienta,
     fotky: mapDraftFotky(draft.fotky, imageUrls),
+    sestavaSummary: hasSestavaKonfigurace(draft.sestava)
+      ? formatSestavaSummaryText(draft.sestava, DEFAULT_PORTAL_SESTAVA_KATALOG)
+      : draft.technickePlneni.poznamkaKTechnice,
   };
 }
 
 export function snapshotToDocumentData(
   snapshot: PoptavkaObjednavkaSnapshot
 ): PoptavkaObjednavkaDocumentData {
+  const sestava = snapshot.sestava ?? EMPTY_SESTAVA_KONFIGURATOR;
   return {
     klient: snapshot.klient,
     dodavatel: snapshot.dodavatel,
@@ -61,6 +71,9 @@ export function snapshotToDocumentData(
         poradi: row.poradi,
       }))
       .sort((a, b) => a.poradi - b.poradi),
+    sestavaSummary: hasSestavaKonfigurace(sestava)
+      ? formatSestavaSummaryText(sestava, DEFAULT_PORTAL_SESTAVA_KATALOG)
+      : snapshot.technickePlneni.poznamkaKTechnice,
   };
 }
 

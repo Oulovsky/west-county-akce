@@ -14,6 +14,8 @@ import {
   loadPoptavkaObjednavkaDraft,
 } from "@/lib/client-portal/poptavka-objednavka-draft-server";
 import { buildPoptavkaObjednavkaUrl, countPoptavkaObjednavkaLinkVersions } from "@/lib/client-portal/poptavka-objednavka-link-server";
+import { loadPortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-server";
+import { loadPortalSetups } from "@/lib/client-portal/poptavka-server";
 import { createClient } from "@/lib/supabase/server";
 import PoptavkaOutboundMessagePanel from "../../PoptavkaOutboundMessagePanel";
 import PoptavkaObjednavkaDraftEditor from "./PoptavkaObjednavkaDraftEditor";
@@ -261,6 +263,10 @@ export default async function PoptavkaObjednavkaEditorPage({
   const canSend = canSendPoptavkaBindingOrder(detail.stav);
   const odeslanychVerzi = await countPoptavkaObjednavkaLinkVersions(supabase, poptavkaId);
   const dalsiNavrhVerze = odeslanychVerzi + 1;
+  const [sestavaKatalog, setupsByOblast] = await Promise.all([
+    loadPortalSestavaKatalog(),
+    loadPortalSetups(supabase),
+  ]);
 
   return (
     <div className="space-y-6 p-6">
@@ -329,6 +335,9 @@ export default async function PoptavkaObjednavkaEditorPage({
         dalsiNavrhVerze={dalsiNavrhVerze}
         saved={resolvedSearchParams?.saved === "1"}
         errorCode={resolvedSearchParams?.error ?? null}
+        sestavaKatalog={sestavaKatalog}
+        setupsByOblast={setupsByOblast}
+        initialFotky={detail.fotky}
       />
     </div>
   );

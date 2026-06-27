@@ -1,4 +1,6 @@
 import type { PoptavkaFotkaTyp, SetupOblast } from "@/lib/client-portal/types";
+import type { SestavaKonfiguratorState } from "@/lib/client-portal/sestava-konfigurator-types";
+import type { PoptavkaTechnikaFormValues } from "@/lib/client-portal/poptavka-technika-form";
 
 export const POPTAVKA_OBJEDNAVKA_DRAFT_DATA_VERSION = 1 as const;
 export const POPTAVKA_OBJEDNAVKA_SNAPSHOT_VERSION = 1 as const;
@@ -29,6 +31,8 @@ export type AkceBlock = {
   casProgramuDo: string | null;
   viceDenni: boolean;
   poznamka: string | null;
+  presnyPopisMista: string | null;
+  logistikaPoznamkaKlienta: string | null;
 };
 
 export type MistoElektroBlock = {
@@ -155,6 +159,10 @@ export type PoptavkaObjednavkaDraftData = {
   draftVersion: typeof POPTAVKA_OBJEDNAVKA_DRAFT_DATA_VERSION;
   /** Ruční příznak — v dokumentu pro klienta se zobrazí upozornění na změny oproti poptávce. */
   upravenoOprotiPoptavce: boolean;
+  /** Stejný stav jako klientský konfigurátor sestavy (krok 3). */
+  sestava: SestavaKonfiguratorState;
+  /** Stejné hodnoty jako klientský krok Technické podmínky. */
+  technika: PoptavkaTechnikaFormValues;
   klient: PartyBlock;
   dodavatel: PartyBlock;
   akce: AkceBlock;
@@ -191,6 +199,8 @@ export type PoptavkaObjednavkaSnapshot = {
   draftSchemaVersion: number;
   snapshotSchemaVersion: number;
   meta: PoptavkaObjednavkaSnapshotMeta;
+  sestava: SestavaKonfiguratorState;
+  technika: PoptavkaTechnikaFormValues;
   klient: PartyBlock;
   dodavatel: PartyBlock;
   akce: AkceBlock;
@@ -236,6 +246,8 @@ export type PoptavkaObjednavkaDocumentData = {
   smluvniPodminky: SmluvniPodminkyBlock;
   textProKlienta: TextProKlientaBlock;
   fotky: PoptavkaObjednavkaDocumentFotka[];
+  /** Textový výpis konfigurace sestavy pro dokument. */
+  sestavaSummary?: string | null;
 };
 
 export type PoptavkaObjednavkaDocumentMeta = {

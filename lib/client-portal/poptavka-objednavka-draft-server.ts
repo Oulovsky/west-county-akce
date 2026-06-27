@@ -2,6 +2,11 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  EMPTY_SESTAVA_KONFIGURATOR,
+  migrateLegacySestavaState,
+} from "@/lib/client-portal/sestava-konfigurator-form";
+import { EMPTY_POPTAVKA_TECHNIKA } from "@/lib/client-portal/poptavka-technika-form";
+import {
   buildPoptavkaObjednavkaDraftFromPoptavka,
   createEmptyPoptavkaObjednavkaDraftData,
   normalizePoptavkaObjednavkaDraftData,
@@ -116,7 +121,12 @@ function mergeDraftDataFromJson(raw: unknown): PoptavkaObjednavkaDraftData {
     },
     smluvniPodminky: { ...base.smluvniPodminky, ...src.smluvniPodminky },
     textProKlienta: { ...base.textProKlienta, ...src.textProKlienta },
-    fotky: base.fotky,
+    fotky: src.fotky ?? base.fotky,
+    sestava: migrateLegacySestavaState(
+      (src.sestava as Partial<typeof EMPTY_SESTAVA_KONFIGURATOR> | undefined) ??
+        base.sestava
+    ),
+    technika: { ...EMPTY_POPTAVKA_TECHNIKA, ...(src.technika ?? {}) },
     pricing: null,
     upravenoOprotiPoptavce: Boolean(src.upravenoOprotiPoptavce),
     validationWarnings: [],

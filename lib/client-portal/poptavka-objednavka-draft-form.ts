@@ -1,7 +1,7 @@
-import type {
-  PoptavkaObjednavkaDraftData,
-  PoptavkaObjednavkaTriVolba,
-} from "@/lib/client-portal/poptavka-objednavka-types";
+import { TYP_AKCE_OPTIONS } from "@/lib/client-portal/poptavka-form";
+import { parseSestavaKonfiguratorJson } from "@/lib/client-portal/sestava-konfigurator-form";
+import { parseTechnikaJson } from "@/lib/client-portal/poptavka-technika-form";
+import type { PoptavkaObjednavkaDraftData } from "@/lib/client-portal/poptavka-objednavka-types";
 import { POPTAVKA_OBJEDNAVKA_DRAFT_DATA_VERSION } from "@/lib/client-portal/poptavka-objednavka-types";
 import { parseDatetimeLocalToIso } from "@/lib/logistika-okna";
 
@@ -12,11 +12,6 @@ function field(formData: FormData, name: string) {
 function nullableField(formData: FormData, name: string) {
   const value = field(formData, name);
   return value || null;
-}
-
-function parseTriVolba(value: string): PoptavkaObjednavkaTriVolba | null {
-  if (value === "ano" || value === "ne" || value === "nevim") return value;
-  return null;
 }
 
 function parseOptionalNumber(value: string) {
@@ -39,9 +34,14 @@ export function mergeObjednavkaDraftFromFormData(
   base: PoptavkaObjednavkaDraftData,
   formData: FormData
 ): PoptavkaObjednavkaDraftData {
+  const sestavaJson = field(formData, "sestava_konfigurator_json");
+  const technikaJson = field(formData, "technika_json");
+
   return {
     draftVersion: POPTAVKA_OBJEDNAVKA_DRAFT_DATA_VERSION,
     upravenoOprotiPoptavce: formData.get("upraveno_oproti_poptavce") === "on",
+    sestava: parseSestavaKonfiguratorJson(sestavaJson || null) ?? base.sestava,
+    technika: parseTechnikaJson(technikaJson || null) ?? base.technika,
     klient: {
       nazev: nullableField(formData, "klient_nazev"),
       ico: nullableField(formData, "klient_ico"),
@@ -64,8 +64,10 @@ export function mergeObjednavkaDraftFromFormData(
     },
     akce: {
       nazevAkce: nullableField(formData, "akce_nazev"),
-      typAkce: nullableField(formData, "akce_typ"),
-      typAkceKod: base.akce.typAkceKod,
+      typAkceKod: nullableField(formData, "akce_typ_kod") ?? base.akce.typAkceKod,
+      typAkce:
+        TYP_AKCE_OPTIONS.find((opt) => opt.value === field(formData, "akce_typ_kod"))?.label ??
+        base.akce.typAkce,
       typAkcePoznamka: nullableField(formData, "akce_typ_poznamka"),
       datumOd: nullableField(formData, "akce_datum_od"),
       datumDo: nullableField(formData, "akce_datum_do"),
@@ -73,39 +75,17 @@ export function mergeObjednavkaDraftFromFormData(
       casProgramuDo: normalizeTime(field(formData, "akce_cas_do")),
       viceDenni: formData.get("akce_vice_denni") === "on",
       poznamka: nullableField(formData, "akce_poznamka"),
+      presnyPopisMista: nullableField(formData, "presny_popis_mista"),
+      logistikaPoznamkaKlienta: nullableField(formData, "logistika_poznamka_klienta"),
     },
     misto: {
+      ...base.misto,
       nazev: nullableField(formData, "misto_nazev"),
       adresa: nullableField(formData, "misto_adresa"),
       gps: {
         lat: parseOptionalNumber(field(formData, "misto_gps_lat")),
         lng: parseOptionalNumber(field(formData, "misto_gps_lng")),
       },
-      prijezdPopis: nullableField(formData, "misto_prijezd"),
-      pristupovaCesta: nullableField(formData, "misto_pristup"),
-      povrchTeren: parseTriVolba(field(formData, "misto_povrch")),
-      vjezdTechnikou: parseTriVolba(field(formData, "misto_vjezd")),
-      mistoStage: nullableField(formData, "misto_stage"),
-      mistoFoh: nullableField(formData, "misto_foh"),
-      mistoLedRezie: nullableField(formData, "misto_led_rezie"),
-      elektro: {
-        pripojka: nullableField(formData, "elektro_pripojka"),
-        jisteni: nullableField(formData, "elektro_jisteni"),
-        zasuvka: nullableField(formData, "elektro_zasuvka"),
-        vzdalenostM: parseOptionalNumber(field(formData, "elektro_vzdalenost_m")),
-        rozvadecePoznamka: nullableField(formData, "elektro_rozvadece"),
-        kabeloveTrasy: nullableField(formData, "elektro_kabelove_trasy"),
-        kabelPresSilnici: parseTriVolba(field(formData, "elektro_kabel_pres_silnici")),
-        potrebaElektrocentraly: parseTriVolba(field(formData, "elektro_centrala")),
-        vzdalenostRozvadece: nullableField(formData, "elektro_vzdalenost_rozvadece"),
-      },
-      omezeniHluku: nullableField(formData, "misto_omezeni_hluku"),
-      casovaOmezeni: nullableField(formData, "misto_casova_omezeni"),
-      nocniPraceOmezeni: nullableField(formData, "misto_nocni_prace"),
-      kotveniZaveseni: nullableField(formData, "misto_kotveni"),
-      pozadavkyPoradatele: nullableField(formData, "misto_pozadavky_poradatele"),
-      dalsiTechnickePoznamky: nullableField(formData, "misto_dalsi_poznamky"),
-      pozadovanVyjezdTechnika: formData.get("misto_vyjezd_technika") === "on",
     },
     organizace: {
       prijezdTechniky: nullableField(formData, "org_prijezd_techniky"),
@@ -139,7 +119,7 @@ export function mergeObjednavkaDraftFromFormData(
     technickePlneni: {
       setupy: base.technickePlneni.setupy,
       oblasti: base.technickePlneni.oblasti,
-      poznamkaKTechnice: nullableField(formData, "technika_poznamka"),
+      poznamkaKTechnice: base.technickePlneni.poznamkaKTechnice,
     },
     smluvniPodminky: {
       zavaznost: field(formData, "smluvni_zavaznost"),
