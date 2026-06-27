@@ -8,31 +8,14 @@ import {
 } from "@/lib/client-portal/poptavka-fotky-shared";
 import type { TechnikaSectionPhotoKey } from "@/lib/client-portal/poptavka-technika-podminky";
 import type { PoptavkaFotkaTyp } from "@/lib/client-portal/types";
+import {
+  emptySectionPhotoState,
+  type PendingPhoto,
+  type SectionPhotoState,
+} from "@/lib/client-portal/poptavka-section-photo-state";
 
-type SavedFotka = {
-  id: string;
-  typ: PoptavkaFotkaTyp;
-  popis: string | null;
-  original_filename: string | null;
-  signedUrl: string | null;
-};
-
-export type PendingPhoto = {
-  id: string;
-  file: File;
-  previewUrl: string;
-  status?: "pending" | "uploading" | "failed";
-  errorMessage?: string;
-};
-
-export type SectionPhotoState = {
-  pending: PendingPhoto[];
-  saved: SavedFotka[];
-};
-
-export function emptySectionPhotoState(): SectionPhotoState {
-  return { pending: [], saved: [] };
-}
+export type { PendingPhoto, SectionPhotoState };
+export { emptySectionPhotoState };
 
 export default function PoptavkaTechnikaSectionPhoto({
   sectionKey,

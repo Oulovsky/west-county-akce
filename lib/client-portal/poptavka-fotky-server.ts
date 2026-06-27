@@ -7,14 +7,13 @@ import {
   isAllowedPoptavkaFotkaTyp,
   resolvePoptavkaPhotoMimeType,
   validatePoptavkaPhotoFile,
+  type PoptavkaFotkaWithUrl,
 } from "@/lib/client-portal/poptavka-fotky-shared";
 import type { PoptavkaFotka } from "@/lib/client-portal/types";
 import { POPTAVKA_FOTKY_BUCKET } from "@/lib/client-portal/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export type PoptavkaFotkaWithUrl = PoptavkaFotka & {
-  signedUrl: string | null;
-};
+export type { PoptavkaFotkaWithUrl };
 
 export async function loadPoptavkaFotkyWithUrls(
   supabase: SupabaseClient,

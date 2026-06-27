@@ -1,16 +1,15 @@
+"use client";
+
 import { TECHNIKA_SECTION_PHOTOS } from "@/lib/client-portal/poptavka-technika-podminky";
 import type { TechnikaSectionPhotoKey } from "@/lib/client-portal/poptavka-technika-podminky";
-import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-server";
-import type { SectionPhotoState } from "@/components/portal/PoptavkaTechnikaSectionPhoto";
-import { emptySectionPhotoState } from "@/components/portal/PoptavkaTechnikaSectionPhoto";
+import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-shared";
+import {
+  emptySectionPhotoState,
+  type PendingPhoto,
+  type SectionPhotoState,
+} from "@/lib/client-portal/poptavka-section-photo-state";
 
-export type PendingSectionPhoto = {
-  id: string;
-  file: File;
-  previewUrl: string;
-  status?: "pending" | "uploading" | "failed";
-  errorMessage?: string;
-};
+export type PendingSectionPhoto = PendingPhoto;
 
 export type SectionPhotoUploadItemResult =
   | { ok: true; clientId: string; fotka: PoptavkaFotkaWithUrl }

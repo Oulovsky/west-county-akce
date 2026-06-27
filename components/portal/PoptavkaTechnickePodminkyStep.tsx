@@ -2,7 +2,6 @@
 
 import { useMemo } from "react";
 import PoptavkaTechnikaSectionPhoto, {
-  emptySectionPhotoState,
   type SectionPhotoState,
 } from "@/components/portal/PoptavkaTechnikaSectionPhoto";
 import {
@@ -28,7 +27,10 @@ import {
   STAGE_PRIPOJKA_OPTIONS,
   type PoptavkaTechnikaFormValues,
 } from "@/lib/client-portal/poptavka-technika-form";
-import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-server";
+import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-shared";
+import { createInitialSectionPhotos, emptySectionPhotoState } from "@/lib/client-portal/poptavka-section-photo-state";
+
+export { createInitialSectionPhotos };
 
 type Props = {
   technika: PoptavkaTechnikaFormValues;
@@ -55,33 +57,6 @@ type Props = {
   kontaktEmail: string;
   highlightMissingPhotos?: boolean;
 };
-
-function buildInitialSectionPhotos(
-  initialFotky: PoptavkaFotkaWithUrl[]
-): Partial<Record<TechnikaSectionPhotoKey, SectionPhotoState>> {
-  const map: Partial<Record<TechnikaSectionPhotoKey, SectionPhotoState>> = {};
-
-  for (const section of TECHNIKA_SECTION_PHOTOS) {
-    map[section.key] = {
-      ...emptySectionPhotoState(),
-      saved: initialFotky
-        .filter((row) => row.typ === section.typ)
-        .map((row) => ({
-          id: row.id,
-          typ: row.typ,
-          popis: row.popis,
-          original_filename: row.original_filename,
-          signedUrl: row.signedUrl,
-        })),
-    };
-  }
-
-  return map;
-}
-
-export function createInitialSectionPhotos(initialFotky: PoptavkaFotkaWithUrl[] = []) {
-  return buildInitialSectionPhotos(initialFotky);
-}
 
 const choiceCardClass =
   "rounded-2xl border border-white/15 bg-white/[0.03] p-5 text-left transition hover:border-amber-500/40 hover:bg-white/[0.05]";

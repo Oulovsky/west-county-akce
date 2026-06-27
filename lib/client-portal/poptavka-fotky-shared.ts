@@ -1,5 +1,9 @@
-import type { PoptavkaFotkaTyp } from "@/lib/client-portal/types";
+import type { PoptavkaFotkaTyp, PoptavkaFotka } from "@/lib/client-portal/types";
 import { POPTAVKA_FOTKA_TYPY } from "@/lib/client-portal/types";
+
+export type PoptavkaFotkaWithUrl = PoptavkaFotka & {
+  signedUrl: string | null;
+};
 
 export const POPTAVKA_FOTKY_ALLOWED_MIME_TYPES = [
   "image/jpeg",

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Spinner } from "@/components/ui/SubmitButton";
 import { rethrowIfNextRedirect } from "@/lib/next/isRedirectError";
 import {
@@ -28,15 +28,14 @@ import { emptyLogistikaOknaValues } from "@/lib/logistika-okna";
 import PoptavkaLogistikaOknaPanel from "@/components/portal/PoptavkaLogistikaOknaPanel";
 import PoptavkaMistoKnowHowPanel from "@/components/portal/PoptavkaMistoKnowHowPanel";
 import PoptavkaSestavaKonfigurator from "@/components/portal/PoptavkaSestavaKonfigurator";
-import PoptavkaTechnickePodminkyStep, {
-  createInitialSectionPhotos,
-} from "@/components/portal/PoptavkaTechnickePodminkyStep";
+import PoptavkaTechnickePodminkyStep from "@/components/portal/PoptavkaTechnickePodminkyStep";
 import {
+  createInitialSectionPhotos,
   emptySectionPhotoState,
-} from "@/components/portal/PoptavkaTechnikaSectionPhoto";
-import { TECHNIKA_SECTION_PHOTOS } from "@/lib/client-portal/poptavka-technika-podminky";
-import type { SectionPhotoState } from "@/components/portal/PoptavkaTechnikaSectionPhoto";
+  type SectionPhotoState,
+} from "@/lib/client-portal/poptavka-section-photo-state";
 import type { TechnickeRezim, TechnikaSectionPhotoKey } from "@/lib/client-portal/poptavka-technika-podminky";
+import { TECHNIKA_SECTION_PHOTOS } from "@/lib/client-portal/poptavka-technika-podminky";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
 import {
   appendPoptavkaFormValuesToFormData,
@@ -47,7 +46,7 @@ import {
 } from "@/lib/client-portal/poptavka-form";
 import { appendTechnikaFormValuesToFormData } from "@/lib/client-portal/poptavka-technika-form";
 import type { ClientPortalMistoSummary, ClientPortalMistoKnowHow } from "@/lib/client-portal/client-mista-shared";
-import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-server";
+import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-shared";
 import type { PortalSetupsByOblast } from "@/lib/client-portal/poptavka-server";
 import {
   EMPTY_POPTAVKA_TECHNIKA,
@@ -132,7 +131,23 @@ function formatSavedMistoLabel(misto: ClientPortalMistoSummary) {
   return misto.nazev;
 }
 
-export default function PoptavkaFormClient({
+export default function PoptavkaFormClient(props: Props) {
+  return (
+    <Suspense
+      fallback={
+        <PortalShell showBackToPortal showMainNav>
+          <PortalCard title={props.mode === "create" ? "Nová poptávka" : "Upravit poptávku"}>
+            <p className="text-sm text-slate-400">Načítání formuláře…</p>
+          </PortalCard>
+        </PortalShell>
+      }
+    >
+      <PoptavkaFormClientInner {...props} />
+    </Suspense>
+  );
+}
+
+function PoptavkaFormClientInner({
   mode,
   prefill,
   setupsByOblast,

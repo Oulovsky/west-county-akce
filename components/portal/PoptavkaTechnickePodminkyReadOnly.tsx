@@ -21,7 +21,7 @@ import {
   technikaFromRecord,
 } from "@/lib/client-portal/poptavka-technika-form";
 import { POPTAVKA_FOTKA_TYP_LABELS } from "@/lib/client-portal/poptavka-fotky-shared";
-import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-server";
+import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-shared";
 import type { PoptavkaTechnickeUdaje } from "@/lib/client-portal/types";
 
 function ReadOnlyField({ label, value }: { label: string; value: string | null | undefined }) {

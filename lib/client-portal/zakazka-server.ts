@@ -8,7 +8,7 @@ import {
   type PortalSetupSelection,
   type PoptavkaDetail,
 } from "@/lib/client-portal/poptavka-server";
-import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-server";
+import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-shared";
 import type { PoptavkaTechnickeUdaje } from "@/lib/client-portal/types";
 import { getWorkflowStatusLabel } from "@/lib/zakazka-workflow";
 
