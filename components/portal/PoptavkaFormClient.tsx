@@ -63,7 +63,10 @@ import {
   getWizardStep3Errors,
   validatePoptavkaDraftMinima,
   validateTechnikVyjezdOrderComplete,
-  validateKlientSubmitComplete,
+  validateKlientSubmitDetailed,
+  collectKlientSubmitValidationIssues,
+  formatWizardValidationIssueLine,
+  wizardIssueLabel,
   countSectionPhotos,
   getMissingSectionPhotoLabels,
   resolveWizardResumeStep,
@@ -156,6 +159,9 @@ export default function PoptavkaFormClient({
   const [mistoAdresaAuto, setMistoAdresaAuto] = useState(() => !initialValues?.misto_adresa?.trim());
   const [stepError, setStepError] = useState<string | null>(null);
   const [stepErrorDetails, setStepErrorDetails] = useState<string[]>([]);
+  const [submitValidationActive, setSubmitValidationActive] = useState(() =>
+    Boolean(errorCode && !saved && !submitted && errorCode !== "not_found")
+  );
   const [pendingIntent, setPendingIntent] = useState<PendingIntent | null>(null);
   const [technickeUiRezim, setTechnickeUiRezim] = useState<TechnickeRezim | null>(() => {
     const rezim = initialTechnika?.technicke_rezim;
@@ -260,24 +266,6 @@ export default function PoptavkaFormClient({
     [sectionPhotoCounts]
   );
 
-  const photoValidationErrorActive =
-    stepError === "technicke_missing_section_photos" ||
-    errorCode === "technicke_missing_section_photos";
-
-  const showPhotoValidationError =
-    photoValidationErrorActive && missingPhotoLabels.length > 0;
-
-  const otherStepError =
-    stepError && stepError !== "technicke_missing_section_photos" ? stepError : null;
-
-  const otherServerError =
-    errorCode &&
-    !stepError &&
-    errorCode !== "technicke_missing_section_photos" &&
-    ERROR_MESSAGES[errorCode]
-      ? errorCode
-      : null;
-
   const initialFotkyKey = useMemo(
     () => initialFotky.map((fotka) => fotka.id).sort().join(","),
     [initialFotky]
@@ -361,6 +349,9 @@ export default function PoptavkaFormClient({
   }, [initialFotkyKey, initialFotky]);
 
   useEffect(() => {
+    const photoValidationErrorActive =
+      stepError === "technicke_missing_section_photos" ||
+      errorCode === "technicke_missing_section_photos";
     if (!photoValidationErrorActive) return;
     if (missingPhotoLabels.length > 0) return;
 
@@ -372,13 +363,19 @@ export default function PoptavkaFormClient({
       router.replace(pathname, { scroll: false });
     }
   }, [
-    photoValidationErrorActive,
     missingPhotoLabels.length,
     stepError,
+    errorCode,
     searchParams,
     pathname,
     router,
   ]);
+
+  useEffect(() => {
+    if (errorCode && !saved && !submitted && errorCode !== "not_found") {
+      setSubmitValidationActive(true);
+    }
+  }, [errorCode, saved, submitted]);
 
   const effectiveTechnickeRezim =
     technickeUiRezim ??
@@ -389,6 +386,105 @@ export default function PoptavkaFormClient({
     technickeUiPotvrzeno ||
     technika.technicke_potvrzeni_odpovednosti ||
     technika.technicke_potvrzeni_vyjezd_ceny;
+
+  const technikaForValidation = useMemo((): PoptavkaTechnikaFormValues => {
+    if (effectiveTechnickeRezim === "klient_vyplni") {
+      return {
+        ...technika,
+        technicke_rezim: "klient_vyplni",
+        technicke_potvrzeni_odpovednosti: effectiveTechnickePotvrzeno,
+        technicke_potvrzeni_vyjezd_ceny: false,
+        pozadovan_vyjezd_technika: false,
+      };
+    }
+    if (effectiveTechnickeRezim === "vyjezd_technika") {
+      return {
+        ...technika,
+        technicke_rezim: "vyjezd_technika",
+        technicke_potvrzeni_vyjezd_ceny: effectiveTechnickePotvrzeno,
+        technicke_potvrzeni_odpovednosti: false,
+        pozadovan_vyjezd_technika: true,
+      };
+    }
+    return technika;
+  }, [technika, effectiveTechnickeRezim, effectiveTechnickePotvrzeno]);
+
+  const submitValidationInput = useMemo(
+    () => ({
+      form,
+      sestava,
+      katalog: sestavaKatalog,
+      technika: technikaForValidation,
+      photoCounts: sectionPhotoCounts,
+    }),
+    [form, sestava, sestavaKatalog, technikaForValidation, sectionPhotoCounts]
+  );
+
+  const derivedSubmitIssues = useMemo(
+    () => collectKlientSubmitValidationIssues(submitValidationInput),
+    [submitValidationInput]
+  );
+
+  const displayedSubmitIssues = useMemo(() => {
+    if (derivedSubmitIssues.length > 0) return derivedSubmitIssues;
+    if (errorCode && (ERROR_MESSAGES[errorCode] || wizardIssueLabel(errorCode) !== errorCode)) {
+      return [
+        {
+          step: wizardErrorStep(errorCode),
+          code: errorCode,
+          label: wizardIssueLabel(errorCode),
+        },
+      ];
+    }
+    return [];
+  }, [derivedSubmitIssues, errorCode]);
+
+  useEffect(() => {
+    if (!submitValidationActive) return;
+    if (derivedSubmitIssues.length > 0) {
+      setStepError(derivedSubmitIssues[0]!.code);
+      setStepErrorDetails(derivedSubmitIssues.map(formatWizardValidationIssueLine));
+      return;
+    }
+    setSubmitValidationActive(false);
+    setStepError(null);
+    setStepErrorDetails([]);
+    if (searchParams.get("error")) {
+      router.replace(pathname, { scroll: false });
+    }
+  }, [
+    submitValidationActive,
+    derivedSubmitIssues,
+    searchParams,
+    pathname,
+    router,
+  ]);
+
+  const showSubmitValidationBox =
+    submitValidationActive && displayedSubmitIssues.length > 0;
+
+  const photoValidationErrorActive =
+    stepError === "technicke_missing_section_photos" ||
+    errorCode === "technicke_missing_section_photos";
+
+  const showPhotoValidationError =
+    !showSubmitValidationBox &&
+    photoValidationErrorActive &&
+    missingPhotoLabels.length > 0;
+
+  const otherStepError =
+    stepError && !submitValidationActive && stepError !== "technicke_missing_section_photos"
+      ? stepError
+      : null;
+
+  const otherServerError =
+    errorCode &&
+    !stepError &&
+    !submitValidationActive &&
+    ERROR_MESSAGES[errorCode]
+      ? errorCode
+      : null;
+
   const canOrderTechnikVyjezd =
     form.misto_lat != null &&
     form.misto_lng != null &&
@@ -532,6 +628,7 @@ export default function PoptavkaFormClient({
   }
 
   function showStepValidationError(code: string, details: string[] = []) {
+    setSubmitValidationActive(false);
     setStepError(code);
     setStepErrorDetails(details);
     if (typeof window !== "undefined") {
@@ -539,7 +636,19 @@ export default function PoptavkaFormClient({
     }
   }
 
+  function showSubmitValidationFailure(
+    result: Extract<ReturnType<typeof validateKlientSubmitDetailed>, { ok: false }>
+  ) {
+    setSubmitValidationActive(true);
+    setStepError(result.code);
+    setStepErrorDetails(result.issues.map(formatWizardValidationIssueLine));
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
   function clearStepValidationError() {
+    setSubmitValidationActive(false);
     setStepError(null);
     setStepErrorDetails([]);
   }
@@ -595,7 +704,7 @@ export default function PoptavkaFormClient({
     formData.set("sestava_konfigurator_json", sestavaJson);
     formData.set("setupy_json", setupyJson);
     appendPoptavkaFormValuesToFormData(formData, form);
-    appendTechnikaFormValuesToFormData(formData, technika);
+    appendTechnikaFormValuesToFormData(formData, technikaForValidation);
     const intent = normalizeSubmitIntent(String(formData.get("save_intent") ?? "draft"));
 
     if (intent === "order_technik_vyjezd") {
@@ -614,24 +723,19 @@ export default function PoptavkaFormClient({
         return;
       }
     } else if (intent === "submit_klient") {
-      const submitError = validateKlientSubmitComplete({
+      const submitResult = validateKlientSubmitDetailed({
         form,
         sestava,
         katalog: sestavaKatalog,
-        technika,
-        photoCounts: countSectionPhotos(sectionPhotos),
+        technika: technikaForValidation,
+        photoCounts: sectionPhotoCounts,
       });
-      if (submitError) {
-        const details =
-          submitError === "invalid_sestava"
-            ? getWizardStep3Errors(sestava, sestavaKatalog)
-            : submitError === "technicke_missing_section_photos"
-              ? getMissingSectionPhotoLabels(countSectionPhotos(sectionPhotos))
-              : [];
-        showStepValidationError(submitError, details);
-        setStep(wizardErrorStep(submitError));
+      if (!submitResult.ok) {
+        showSubmitValidationFailure(submitResult);
+        setStep(wizardErrorStep(submitResult.code));
         return;
       }
+      setSubmitValidationActive(false);
     } else {
       const saveError = validatePoptavkaDraftMinima(form);
       if (saveError) {
@@ -739,6 +843,18 @@ export default function PoptavkaFormClient({
           <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
             {ERROR_MESSAGES[otherServerError]}
           </p>
+        ) : null}
+        {showSubmitValidationBox ? (
+          <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+            <p>Poptávku zatím nelze odeslat. Doplňte:</p>
+            <ul className="mt-2 list-inside list-disc space-y-1 text-red-100/90">
+              {displayedSubmitIssues.map((issue) => (
+                <li key={`${issue.step}-${issue.code}-${issue.label}`}>
+                  {formatWizardValidationIssueLine(issue)}
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : null}
         {otherStepError ? (
           <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
@@ -1322,7 +1438,7 @@ export default function PoptavkaFormClient({
               kontaktJmeno={form.kontakt_jmeno}
               kontaktTelefon={form.kontakt_telefon}
               kontaktEmail={form.kontakt_email}
-              highlightMissingPhotos={showPhotoValidationError}
+              highlightMissingPhotos={showPhotoValidationError || showSubmitValidationBox}
             />
           )}
 

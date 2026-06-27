@@ -73,6 +73,167 @@ export function wizardErrorMessage(code: string): string {
   return WIZARD_STEP_ERROR_MESSAGES[code] ?? "Zkontrolujte vyplněné údaje.";
 }
 
+export type WizardValidationIssue = {
+  step: number;
+  code: string;
+  label: string;
+};
+
+export function wizardIssueLabel(code: string): string {
+  return WIZARD_STEP_ERROR_MESSAGES[code] ?? code;
+}
+
+export function formatWizardValidationIssueLine(issue: WizardValidationIssue): string {
+  return `Krok ${issue.step}: ${issue.label}`;
+}
+
+export type KlientSubmitValidationResult =
+  | { ok: true }
+  | {
+      ok: false;
+      code: string;
+      message: string;
+      issues: WizardValidationIssue[];
+    };
+
+function pushIssue(
+  issues: WizardValidationIssue[],
+  step: number,
+  code: string,
+  label?: string
+) {
+  issues.push({
+    step,
+    code,
+    label: label ?? wizardIssueLabel(code),
+  });
+}
+
+/** Všechny chybějící položky pro odeslání poptávky klientem (ne jen první chyba). */
+export function collectKlientSubmitValidationIssues(input: {
+  form: PoptavkaFormValues;
+  sestava: SestavaKonfiguratorState;
+  katalog: PortalSestavaKatalog;
+  technika: PoptavkaTechnikaFormValues;
+  photoCounts: SectionPhotoCounts;
+}): WizardValidationIssue[] {
+  const issues: WizardValidationIssue[] = [];
+
+  const step1 = validateWizardStep1(input.form);
+  if (step1) pushIssue(issues, 1, step1);
+
+  const step2 = validateWizardStep2(input.form);
+  if (step2) pushIssue(issues, 2, step2);
+
+  const step3 = validateWizardStep3(input.sestava, input.katalog);
+  if (step3) {
+    pushIssue(issues, 3, step3);
+    for (const detail of getWizardStep3Errors(input.sestava, input.katalog)) {
+      pushIssue(issues, 3, step3, detail);
+    }
+  }
+
+  if (input.technika.technicke_rezim !== "klient_vyplni") {
+    pushIssue(issues, 4, "technicke_missing_rezim");
+    return issues;
+  }
+
+  if (!input.technika.technicke_potvrzeni_odpovednosti) {
+    pushIssue(issues, 4, "technicke_missing_potvrzeni");
+  }
+
+  const technickeChecks: Array<{ code: string; check: () => boolean }> = [
+    {
+      code: "technicke_elektro_missing_zdroj",
+      check: () =>
+        input.technika.elektro_zdroj_typ !== "pevna_pripojka" &&
+        input.technika.elektro_zdroj_typ !== "elektrocentrala",
+    },
+    {
+      code: "technicke_elektro_missing_chranic",
+      check: () => !input.technika.hlavni_chranic_vetve.trim(),
+    },
+    {
+      code: "technicke_elektro_missing_pripojky",
+      check: () =>
+        !["pripojky_16a_count", "pripojky_32a_count", "pripojky_64a_count", "pripojky_125a_count"].every(
+          (key) => {
+            const text = input.technika[key as keyof PoptavkaTechnikaFormValues];
+            const number = Number(String(text ?? "").trim());
+            return Number.isInteger(number) && number >= 0;
+          }
+        ),
+    },
+    {
+      code: "technicke_elektro_missing_stage_pripojka",
+      check: () =>
+        input.technika.stage_pripojka_rezim !== "samostatna_pro_stage" &&
+        input.technika.stage_pripojka_rezim !== "sdilena_s_dalsimi_odbery",
+    },
+    {
+      code: "technicke_prijezd_missing_volba",
+      check: () =>
+        input.technika.prijezd_az_ke_stage !== "ano" &&
+        input.technika.prijezd_az_ke_stage !== "ne",
+    },
+    {
+      code: "technicke_prijezd_missing_vozidlo",
+      check: () =>
+        input.technika.prijezd_az_ke_stage === "ano" &&
+        !input.technika.prijezd_dodavka_35t &&
+        !input.technika.prijezd_nakladni_12t,
+    },
+    {
+      code: "technicke_prijezd_missing_vzdalenost",
+      check: () => {
+        if (input.technika.prijezd_az_ke_stage !== "ne") return false;
+        const distance = Number(
+          String(input.technika.prijezd_vzdalenost_od_stage_m ?? "").replace(",", ".")
+        );
+        return !Number.isFinite(distance) || distance <= 0;
+      },
+    },
+    {
+      code: "technicke_missing_ano_ne",
+      check: () =>
+        (input.technika.misto_zpevnene !== "ano" && input.technika.misto_zpevnene !== "ne") ||
+        (input.technika.kabel_pres_silnici !== "ano" &&
+          input.technika.kabel_pres_silnici !== "ne"),
+    },
+  ];
+
+  for (const { code, check } of technickeChecks) {
+    if (check()) pushIssue(issues, 4, code);
+  }
+
+  for (const label of getMissingSectionPhotoLabels(input.photoCounts)) {
+    pushIssue(issues, 4, "technicke_missing_section_photos", label);
+  }
+
+  return issues;
+}
+
+export function validateKlientSubmitDetailed(input: {
+  form: PoptavkaFormValues;
+  sestava: SestavaKonfiguratorState;
+  katalog: PortalSestavaKatalog;
+  technika: PoptavkaTechnikaFormValues;
+  photoCounts: SectionPhotoCounts;
+}): KlientSubmitValidationResult {
+  const issues = collectKlientSubmitValidationIssues(input);
+  if (issues.length === 0) {
+    return { ok: true };
+  }
+
+  const code = issues[0]!.code;
+  return {
+    ok: false,
+    code,
+    message: "Poptávku zatím nelze odeslat. Doplňte chybějící údaje.",
+    issues,
+  };
+}
+
 export function wizardErrorStep(code: string): number {
   if (
     code === "missing_contact" ||
@@ -231,19 +392,8 @@ export function validateKlientSubmitComplete(input: {
   technika: PoptavkaTechnikaFormValues;
   photoCounts: SectionPhotoCounts;
 }): string | null {
-  const stepsError = validateWizardStepsUpTo(4, input);
-  if (stepsError) return stepsError;
-
-  if (input.technika.technicke_rezim !== "klient_vyplni") {
-    return "technicke_missing_rezim";
-  }
-
-  return validateTechnickePodminkyForSubmit({
-    technickeRezim: input.technika.technicke_rezim,
-    potvrzeniOdpovednosti: input.technika.technicke_potvrzeni_odpovednosti,
-    technika: input.technika,
-    photoCounts: input.photoCounts,
-  });
+  const result = validateKlientSubmitDetailed(input);
+  return result.ok ? null : result.code;
 }
 
 export function validateTechnikVyjezdOrderComplete(input: {

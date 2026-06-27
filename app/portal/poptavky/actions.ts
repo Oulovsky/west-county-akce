@@ -19,6 +19,7 @@ import {
 import { validateTechnickePodminkyForSave, type TechnikaSectionPhotoKey } from "@/lib/client-portal/poptavka-technika-podminky";
 import {
   validateKlientSubmitComplete,
+  validateKlientSubmitDetailed,
   validateTechnikVyjezdOrderComplete,
 } from "@/lib/client-portal/poptavka-wizard-validation";
 import {
@@ -127,6 +128,8 @@ async function finalizePoptavkaSubmission(
   detail: NonNullable<Awaited<ReturnType<typeof loadPoptavkaDetail>>>,
   options?: { redirectQuery?: string }
 ) {
+  console.info("[poptavka submit] finalize start", { poptavkaId, stavBefore: detail.stav });
+
   if (
     !detail.kontakt_jmeno ||
     !detail.kontakt_email ||
@@ -137,6 +140,7 @@ async function finalizePoptavkaSubmission(
     detail.misto_lng == null ||
     !detail.presny_popis_mista?.trim()
   ) {
+    console.warn("[poptavka submit] finalize incomplete detail", { poptavkaId });
     redirectWithError(`/portal/poptavka/${poptavkaId}`, "submit_incomplete");
   }
 
@@ -153,8 +157,14 @@ async function finalizePoptavkaSubmission(
     .eq("poptavka_id", poptavkaId);
 
   if (error) {
+    console.error("[poptavka submit] finalize db update failed", {
+      poptavkaId,
+      message: error.message,
+    });
     redirectWithError(`/portal/poptavka/${poptavkaId}`, "submit_failed");
   }
+
+  console.info("[poptavka submit] stav updated", { poptavkaId, stav: "odeslana" });
 
   try {
     await notifyInternalTeamAboutSubmittedPoptavka({
@@ -164,12 +174,13 @@ async function finalizePoptavkaSubmission(
       isResubmit: wasRevision,
     });
   } catch (notifyError) {
-    console.warn("Poptavka submit notification failed:", notifyError);
+    console.warn("[poptavka submit] internal notification failed:", notifyError);
   }
 
   try {
     const internalDetail = await loadInternalPoptavkaDetail(supabase, poptavkaId);
     if (internalDetail) {
+      console.info("[poptavka submit] confirmation email attempt", { poptavkaId });
       const emailResult = await trySendPoptavkaSubmittedConfirmation({
         detail: internalDetail,
         baseUrl: getPortalAppBaseUrl(await headers()),
@@ -181,18 +192,22 @@ async function finalizePoptavkaSubmission(
             : emailResult.ok
               ? "unknown"
               : emailResult.reason;
-        console.warn("Poptavka submit confirmation email not sent:", reason);
+        console.warn("[poptavka submit] confirmation email not sent", { poptavkaId, reason });
+      } else {
+        console.info("[poptavka submit] confirmation email sent", { poptavkaId });
       }
     }
   } catch (emailError) {
-    console.warn("Poptavka submit confirmation email failed:", emailError);
+    console.warn("[poptavka submit] confirmation email failed:", emailError);
   }
 
   revalidatePath("/portal/poptavky");
   revalidatePath(`/portal/poptavka/${poptavkaId}`);
   revalidatePath("/zakazky/poptavky");
   revalidatePath(`/zakazky/poptavky/${poptavkaId}`);
-  redirect(`/portal/poptavka/${poptavkaId}?${options?.redirectQuery ?? "submitted=1"}`);
+  const redirectTarget = `/portal/poptavka/${poptavkaId}?${options?.redirectQuery ?? "submitted=1"}`;
+  console.info("[poptavka submit] redirect", { poptavkaId, redirectTarget });
+  redirect(redirectTarget);
 }
 
 async function assertEditablePoptavka(
@@ -727,7 +742,15 @@ export async function submitKlientPoptavkaAction(formData: FormData) {
     ? `/portal/poptavka/${existingPoptavkaId}`
     : "/portal/poptavka/nova";
 
-  if (readWizardKrok(formData) < 4) {
+  const wizardKrok = readWizardKrok(formData);
+  console.info("[poptavka submit] start", {
+    poptavkaId: existingPoptavkaId ?? "new",
+    wizardKrok,
+    intent: "submit_klient",
+  });
+
+  if (wizardKrok < 4) {
+    console.warn("[poptavka submit] blocked wizard step", { poptavkaId: existingPoptavkaId, wizardKrok });
     redirectWithError(errorPath, "wizard_step_locked");
   }
 
@@ -748,23 +771,38 @@ export async function submitKlientPoptavkaAction(formData: FormData) {
     }
   }
 
-  const submitError = validateKlientSubmitComplete({
+  const validationInput = {
     form: values,
     sestava,
     katalog,
     technika,
     photoCounts,
-  });
+  };
+
+  const submitError = validateKlientSubmitComplete(validationInput);
   if (submitError) {
+    const detailed = validateKlientSubmitDetailed(validationInput);
+    console.info("[poptavka submit] validation failed", {
+      poptavkaId: existingPoptavkaId ?? "new",
+      code: submitError,
+      issueCodes: detailed.ok ? [] : detailed.issues.map((issue) => issue.code),
+      issueCount: detailed.ok ? 0 : detailed.issues.length,
+    });
     redirectWithError(errorPath, submitError);
   }
 
   let poptavkaId: string;
   try {
     poptavkaId = await persistPoptavkaFromFormData(supabase, session, formData, existingPoptavkaId);
-  } catch {
+  } catch (persistError) {
+    console.error("[poptavka submit] persist failed", {
+      poptavkaId: existingPoptavkaId ?? "new",
+      message: persistError instanceof Error ? persistError.message : "unknown",
+    });
     redirectWithError(errorPath, "setups_failed");
   }
+
+  console.info("[poptavka submit] persisted", { poptavkaId });
 
   photoCounts = await countSectionPhotosForSubmit(supabase, poptavkaId, formData);
   const photoRecheck = validateKlientSubmitComplete({
@@ -775,11 +813,24 @@ export async function submitKlientPoptavkaAction(formData: FormData) {
     photoCounts,
   });
   if (photoRecheck) {
+    const detailed = validateKlientSubmitDetailed({
+      form: values,
+      sestava,
+      katalog,
+      technika,
+      photoCounts,
+    });
+    console.info("[poptavka submit] post-persist validation failed", {
+      poptavkaId,
+      code: photoRecheck,
+      issueCodes: detailed.ok ? [] : detailed.issues.map((issue) => issue.code),
+    });
     redirectWithError(`/portal/poptavka/${poptavkaId}`, photoRecheck);
   }
 
   const detail = await loadPoptavkaDetail(supabase, poptavkaId);
   if (!detail) {
+    console.error("[poptavka submit] detail missing after persist", { poptavkaId });
     redirectWithError(errorPath, "save_failed");
   }
 
