@@ -302,6 +302,60 @@ export function parseTechnikaFormData(formData: FormData): PoptavkaTechnikaFormV
   };
 }
 
+function setCheckboxInFormData(formData: FormData, name: string, checked: boolean) {
+  formData.delete(name);
+  if (checked) {
+    formData.set(name, "on");
+  }
+}
+
+/** Sync React technika state into FormData so save works from step 4. */
+export function appendTechnikaFormValuesToFormData(
+  formData: FormData,
+  values: PoptavkaTechnikaFormValues
+) {
+  formData.set("technicke_rezim", values.technicke_rezim);
+  setCheckboxInFormData(formData, "technicke_potvrzeni_odpovednosti", values.technicke_potvrzeni_odpovednosti);
+  setCheckboxInFormData(formData, "technicke_potvrzeni_vyjezd_ceny", values.technicke_potvrzeni_vyjezd_ceny);
+  formData.set("elektro_zdroj_typ", values.elektro_zdroj_typ);
+  formData.set("hlavni_chranic_vetve", values.hlavni_chranic_vetve);
+  formData.set("pripojky_16a_count", values.pripojky_16a_count);
+  formData.set("pripojky_32a_count", values.pripojky_32a_count);
+  formData.set("pripojky_64a_count", values.pripojky_64a_count);
+  formData.set("pripojky_125a_count", values.pripojky_125a_count);
+  formData.set("stage_pripojka_rezim", values.stage_pripojka_rezim);
+  formData.set("prijezd_poznamka", values.prijezd_poznamka);
+  formData.set("prijezd_az_ke_stage", values.prijezd_az_ke_stage);
+  setCheckboxInFormData(formData, "prijezd_dodavka_35t", values.prijezd_dodavka_35t);
+  setCheckboxInFormData(formData, "prijezd_nakladni_12t", values.prijezd_nakladni_12t);
+  formData.set("prijezd_vzdalenost_od_stage_m", values.prijezd_vzdalenost_od_stage_m);
+  formData.set("parkovani_poznamka", values.parkovani_poznamka);
+  formData.set("rozvadece_poznamka", values.rozvadece_poznamka);
+  formData.set("elektro_pripojka", values.elektro_pripojka);
+  formData.set("elektro_jisteni", values.elektro_jisteni);
+  formData.set("elektro_zasuvka", values.elektro_zasuvka);
+  formData.set("elektro_vzdalenost_m", values.elektro_vzdalenost_m);
+  formData.set("kabelove_trasy", values.kabelove_trasy);
+  formData.set("misto_stage", values.misto_stage);
+  formData.set("misto_foh", values.misto_foh);
+  formData.set("omezeni_hluku", values.omezeni_hluku);
+  formData.set("casova_omezeni", values.casova_omezeni);
+  formData.set("dalsi_poznamky", values.dalsi_poznamky);
+  setCheckboxInFormData(formData, "pozadovan_vyjezd_technika", values.pozadovan_vyjezd_technika);
+  formData.set("technik_vyjezd_kontakt_jmeno", values.technik_vyjezd_kontakt_jmeno);
+  formData.set("technik_vyjezd_kontakt_telefon", values.technik_vyjezd_kontakt_telefon);
+  formData.set("technik_vyjezd_kontakt_email", values.technik_vyjezd_kontakt_email);
+  setCheckboxInFormData(formData, "technik_vyjezd_preferuje_telefon", values.technik_vyjezd_preferuje_telefon);
+  setCheckboxInFormData(formData, "technik_vyjezd_preferuje_email", values.technik_vyjezd_preferuje_email);
+  setCheckboxInFormData(formData, "technik_vyjezd_potvrzeni_fakturace", values.technik_vyjezd_potvrzeni_fakturace);
+  formData.set("lze_zajet_autem", values.lze_zajet_autem);
+  formData.set("misto_zpevnene", values.misto_zpevnene);
+  formData.set("kabel_pres_silnici", values.kabel_pres_silnici);
+  formData.set("vzdalenost_vykladka_stage", values.vzdalenost_vykladka_stage);
+  formData.set("pristup_pro_techniku", values.pristup_pro_techniku);
+  formData.set("omezeni_prujezdu", values.omezeni_prujezdu);
+}
+
 export function buildTechnikaRowPayload(
   values: PoptavkaTechnikaFormValues,
   extraFields?: Record<string, unknown>
@@ -336,6 +390,13 @@ export function buildTechnikaRowPayload(
       rezim === "klient_vyplni" && values.technicke_potvrzeni_odpovednosti ? now : null,
     technicke_potvrzeni_vyjezd_ceny_at:
       rezim === "vyjezd_technika" && values.technicke_potvrzeni_vyjezd_ceny ? now : null,
+    technik_vyjezd_kontakt_jmeno: nullable(values.technik_vyjezd_kontakt_jmeno),
+    technik_vyjezd_kontakt_telefon: nullable(values.technik_vyjezd_kontakt_telefon),
+    technik_vyjezd_kontakt_email: nullable(values.technik_vyjezd_kontakt_email),
+    technik_vyjezd_preferuje_telefon: values.technik_vyjezd_preferuje_telefon,
+    technik_vyjezd_preferuje_email: values.technik_vyjezd_preferuje_email,
+    technik_vyjezd_potvrzeni_fakturace_at:
+      values.technik_vyjezd_potvrzeni_fakturace ? now : null,
     rizika: [],
     odpovedi_extra: {
       prijezd_az_ke_stage: values.prijezd_az_ke_stage || null,

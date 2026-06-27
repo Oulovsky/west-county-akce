@@ -137,6 +137,34 @@ export function parsePoptavkaFormData(formData: FormData): PoptavkaFormValues {
   };
 }
 
+/** Sync React form state into FormData so save works from any wizard step. */
+export function appendPoptavkaFormValuesToFormData(
+  formData: FormData,
+  values: PoptavkaFormValues
+) {
+  formData.set("kontakt_jmeno", values.kontakt_jmeno);
+  formData.set("kontakt_telefon", values.kontakt_telefon);
+  formData.set("kontakt_email", values.kontakt_email);
+  formData.set("misto_nazev", values.misto_nazev);
+  formData.set("typ_akce", values.typ_akce);
+  formData.set("misto_adresa", values.misto_adresa);
+  formData.set("presny_popis_mista", values.presny_popis_mista);
+  formData.set("datum_od", values.datum_od);
+  formData.set("datum_do", values.datum_do);
+  formData.set("cas_programu_od", values.cas_programu_od);
+  formData.set("cas_programu_do", values.cas_programu_do);
+  formData.set("misto_poznamka", values.misto_poznamka);
+  formData.set("misto_source", values.misto_source);
+  formData.set("misto_id", values.misto_id ?? "");
+  formData.set("misto_lat", values.misto_lat != null ? String(values.misto_lat) : "");
+  formData.set("misto_lng", values.misto_lng != null ? String(values.misto_lng) : "");
+  formData.set("stavba_okno_od", values.stavba_okno_od);
+  formData.set("stavba_okno_do", values.stavba_okno_do);
+  formData.set("bourani_okno_od", values.bourani_okno_od);
+  formData.set("bourani_okno_do", values.bourani_okno_do);
+  formData.set("logistika_poznamka_klienta", values.logistika_poznamka_klienta);
+}
+
 export function validatePoptavkaDraftMinima(values: PoptavkaFormValues): string | null {
   if (!values.misto_nazev.trim()) return "missing_event_name";
   if (!values.datum_od) return "missing_date";

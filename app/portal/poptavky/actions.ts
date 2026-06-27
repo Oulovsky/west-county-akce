@@ -5,8 +5,8 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireActiveClientPortalSession } from "@/lib/auth/client-portal-access-server";
 import {
-  POPTAVKA_FOTKY_ALLOWED_MIME_TYPES,
-  POPTAVKA_FOTKY_MAX_SIZE_BYTES,
+  isFormDataUploadFile,
+  isValidPoptavkaUploadFile,
 } from "@/lib/client-portal/poptavka-fotky-shared";
 import {
   deletePoptavkaFotkaForClient,
@@ -91,14 +91,13 @@ async function uploadTechnickeSectionPhotosFromFormData(
 ) {
   const files: File[] = [];
   const photoTypes: string[] = [];
+  let rejectedEntries = 0;
 
   for (const sectionKey of TECHNIKA_SECTION_PHOTO_KEYS) {
     for (const value of formData.getAll(`technicke_foto_${sectionKey}`)) {
-      if (!(value instanceof File) || value.size <= 0) continue;
-      if (!(POPTAVKA_FOTKY_ALLOWED_MIME_TYPES as readonly string[]).includes(value.type)) {
-        continue;
-      }
-      if (value.size > POPTAVKA_FOTKY_MAX_SIZE_BYTES) {
+      if (!isFormDataUploadFile(value)) continue;
+      if (!isValidPoptavkaUploadFile(value)) {
+        rejectedEntries += 1;
         continue;
       }
       files.push(value);
@@ -106,7 +105,12 @@ async function uploadTechnickeSectionPhotosFromFormData(
     }
   }
 
-  if (files.length === 0) return;
+  if (files.length === 0) {
+    if (rejectedEntries > 0) {
+      throw new Error("Invalid section photo upload");
+    }
+    return;
+  }
 
   await uploadPoptavkaFotkyForClient(
     supabase,
@@ -211,13 +215,17 @@ async function upsertTechnickeUdaje(
   formData: FormData
 ) {
   const technikaValues = parseTechnikaFormData(formData);
+  const poptavkaValues = parsePoptavkaFormData(formData);
   const sestava = parseSestavaFormData(formData);
-  const payload = buildTechnikaRowPayload(technikaValues, buildSestavaOdpovediExtra(sestava));
+  const payload = buildTechnikaRowPayload(technikaValues, {
+    ...buildSestavaOdpovediExtra(sestava),
+    misto_source: poptavkaValues.misto_source,
+  });
 
   const { data: existing } = await supabase
     .from("poptavka_technicke_udaje")
     .select(
-      "poptavka_id, technicke_potvrzeni_odpovednosti_at, technicke_potvrzeni_vyjezd_ceny_at"
+      "poptavka_id, technicke_potvrzeni_odpovednosti_at, technicke_potvrzeni_vyjezd_ceny_at, technik_vyjezd_potvrzeni_fakturace_at"
     )
     .eq("poptavka_id", poptavkaId)
     .maybeSingle();
@@ -236,6 +244,17 @@ async function upsertTechnickeUdaje(
     existing?.technicke_potvrzeni_vyjezd_ceny_at
   ) {
     payload.technicke_potvrzeni_vyjezd_ceny_at = existing.technicke_potvrzeni_vyjezd_ceny_at;
+  }
+
+  if (
+    technikaValues.technik_vyjezd_potvrzeni_fakturace &&
+    existing?.technik_vyjezd_potvrzeni_fakturace_at
+  ) {
+    payload.technik_vyjezd_potvrzeni_fakturace_at = existing.technik_vyjezd_potvrzeni_fakturace_at;
+  }
+
+  if (!technikaValues.technik_vyjezd_potvrzeni_fakturace) {
+    payload.technik_vyjezd_potvrzeni_fakturace_at = null;
   }
 
   if (existing?.poptavka_id) {
@@ -333,8 +352,15 @@ async function saveDraftPoptavkaFromFormData(
   }
 
   const setupResult = await resolveSetupsForDraft(supabase, formData);
-  if (!setupResult.ok) {
+  let draftSetups: ReturnType<typeof parsePoptavkaFormData>["setupy"] | null = null;
+  if (setupResult.ok) {
+    draftSetups = setupResult.setupy;
+  } else if ("skipReplace" in setupResult && setupResult.skipReplace) {
+    draftSetups = null;
+  } else if ("error" in setupResult) {
     redirectWithError(errorPath, setupResult.error);
+  } else {
+    redirectWithError(errorPath, "invalid_setups");
   }
 
   const payload = buildPoptavkaRowPayload(
@@ -359,7 +385,9 @@ async function saveDraftPoptavkaFromFormData(
 
     if (error) redirectWithError(`/portal/poptavka/${existingPoptavkaId}`, "save_failed");
 
-    await replacePoptavkaSetups(supabase, existingPoptavkaId, setupResult.setupy);
+    if (draftSetups !== null) {
+      await replacePoptavkaSetups(supabase, existingPoptavkaId, draftSetups);
+    }
     await upsertTechnickeUdaje(supabase, existingPoptavkaId, formData);
     await uploadTechnickeSectionPhotosFromFormData(supabase, existingPoptavkaId, formData);
     return existingPoptavkaId;
@@ -382,7 +410,9 @@ async function saveDraftPoptavkaFromFormData(
     redirectWithError("/portal/poptavka/nova", "save_failed");
   }
 
-  await replacePoptavkaSetups(supabase, created.poptavka_id, setupResult.setupy);
+  if (draftSetups !== null) {
+    await replacePoptavkaSetups(supabase, created.poptavka_id, draftSetups);
+  }
   await upsertTechnickeUdaje(supabase, created.poptavka_id, formData);
   await uploadTechnickeSectionPhotosFromFormData(supabase, created.poptavka_id, formData);
   return created.poptavka_id;
@@ -474,7 +504,8 @@ async function countSectionPhotosForSubmit(
       detail?.fotky.filter((row) => row.typ === key).length ?? 0;
     const pending = formData
       .getAll(`technicke_foto_${key}`)
-      .filter((value): value is File => value instanceof File && value.size > 0).length;
+      .filter(isFormDataUploadFile)
+      .filter((value) => value.size > 0).length;
     counts[key] = saved + pending;
   }
 
@@ -528,7 +559,7 @@ async function resolveSetupsForDraft(
   const validation = validateSestavaKonfigurator(sestava, katalog);
 
   if (validation.errors.length > 0) {
-    return resolvePortalSetupsForSave(supabase, []);
+    return { ok: false as const, skipReplace: true as const };
   }
 
   const portalSetups = await loadPortalSetups(supabase);
@@ -601,6 +632,7 @@ export async function createPoptavkaAction(formData: FormData) {
   const session = await requireActiveClientPortalSession(supabase);
   const poptavkaId = await saveDraftPoptavkaFromFormData(supabase, session, formData);
   revalidatePath("/portal/poptavky");
+  revalidatePath(`/portal/poptavka/${poptavkaId}`);
   redirect(`/portal/poptavka/${poptavkaId}?saved=1`);
 }
 
@@ -638,7 +670,8 @@ export async function uploadPoptavkaFotkyAction(formData: FormData) {
 
   const files = formData
     .getAll("photo_files")
-    .filter((value): value is File => value instanceof File && value.size > 0);
+    .filter(isFormDataUploadFile)
+    .filter((value) => value.size > 0);
   const photoTypes = getStringList(formData, "photo_types");
   const photoDescriptions = getStringList(formData, "photo_descriptions");
 
@@ -647,11 +680,8 @@ export async function uploadPoptavkaFotkyAction(formData: FormData) {
   }
 
   for (const file of files) {
-    if (!(POPTAVKA_FOTKY_ALLOWED_MIME_TYPES as readonly string[]).includes(file.type)) {
+    if (!isValidPoptavkaUploadFile(file)) {
       return { ok: false as const, error: "invalid_type" };
-    }
-    if (file.size > POPTAVKA_FOTKY_MAX_SIZE_BYTES) {
-      return { ok: false as const, error: "file_too_large" };
     }
   }
 
@@ -713,7 +743,8 @@ export async function submitKlientPoptavkaAction(formData: FormData) {
     for (const key of TECHNIKA_SECTION_PHOTO_KEYS) {
       photoCounts[key] = formData
         .getAll(`technicke_foto_${key}`)
-        .filter((value): value is File => value instanceof File && value.size > 0).length;
+        .filter(isFormDataUploadFile)
+        .filter((value) => value.size > 0).length;
     }
   }
 

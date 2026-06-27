@@ -26,6 +26,36 @@ export function isAllowedPoptavkaFotkaTyp(value: string): value is PoptavkaFotka
   return (POPTAVKA_FOTKA_TYPY as readonly string[]).includes(value);
 }
 
+/** Server/client: FormData file entry (avoids brittle `instanceof File` on server). */
+export function isFormDataUploadFile(value: FormDataEntryValue): value is File {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const file = value as File;
+  return (
+    typeof file.size === "number" &&
+    file.size > 0 &&
+    typeof file.arrayBuffer === "function"
+  );
+}
+
+export function resolvePoptavkaPhotoMimeType(file: File): string | null {
+  if ((POPTAVKA_FOTKY_ALLOWED_MIME_TYPES as readonly string[]).includes(file.type)) {
+    return file.type;
+  }
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  if (extension === "jpg" || extension === "jpeg") return "image/jpeg";
+  if (extension === "png") return "image/png";
+  if (extension === "webp") return "image/webp";
+  return null;
+}
+
+export function isValidPoptavkaUploadFile(file: File): boolean {
+  return (
+    resolvePoptavkaPhotoMimeType(file) !== null && file.size <= POPTAVKA_FOTKY_MAX_SIZE_BYTES
+  );
+}
+
 export function getPoptavkaFotkaExtension(mimeType: string) {
   if (mimeType === "image/png") return "png";
   if (mimeType === "image/webp") return "webp";

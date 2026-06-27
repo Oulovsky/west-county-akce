@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   getPoptavkaFotkaExtension,
   isAllowedPoptavkaFotkaTyp,
+  resolvePoptavkaPhotoMimeType,
 } from "@/lib/client-portal/poptavka-fotky-shared";
 import type { PoptavkaFotka } from "@/lib/client-portal/types";
 import { POPTAVKA_FOTKY_BUCKET } from "@/lib/client-portal/types";
@@ -60,13 +61,14 @@ export async function uploadPoptavkaFotkyForClient(
 
   for (const [index, file] of files.entries()) {
     const typ = isAllowedPoptavkaFotkaTyp(types[index] ?? "") ? types[index] : "jina";
-    const extension = getPoptavkaFotkaExtension(file.type);
+    const mimeType = resolvePoptavkaPhotoMimeType(file) ?? "image/jpeg";
+    const extension = getPoptavkaFotkaExtension(mimeType);
     const storagePath = `poptavka/${poptavkaId}/${randomUUID()}.${extension}`;
 
     const { error: uploadError } = await admin.storage
       .from(POPTAVKA_FOTKY_BUCKET)
       .upload(storagePath, file, {
-        contentType: file.type,
+        contentType: mimeType,
         upsert: false,
       });
 
@@ -82,7 +84,7 @@ export async function uploadPoptavkaFotkyForClient(
       popis: descriptions[index]?.trim() || null,
       poradi: index,
       original_filename: file.name || null,
-      mime_type: file.type || null,
+      mime_type: mimeType || null,
       size_bytes: file.size,
     });
   }

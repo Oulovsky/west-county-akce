@@ -163,7 +163,14 @@ export default async function PortalPoptavkaDetailPage({
           cas_programu_od: trimTime(detail.cas_programu_od),
           cas_programu_do: trimTime(detail.cas_programu_do),
           misto_poznamka: detail.misto_poznamka ?? "",
-          misto_source: detail.misto_id ? "saved" : "new",
+          misto_source:
+            detail.technicke_udaje?.odpovedi_extra?.misto_source === "saved"
+              ? "saved"
+              : detail.technicke_udaje?.odpovedi_extra?.misto_source === "new"
+                ? "new"
+                : detail.misto_id
+                  ? "saved"
+                  : "new",
           misto_id: detail.misto_id,
           misto_lat: detail.misto_lat,
           misto_lng: detail.misto_lng,

@@ -11,6 +11,7 @@ import {
   submitKlientPoptavkaAction,
   updatePoptavkaAction,
 } from "@/app/portal/poptavky/actions";
+import { uploadPendingSectionPhotosForPoptavka } from "@/lib/client-portal/poptavka-section-photo-upload-client";
 import PoptavkaGpsLocationPanel from "@/components/portal/PoptavkaGpsLocationPanel";
 import {
   formatCoordsFallbackLabel,
@@ -32,11 +33,13 @@ import type { SectionPhotoState } from "@/components/portal/PoptavkaTechnikaSect
 import type { TechnickeRezim, TechnikaSectionPhotoKey } from "@/lib/client-portal/poptavka-technika-podminky";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
 import {
+  appendPoptavkaFormValuesToFormData,
   TYP_AKCE_OPTIONS,
   type PoptavkaFormValues,
   type PoptavkaPrefill,
   type PoptavkaSetupInput,
 } from "@/lib/client-portal/poptavka-form";
+import { appendTechnikaFormValuesToFormData } from "@/lib/client-portal/poptavka-technika-form";
 import type { ClientPortalMistoSummary, ClientPortalMistoKnowHow } from "@/lib/client-portal/client-mista-shared";
 import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-server";
 import type { PortalSetupsByOblast } from "@/lib/client-portal/poptavka-server";
@@ -310,6 +313,12 @@ export default function PoptavkaFormClient({
   }, [searchParams]);
 
   useEffect(() => {
+    if (saved || searchParams.get("saved") === "1") {
+      router.refresh();
+    }
+  }, [saved, searchParams, router]);
+
+  useEffect(() => {
     const fromServer = createInitialSectionPhotos(initialFotky);
     setSectionPhotos((current) => {
       let changed = false;
@@ -319,16 +328,29 @@ export default function PoptavkaFormClient({
         const key = section.key;
         const serverState = fromServer[key] ?? emptySectionPhotoState();
         const currentState = current[key] ?? emptySectionPhotoState();
+
+        const savedChanged =
+          serverState.saved.length !== currentState.saved.length ||
+          serverState.saved.some((row, index) => row.id !== currentState.saved[index]?.id);
+
+        let pending = currentState.pending;
+        if (savedChanged && serverState.saved.length > currentState.saved.length) {
+          for (const photo of pending) {
+            URL.revokeObjectURL(photo.previewUrl);
+          }
+          pending = [];
+        }
+
         const merged = {
-          pending: currentState.pending,
+          pending,
           saved: serverState.saved,
         };
 
-        const savedChanged =
-          merged.saved.length !== currentState.saved.length ||
-          merged.saved.some((row, index) => row.id !== currentState.saved[index]?.id);
-
-        if (savedChanged) {
+        if (
+          savedChanged ||
+          pending.length !== currentState.pending.length ||
+          merged.saved.length !== currentState.saved.length
+        ) {
           next[key] = merged;
           changed = true;
         }
@@ -570,6 +592,10 @@ export default function PoptavkaFormClient({
 
     const formData = new FormData(event.currentTarget);
     formData.set("wizard_step", String(step));
+    formData.set("sestava_konfigurator_json", sestavaJson);
+    formData.set("setupy_json", setupyJson);
+    appendPoptavkaFormValuesToFormData(formData, form);
+    appendTechnikaFormValuesToFormData(formData, technika);
     const intent = normalizeSubmitIntent(String(formData.get("save_intent") ?? "draft"));
 
     if (intent === "order_technik_vyjezd") {
@@ -625,7 +651,27 @@ export default function PoptavkaFormClient({
         pendingBySection[key as TechnikaSectionPhotoKey] = state.pending;
       }
     }
-    appendPendingSectionPhotos(formData, pendingBySection);
+
+    const hasPendingPhotos = Object.values(pendingBySection).some(
+      (photos) => (photos?.length ?? 0) > 0
+    );
+
+    let pendingUploadedViaClient = false;
+    if (poptavkaId && hasPendingPhotos) {
+      try {
+        await uploadPendingSectionPhotosForPoptavka(poptavkaId, pendingBySection);
+        pendingUploadedViaClient = true;
+        router.refresh();
+      } catch {
+        setPendingIntent(null);
+        showStepValidationError(intent === "draft" ? "save_failed" : "submit_failed");
+        return;
+      }
+    }
+
+    if (!pendingUploadedViaClient) {
+      appendPendingSectionPhotos(formData, pendingBySection);
+    }
 
     try {
       if (intent === "order_technik_vyjezd") {
