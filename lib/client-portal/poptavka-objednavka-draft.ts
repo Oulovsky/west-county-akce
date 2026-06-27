@@ -7,7 +7,6 @@ import { DEFAULT_PORTAL_SESTAVA_KATALOG } from "@/lib/client-portal/sestava-konf
 import {
   EMPTY_SESTAVA_KONFIGURATOR,
   formatSestavaSummaryText,
-  hasSestavaKonfigurace,
   migrateLegacySestavaState,
   sestavaFromOdpovediExtra,
 } from "@/lib/client-portal/sestava-konfigurator-form";
@@ -507,12 +506,6 @@ export function getPoptavkaObjednavkaDraftWarnings(
   ) {
     warnings.push("Chybí technické údaje o místě akce.");
   }
-  if (draft.technickePlneni.setupy.length === 0 && !hasSestavaKonfigurace(draft.sestava)) {
-    warnings.push("Chybí konfigurace sestavy nebo vybrané skladové setupy.");
-  } else if (draft.technickePlneni.setupy.length === 0 && hasSestavaKonfigurace(draft.sestava)) {
-    warnings.push("Konkrétní skladové setupy zatím nejsou přiřazené.");
-  }
-
   return warnings;
 }
 

@@ -18,6 +18,7 @@ import {
   buildSestavaOdpovediExtra,
   EMPTY_SESTAVA_KONFIGURATOR,
 } from "@/lib/client-portal/sestava-konfigurator-form";
+import { DEFAULT_PORTAL_SESTAVA_KATALOG } from "@/lib/client-portal/sestava-konfigurator-katalog";
 
 function normalizeTime(value: string | null | undefined) {
   if (!value?.trim()) return null;
@@ -180,7 +181,10 @@ export function buildDotaznikPayloadFromSnapshot(
       cislo_poptavky: snapshot.meta.cisloPoptavky,
       objednavka_link_id: snapshot.meta.linkId,
       snapshot_frozen_at: snapshot.frozenAt,
-      ...buildSestavaOdpovediExtra(snapshot.sestava ?? EMPTY_SESTAVA_KONFIGURATOR),
+      ...buildSestavaOdpovediExtra(
+        snapshot.sestava ?? EMPTY_SESTAVA_KONFIGURATOR,
+        DEFAULT_PORTAL_SESTAVA_KATALOG
+      ),
       rozvadece_poznamka: misto.elektro.rozvadecePoznamka,
       kabelove_trasy: misto.elektro.kabeloveTrasy,
       misto_stage: misto.mistoStage,

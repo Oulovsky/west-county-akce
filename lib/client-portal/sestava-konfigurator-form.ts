@@ -8,6 +8,7 @@ import {
   getZastreseniHeightOptions,
   isIntegerMeter,
 } from "@/lib/client-portal/sestava-konfigurator-katalog";
+import { computeNakladkaFromSestava } from "@/lib/client-portal/sestava-nakladka";
 import type {
   KotveniPovrch,
   KotveniTyp,
@@ -378,8 +379,17 @@ function tryParseJson(value: FormDataEntryValue | null): unknown {
   }
 }
 
-export function buildSestavaOdpovediExtra(state: SestavaKonfiguratorState) {
-  return { sestava_konfigurator: normalizeSestavaStateForSave(state) };
+export function buildSestavaOdpovediExtra(
+  state: SestavaKonfiguratorState,
+  katalog?: PortalSestavaKatalog
+) {
+  const extra: Record<string, unknown> = {
+    sestava_konfigurator: normalizeSestavaStateForSave(state),
+  };
+  if (katalog) {
+    extra.sestava_nakladka_vypocet = computeNakladkaFromSestava(katalog, state);
+  }
+  return extra;
 }
 
 export function computeOdhadModulu(
@@ -528,76 +538,93 @@ export function deriveSetupSelectionsFromSestava(
   }
 
   const selections: PoptavkaSetupInput[] = [];
-  const seen = new Set<string>();
+  const seenSingle = new Set<string>();
 
-  const pushSetup = (setupId: string | null | undefined, qty = 1) => {
-    if (!setupId || seen.has(setupId)) return;
-    seen.add(setupId);
-    selections.push({ setup_id: setupId, mnozstvi: qty, poznamka_klienta: null });
+  const pushSetup = (
+    setupId: string | null | undefined,
+    qty = 1,
+    poznamka: string | null = null,
+    options?: { allowDuplicate?: boolean }
+  ) => {
+    if (!setupId) return;
+    if (!options?.allowDuplicate) {
+      if (seenSingle.has(setupId)) return;
+      seenSingle.add(setupId);
+    }
+    selections.push({ setup_id: setupId, mnozstvi: qty, poznamka_klienta: poznamka });
   };
 
   const findByOblastNazev = (oblast: keyof PortalSetupsByOblast, needle: string) => {
     const list = portalSetups[oblast] ?? [];
-    const lower = needle.toLowerCase();
-    return list.find((row) => row.nazev.toLowerCase().includes(lower))?.setup_id ?? null;
+    const lower = needle.toLowerCase().trim();
+    return (
+      list.find((row) => row.nazev.toLowerCase().trim() === lower)?.setup_id ??
+      list.find((row) => row.nazev.toLowerCase().includes(lower))?.setup_id ??
+      null
+    );
+  };
+
+  const findDronSetup = () => {
+    const list = portalSetups.dron ?? [];
+    return (
+      list.find((row) => {
+        const nazev = row.nazev.toLowerCase();
+        return (
+          (nazev.includes("dron") || nazev.includes("dronová")) &&
+          !nazev.includes("obsluh")
+        );
+      })?.setup_id ?? null
+    );
   };
 
   if (state.stage_typ === "mobilni") {
     pushSetup(state.mobilni_setup_id ?? katalog.mobilni_stage.setup_id);
     if (!state.mobilni_setup_id && !katalog.mobilni_stage.setup_id) {
-      pushSetup(findByOblastNazev("stage", "mobil"));
+      pushSetup(findByOblastNazev("stage", katalog.mobilni_stage.nazev));
     }
   } else if (state.stage_typ === "zastresene") {
     pushSetup(state.zastreseni_setup_id);
     if (!state.zastreseni_setup_id) {
       const variant = findZastreseniVariant(katalog, state.zastreseni_variant_id);
-      pushSetup(variant?.setup_id ?? findByOblastNazev("stage", variant?.id ?? "zastřeš"));
+      pushSetup(variant?.setup_id ?? findByOblastNazev("stage", variant?.nazev ?? ""));
     }
-  }
-
-  if (state.podium_sirka_m && state.podium_hloubka_m) {
-    pushSetup(findByOblastNazev("stage", "pódium") ?? findByOblastNazev("stage", "podium"));
   }
 
   if (state.praktikabl_typ !== "zadny") {
-    pushSetup(findByOblastNazev("stage", "praktikábl") ?? findByOblastNazev("stage", "riser"));
+    const variant = findPraktikablVariant(katalog, state.praktikabl_variant_id);
+    pushSetup(
+      findByOblastNazev("stage", variant?.nazev ?? "praktikábl") ??
+        findByOblastNazev("stage", "praktikábl") ??
+        findByOblastNazev("stage", "riser")
+    );
   }
 
-  for (const { block } of enabledLedWallBlocks(state)) {
-    if (block.typ_kod) {
-      const preset = katalog.led_typy.find((row) => row.kod === block.typ_kod);
-      pushSetup(findByOblastNazev("led_wall", preset?.pixel_pitch ?? "led"));
-    }
+  const brankaSetupId = findByOblastNazev("stage", "branka");
+  if (state.led_branka_vlevo.enabled) {
+    pushSetup(brankaSetupId, 1, "vlevo", { allowDuplicate: true });
+  }
+  if (state.led_branka_vpravo.enabled) {
+    pushSetup(brankaSetupId, 1, "vpravo", { allowDuplicate: true });
   }
 
-  if (state.stage_typ === "mobilni") {
-    if (state.mobilni_pozaduje_zvuk) {
-      pushSetup(findByOblastNazev("sound", "mobil"));
-    }
-    if (state.mobilni_pozaduje_svetla) {
-      pushSetup(findByOblastNazev("lights", "mobil"));
-    }
-  } else {
+  if (state.stage_typ === "zastresene") {
     if (state.zvuk_setup_id) {
       pushSetup(state.zvuk_setup_id);
     } else if (state.zvuk_preset) {
       const preset = katalog.zvuk_presety.find((row) => row.kod === state.zvuk_preset);
-      pushSetup(preset?.setup_id ?? findByOblastNazev("sound", state.zvuk_preset));
+      pushSetup(preset?.setup_id ?? findByOblastNazev("sound", preset?.nazev ?? ""));
     }
 
     if (state.svetla_setup_id) {
       pushSetup(state.svetla_setup_id);
     } else if (state.svetla_preset) {
       const preset = katalog.svetla_presety.find((row) => row.kod === state.svetla_preset);
-      pushSetup(preset?.setup_id ?? findByOblastNazev("lights", state.svetla_preset));
+      pushSetup(preset?.setup_id ?? findByOblastNazev("lights", preset?.nazev ?? ""));
     }
   }
 
-  if (state.kamery_pocet > 0) {
-    pushSetup(findByOblastNazev("video", "kamer"));
-  }
   if (state.dron) {
-    pushSetup(findByOblastNazev("dron", "dron"));
+    pushSetup(findDronSetup());
   }
 
   return selections;
@@ -608,11 +635,13 @@ export function mergeSetupSelections(
   derived: PoptavkaSetupInput[]
 ): PoptavkaSetupInput[] {
   const map = new Map<string, PoptavkaSetupInput>();
+  const keyOf = (row: PoptavkaSetupInput) =>
+    `${row.setup_id}\0${row.poznamka_klienta ?? ""}`;
   for (const row of derived) {
-    map.set(row.setup_id, row);
+    map.set(keyOf(row), row);
   }
   for (const row of manual) {
-    map.set(row.setup_id, row);
+    map.set(keyOf(row), row);
   }
   return Array.from(map.values());
 }

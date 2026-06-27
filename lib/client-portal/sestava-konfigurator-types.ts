@@ -198,3 +198,32 @@ export type SestavaOdhadModulu = {
   odhad_noh: number;
   odhad_schodu: number;
 };
+
+export type SestavaNakladkaPolozkaKod =
+  | "nivtec_deska"
+  | "nivtec_noha"
+  | "schody"
+  | "led_panel";
+
+export type SestavaNakladkaPolozka = {
+  kod: SestavaNakladkaPolozkaKod;
+  nazev: string;
+  mnozstvi: number;
+  jednotka: "ks";
+  sklad_polozka_id?: string | null;
+  /** LED typ, umístění bloku, strana branky, rozměry… */
+  metadata?: Record<string, string | number | boolean | null>;
+};
+
+export type SestavaNakladkaParametry = {
+  podium_sirka_m: number | null;
+  podium_hloubka_m: number | null;
+  podium_vyska_m: number | null;
+  kamery_pocet: number;
+  dron: boolean;
+};
+
+export type SestavaNakladkaVypocet = {
+  polozky: SestavaNakladkaPolozka[];
+  parametry: SestavaNakladkaParametry;
+};

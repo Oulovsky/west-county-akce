@@ -326,9 +326,23 @@ export function computePodiumModuly(
   return cols * rows;
 }
 
+/** Každá Nivtec deska 1 × 2 m má 4 nohy. */
 export function estimatePodiumLegs(modulu: number): number {
   if (modulu <= 0) return 0;
-  return Math.max(4, Math.ceil(modulu / 2) + 2);
+  return modulu * 4;
+}
+
+/** Počet LED panelů z rozměru wall a rozměru jednoho panelu (mřížka nahoru). */
+export function computeLedPanelCountFromDimensions(
+  sirkaM: number,
+  vyskaM: number,
+  panelSirkaM: number,
+  panelVyskaM: number
+): number {
+  if (sirkaM <= 0 || vyskaM <= 0 || panelSirkaM <= 0 || panelVyskaM <= 0) return 0;
+  const cols = Math.ceil(sirkaM / panelSirkaM);
+  const rows = Math.ceil(vyskaM / panelVyskaM);
+  return cols * rows;
 }
 
 export function isIntegerMeter(value: number | null | undefined): boolean {

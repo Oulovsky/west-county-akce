@@ -195,8 +195,9 @@ async function upsertTechnickeUdaje(
   const technikaValues = parseTechnikaFormData(formData);
   const poptavkaValues = parsePoptavkaFormData(formData);
   const sestava = parseSestavaFormData(formData);
+  const katalog = await loadPortalSestavaKatalog();
   const payload = buildTechnikaRowPayload(technikaValues, {
-    ...buildSestavaOdpovediExtra(sestava),
+    ...buildSestavaOdpovediExtra(sestava, katalog),
     misto_source: poptavkaValues.misto_source,
   });
 
@@ -259,10 +260,11 @@ async function upsertTechnikVyjezdOrder(
 ) {
   const technikaValues = parseTechnikaFormData(formData);
   const sestava = parseSestavaFormData(formData);
+  const katalog = await loadPortalSestavaKatalog();
   const now = new Date().toISOString();
   const calc = calculateTechnikVyjezdDoprava(values.misto_lat!, values.misto_lng!);
   const payload = {
-    ...buildTechnikaRowPayload(technikaValues, buildSestavaOdpovediExtra(sestava)),
+    ...buildTechnikaRowPayload(technikaValues, buildSestavaOdpovediExtra(sestava, katalog)),
     technicke_rezim: "vyjezd_technika" as const,
     pozadovan_vyjezd_technika: true,
     technicke_potvrzeni_vyjezd_ceny_at: now,
