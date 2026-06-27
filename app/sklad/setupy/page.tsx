@@ -24,6 +24,16 @@ type SetupPolozkaCountRow = {
   mnozstvi: number | string;
 };
 
+const inputClass =
+  "min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-600 focus:border-blue-500";
+const nameInputClass = `${inputClass} font-bold`;
+const primaryBtnClass =
+  "inline-flex h-11 shrink-0 items-center justify-center rounded-xl border border-blue-600 bg-blue-600 px-4 text-sm font-black text-white whitespace-nowrap shadow-lg shadow-blue-950/30 transition hover:bg-blue-500";
+const secondaryBtnClass =
+  "inline-flex h-11 shrink-0 items-center justify-center rounded-xl border border-slate-600 bg-slate-800 px-4 text-sm font-black text-white whitespace-nowrap transition hover:bg-slate-700";
+const toggleBtnClass =
+  "inline-flex h-11 shrink-0 items-center justify-center rounded-xl border border-slate-600 bg-slate-950 px-4 text-sm font-black text-white whitespace-nowrap transition hover:bg-slate-800";
+
 function toNumber(value: number | string | null | undefined) {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
@@ -33,19 +43,33 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat("cs-CZ", { maximumFractionDigits: 2 }).format(value);
 }
 
+async function resolveNextSetupPoradi(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const { data, error } = await supabase
+    .from("setupy")
+    .select("poradi")
+    .order("poradi", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+
+  const currentMax = toNumber(data?.poradi);
+  return currentMax + 1;
+}
+
 export default async function SkladSetupyPage() {
   async function createSetup(formData: FormData) {
     "use server";
 
     const nazev = String(formData.get("nazev") ?? "").trim();
     const popis = String(formData.get("popis") ?? "").trim();
-    const poradi = Number(formData.get("poradi") ?? 0);
 
     if (!nazev) throw new Error("Název setupu je povinný.");
-    if (!Number.isFinite(poradi)) throw new Error("Pořadí musí být číslo.");
 
     const supabase = await createClient();
     await assertInternalWriteAccess(supabase);
+    const poradi = await resolveNextSetupPoradi(supabase);
+
     const { data, error } = await supabase
       .from("setupy")
       .insert({
@@ -168,35 +192,25 @@ export default async function SkladSetupyPage() {
       ) : null}
 
       {readOnly ? null : (
-      <Card>
-        <h2 className="text-xl font-black text-white">Nový setup</h2>
-        <form action={createSetup} className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_120px_auto]">
-          <input
-            name="nazev"
-            placeholder="Stage 10x8"
-            required
-            className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-600 focus:border-blue-500"
-          />
-          <input
-            name="popis"
-            placeholder="Volitelný popis"
-            className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-600 focus:border-blue-500"
-          />
-          <input
-            name="poradi"
-            type="number"
-            step="1"
-            defaultValue="0"
-            className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-blue-500"
-          />
-          <button
-            type="submit"
-            className="rounded-xl border border-blue-600 bg-blue-600 px-5 py-3 font-black text-white shadow-lg shadow-blue-950/30 transition hover:bg-blue-500"
-          >
-            Vytvořit
-          </button>
-        </form>
-      </Card>
+        <Card>
+          <h2 className="text-xl font-black text-white">Nový setup</h2>
+          <form action={createSetup} className="mt-4 flex flex-wrap items-center gap-2">
+            <input
+              name="nazev"
+              placeholder="Název setupu"
+              required
+              className={`${nameInputClass} min-w-[12rem]`}
+            />
+            <input
+              name="popis"
+              placeholder="Volitelný popis"
+              className={`${inputClass} min-w-[12rem]`}
+            />
+            <button type="submit" className={primaryBtnClass}>
+              Vytvořit
+            </button>
+          </form>
+        </Card>
       )}
 
       <div className="mt-6 grid gap-4">
@@ -210,88 +224,81 @@ export default async function SkladSetupyPage() {
 
             return (
               <Card key={setup.setup_id} className="border-slate-800 bg-[#081225]">
-                <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant={setup.aktivni ? "success" : "warning"}>
-                        {setup.aktivni ? "Aktivní" : "Neaktivní"}
-                      </Badge>
-                      <span className="rounded-md bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-300">
-                        položek: {count.pocetPolozek}
-                      </span>
-                      <span className="rounded-md bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-300">
-                        kusů: {formatNumber(count.celkemKusu)}
-                      </span>
-                    </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={setup.aktivni ? "success" : "warning"}>
+                    {setup.aktivni ? "Aktivní" : "Neaktivní"}
+                  </Badge>
+                  <span className="rounded-md bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-300">
+                    položek: {count.pocetPolozek}
+                  </span>
+                  <span className="rounded-md bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-300">
+                    kusů: {formatNumber(count.celkemKusu)}
+                  </span>
+                </div>
 
-                    {readOnly ? (
-                      <div className="mt-4 space-y-2">
-                        <h3 className="text-lg font-bold text-white">{setup.nazev}</h3>
-                        {setup.popis ? (
-                          <p className="text-sm text-slate-400">{setup.popis}</p>
-                        ) : null}
-                      </div>
-                    ) : (
-                    <form action={updateSetup} className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_120px_auto]">
+                {readOnly ? (
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <div className="min-w-0 flex-1 basis-[16rem]">
+                      <h3 className="text-lg font-bold text-white">{setup.nazev}</h3>
+                      {setup.popis ? (
+                        <p className="mt-1 text-sm text-slate-400">{setup.popis}</p>
+                      ) : null}
+                    </div>
+                    <Link href={`/sklad/setupy/${setup.setup_id}`} className={primaryBtnClass}>
+                      Otevřít detail
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <form
+                      action={updateSetup}
+                      className="flex min-w-0 flex-1 flex-wrap items-center gap-2 basis-[20rem]"
+                    >
                       <input type="hidden" name="setup_id" value={setup.setup_id} />
+                      <input
+                        type="hidden"
+                        name="poradi"
+                        value={setup.poradi ?? 0}
+                        readOnly
+                      />
                       <input
                         name="nazev"
                         defaultValue={setup.nazev}
                         required
-                        className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 font-bold text-white outline-none focus:border-blue-500"
+                        aria-label="Název setupu"
+                        className={`${nameInputClass} min-w-[10rem]`}
                       />
                       <input
                         name="popis"
                         defaultValue={setup.popis ?? ""}
                         placeholder="Popis"
-                        className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-600 focus:border-blue-500"
+                        aria-label="Popis setupu"
+                        className={`${inputClass} min-w-[10rem]`}
                       />
-                      <input
-                        name="poradi"
-                        type="number"
-                        step="1"
-                        defaultValue={setup.poradi ?? 0}
-                        className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-blue-500"
-                      />
-                      <button
-                        type="submit"
-                        className="rounded-xl border border-slate-600 bg-slate-800 px-4 py-3 text-sm font-black text-white transition hover:bg-slate-700"
-                      >
+                      <button type="submit" className={secondaryBtnClass}>
                         Uložit
                       </button>
                     </form>
-                    )}
 
-                  </div>
-
-                  <div className="flex flex-col gap-3">
-                    <Link
-                      href={`/sklad/setupy/${setup.setup_id}`}
-                      className="flex min-h-12 items-center justify-center rounded-xl border border-blue-600 bg-blue-600 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-500"
-                    >
+                    <Link href={`/sklad/setupy/${setup.setup_id}`} className={primaryBtnClass}>
                       Otevřít detail
                     </Link>
-                    {readOnly ? null : (
-                    <>
-                    <form action={toggleSetup}>
+
+                    <form action={toggleSetup} className="shrink-0">
                       <input type="hidden" name="setup_id" value={setup.setup_id} />
                       <input
                         type="hidden"
                         name="aktivni"
                         value={setup.aktivni ? "false" : "true"}
                       />
-                      <button
-                        type="submit"
-                        className="min-h-12 w-full rounded-xl border border-slate-600 bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-slate-800"
-                      >
+                      <button type="submit" className={toggleBtnClass}>
                         {setup.aktivni ? "Deaktivovat" : "Aktivovat"}
                       </button>
                     </form>
+
                     <DeleteSetupButton setupId={setup.setup_id} />
-                    </>
-                    )}
                   </div>
-                </div>
+                )}
               </Card>
             );
           })

@@ -7,6 +7,9 @@ type Props = {
   setupId: string;
 };
 
+const buttonClass =
+  "inline-flex h-11 shrink-0 items-center justify-center rounded-xl border border-red-800 bg-red-950 px-4 text-sm font-black text-red-100 whitespace-nowrap transition hover:bg-red-900 disabled:opacity-60";
+
 export function DeleteSetupButton({ setupId }: Props) {
   const [pending, startTransition] = useTransition();
 
@@ -20,7 +23,7 @@ export function DeleteSetupButton({ setupId }: Props) {
           await deleteSetupAction(setupId);
         });
       }}
-      className="min-h-12 w-full rounded-xl border border-red-800 bg-red-950 px-4 py-3 text-sm font-black text-red-100 transition hover:bg-red-900 disabled:opacity-60"
+      className={buttonClass}
     >
       {pending ? "Mažu…" : "Smazat setup"}
     </button>
