@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Spinner } from "@/components/ui/SubmitButton";
+import { rethrowIfNextRedirect } from "@/lib/next/isRedirectError";
 import {
   createPoptavkaAction,
   orderTechnikVyjezdAndSubmitPoptavkaAction,
@@ -21,7 +23,11 @@ import PoptavkaSestavaKonfigurator from "@/components/portal/PoptavkaSestavaKonf
 import PoptavkaTechnickePodminkyStep, {
   createInitialSectionPhotos,
 } from "@/components/portal/PoptavkaTechnickePodminkyStep";
-import { appendPendingSectionPhotos } from "@/components/portal/PoptavkaTechnikaSectionPhoto";
+import {
+  appendPendingSectionPhotos,
+  emptySectionPhotoState,
+} from "@/components/portal/PoptavkaTechnikaSectionPhoto";
+import { TECHNIKA_SECTION_PHOTOS } from "@/lib/client-portal/poptavka-technika-podminky";
 import type { SectionPhotoState } from "@/components/portal/PoptavkaTechnikaSectionPhoto";
 import type { TechnickeRezim, TechnikaSectionPhotoKey } from "@/lib/client-portal/poptavka-technika-podminky";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
@@ -142,6 +148,7 @@ export default function PoptavkaFormClient({
   const maxStep = steps.length;
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState(1);
   const [mistoAdresaAuto, setMistoAdresaAuto] = useState(() => !initialValues?.misto_adresa?.trim());
   const [stepError, setStepError] = useState<string | null>(null);
@@ -244,6 +251,35 @@ export default function PoptavkaFormClient({
     [form, sestava, sestavaKatalog, technika, sectionPhotos]
   );
 
+  const sectionPhotoCounts = useMemo(() => countSectionPhotos(sectionPhotos), [sectionPhotos]);
+  const missingPhotoLabels = useMemo(
+    () => getMissingSectionPhotoLabels(sectionPhotoCounts),
+    [sectionPhotoCounts]
+  );
+
+  const photoValidationErrorActive =
+    stepError === "technicke_missing_section_photos" ||
+    errorCode === "technicke_missing_section_photos";
+
+  const showPhotoValidationError =
+    photoValidationErrorActive && missingPhotoLabels.length > 0;
+
+  const otherStepError =
+    stepError && stepError !== "technicke_missing_section_photos" ? stepError : null;
+
+  const otherServerError =
+    errorCode &&
+    !stepError &&
+    errorCode !== "technicke_missing_section_photos" &&
+    ERROR_MESSAGES[errorCode]
+      ? errorCode
+      : null;
+
+  const initialFotkyKey = useMemo(
+    () => initialFotky.map((fotka) => fotka.id).sort().join(","),
+    [initialFotky]
+  );
+
   const resumedRef = useRef(false);
   useEffect(() => {
     if (readOnly || resumedRef.current || mode !== "edit") return;
@@ -262,6 +298,65 @@ export default function PoptavkaFormClient({
       setPendingIntent(null);
     }
   }, [saved, submitted, technikVyjezdOrdered, errorCode]);
+
+  useEffect(() => {
+    const urlSaved = searchParams.get("saved") === "1";
+    const urlSubmitted = searchParams.get("submitted") === "1";
+    const urlTechnikVyjezd = searchParams.get("technik_vyjezd_ordered") === "1";
+    const urlError = searchParams.get("error");
+    if (urlSaved || urlSubmitted || urlTechnikVyjezd || urlError) {
+      setPendingIntent(null);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const fromServer = createInitialSectionPhotos(initialFotky);
+    setSectionPhotos((current) => {
+      let changed = false;
+      const next = { ...current };
+
+      for (const section of TECHNIKA_SECTION_PHOTOS) {
+        const key = section.key;
+        const serverState = fromServer[key] ?? emptySectionPhotoState();
+        const currentState = current[key] ?? emptySectionPhotoState();
+        const merged = {
+          pending: currentState.pending,
+          saved: serverState.saved,
+        };
+
+        const savedChanged =
+          merged.saved.length !== currentState.saved.length ||
+          merged.saved.some((row, index) => row.id !== currentState.saved[index]?.id);
+
+        if (savedChanged) {
+          next[key] = merged;
+          changed = true;
+        }
+      }
+
+      return changed ? next : current;
+    });
+  }, [initialFotkyKey, initialFotky]);
+
+  useEffect(() => {
+    if (!photoValidationErrorActive) return;
+    if (missingPhotoLabels.length > 0) return;
+
+    if (stepError === "technicke_missing_section_photos") {
+      setStepError(null);
+      setStepErrorDetails([]);
+    }
+    if (searchParams.get("error") === "technicke_missing_section_photos") {
+      router.replace(pathname, { scroll: false });
+    }
+  }, [
+    photoValidationErrorActive,
+    missingPhotoLabels.length,
+    stepError,
+    searchParams,
+    pathname,
+    router,
+  ]);
 
   const effectiveTechnickeRezim =
     technickeUiRezim ??
@@ -469,7 +564,7 @@ export default function PoptavkaFormClient({
     goToStep(step + 1);
   }
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (readOnly) return;
 
@@ -532,17 +627,19 @@ export default function PoptavkaFormClient({
     }
     appendPendingSectionPhotos(formData, pendingBySection);
 
-    if (intent === "order_technik_vyjezd") {
-      void orderTechnikVyjezdAndSubmitPoptavkaAction(formData);
-      return;
+    try {
+      if (intent === "order_technik_vyjezd") {
+        await orderTechnikVyjezdAndSubmitPoptavkaAction(formData);
+      } else if (intent === "submit_klient") {
+        await submitKlientPoptavkaAction(formData);
+      } else {
+        await formAction(formData);
+      }
+    } catch (error) {
+      rethrowIfNextRedirect(error);
+      setPendingIntent(null);
+      showStepValidationError(intent === "draft" ? "save_failed" : "submit_failed");
     }
-
-    if (intent === "submit_klient") {
-      void submitKlientPoptavkaAction(formData);
-      return;
-    }
-
-    void formAction(formData);
   }
 
   function handleFormKeyDown(event: React.KeyboardEvent<HTMLFormElement>) {
@@ -592,17 +689,29 @@ export default function PoptavkaFormClient({
             Poptávka byla uložena jako koncept.
           </p>
         ) : null}
-        {errorCode && !stepError && ERROR_MESSAGES[errorCode] ? (
+        {otherServerError ? (
           <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-            {ERROR_MESSAGES[errorCode]}
+            {ERROR_MESSAGES[otherServerError]}
           </p>
         ) : null}
-        {stepError ? (
+        {otherStepError ? (
           <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-            <p>{wizardErrorMessage(stepError)}</p>
+            <p>{wizardErrorMessage(otherStepError)}</p>
             {stepErrorDetails.length > 0 ? (
               <ul className="mt-2 list-inside list-disc space-y-1 text-red-100/90">
                 {stepErrorDetails.map((detail) => (
+                  <li key={detail}>{detail}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+        {showPhotoValidationError ? (
+          <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+            <p>{wizardErrorMessage("technicke_missing_section_photos")}</p>
+            {missingPhotoLabels.length > 0 ? (
+              <ul className="mt-2 list-inside list-disc space-y-1 text-red-100/90">
+                {missingPhotoLabels.map((detail) => (
                   <li key={detail}>{detail}</li>
                 ))}
               </ul>
@@ -1167,11 +1276,32 @@ export default function PoptavkaFormClient({
               kontaktJmeno={form.kontakt_jmeno}
               kontaktTelefon={form.kontakt_telefon}
               kontaktEmail={form.kontakt_email}
-              highlightMissingPhotos={stepError === "technicke_missing_section_photos"}
+              highlightMissingPhotos={showPhotoValidationError}
             />
           )}
 
           <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-6">
+            {pendingIntent === "submit_klient" || pendingIntent === "order_technik_vyjezd" ? (
+              <p
+                className="flex w-full basis-full items-center gap-2 text-sm text-blue-200/90"
+                role="status"
+                aria-live="polite"
+              >
+                <Spinner />
+                Odesíláme poptávku, ukládáme data a posíláme potvrzovací e-mail…
+              </p>
+            ) : null}
+            {pendingIntent === "draft" ? (
+              <p
+                className="flex w-full basis-full items-center gap-2 text-sm text-amber-200/90"
+                role="status"
+                aria-live="polite"
+              >
+                <Spinner />
+                Ukládáme koncept poptávky…
+              </p>
+            ) : null}
+
             {!readOnly && step > 1 ? (
               <button
                 type="button"
@@ -1198,14 +1328,20 @@ export default function PoptavkaFormClient({
               <button
                 type="button"
                 disabled={pendingIntent !== null}
+                aria-busy={pendingIntent === "draft" || undefined}
                 onClick={() => submitWithIntent("draft")}
                 className="rounded-xl border border-amber-500/60 bg-amber-500/20 px-5 py-3 text-sm font-bold text-amber-50 transition hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {pendingIntent === "draft"
-                  ? "Ukládám…"
-                  : mode === "create"
-                    ? "Uložit koncept"
-                    : "Uložit změny"}
+                {pendingIntent === "draft" ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Spinner />
+                    Ukládám…
+                  </span>
+                ) : mode === "create" ? (
+                  "Uložit koncept"
+                ) : (
+                  "Uložit změny"
+                )}
               </button>
             ) : null}
 
@@ -1216,10 +1352,18 @@ export default function PoptavkaFormClient({
               <button
                 type="button"
                 disabled={pendingIntent !== null}
+                aria-busy={pendingIntent === "submit_klient" || undefined}
                 onClick={() => submitWithIntent("submit_klient")}
                 className="rounded-xl border border-blue-500/60 bg-blue-500/20 px-5 py-3 text-sm font-bold text-blue-50 transition hover:bg-blue-500/30 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {pendingIntent === "submit_klient" ? "Odesílám…" : "Odeslat poptávku"}
+                {pendingIntent === "submit_klient" ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Spinner />
+                    Odesílám…
+                  </span>
+                ) : (
+                  "Odeslat poptávku"
+                )}
               </button>
             ) : null}
 
@@ -1230,12 +1374,18 @@ export default function PoptavkaFormClient({
               <button
                 type="button"
                 disabled={pendingIntent !== null || !canOrderTechnikVyjezd}
+                aria-busy={pendingIntent === "order_technik_vyjezd" || undefined}
                 onClick={() => submitWithIntent("order_technik_vyjezd")}
                 className="rounded-xl border border-emerald-500/60 bg-emerald-500/20 px-5 py-3 text-sm font-bold text-emerald-50 transition hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {pendingIntent === "order_technik_vyjezd"
-                  ? "Odesílám…"
-                  : "Odeslat poptávku a závazně objednat výjezd technika"}
+                {pendingIntent === "order_technik_vyjezd" ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Spinner />
+                    Odesílám…
+                  </span>
+                ) : (
+                  "Odeslat poptávku a závazně objednat výjezd technika"
+                )}
               </button>
             ) : null}
 
