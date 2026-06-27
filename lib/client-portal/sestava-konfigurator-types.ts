@@ -29,6 +29,24 @@ export type PresetVelikost = "mala" | "stredni" | "velka";
 
 export type SestavaKonfiguratorRezim = "standard" | "atypicka";
 
+/** Povolené výšky zastřešení (m) — dropdown, ne volné zadávání. */
+export const ZASTRESENI_CISTA_VYSKA_OPTIONS = [5, 6, 7] as const;
+
+export type ZastreseniCistaVyskaM = (typeof ZASTRESENI_CISTA_VYSKA_OPTIONS)[number];
+
+/** Maximální rozměr LED wall na mobilní stage (m). */
+export const MOBILNI_LED_MAX_SIRKA_M = 5;
+export const MOBILNI_LED_MAX_VYSKA_M = 2.5;
+
+export type LedWallBlock = {
+  enabled: boolean;
+  typ_kod: LedTypKod | null;
+  sirka_m: number | null;
+  vyska_m: number | null;
+};
+
+export type MobilniSchodyStrana = "vlevo" | "vpravo";
+
 export type SestavaKonfiguratorState = {
   rezim: SestavaKonfiguratorRezim;
   atypicka_poptavka_text: string;
@@ -60,6 +78,16 @@ export type SestavaKonfiguratorState = {
   led_umisteni: LedUmisteni | null;
   led_rohy: boolean;
   led_obsluha_obsahu: LedObsluhaObsahu | null;
+  /** LED wall na pódiu — samostatný blok. */
+  led_podium: LedWallBlock;
+  /** LED branka vlevo (pohled diváka na stage). */
+  led_branka_vlevo: LedWallBlock;
+  /** LED branka vpravo (pohled diváka na stage). */
+  led_branka_vpravo: LedWallBlock;
+  /** Mobilní stage: schody zleva nebo zprava (jen jedna strana). */
+  mobilni_schody_strana: MobilniSchodyStrana | null;
+  mobilni_pozaduje_zvuk: boolean;
+  mobilni_pozaduje_svetla: boolean;
   zvuk_preset: PresetVelikost | null;
   zvuk_setup_id: string | null;
   svetla_preset: PresetVelikost | null;

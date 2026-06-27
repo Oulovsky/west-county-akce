@@ -1,5 +1,6 @@
 import type { PortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-types";
 import type { KotveniTyp } from "@/lib/client-portal/sestava-konfigurator-types";
+import { ZASTRESENI_CISTA_VYSKA_OPTIONS } from "@/lib/client-portal/sestava-konfigurator-types";
 
 /** Standardní LED panel 1 × 0,5 m = 0,5 m². */
 export const STANDARD_LED_PANEL_PLOCHA_M2 = 0.5;
@@ -16,45 +17,73 @@ export const DEFAULT_PORTAL_SESTAVA_KATALOG: PortalSestavaKatalog = {
   },
   zastreseni_varianty: [
     {
+      id: "8x3",
+      nazev: "Zastřešení 8 × 3 m",
+      sirka_m: 8,
+      hloubka_m: 3,
+      min_sirka_m: 8,
+      max_sirka_m: 8,
+      min_hloubka_m: 3,
+      max_hloubka_m: 3,
+      max_cista_vyska_m: 5.0,
+      doporucena_sirky_m: [8],
+      doporucene_hloubky_m: [3],
+      setup_id: null,
+    },
+    {
+      id: "8x4",
+      nazev: "Zastřešení 8 × 4 m",
+      sirka_m: 8,
+      hloubka_m: 4,
+      min_sirka_m: 8,
+      max_sirka_m: 8,
+      min_hloubka_m: 4,
+      max_hloubka_m: 4,
+      max_cista_vyska_m: 5.0,
+      doporucena_sirky_m: [8],
+      doporucene_hloubky_m: [4],
+      setup_id: null,
+    },
+    {
       id: "8x6",
-      nazev: "8 × 6 m",
+      nazev: "Zastřešení 8 × 6 m",
       sirka_m: 8,
       hloubka_m: 6,
       min_sirka_m: 8,
       max_sirka_m: 8,
       min_hloubka_m: 6,
       max_hloubka_m: 6,
-      max_cista_vyska_m: 5.0,
+      max_cista_vyska_m: 6.0,
       doporucena_sirky_m: [8],
       doporucene_hloubky_m: [6],
       setup_id: null,
     },
     {
+      id: "8x7",
+      nazev: "Zastřešení 8 × 7 m",
+      sirka_m: 8,
+      hloubka_m: 7,
+      min_sirka_m: 8,
+      max_sirka_m: 8,
+      min_hloubka_m: 7,
+      max_hloubka_m: 7,
+      max_cista_vyska_m: 6.0,
+      doporucena_sirky_m: [8],
+      doporucene_hloubky_m: [7],
+      setup_id: null,
+    },
+    {
       id: "10x8",
-      nazev: "10 × 8 m",
+      nazev: "Zastřešení 10 × 8 m",
       sirka_m: 10,
       hloubka_m: 8,
       min_sirka_m: 10,
       max_sirka_m: 10,
       min_hloubka_m: 8,
       max_hloubka_m: 8,
-      max_cista_vyska_m: 6.0,
+      max_cista_vyska_m: 7.0,
       doporucena_sirky_m: [10],
       doporucene_hloubky_m: [8],
-      setup_id: null,
-    },
-    {
-      id: "15x10",
-      nazev: "15 × 10 m",
-      sirka_m: 15,
-      hloubka_m: 10,
-      min_sirka_m: 15,
-      max_sirka_m: 15,
-      min_hloubka_m: 10,
-      max_hloubka_m: 10,
-      max_cista_vyska_m: 8.0,
-      doporucena_sirky_m: [15],
-      doporucene_hloubky_m: [10],
       setup_id: null,
     },
   ],
@@ -310,6 +339,11 @@ export function isIntegerMeter(value: number | null | undefined): boolean {
 export function buildPodiumMeterOptions(maxM: number): number[] {
   const limit = Math.max(1, Math.min(30, Math.floor(maxM)));
   return Array.from({ length: limit }, (_, index) => index + 1);
+}
+
+export function getZastreseniHeightOptions(maxCista: number | null): number[] {
+  if (maxCista == null) return [...ZASTRESENI_CISTA_VYSKA_OPTIONS];
+  return ZASTRESENI_CISTA_VYSKA_OPTIONS.filter((h) => h <= maxCista + 0.001);
 }
 
 export function getAvailableKotveniTypy(

@@ -38,6 +38,8 @@ import {
 import {
   EMPTY_SESTAVA_KONFIGURATOR,
   deriveSetupSelectionsFromSestava,
+  migrateLegacySestavaState,
+  normalizeSestavaStateForSave,
 } from "@/lib/client-portal/sestava-konfigurator-form";
 import type {
   PortalSestavaKatalog,
@@ -189,12 +191,17 @@ export default function PoptavkaFormClient({
     ...initialTechnika,
   });
 
-  const [sestava, setSestava] = useState<SestavaKonfiguratorState>({
-    ...EMPTY_SESTAVA_KONFIGURATOR,
-    ...initialSestava,
-  });
+  const [sestava, setSestava] = useState<SestavaKonfiguratorState>(() =>
+    migrateLegacySestavaState({
+      ...EMPTY_SESTAVA_KONFIGURATOR,
+      ...initialSestava,
+    })
+  );
 
-  const sestavaJson = useMemo(() => JSON.stringify(sestava), [sestava]);
+  const sestavaJson = useMemo(
+    () => JSON.stringify(normalizeSestavaStateForSave(sestava)),
+    [sestava]
+  );
 
   const [selectedSetups, setSelectedSetups] = useState<Record<string, PoptavkaSetupInput>>(
     () => {
@@ -1018,7 +1025,7 @@ export default function PoptavkaFormClient({
                 katalog={sestavaKatalog}
                 setupsByOblast={setupsByOblast}
                 state={sestava}
-                onChange={setSestava}
+                onChange={(next) => setSestava(normalizeSestavaStateForSave(next))}
                 readOnly={readOnly}
                 inputClass={inputClass}
                 labelClass={labelClass}
