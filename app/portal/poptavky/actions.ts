@@ -356,13 +356,27 @@ async function saveDraftPoptavkaFromFormData(
     ? `/portal/poptavka/${existingPoptavkaId}`
     : "/portal/poptavka/nova";
 
+  console.info("[poptavka draft] start", {
+    poptavkaId: existingPoptavkaId ?? "new",
+    wizardKrok,
+    intent: "draft",
+  });
+
   const validationError = validatePoptavkaDraftMinima(values);
   if (validationError) {
+    console.info("[poptavka draft] validation failed", {
+      poptavkaId: existingPoptavkaId ?? "new",
+      code: validationError,
+    });
     redirectWithError(errorPath, validationError);
   }
 
   const mistoResult = await resolveValidatedMistoIdForSave(supabase, values, { draft: true });
   if (!mistoResult.ok) {
+    console.info("[poptavka draft] misto validation failed", {
+      poptavkaId: existingPoptavkaId ?? "new",
+      code: mistoResult.error,
+    });
     redirectWithError(errorPath, mistoResult.error);
   }
 
@@ -373,6 +387,10 @@ async function saveDraftPoptavkaFromFormData(
   } else if ("skipReplace" in setupResult && setupResult.skipReplace) {
     draftSetups = null;
   } else if ("error" in setupResult) {
+    console.info("[poptavka draft] setups validation failed", {
+      poptavkaId: existingPoptavkaId ?? "new",
+      code: setupResult.error,
+    });
     redirectWithError(errorPath, setupResult.error);
   } else {
     redirectWithError(errorPath, "invalid_setups");
@@ -398,13 +416,20 @@ async function saveDraftPoptavkaFromFormData(
       .update(payload)
       .eq("poptavka_id", existingPoptavkaId);
 
-    if (error) redirectWithError(`/portal/poptavka/${existingPoptavkaId}`, "save_failed");
+    if (error) {
+      console.error("[poptavka draft] db update failed", {
+        poptavkaId: existingPoptavkaId,
+        message: error.message,
+      });
+      redirectWithError(`/portal/poptavka/${existingPoptavkaId}`, "draft_save_failed");
+    }
 
     if (draftSetups !== null) {
       await replacePoptavkaSetups(supabase, existingPoptavkaId, draftSetups);
     }
     await upsertTechnickeUdaje(supabase, existingPoptavkaId, formData);
     await uploadTechnickeSectionPhotosFromFormData(supabase, existingPoptavkaId, formData);
+    console.info("[poptavka draft] saved", { poptavkaId: existingPoptavkaId });
     return existingPoptavkaId;
   }
 
@@ -422,7 +447,10 @@ async function saveDraftPoptavkaFromFormData(
     .single();
 
   if (error || !created) {
-    redirectWithError("/portal/poptavka/nova", "save_failed");
+    console.error("[poptavka draft] db insert failed", {
+      message: error?.message ?? "no row returned",
+    });
+    redirectWithError("/portal/poptavka/nova", "draft_save_failed");
   }
 
   if (draftSetups !== null) {
@@ -430,6 +458,7 @@ async function saveDraftPoptavkaFromFormData(
   }
   await upsertTechnickeUdaje(supabase, created.poptavka_id, formData);
   await uploadTechnickeSectionPhotosFromFormData(supabase, created.poptavka_id, formData);
+  console.info("[poptavka draft] saved", { poptavkaId: created.poptavka_id });
   return created.poptavka_id;
 }
 
@@ -645,9 +674,11 @@ async function replacePoptavkaSetups(
 export async function createPoptavkaAction(formData: FormData) {
   const supabase = await createClient();
   const session = await requireActiveClientPortalSession(supabase);
+  console.info("[poptavka draft] action create");
   const poptavkaId = await saveDraftPoptavkaFromFormData(supabase, session, formData);
   revalidatePath("/portal/poptavky");
   revalidatePath(`/portal/poptavka/${poptavkaId}`);
+  console.info("[poptavka draft] redirect saved", { poptavkaId });
   redirect(`/portal/poptavka/${poptavkaId}?saved=1`);
 }
 
@@ -660,10 +691,17 @@ export async function updatePoptavkaAction(formData: FormData) {
     redirectWithError("/portal/poptavky", "missing_id");
   }
 
-  await saveDraftPoptavkaFromFormData(supabase, await requireActiveClientPortalSession(supabase), formData, poptavkaId);
+  console.info("[poptavka draft] action update", { poptavkaId });
+  await saveDraftPoptavkaFromFormData(
+    supabase,
+    await requireActiveClientPortalSession(supabase),
+    formData,
+    poptavkaId
+  );
 
   revalidatePath("/portal/poptavky");
   revalidatePath(`/portal/poptavka/${poptavkaId}`);
+  console.info("[poptavka draft] redirect saved", { poptavkaId });
   redirect(`/portal/poptavka/${poptavkaId}?saved=1`);
 }
 

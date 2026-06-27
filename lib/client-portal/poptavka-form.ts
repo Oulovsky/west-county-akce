@@ -166,8 +166,8 @@ export function appendPoptavkaFormValuesToFormData(
 }
 
 export function validatePoptavkaDraftMinima(values: PoptavkaFormValues): string | null {
-  if (!values.misto_nazev.trim()) return "missing_event_name";
-  if (!values.datum_od) return "missing_date";
+  if (!values.misto_nazev.trim()) return "draft_missing_title";
+  if (!values.datum_od) return "draft_missing_date";
   return null;
 }
 

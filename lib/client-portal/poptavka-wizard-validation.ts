@@ -69,8 +69,55 @@ export const WIZARD_STEP_ERROR_MESSAGES: Record<string, string> = {
     "Vyberte alespoň jeden preferovaný způsob kontaktu (telefon nebo e-mail).",
 };
 
+/** Chyby uložení konceptu (draft save) — nevyžadují kompletní poptávku. */
+export const DRAFT_ERROR_MESSAGES: Record<string, string> = {
+  draft_missing_title: "Pro uložení konceptu doplňte název akce.",
+  draft_missing_date: "Pro uložení konceptu doplňte datum akce.",
+  save_failed: "Koncept se nepodařilo uložit kvůli chybě serveru. Zkuste to prosím znovu.",
+  draft_save_failed: "Koncept se nepodařilo uložit kvůli chybě serveru. Zkuste to prosím znovu.",
+  draft_photo_upload_failed:
+    "Koncept se nepodařilo uložit — nahrání fotek selhalo. Zkuste to prosím znovu.",
+  setups_failed: "Koncept se uložil částečně, ale setupy se nepodařilo zapsat.",
+  invalid_setups:
+    "Vybrané setupy už nejsou v portálu dostupné. Upravte výběr techniky a uložte znovu.",
+  invalid_misto:
+    "Vybrané místo není dostupné pro váš účet. Vyberte jiné místo nebo zadejte nové.",
+  missing_id: "Chybí identifikátor poptávky.",
+  not_editable: "Tuto poptávku už nelze upravovat.",
+  not_found: "Poptávka nenalezena.",
+};
+
+/** Chyby odeslání / server submit — mimo validaci polí. */
+export const SUBMIT_SERVER_ERROR_MESSAGES: Record<string, string> = {
+  submit_failed: "Odeslání se nezdařilo. Zkuste to prosím znovu.",
+  submit_incomplete: "Doplňte kontakt, název akce a termín před odesláním.",
+};
+
+export type PoptavkaFormErrorKind = "draft" | "submit" | "wizard";
+
+const DRAFT_ERROR_CODES = new Set(Object.keys(DRAFT_ERROR_MESSAGES));
+const SUBMIT_SERVER_ERROR_CODES = new Set(Object.keys(SUBMIT_SERVER_ERROR_MESSAGES));
+
+/** Vrátí lidsky čitelný text; u neznámého kódu zobrazí technický kód pro ladění. */
+export function resolvePoptavkaFormError(code: string): string {
+  return (
+    WIZARD_STEP_ERROR_MESSAGES[code] ??
+    DRAFT_ERROR_MESSAGES[code] ??
+    SUBMIT_SERVER_ERROR_MESSAGES[code] ??
+    `Operaci se nepodařilo dokončit. Kód chyby: ${code}`
+  );
+}
+
 export function wizardErrorMessage(code: string): string {
-  return WIZARD_STEP_ERROR_MESSAGES[code] ?? "Zkontrolujte vyplněné údaje.";
+  return resolvePoptavkaFormError(code);
+}
+
+/** Rozliší, zda jde o chybu konceptu, odeslání nebo průchodu krokem wizardu. */
+export function classifyPoptavkaErrorKind(code: string): PoptavkaFormErrorKind {
+  if (DRAFT_ERROR_CODES.has(code)) return "draft";
+  if (SUBMIT_SERVER_ERROR_CODES.has(code)) return "submit";
+  if (code === "wizard_step_locked") return "wizard";
+  return "submit";
 }
 
 export type WizardValidationIssue = {
@@ -80,7 +127,7 @@ export type WizardValidationIssue = {
 };
 
 export function wizardIssueLabel(code: string): string {
-  return WIZARD_STEP_ERROR_MESSAGES[code] ?? code;
+  return resolvePoptavkaFormError(code);
 }
 
 export function formatWizardValidationIssueLine(issue: WizardValidationIssue): string {
@@ -244,6 +291,8 @@ export function wizardErrorStep(code: string): number {
     return 1;
   }
   if (
+    code === "draft_missing_title" ||
+    code === "draft_missing_date" ||
     code === "missing_event_name" ||
     code === "missing_date" ||
     code === "missing_location" ||

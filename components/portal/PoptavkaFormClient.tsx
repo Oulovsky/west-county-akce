@@ -58,7 +58,6 @@ import type {
   SestavaKonfiguratorState,
 } from "@/lib/client-portal/sestava-konfigurator-types";
 import {
-  WIZARD_STEP_ERROR_MESSAGES,
   computeMaxReachableStep,
   getWizardStep3Errors,
   validatePoptavkaDraftMinima,
@@ -66,30 +65,26 @@ import {
   validateKlientSubmitDetailed,
   collectKlientSubmitValidationIssues,
   formatWizardValidationIssueLine,
-  wizardIssueLabel,
+  classifyPoptavkaErrorKind,
+  resolvePoptavkaFormError,
   countSectionPhotos,
-  getMissingSectionPhotoLabels,
   resolveWizardResumeStep,
   validateWizardStep,
-  validateWizardStep3,
   validateWizardStepsUpTo,
-  wizardErrorMessage,
   wizardErrorStep,
+  type PoptavkaFormErrorKind,
 } from "@/lib/client-portal/poptavka-wizard-validation";
 
-const ERROR_MESSAGES: Record<string, string> = {
-  ...WIZARD_STEP_ERROR_MESSAGES,
-  save_failed: "Poptávku se nepodařilo uložit.",
-  setups_failed: "Základ poptávky byl uložen, ale setupy se nepodařilo zapsat.",
-  not_editable: "Tuto poptávku už nelze upravovat.",
-  not_found: "Poptávka nenalezena.",
-  submit_incomplete: "Doplňte kontakt, název akce a termín před odesláním.",
-  submit_failed: "Odeslání se nezdařilo.",
-  invalid_misto:
-    "Vybrané místo není dostupné pro váš účet. Vyberte jiné místo nebo zadejte nové.",
-  invalid_setups:
-    "Vybrané setupy už nejsou v portálu dostupné. Upravte výběr techniky a uložte znovu.",
-};
+type FormErrorKind = PoptavkaFormErrorKind | null;
+
+function initialFormErrorKind(
+  errorCode: string | null | undefined,
+  saved?: boolean,
+  submitted?: boolean
+): FormErrorKind {
+  if (!errorCode || saved || submitted || errorCode === "not_found") return null;
+  return classifyPoptavkaErrorKind(errorCode);
+}
 
 type Props = {
   mode: "create" | "edit";
@@ -157,10 +152,10 @@ export default function PoptavkaFormClient({
   const searchParams = useSearchParams();
   const [step, setStep] = useState(1);
   const [mistoAdresaAuto, setMistoAdresaAuto] = useState(() => !initialValues?.misto_adresa?.trim());
-  const [stepError, setStepError] = useState<string | null>(null);
+  const [localErrorCode, setLocalErrorCode] = useState<string | null>(null);
   const [stepErrorDetails, setStepErrorDetails] = useState<string[]>([]);
-  const [submitValidationActive, setSubmitValidationActive] = useState(() =>
-    Boolean(errorCode && !saved && !submitted && errorCode !== "not_found")
+  const [formErrorKind, setFormErrorKind] = useState<FormErrorKind>(() =>
+    initialFormErrorKind(errorCode, saved, submitted)
   );
   const [pendingIntent, setPendingIntent] = useState<PendingIntent | null>(null);
   const [technickeUiRezim, setTechnickeUiRezim] = useState<TechnickeRezim | null>(() => {
@@ -261,10 +256,6 @@ export default function PoptavkaFormClient({
   );
 
   const sectionPhotoCounts = useMemo(() => countSectionPhotos(sectionPhotos), [sectionPhotos]);
-  const missingPhotoLabels = useMemo(
-    () => getMissingSectionPhotoLabels(sectionPhotoCounts),
-    [sectionPhotoCounts]
-  );
 
   const initialFotkyKey = useMemo(
     () => initialFotky.map((fotka) => fotka.id).sort().join(","),
@@ -348,35 +339,6 @@ export default function PoptavkaFormClient({
     });
   }, [initialFotkyKey, initialFotky]);
 
-  useEffect(() => {
-    const photoValidationErrorActive =
-      stepError === "technicke_missing_section_photos" ||
-      errorCode === "technicke_missing_section_photos";
-    if (!photoValidationErrorActive) return;
-    if (missingPhotoLabels.length > 0) return;
-
-    if (stepError === "technicke_missing_section_photos") {
-      setStepError(null);
-      setStepErrorDetails([]);
-    }
-    if (searchParams.get("error") === "technicke_missing_section_photos") {
-      router.replace(pathname, { scroll: false });
-    }
-  }, [
-    missingPhotoLabels.length,
-    stepError,
-    errorCode,
-    searchParams,
-    pathname,
-    router,
-  ]);
-
-  useEffect(() => {
-    if (errorCode && !saved && !submitted && errorCode !== "not_found") {
-      setSubmitValidationActive(true);
-    }
-  }, [errorCode, saved, submitted]);
-
   const effectiveTechnickeRezim =
     technickeUiRezim ??
     (technika.technicke_rezim === "klient_vyplni" || technika.technicke_rezim === "vyjezd_technika"
@@ -425,65 +387,40 @@ export default function PoptavkaFormClient({
     [submitValidationInput]
   );
 
-  const displayedSubmitIssues = useMemo(() => {
-    if (derivedSubmitIssues.length > 0) return derivedSubmitIssues;
-    if (errorCode && (ERROR_MESSAGES[errorCode] || wizardIssueLabel(errorCode) !== errorCode)) {
-      return [
-        {
-          step: wizardErrorStep(errorCode),
-          code: errorCode,
-          label: wizardIssueLabel(errorCode),
-        },
-      ];
+  const submitIssueLines = useMemo(() => {
+    if (derivedSubmitIssues.length > 0) {
+      return derivedSubmitIssues.map(formatWizardValidationIssueLine);
+    }
+    const code = localErrorCode ?? errorCode;
+    if (formErrorKind === "submit" && code) {
+      return [`Krok ${wizardErrorStep(code)}: ${resolvePoptavkaFormError(code)}`];
     }
     return [];
-  }, [derivedSubmitIssues, errorCode]);
+  }, [derivedSubmitIssues, formErrorKind, localErrorCode, errorCode]);
 
   useEffect(() => {
-    if (!submitValidationActive) return;
-    if (derivedSubmitIssues.length > 0) {
-      setStepError(derivedSubmitIssues[0]!.code);
-      setStepErrorDetails(derivedSubmitIssues.map(formatWizardValidationIssueLine));
-      return;
-    }
-    setSubmitValidationActive(false);
-    setStepError(null);
-    setStepErrorDetails([]);
+    if (formErrorKind !== "submit") return;
+    if (derivedSubmitIssues.length > 0) return;
+    setFormErrorKind(null);
+    setLocalErrorCode(null);
     if (searchParams.get("error")) {
       router.replace(pathname, { scroll: false });
     }
-  }, [
-    submitValidationActive,
-    derivedSubmitIssues,
-    searchParams,
-    pathname,
-    router,
-  ]);
+  }, [formErrorKind, derivedSubmitIssues.length, searchParams, pathname, router]);
 
-  const showSubmitValidationBox =
-    submitValidationActive && displayedSubmitIssues.length > 0;
+  const showSubmitValidationBox = formErrorKind === "submit" && submitIssueLines.length > 0;
 
-  const photoValidationErrorActive =
-    stepError === "technicke_missing_section_photos" ||
-    errorCode === "technicke_missing_section_photos";
+  const activeDraftErrorCode =
+    formErrorKind === "draft" ? (localErrorCode ?? errorCode ?? null) : null;
+  const showDraftErrorBox = Boolean(activeDraftErrorCode);
 
-  const showPhotoValidationError =
-    !showSubmitValidationBox &&
-    photoValidationErrorActive &&
-    missingPhotoLabels.length > 0;
+  const activeWizardErrorCode =
+    formErrorKind === "wizard" ? (localErrorCode ?? null) : null;
+  const showWizardErrorBox = Boolean(activeWizardErrorCode);
 
-  const otherStepError =
-    stepError && !submitValidationActive && stepError !== "technicke_missing_section_photos"
-      ? stepError
-      : null;
-
-  const otherServerError =
-    errorCode &&
-    !stepError &&
-    !submitValidationActive &&
-    ERROR_MESSAGES[errorCode]
-      ? errorCode
-      : null;
+  const highlightMissingPhotos =
+    showSubmitValidationBox &&
+    derivedSubmitIssues.some((issue) => issue.code === "technicke_missing_section_photos");
 
   const canOrderTechnikVyjezd =
     form.misto_lat != null &&
@@ -627,9 +564,31 @@ export default function PoptavkaFormClient({
     }
   }
 
+  function clearUrlError() {
+    if (searchParams.get("error")) {
+      router.replace(pathname, { scroll: false });
+    }
+  }
+
+  function clearFormErrors() {
+    setFormErrorKind(null);
+    setLocalErrorCode(null);
+    setStepErrorDetails([]);
+    clearUrlError();
+  }
+
+  function showDraftValidationError(code: string) {
+    setFormErrorKind("draft");
+    setLocalErrorCode(code);
+    setStepErrorDetails([]);
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
   function showStepValidationError(code: string, details: string[] = []) {
-    setSubmitValidationActive(false);
-    setStepError(code);
+    setFormErrorKind("wizard");
+    setLocalErrorCode(code);
     setStepErrorDetails(details);
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -639,18 +598,16 @@ export default function PoptavkaFormClient({
   function showSubmitValidationFailure(
     result: Extract<ReturnType<typeof validateKlientSubmitDetailed>, { ok: false }>
   ) {
-    setSubmitValidationActive(true);
-    setStepError(result.code);
-    setStepErrorDetails(result.issues.map(formatWizardValidationIssueLine));
+    setFormErrorKind("submit");
+    setLocalErrorCode(result.code);
+    setStepErrorDetails([]);
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }
 
   function clearStepValidationError() {
-    setSubmitValidationActive(false);
-    setStepError(null);
-    setStepErrorDetails([]);
+    clearFormErrors();
   }
 
   function attemptGoToStep(targetStep: number) {
@@ -699,6 +656,8 @@ export default function PoptavkaFormClient({
     event.preventDefault();
     if (readOnly) return;
 
+    clearUrlError();
+
     const formData = new FormData(event.currentTarget);
     formData.set("wizard_step", String(step));
     formData.set("sestava_konfigurator_json", sestavaJson);
@@ -708,6 +667,7 @@ export default function PoptavkaFormClient({
     const intent = normalizeSubmitIntent(String(formData.get("save_intent") ?? "draft"));
 
     if (intent === "order_technik_vyjezd") {
+      clearFormErrors();
       const orderError = validateTechnikVyjezdOrderComplete({
         values: form,
         technika,
@@ -723,6 +683,7 @@ export default function PoptavkaFormClient({
         return;
       }
     } else if (intent === "submit_klient") {
+      clearFormErrors();
       const submitResult = validateKlientSubmitDetailed({
         form,
         sestava,
@@ -735,11 +696,11 @@ export default function PoptavkaFormClient({
         setStep(wizardErrorStep(submitResult.code));
         return;
       }
-      setSubmitValidationActive(false);
     } else {
+      clearFormErrors();
       const saveError = validatePoptavkaDraftMinima(form);
       if (saveError) {
-        showStepValidationError(saveError);
+        showDraftValidationError(saveError);
         setStep(wizardErrorStep(saveError));
         return;
       }
@@ -768,7 +729,22 @@ export default function PoptavkaFormClient({
         router.refresh();
       } catch {
         setPendingIntent(null);
-        showStepValidationError(intent === "draft" ? "save_failed" : "submit_failed");
+        if (intent === "draft") {
+          showDraftValidationError("draft_photo_upload_failed");
+        } else {
+          showSubmitValidationFailure({
+            ok: false,
+            code: "submit_failed",
+            message: resolvePoptavkaFormError("submit_failed"),
+            issues: [
+              {
+                step: 4,
+                code: "submit_failed",
+                label: resolvePoptavkaFormError("submit_failed"),
+              },
+            ],
+          });
+        }
         return;
       }
     }
@@ -788,7 +764,24 @@ export default function PoptavkaFormClient({
     } catch (error) {
       rethrowIfNextRedirect(error);
       setPendingIntent(null);
-      showStepValidationError(intent === "draft" ? "save_failed" : "submit_failed");
+      if (intent === "draft") {
+        showDraftValidationError("save_failed");
+      } else if (intent === "submit_klient") {
+        showSubmitValidationFailure({
+          ok: false,
+          code: "submit_failed",
+          message: resolvePoptavkaFormError("submit_failed"),
+          issues: [
+            {
+              step: 4,
+              code: "submit_failed",
+              label: resolvePoptavkaFormError("submit_failed"),
+            },
+          ],
+        });
+      } else {
+        showStepValidationError("submit_failed");
+      }
     }
   }
 
@@ -839,41 +832,28 @@ export default function PoptavkaFormClient({
             Poptávka byla uložena jako koncept.
           </p>
         ) : null}
-        {otherServerError ? (
-          <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-            {ERROR_MESSAGES[otherServerError]}
-          </p>
+        {showDraftErrorBox && activeDraftErrorCode ? (
+          <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+            <p className="font-medium">Koncept se nepodařilo uložit.</p>
+            <p className="mt-1">{resolvePoptavkaFormError(activeDraftErrorCode)}</p>
+          </div>
         ) : null}
         {showSubmitValidationBox ? (
           <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
             <p>Poptávku zatím nelze odeslat. Doplňte:</p>
             <ul className="mt-2 list-inside list-disc space-y-1 text-red-100/90">
-              {displayedSubmitIssues.map((issue) => (
-                <li key={`${issue.step}-${issue.code}-${issue.label}`}>
-                  {formatWizardValidationIssueLine(issue)}
-                </li>
+              {submitIssueLines.map((line) => (
+                <li key={line}>{line}</li>
               ))}
             </ul>
           </div>
         ) : null}
-        {otherStepError ? (
+        {showWizardErrorBox && activeWizardErrorCode ? (
           <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-            <p>{wizardErrorMessage(otherStepError)}</p>
+            <p>{resolvePoptavkaFormError(activeWizardErrorCode)}</p>
             {stepErrorDetails.length > 0 ? (
               <ul className="mt-2 list-inside list-disc space-y-1 text-red-100/90">
                 {stepErrorDetails.map((detail) => (
-                  <li key={detail}>{detail}</li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        ) : null}
-        {showPhotoValidationError ? (
-          <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-            <p>{wizardErrorMessage("technicke_missing_section_photos")}</p>
-            {missingPhotoLabels.length > 0 ? (
-              <ul className="mt-2 list-inside list-disc space-y-1 text-red-100/90">
-                {missingPhotoLabels.map((detail) => (
                   <li key={detail}>{detail}</li>
                 ))}
               </ul>
@@ -1438,7 +1418,7 @@ export default function PoptavkaFormClient({
               kontaktJmeno={form.kontakt_jmeno}
               kontaktTelefon={form.kontakt_telefon}
               kontaktEmail={form.kontakt_email}
-              highlightMissingPhotos={showPhotoValidationError || showSubmitValidationBox}
+              highlightMissingPhotos={highlightMissingPhotos}
             />
           )}
 
