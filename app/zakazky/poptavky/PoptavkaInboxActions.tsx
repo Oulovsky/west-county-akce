@@ -2,7 +2,6 @@
 
 import {
   acceptPoptavkaAction,
-  approvePoptavkaAction,
   convertPoptavkaToZakazkaAction,
   rejectPoptavkaAction,
   returnPoptavkaToRevisionAction,
@@ -15,8 +14,6 @@ import Link from "next/link";
 const ERROR_MESSAGES: Record<string, string> = {
   missing_reason: "Vyplňte důvod nebo poznámku.",
   invalid_state: "Akce není pro aktuální stav poptávky dostupná.",
-  approve_invalid_state:
-    "Schválit k převodu lze až po potvrzení závazné objednávky klientem.",
   save_failed: "Uložení se nezdařilo.",
   not_found: "Poptávka nenalezena.",
   missing_klient: "Poptávka nemá přiřazeného klienta.",
@@ -37,8 +34,7 @@ export default function PoptavkaInboxActions({
   stav,
   canAct,
   canAccept,
-  canApprove,
-  canConvert,
+  canRetryConvert,
   zakazkaId,
   errorCode,
   readOnly = false,
@@ -47,8 +43,7 @@ export default function PoptavkaInboxActions({
   stav: PoptavkaStav;
   canAct: boolean;
   canAccept?: boolean;
-  canApprove?: boolean;
-  canConvert?: boolean;
+  canRetryConvert?: boolean;
   zakazkaId?: string | null;
   errorCode?: string | null;
   readOnly?: boolean;
@@ -63,7 +58,7 @@ export default function PoptavkaInboxActions({
             href={`/zakazky/${zakazkaId}`}
             className="mt-3 inline-flex rounded-xl border border-blue-500/40 bg-blue-600/20 px-4 py-2 text-sm font-semibold text-blue-50 hover:bg-blue-600/30"
           >
-            Otevřít zakázku →
+            Otevřít vytvořenou zakázku →
           </Link>
         </div>
       </section>
@@ -75,15 +70,7 @@ export default function PoptavkaInboxActions({
 
   return (
     <section className="space-y-6 rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
-      {canApprove ? (
-        <div>
-          <h2 className="text-xl font-semibold text-white">Schválit k převodu</h2>
-          <p className="mt-1 text-sm text-slate-400">
-            Klient potvrdil závaznou objednávku. Interním schválením poptávku připravíte k převodu
-            na zakázku.
-          </p>
-        </div>
-      ) : canAct || canAccept ? (
+      {canAct || canAccept ? (
         <div>
           <h2 className="text-xl font-semibold text-white">První reakce na poptávku</h2>
           <p className="mt-1 text-sm text-slate-400">
@@ -110,64 +97,39 @@ export default function PoptavkaInboxActions({
         <div className="rounded-xl border border-blue-500/30 bg-blue-950/20 px-4 py-4 text-sm text-blue-100">
           <div className="font-semibold text-white">Interní zakázka</div>
           <p className="mt-1 text-slate-300">
-            Poptávka byla převedena do interní zakázky.
+            Po potvrzení objednávky klientem byla automaticky vytvořena interní zakázka.
           </p>
           <Link
             href={`/zakazky/${zakazkaId}`}
             className="mt-3 inline-flex rounded-xl border border-blue-500/40 bg-blue-600/20 px-4 py-2 text-sm font-semibold text-blue-50 hover:bg-blue-600/30"
           >
-            Otevřít zakázku →
+            Otevřít vytvořenou zakázku →
           </Link>
         </div>
       ) : null}
 
-      {canApprove ? (
-        <form
-          action={approvePoptavkaAction}
-          onSubmit={(event) => {
-            const confirmed = window.confirm(
-              "Schválit poptávku k převodu na zakázku? Klient již potvrdil závaznou objednávku. Zakázka se zatím nevytvoří — změní se pouze interní stav."
-            );
-            if (!confirmed) event.preventDefault();
-          }}
-          className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4"
-        >
-          <input type="hidden" name="poptavka_id" value={poptavkaId} />
-          <p className="text-sm leading-relaxed text-emerald-100/90">
-            Potvrzená závazná objednávka je podkladem pro další práci. Po schválení můžete poptávku
-            převést na interní zakázku.
-          </p>
-          <button
-            type="submit"
-            className="rounded-xl border border-emerald-500/50 bg-emerald-600/30 px-5 py-2.5 text-sm font-semibold text-emerald-50 hover:bg-emerald-600/40"
-          >
-            Schválit k převodu
-          </button>
-        </form>
-      ) : null}
-
-      {canConvert ? (
+      {canRetryConvert ? (
         <form
           action={convertPoptavkaToZakazkaAction}
           onSubmit={(event) => {
             const confirmed = window.confirm(
-              "Vytvořit interní zakázku z této schválené poptávky? Převedou se údaje, setupy a technické podklady."
+              "Znovu vytvořit interní zakázku z potvrzené poptávky? Použijte jen pokud automatický převod selhal."
             );
             if (!confirmed) event.preventDefault();
           }}
-          className="space-y-3 rounded-xl border border-blue-500/20 bg-blue-950/10 p-4"
+          className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-950/10 p-4"
         >
-          <h3 className="font-semibold text-blue-100">Vytvořit zakázku</h3>
+          <h3 className="font-semibold text-amber-100">Znovu vytvořit zakázku</h3>
           <input type="hidden" name="poptavka_id" value={poptavkaId} />
           <p className="text-sm leading-relaxed text-slate-400">
-            Ze schválené poptávky vznikne interní zakázka s plánem techniky. Konkrétní skladové kusy
-            se neřadí — ty vzniknou až při scanování.
+            Automatické vytvoření zakázky po potvrzení klientem se nepodařilo. Tlačítkem převod
+            dokončíte ručně — vznikne interní zakázka s plánem techniky ze snapshotu objednávky.
           </p>
           <button
             type="submit"
-            className="rounded-xl border border-blue-500/40 bg-blue-600/20 px-4 py-2 text-sm font-semibold text-blue-50 hover:bg-blue-600/30"
+            className="rounded-xl border border-amber-500/40 bg-amber-600/20 px-4 py-2 text-sm font-semibold text-amber-50 hover:bg-amber-600/30"
           >
-            Vytvořit zakázku
+            Znovu vytvořit zakázku
           </button>
         </form>
       ) : null}
@@ -249,9 +211,9 @@ export default function PoptavkaInboxActions({
             </button>
           </form>
         </div>
-      ) : !canApprove ? (
+      ) : (
         <div className="space-y-3">
-          {!canConvert && !zakazkaId ? (
+          {!canRetryConvert && !zakazkaId ? (
             <p className="text-sm text-slate-400">
               Poptávka je ve stavu{" "}
               <strong className="text-slate-200">{POPTAVKA_STAV_LABELS[stav]}</strong>. Stavové akce
@@ -260,8 +222,8 @@ export default function PoptavkaInboxActions({
           ) : null}
           {stav === "objednavka_odeslana" ? (
             <p className="rounded-lg border border-blue-500/30 bg-blue-950/20 px-4 py-3 text-sm text-blue-100">
-              Čeká se na potvrzení závazné objednávky klientem. Po potvrzení zde bude k dispozici
-              akce „Schválit k převodu“.
+              Čeká se na potvrzení závazné objednávky klientem. Po potvrzení systém automaticky
+              vytvoří interní zakázku a pošle notifikaci týmu.
             </p>
           ) : null}
           {stav === "objednavka_odmitnuta" ? (
@@ -271,7 +233,7 @@ export default function PoptavkaInboxActions({
             </p>
           ) : null}
         </div>
-      ) : null}
+      )}
     </section>
   );
 }

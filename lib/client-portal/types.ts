@@ -54,7 +54,6 @@ export const POPTAVKA_STAVY: readonly PoptavkaStav[] = [
 /** Poptávky čekající na interní akci (badge, počítadlo inboxu). */
 export const PENDING_INTERNAL_POPTAVKA_STAVY: readonly PoptavkaStav[] = [
   "odeslana",
-  "objednavka_potvrzena",
 ] as const;
 
 /** První odeslání závazné objednávky z aktivního draftu. */

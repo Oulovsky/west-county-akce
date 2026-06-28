@@ -31,7 +31,7 @@ import {
   canInitialSendPoptavkaBindingOrder,
   canResendPoptavkaBindingOrder,
 } from "@/lib/client-portal/poptavka-internal-server";
-import { resolvePoptavkaClientEmail } from "@/lib/client-portal/poptavka-email-server";
+import { createZakazkaFromApprovedPoptavka } from "@/lib/client-portal/convert-poptavka-to-zakazka";
 import {
   notifyInternalTeamAboutPoptavkaObjednavkaConfirmed,
   notifyInternalTeamAboutPoptavkaObjednavkaRejected,
@@ -1119,6 +1119,22 @@ async function loadDecisionLinkContext(
   return { ok: true, context };
 }
 
+async function autoCreateZakazkaAfterPoptavkaConfirm(poptavkaId: string) {
+  const admin = createAdminClient();
+  const result = await createZakazkaFromApprovedPoptavka(admin, poptavkaId);
+
+  if (!result.ok) {
+    console.error("Auto create zakazka after poptavka confirm failed", {
+      poptavkaId,
+      error: result.error,
+      message: result.message,
+    });
+    return null;
+  }
+
+  return result;
+}
+
 async function confirmPoptavkaObjednavkaByContext(
   context: DecisionLinkContext,
   meta: PoptavkaObjednavkaDecisionRequestMeta,
@@ -1128,6 +1144,7 @@ async function confirmPoptavkaObjednavkaByContext(
   const { link, poptavka } = context;
 
   if (isPoptavkaObjednavkaLinkConfirmed(link)) {
+    await autoCreateZakazkaAfterPoptavkaConfirm(poptavka.poptavka_id);
     return {
       ok: true,
       status: "already_confirmed",
@@ -1140,7 +1157,8 @@ async function confirmPoptavkaObjednavkaByContext(
   }
 
   if (poptavka.stav !== "objednavka_odeslana") {
-    if (poptavka.stav === "objednavka_potvrzena") {
+    if (poptavka.stav === "objednavka_potvrzena" || poptavka.stav === "prevadena_do_zakazky") {
+      await autoCreateZakazkaAfterPoptavkaConfirm(poptavka.poptavka_id);
       return {
         ok: true,
         status: "already_confirmed",
@@ -1190,6 +1208,7 @@ async function confirmPoptavkaObjednavkaByContext(
   if (!updatedLink) {
     const reload = await reloadContext();
     if (reload && isPoptavkaObjednavkaLinkConfirmed(reload.link)) {
+      await autoCreateZakazkaAfterPoptavkaConfirm(reload.poptavka.poptavka_id);
       return {
         ok: true,
         status: "already_confirmed",
@@ -1216,6 +1235,17 @@ async function confirmPoptavkaObjednavkaByContext(
   if (poptavkaError || !updatedPoptavka) {
     const reload = await reloadContext();
     if (reload && reload.poptavka.stav === "objednavka_potvrzena") {
+      const convertResult = await autoCreateZakazkaAfterPoptavkaConfirm(reload.poptavka.poptavka_id);
+      try {
+        await notifyInternalTeamAboutPoptavkaObjednavkaConfirmed({
+          poptavkaId: reload.poptavka.poptavka_id,
+          cisloPoptavky: reload.poptavka.cislo_poptavky,
+          mistoNazev: reload.poptavka.misto_nazev,
+          zakazkaId: convertResult?.zakazkaId ?? null,
+        });
+      } catch (notifyError) {
+        console.warn("Poptavka objednavka confirmed notification failed:", notifyError);
+      }
       return {
         ok: true,
         status: "already_confirmed",
@@ -1226,11 +1256,14 @@ async function confirmPoptavkaObjednavkaByContext(
     return { ok: false, errorMessage: decisionErrorMessage("save_failed") };
   }
 
+  const convertResult = await autoCreateZakazkaAfterPoptavkaConfirm(poptavka.poptavka_id);
+
   try {
     await notifyInternalTeamAboutPoptavkaObjednavkaConfirmed({
       poptavkaId: poptavka.poptavka_id,
       cisloPoptavky: poptavka.cislo_poptavky,
       mistoNazev: poptavka.misto_nazev,
+      zakazkaId: convertResult?.zakazkaId ?? null,
     });
   } catch (notifyError) {
     console.warn("Poptavka objednavka confirmed notification failed:", notifyError);

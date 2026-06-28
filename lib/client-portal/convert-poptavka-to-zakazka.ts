@@ -537,7 +537,7 @@ async function createZakazkaFromInput(
   }
 
   const now = new Date().toISOString();
-  const { error: poptavkaUpdateError } = await supabase
+  const { data: updatedPoptavka, error: poptavkaUpdateError } = await supabase
     .from("poptavky")
     .update({
       zakazka_id: createdZakazkaId,
@@ -545,11 +545,39 @@ async function createZakazkaFromInput(
       updated_at: now,
     })
     .eq("poptavka_id", poptavkaId)
-    .eq("stav", "schvalena")
-    .is("zakazka_id", null);
+    .in("stav", ["objednavka_potvrzena", "schvalena"])
+    .is("zakazka_id", null)
+    .select("poptavka_id, zakazka_id")
+    .maybeSingle();
 
   if (poptavkaUpdateError) {
     return { ok: false, error: "link_failed", message: poptavkaUpdateError.message };
+  }
+
+  if (!updatedPoptavka) {
+    const { data: linked } = await supabase
+      .from("poptavky")
+      .select("zakazka_id")
+      .eq("poptavka_id", poptavkaId)
+      .maybeSingle();
+
+    if (linked?.zakazka_id) {
+      const mistoEnrichWarning = resolvedMistoId
+        ? await tryMistoEnrichForZakazka(supabase, detail, linked.zakazka_id as string, input.enrich)
+        : undefined;
+      return {
+        ok: true,
+        zakazkaId: linked.zakazka_id as string,
+        alreadyConverted: true,
+        mistoEnrichWarning,
+      };
+    }
+
+    return {
+      ok: false,
+      error: "link_failed",
+      message: "Zakázka byla vytvořena, ale nepodařilo se propojit s poptávkou.",
+    };
   }
 
   const mistoEnrichWarning = resolvedMistoId
@@ -564,14 +592,39 @@ async function createZakazkaFromInput(
   };
 }
 
+export const APPROVED_POPTAVKA_CONVERT_STAVY = [
+  "objednavka_potvrzena",
+  "schvalena",
+] as const satisfies readonly PoptavkaStav[];
+
+export function canCreateZakazkaFromApprovedPoptavka(detail: {
+  stav: PoptavkaStav;
+  zakazka_id: string | null;
+}) {
+  if (detail.zakazka_id) return true;
+  return (APPROVED_POPTAVKA_CONVERT_STAVY as readonly string[]).includes(detail.stav);
+}
+
+/** @deprecated Použijte canCreateZakazkaFromApprovedPoptavka — manuální převod už není potřeba. */
 export function canConvertPoptavkaToZakazka(detail: {
   stav: PoptavkaStav;
   zakazka_id: string | null;
 }) {
-  return detail.stav === "schvalena" && detail.zakazka_id == null;
+  return canCreateZakazkaFromApprovedPoptavka(detail) && detail.zakazka_id == null;
 }
 
-export async function convertPoptavkaToZakazka(
+export function canRetryZakazkaFromPoptavka(detail: {
+  stav: PoptavkaStav;
+  zakazka_id: string | null;
+}) {
+  return canCreateZakazkaFromApprovedPoptavka(detail) && detail.zakazka_id == null;
+}
+
+/**
+ * Vytvoří interní zakázku z potvrzené poptávky (snapshot objednávky).
+ * Idempotentní — při existující vazbě vrátí existující zakázku.
+ */
+export async function createZakazkaFromApprovedPoptavka(
   supabase: SupabaseClient,
   poptavkaId: string
 ): Promise<ConvertPoptavkaResult> {
@@ -595,7 +648,23 @@ export async function convertPoptavkaToZakazka(
     };
   }
 
-  if (detail.stav !== "schvalena") {
+  if (detail.stav === "prevadena_do_zakazky") {
+    const { data: existingBySource } = await supabase
+      .from("zakazky")
+      .select("zakazka_id")
+      .eq("zdroj_poptavka_id", poptavkaId)
+      .maybeSingle();
+
+    if (existingBySource?.zakazka_id) {
+      return {
+        ok: true,
+        zakazkaId: existingBySource.zakazka_id as string,
+        alreadyConverted: true,
+      };
+    }
+  }
+
+  if (!(APPROVED_POPTAVKA_CONVERT_STAVY as readonly string[]).includes(detail.stav)) {
     return { ok: false, error: "invalid_state" };
   }
 
@@ -633,15 +702,22 @@ export async function convertPoptavkaToZakazka(
     return { ok: false, error: "missing_klient" };
   }
 
-  const mode = resolveConvertMode(detail);
-  const built =
-    mode === "snapshot"
-      ? await buildSnapshotZakazkaCreateInput(supabase, detail)
-      : await buildLegacyZakazkaCreateInput(supabase, detail);
+  if (!detail.objednavka_potvrzena_at) {
+    return { ok: false, error: "missing_confirmed_snapshot" };
+  }
+
+  const built = await buildSnapshotZakazkaCreateInput(supabase, detail);
 
   if (!built.ok) {
     return built;
   }
 
   return createZakazkaFromInput(supabase, poptavkaId, detail, built.input);
+}
+
+export async function convertPoptavkaToZakazka(
+  supabase: SupabaseClient,
+  poptavkaId: string
+): Promise<ConvertPoptavkaResult> {
+  return createZakazkaFromApprovedPoptavka(supabase, poptavkaId);
 }

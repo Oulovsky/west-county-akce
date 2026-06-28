@@ -267,6 +267,8 @@ export async function convertPoptavkaToZakazkaAction(formData: FormData) {
   revalidatePath(`/portal/poptavka/${poptavkaId}`);
   revalidatePath("/portal/poptavky");
   revalidatePath("/portal/zakazky");
+  revalidatePath("/zakazky");
+  revalidatePath(`/zakazky/${result.zakazkaId}`);
 
   let redirectUrl = `/zakazky/poptavky/${poptavkaId}?saved=converted&zakazka=${result.zakazkaId}`;
   if (result.mistoEnrichWarning) {

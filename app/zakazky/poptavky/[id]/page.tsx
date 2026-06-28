@@ -17,7 +17,7 @@ import {
 } from "@/lib/client-portal/sestava-konfigurator-form";
 import { loadPortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-server";
 import {
-  canConvertPoptavkaToZakazka,
+  canRetryZakazkaFromPoptavka,
 } from "@/lib/client-portal/convert-poptavka-to-zakazka";
 import {
   formatPoptavkaOutboundForCopy,
@@ -28,7 +28,6 @@ import {
 import {
   canAcceptPoptavkaForProcessing,
   canInternalActOnPoptavka,
-  canInternalApproveForConvert,
   canInitialSendPoptavkaBindingOrder,
   canOpenObjednavkaEditor,
   loadInternalPoptavkaDetail,
@@ -150,8 +149,7 @@ export default async function ZakazkyPoptavkaDetailPage({
       : null;
   const canAct = canInternalActOnPoptavka(detail.stav);
   const canAccept = canAcceptPoptavkaForProcessing(detail.stav);
-  const canApprove = canInternalApproveForConvert(detail.stav);
-  const canConvert = canConvertPoptavkaToZakazka(detail);
+  const canRetryConvert = canRetryZakazkaFromPoptavka(detail);
   const showObjednavkaLink = canOpenObjednavkaEditor(detail.stav);
   const existingObjednavkaDraft = showObjednavkaLink
     ? await loadPoptavkaObjednavkaDraft(supabase, id)
@@ -285,9 +283,9 @@ export default async function ZakazkyPoptavkaDetailPage({
           ) : null}
         </div>
       ) : null}
-      {detail.stav === "objednavka_potvrzena" ? (
-        <p className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
-          Klient potvrdil závaznou objednávku. Další krok: schválit k převodu.
+      {detail.stav === "objednavka_potvrzena" && !convertedZakazkaId ? (
+        <p className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">
+          Klient potvrdil závaznou objednávku, ale automatické vytvoření zakázky se nepodařilo.
           {detail.objednavka_potvrzena_at
             ? ` Potvrzeno ${new Intl.DateTimeFormat("cs-CZ", {
                 day: "numeric",
@@ -297,9 +295,30 @@ export default async function ZakazkyPoptavkaDetailPage({
                 minute: "2-digit",
               }).format(new Date(detail.objednavka_potvrzena_at))}`
             : null}
-          {detail.objednavka_potvrzena_zpusob
-            ? ` (${detail.objednavka_potvrzena_zpusob === "portal" ? "klientská zóna" : "odkaz"})`
+          . Zkuste vytvoření zakázky znovu níže.
+        </p>
+      ) : null}
+      {(detail.stav === "prevadena_do_zakazky" || convertedZakazkaId) &&
+      detail.stav !== "objednavka_potvrzena" ? (
+        <p className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
+          Klient potvrdil závaznou objednávku a systém automaticky vytvořil interní zakázku.
+          {detail.objednavka_potvrzena_at
+            ? ` Potvrzeno ${new Intl.DateTimeFormat("cs-CZ", {
+                day: "numeric",
+                month: "numeric",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              }).format(new Date(detail.objednavka_potvrzena_at))}`
             : null}
+          {convertedZakazkaId ? (
+            <>
+              {" "}
+              <Link href={`/zakazky/${convertedZakazkaId}`} className="font-semibold underline">
+                Otevřít vytvořenou zakázku
+              </Link>
+            </>
+          ) : null}
           .
         </p>
       ) : null}
@@ -505,8 +524,7 @@ export default async function ZakazkyPoptavkaDetailPage({
         stav={detail.stav}
         canAct={canAct && !readOnly}
         canAccept={canAccept && !readOnly}
-        canApprove={canApprove && !readOnly}
-        canConvert={canConvert && !readOnly}
+        canRetryConvert={canRetryConvert && !readOnly}
         zakazkaId={convertedZakazkaId}
         errorCode={resolvedSearchParams?.error ?? null}
         readOnly={readOnly}

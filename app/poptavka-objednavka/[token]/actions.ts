@@ -24,6 +24,7 @@ function revalidateAfterDecision(rawToken: string, poptavkaId: string) {
   revalidatePath(`/zakazky/poptavky/${poptavkaId}`);
   revalidatePath("/zakazky/poptavky");
   revalidatePath(`/portal/poptavka/${poptavkaId}`);
+  revalidatePath("/zakazky");
 }
 
 async function runDecision(

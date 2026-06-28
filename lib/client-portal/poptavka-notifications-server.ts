@@ -30,20 +30,28 @@ export async function notifyInternalTeamAboutPoptavkaObjednavkaConfirmed({
   poptavkaId,
   cisloPoptavky,
   mistoNazev,
+  zakazkaId,
 }: {
   poptavkaId: string;
   cisloPoptavky: string;
   mistoNazev: string | null;
+  zakazkaId?: string | null;
 }) {
   const admin = createAdminClient();
   const akceLabel = mistoNazev?.trim() || "Bez názvu akce";
 
   await createNotificationsForRoles(admin, ["admin", "sef"], {
-    type: "poptavka_objednavka_potvrzena",
+    type: zakazkaId ? "poptavka_objednavka_prevadena" : "poptavka_objednavka_potvrzena",
     priority: "info",
-    title: "Klient potvrdil závaznou objednávku",
-    message: `${cisloPoptavky} · ${akceLabel}`,
-    actionUrl: `/zakazky/poptavky/${poptavkaId}`,
+    title: zakazkaId
+      ? "Klient potvrdil objednávku — zakázka vytvořena"
+      : "Klient potvrdil závaznou objednávku",
+    message: zakazkaId
+      ? `${cisloPoptavky} · ${akceLabel}`
+      : `${cisloPoptavky} · ${akceLabel} — vytvoření zakázky se nepodařilo automaticky`,
+    actionUrl: zakazkaId ? `/zakazky/${zakazkaId}` : `/zakazky/poptavky/${poptavkaId}`,
+    relatedZakazkaId: zakazkaId ?? null,
+    dedupeKeyPrefix: `poptavka-objednavka-confirmed-${poptavkaId}`,
   });
 }
 

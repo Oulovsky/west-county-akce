@@ -24,6 +24,7 @@ function revalidateAfterPortalDecision(poptavkaId: string) {
   revalidatePath("/portal/poptavky");
   revalidatePath(`/zakazky/poptavky/${poptavkaId}`);
   revalidatePath("/zakazky/poptavky");
+  revalidatePath("/zakazky");
 }
 
 async function runPortalDecision(
