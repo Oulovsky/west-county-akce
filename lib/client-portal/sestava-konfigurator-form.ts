@@ -5,9 +5,7 @@ import {
   findPraktikablVariant,
   findZastreseniVariant,
   getAvailableKotveniTypy,
-  getMaxCistaVyska,
   getPodiumVolbyProZastreseni,
-  getZastreseniHeightOptions,
   resolvePodiumVariantFromDimensions,
   sanitizePodiumForZastreseni,
 } from "@/lib/client-portal/sestava-konfigurator-katalog";
@@ -546,12 +544,6 @@ export function validateSestavaKonfigurator(
   }
 
   const isMobilni = state.stage_typ === "mobilni";
-  const maxVyska = getMaxCistaVyska(
-    katalog,
-    state.stage_typ,
-    state.zastreseni_variant_id
-  );
-  const heightOptions = getZastreseniHeightOptions(maxVyska);
   const ledLimits = isMobilni ? mobilniLedLimits() : undefined;
 
   if (state.stage_typ === "zastresene") {
@@ -576,10 +568,6 @@ export function validateSestavaKonfigurator(
       !ZASTRESENI_CISTA_VYSKA_OPTIONS.includes(state.cista_vyska_m as ZastreseniCistaVyskaM)
     ) {
       errors.push("Výška zastřešení musí být 5, 6 nebo 7 m.");
-    } else if (!heightOptions.includes(state.cista_vyska_m)) {
-      errors.push(
-        `Požadovaná čistá výška ${state.cista_vyska_m} m překračuje maximum pro zvolené zastřešení.`
-      );
     }
 
     if (state.podium_variant_id || (state.podium_sirka_m && state.podium_hloubka_m)) {

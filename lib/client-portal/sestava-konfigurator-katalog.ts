@@ -1,6 +1,6 @@
 import type { PortalSestavaKatalog, SestavaKonfiguratorState } from "@/lib/client-portal/sestava-konfigurator-types";
 import type { KotveniTyp } from "@/lib/client-portal/sestava-konfigurator-types";
-import { ZASTRESENI_CISTA_VYSKA_OPTIONS } from "@/lib/client-portal/sestava-konfigurator-types";
+import { ZASTRESENI_CISTA_VYSKA_OPTIONS, ZASTRESENI_MAX_CISTA_VYSKA_M } from "@/lib/client-portal/sestava-konfigurator-types";
 import { normalizeKonfiguratorMatchText } from "@/lib/client-portal/sestava-konfigurator-options";
 
 /** Standardní LED panel 1 × 0,5 m = 0,5 m². */
@@ -36,7 +36,7 @@ export const DEFAULT_PORTAL_SESTAVA_KATALOG: PortalSestavaKatalog = {
       max_sirka_m: 8,
       min_hloubka_m: 3,
       max_hloubka_m: 3,
-      max_cista_vyska_m: 5.0,
+      max_cista_vyska_m: 7.0,
       doporucena_sirky_m: [8],
       doporucene_hloubky_m: [3],
       povolene_podium_ids: ["6x2"],
@@ -51,7 +51,7 @@ export const DEFAULT_PORTAL_SESTAVA_KATALOG: PortalSestavaKatalog = {
       max_sirka_m: 8,
       min_hloubka_m: 4,
       max_hloubka_m: 4,
-      max_cista_vyska_m: 5.0,
+      max_cista_vyska_m: 7.0,
       doporucena_sirky_m: [8],
       doporucene_hloubky_m: [4],
       povolene_podium_ids: ["6x3"],
@@ -66,7 +66,7 @@ export const DEFAULT_PORTAL_SESTAVA_KATALOG: PortalSestavaKatalog = {
       max_sirka_m: 8,
       min_hloubka_m: 6,
       max_hloubka_m: 6,
-      max_cista_vyska_m: 6.0,
+      max_cista_vyska_m: 7.0,
       doporucena_sirky_m: [8],
       doporucene_hloubky_m: [6],
       povolene_podium_ids: ["6x4", "6x6", "8x5"],
@@ -81,7 +81,7 @@ export const DEFAULT_PORTAL_SESTAVA_KATALOG: PortalSestavaKatalog = {
       max_sirka_m: 8,
       min_hloubka_m: 7,
       max_hloubka_m: 7,
-      max_cista_vyska_m: 6.0,
+      max_cista_vyska_m: 7.0,
       doporucena_sirky_m: [8],
       doporucene_hloubky_m: [7],
       povolene_podium_ids: ["6x6"],
@@ -409,11 +409,16 @@ export function sanitizePodiumForZastreseni(
 export function getMaxCistaVyska(
   katalog: PortalSestavaKatalog,
   stageTyp: "mobilni" | "zastresene" | null,
-  zastreseniVariantId: string | null
+  _zastreseniVariantId: string | null
 ): number | null {
   if (stageTyp === "mobilni") return katalog.mobilni_stage.max_cista_vyska_m;
-  const variant = findZastreseniVariant(katalog, zastreseniVariantId);
-  return variant?.max_cista_vyska_m ?? null;
+  if (stageTyp === "zastresene") return ZASTRESENI_MAX_CISTA_VYSKA_M;
+  return null;
+}
+
+/** Povolené hodnoty čisté výšky u zastřešeného pódia — společný zdroj pro klienta i interní editor. */
+export function getZastreseniHeightOptions(): number[] {
+  return [...ZASTRESENI_CISTA_VYSKA_OPTIONS];
 }
 
 /** Odhad počtu standardních LED panelů (1 × 0,5 m) ze skladu — interní. */
@@ -468,11 +473,6 @@ export function isIntegerMeter(value: number | null | undefined): boolean {
 export function buildPodiumMeterOptions(maxM: number): number[] {
   const limit = Math.max(1, Math.min(30, Math.floor(maxM)));
   return Array.from({ length: limit }, (_, index) => index + 1);
-}
-
-export function getZastreseniHeightOptions(maxCista: number | null): number[] {
-  if (maxCista == null) return [...ZASTRESENI_CISTA_VYSKA_OPTIONS];
-  return ZASTRESENI_CISTA_VYSKA_OPTIONS.filter((h) => h <= maxCista + 0.001);
 }
 
 export function getAvailableKotveniTypy(

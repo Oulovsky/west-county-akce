@@ -130,7 +130,7 @@ export default function PoptavkaSestavaKonfigurator({
   const validation = useMemo(() => validateSestavaKonfigurator(state, katalog), [state, katalog]);
   const odhad = useMemo(() => computeOdhadModulu(katalog, state), [katalog, state]);
   const maxCista = getMaxCistaVyska(katalog, state.stage_typ, state.zastreseni_variant_id);
-  const heightOptions = getZastreseniHeightOptions(maxCista);
+  const heightOptions = getZastreseniHeightOptions();
   const isMobilni = state.stage_typ === "mobilni";
   const isZastresene = state.stage_typ === "zastresene";
   const ledLimits = isMobilni ? mobilniLedLimits() : undefined;
@@ -343,16 +343,6 @@ export default function PoptavkaSestavaKonfigurator({
                       const volba = zastreseniVolby.find((row) => row.value === e.target.value);
                       if (!volba) return;
                       const partial = selectZastreseniFromVolba(volba, katalog);
-                      const variant = findZastreseniVariant(katalog, partial.zastreseni_variant_id);
-                      const allowedHeights = getZastreseniHeightOptions(
-                        variant?.max_cista_vyska_m ?? null
-                      );
-                      if (
-                        state.cista_vyska_m != null &&
-                        !allowedHeights.includes(state.cista_vyska_m)
-                      ) {
-                        partial.cista_vyska_m = null;
-                      }
                       const nextVariantId = partial.zastreseni_variant_id ?? null;
                       patch({
                         ...partial,

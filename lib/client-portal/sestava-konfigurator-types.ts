@@ -34,6 +34,11 @@ export const ZASTRESENI_CISTA_VYSKA_OPTIONS = [5, 6, 7] as const;
 
 export type ZastreseniCistaVyskaM = (typeof ZASTRESENI_CISTA_VYSKA_OPTIONS)[number];
 
+/** Maximální čistá výška u zastřešeného pódia — společné pro klienta i interní editor. */
+export const ZASTRESENI_MAX_CISTA_VYSKA_M = ZASTRESENI_CISTA_VYSKA_OPTIONS[
+  ZASTRESENI_CISTA_VYSKA_OPTIONS.length - 1
+];
+
 /** Maximální rozměr LED wall na mobilní stage (m). */
 export const MOBILNI_LED_MAX_SIRKA_M = 5;
 export const MOBILNI_LED_MAX_VYSKA_M = 2.5;
