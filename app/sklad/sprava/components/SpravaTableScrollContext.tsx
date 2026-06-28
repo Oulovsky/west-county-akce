@@ -37,7 +37,13 @@ function restoreScrollSnapshot(
   }
 }
 
-export function SpravaTableScrollProvider({ children }: { children: ReactNode }) {
+export function SpravaTableScrollProvider({
+  children,
+  disableObsahNavigation = false,
+}: {
+  children: ReactNode;
+  disableObsahNavigation?: boolean;
+}) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pendingRestoreRef = useRef<ScrollSnapshot | null>(null);
   const router = useRouter();
@@ -59,10 +65,11 @@ export function SpravaTableScrollProvider({ children }: { children: ReactNode })
 
   const navigateObsah = useCallback(
     (href: string) => {
+      if (disableObsahNavigation) return;
       pendingRestoreRef.current = captureScroll();
       router.replace(href, { scroll: false });
     },
-    [captureScroll, router]
+    [captureScroll, disableObsahNavigation, router]
   );
 
   useLayoutEffect(() => {

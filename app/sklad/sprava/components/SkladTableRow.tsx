@@ -478,12 +478,16 @@ export function SkladTableRow({
 
         <div className={SPRAVA_TABLE_CELL_CENTER}>
           {toNumber(item.poskozene) > 0 ? (
-            <Link
-              href={`/sklad/${item.skladova_polozka_id}`}
-              style={tableDangerBoxRight}
-            >
-              {formatNumber(item.poskozene)}
-            </Link>
+            selectionMode ? (
+              <span style={tableDangerBoxRight}>{formatNumber(item.poskozene)}</span>
+            ) : (
+              <Link
+                href={`/sklad/${item.skladova_polozka_id}`}
+                style={tableDangerBoxRight}
+              >
+                {formatNumber(item.poskozene)}
+              </Link>
+            )
           ) : (
             <span style={tableMutedBoxRight}>
               {formatNumber(item.poskozene)}
@@ -579,6 +583,7 @@ export function SkladTableRow({
           vlastnici={vlastnici}
           onCatalogConfigChanged={onCatalogConfigChanged}
           obsahPolozkaUpdaters={obsahPolozkaUpdaters}
+          syncObsahUrl={!selectionMode}
         />
       ) : null}
     </div>

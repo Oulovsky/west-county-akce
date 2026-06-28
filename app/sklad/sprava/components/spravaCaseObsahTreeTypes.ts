@@ -135,6 +135,8 @@ export type SpravaCaseObsahTreeBindings = {
   vlastnici: TechnickyVlastnik[];
   onCatalogConfigChanged?: () => void | Promise<void>;
   polozkaUpdaters?: SpravaObsahPolozkaUpdaters;
+  /** false = rozbalování case jen lokálně (modal výběru), bez router.replace na /sklad */
+  syncObsahUrl?: boolean;
 };
 
 export function applyObsahChildPolozkaFields(

@@ -1491,7 +1491,7 @@ export function SkladPolozkyCatalog({
           </>
         )}
 
-        <SkladTable loading={loading}>
+        <SkladTable loading={loading} disableObsahNavigation={isSelectMode}>
           {!loading && filteredItems.length === 0 ? (
             <div className="border-t border-slate-800 px-4 py-10 text-center text-sm text-slate-400">
               Žádná položka nevyhovuje zadaným filtrům.

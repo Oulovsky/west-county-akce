@@ -228,7 +228,10 @@ export function SkladKusCaseTreePanel({
 
     const apply = () => {
       if (!resolvedShowInsertForm && !obsahTree.expandedKusIds.has(parentKusId)) {
-        obsahTree.onToggleExpand(parentKusId, depth === 0);
+        obsahTree.onToggleExpand(
+          parentKusId,
+          depth === 0 && obsahTree.syncObsahUrl !== false
+        );
       }
       obsahTree.onToggleInsertForm(parentKusId);
     };

@@ -9,6 +9,7 @@ import { spravaTableContainerStyle } from "./spravaTableLayout";
 type Props = {
   loading: boolean;
   children: ReactNode;
+  disableObsahNavigation?: boolean;
 };
 
 function SkladTableBody({ children }: { children: ReactNode }) {
@@ -32,13 +33,13 @@ function SkladTableBody({ children }: { children: ReactNode }) {
   );
 }
 
-export function SkladTable({ loading, children }: Props) {
+export function SkladTable({ loading, children, disableObsahNavigation }: Props) {
   if (loading) {
     return <SkladLoading />;
   }
 
   return (
-    <SpravaTableScrollProvider>
+    <SpravaTableScrollProvider disableObsahNavigation={disableObsahNavigation}>
       <SkladTableBody>{children}</SkladTableBody>
     </SpravaTableScrollProvider>
   );

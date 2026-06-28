@@ -111,6 +111,8 @@ type Props = {
   vlastnici: TechnickyVlastnik[];
   onCatalogConfigChanged?: () => void | Promise<void>;
   obsahPolozkaUpdaters?: SpravaObsahPolozkaUpdaters;
+  /** false = bez router.replace na /sklad při rozbalení case (modal výběru) */
+  syncObsahUrl?: boolean;
 };
 
 function SpravaKusCheckbox({
@@ -284,7 +286,12 @@ function SpravaExpandKusRow({
             {isCasePolozka ? (
               <SpravaObsahExpandControl
                 isExpanded={isObsahExpanded}
-                onToggle={() => obsahTree.onToggleExpand(kus.kus_id, true)}
+                onToggle={() =>
+                  obsahTree.onToggleExpand(
+                    kus.kus_id,
+                    obsahTree.syncObsahUrl !== false
+                  )
+                }
                 label={label}
               />
             ) : (
@@ -445,6 +452,7 @@ export function SpravaKusyExpandPanel({
   vlastnici,
   onCatalogConfigChanged,
   obsahPolozkaUpdaters,
+  syncObsahUrl = true,
 }: Props) {
   const celkem = toNumber(celkemKDispozici);
   const isCasePolozka = isCaseJednotka(polozkaJednotka);
@@ -575,7 +583,7 @@ export function SpravaKusyExpandPanel({
             void ensureChildrenLoaded(kusId);
           }
 
-          if (syncTopLevelUrl) {
+          if (syncTopLevelUrl && syncObsahUrl) {
             const href = willExpand
               ? buildSpravaObsahHref(skladovaPolozkaId, kusId)
               : buildSpravaPolozkaHref(skladovaPolozkaId);
@@ -595,7 +603,7 @@ export function SpravaKusyExpandPanel({
         apply();
       }
     },
-    [ensureChildrenLoaded, router, skladovaPolozkaId, tableScroll]
+    [ensureChildrenLoaded, router, skladovaPolozkaId, syncObsahUrl, tableScroll]
   );
 
   const fetchKusy = useCallback(async () => {
@@ -900,6 +908,7 @@ export function SpravaKusyExpandPanel({
     vlastnici,
     onCatalogConfigChanged,
     polozkaUpdaters: wrappedObsahPolozkaUpdaters,
+    syncObsahUrl,
   };
 
   return (
