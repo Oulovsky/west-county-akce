@@ -23,15 +23,25 @@ import PoptavkaOutboundMessagePanel from "../../PoptavkaOutboundMessagePanel";
 import PoptavkaObjednavkaDraftEditor from "./PoptavkaObjednavkaDraftEditor";
 
 const ORDER_EMAIL_STATUS_MESSAGES: Record<string, string> = {
-  sent: "Klientovi byl odeslán e-mail s odkazem na závaznou objednávku.",
+  sent: "Objednávka byla odeslána klientovi. Klient ji může potvrdit nebo odmítnout přes odkaz v e-mailu.",
   missing_email:
-    "Závazná objednávka byla vytvořena, ale klient nemá dostupný e-mail pro upozornění.",
+    "Objednávka byla vytvořena, ale klient nemá vyplněný e-mail. Odkaz zkopírujte a pošlete ručně.",
   missing_resend_key:
-    "Závazná objednávka byla vytvořena, ale chybí RESEND_API_KEY — e-mail klientovi nebyl odeslán.",
+    "Objednávka byla vytvořena a odkaz je platný, ale e-mail se nepodařilo odeslat. Zkopírujte klientovi odkaz ručně nebo zkontrolujte nastavení e-mailů.",
+  missing_from:
+    "Objednávka byla vytvořena a odkaz je platný, ale chybí RESEND_FROM_EMAIL — e-mail se neodeslal. Zkopírujte klientovi odkaz ručně.",
   missing_base_url:
-    "Závazná objednávka byla vytvořena, ale nepodařilo se sestavit veřejnou URL aplikace pro e-mail.",
-  failed: "Závazná objednávka byla vytvořena, ale odeslání e-mailu klientovi selhalo.",
+    "Objednávka byla vytvořena a odkaz je platný, ale nepodařilo se sestavit veřejnou URL aplikace pro e-mail. Zkopírujte odkaz ručně.",
+  failed:
+    "Objednávka byla vytvořena a odkaz je platný, ale e-mail se nepodařilo odeslat. Zkopírujte klientovi odkaz ručně.",
 };
+
+function orderSentPrimaryMessage(emailStatus: string | null): string {
+  if (emailStatus === "sent") {
+    return "Objednávka byla odeslána klientovi. Klient ji může potvrdit nebo odmítnout přes odkaz v e-mailu.";
+  }
+  return "Objednávka byla vytvořena a je platná v systému. Draft byl zmrazen.";
+}
 
 export default async function PoptavkaObjednavkaEditorPage({
   params,
@@ -192,17 +202,10 @@ export default async function PoptavkaObjednavkaEditorPage({
         </div>
         <div className="space-y-3">
           <p className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
-            Závazná objednávka byla vytvořena a odeslána klientovi ke schválení.
+            {orderSentPrimaryMessage(orderEmailStatus)}
           </p>
-          {orderEmailStatus && ORDER_EMAIL_STATUS_MESSAGES[orderEmailStatus] ? (
-            <p
-              className={[
-                "rounded-lg border px-4 py-3 text-sm",
-                orderEmailStatus === "sent"
-                  ? "border-blue-500/30 bg-blue-950/20 text-blue-100"
-                  : "border-amber-500/30 bg-amber-950/20 text-amber-100",
-              ].join(" ")}
-            >
+          {orderEmailStatus && orderEmailStatus !== "sent" && ORDER_EMAIL_STATUS_MESSAGES[orderEmailStatus] ? (
+            <p className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">
               {ORDER_EMAIL_STATUS_MESSAGES[orderEmailStatus]}
             </p>
           ) : null}
@@ -308,21 +311,14 @@ export default async function PoptavkaObjednavkaEditorPage({
       {orderSent ? (
         <div className="space-y-3">
           <p className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
-            Závazná objednávka byla vytvořena a odeslána klientovi ke schválení. Draft byl zmrazen.
+            {orderSentPrimaryMessage(orderEmailStatus)}
             {" "}
             <Link href={`/zakazky/poptavky/${poptavkaId}`} className="font-semibold underline">
               Zobrazit detail poptávky
             </Link>
           </p>
-          {orderEmailStatus && ORDER_EMAIL_STATUS_MESSAGES[orderEmailStatus] ? (
-            <p
-              className={[
-                "rounded-lg border px-4 py-3 text-sm",
-                orderEmailStatus === "sent"
-                  ? "border-blue-500/30 bg-blue-950/20 text-blue-100"
-                  : "border-amber-500/30 bg-amber-950/20 text-amber-100",
-              ].join(" ")}
-            >
+          {orderEmailStatus && orderEmailStatus !== "sent" && ORDER_EMAIL_STATUS_MESSAGES[orderEmailStatus] ? (
+            <p className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">
               {ORDER_EMAIL_STATUS_MESSAGES[orderEmailStatus]}
             </p>
           ) : null}

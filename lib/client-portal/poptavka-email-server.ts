@@ -1,11 +1,15 @@
 import "server-only";
 
-import { Resend } from "resend";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  sendResendEmailSafe,
+} from "@/lib/email/resend";
 import type { InternalPoptavkaDetail } from "@/lib/client-portal/poptavka-internal-server";
 
 export function getPortalAppBaseUrl(headersList?: Headers) {
-  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, "");
+  const configured =
+    process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, "") ||
+    process.env.APP_URL?.trim().replace(/\/+$/, "");
   if (configured) return configured;
 
   if (!headersList) return "";
@@ -89,6 +93,7 @@ export type PoptavkaOutboundMessage = {
 export type PoptavkaOutboundSkipReason =
   | "missing_email"
   | "missing_resend_key"
+  | "missing_from"
   | "missing_base_url";
 
 export type TrySendPoptavkaOutboundResult =
@@ -127,8 +132,8 @@ export function buildSubmittedConfirmationEmailSubject() {
   return OUTBOUND_SUBJECTS.submitted;
 }
 
-export function buildBindingOrderEmailSubject(cisloPoptavky: string) {
-  return `WEST COUNTY – závazná objednávka k poptávce ${cisloPoptavky}`;
+export function buildBindingOrderEmailSubject() {
+  return "Závazná objednávka k vaší poptávce";
 }
 
 function escapeHtml(value: string) {
@@ -254,21 +259,25 @@ function buildApprovedEmailBody(link: string) {
 }
 
 /** Závazná objednávka poptávky — odkaz na tokenovou stránku /poptavka-objednavka/{token}. */
-function buildBindingOrderEmailBody(link: string, cisloPoptavky: string) {
+function buildBindingOrderEmailBody(link: string) {
   const text = [
-    `WEST COUNTY pro Vás připravilo návrh závazné objednávky k poptávce ${cisloPoptavky}.`,
+    "Dobrý den,",
     "",
-    "Součástí návrhu jsou smluvní / obchodní podmínky a technický rozsah služeb.",
-    "Prosíme o kontrolu obsahu a závazné potvrzení objednávky v systému.",
+    "připravili jsme pro vás návrh závazné objednávky k vaší poptávce.",
     "",
-    `Závaznou objednávku potvrďte zde: ${link}`,
+    "Objednávku si můžete zobrazit, potvrdit nebo odmítnout zde:",
+    link,
+    "",
+    "S pozdravem",
+    "WEST COUNTY",
   ].join("\n");
 
   const html = `
-    <p>WEST COUNTY pro Vás připravilo návrh <strong>závazné objednávky</strong> k poptávce <strong>${escapeHtml(cisloPoptavky)}</strong>.</p>
-    <p>Součástí návrhu jsou <strong>smluvní / obchodní podmínky</strong> a technický rozsah služeb.</p>
-    <p>Prosíme o kontrolu obsahu a závazné potvrzení objednávky v systému.</p>
-    <p><a href="${link}">Závaznou objednávku potvrďte zde</a></p>
+    <p>Dobrý den,</p>
+    <p>připravili jsme pro vás návrh <strong>závazné objednávky</strong> k vaší poptávce.</p>
+    <p>Objednávku si můžete zobrazit, potvrdit nebo odmítnout zde:</p>
+    <p><a href="${link}">${link}</a></p>
+    <p>S pozdravem<br><strong>WEST COUNTY</strong></p>
   `.trim();
 
   return { text, html };
@@ -302,7 +311,7 @@ function buildOutboundContent(
         cisloPoptavky: options.cisloPoptavky ?? null,
       });
     case "binding_order":
-      return buildBindingOrderEmailBody(link, options.cisloPoptavky?.trim() || "poptávky");
+      return buildBindingOrderEmailBody(link);
   }
 }
 
@@ -354,6 +363,47 @@ export function outboundResultToEmailQuery(result: TrySendPoptavkaOutboundResult
   return "failed";
 }
 
+async function dispatchPoptavkaOutboundEmail(
+  outbound: PoptavkaOutboundMessage,
+  logContext: string
+): Promise<
+  | { sent: true }
+  | { sent: false; reason: PoptavkaOutboundSkipReason }
+  | { sent: false; reason: "send_failed"; message: string }
+> {
+  const sendResult = await sendResendEmailSafe({
+    to: outbound.emailTo,
+    subject: outbound.subject,
+    text: outbound.text,
+    html: outbound.html,
+    logContext,
+  });
+
+  if (sendResult.ok && sendResult.sent) {
+    return { sent: true };
+  }
+
+  if (sendResult.ok && !sendResult.sent && sendResult.skipped) {
+    const reasonMap: Record<
+      typeof sendResult.skipReason,
+      PoptavkaOutboundSkipReason
+    > = {
+      missing_api_key: "missing_resend_key",
+      missing_from: "missing_from",
+      missing_recipient: "missing_email",
+    };
+    return { sent: false, reason: reasonMap[sendResult.skipReason] };
+  }
+
+  const message =
+    !sendResult.ok && "error" in sendResult ? sendResult.error : "Unknown email error";
+  return {
+    sent: false,
+    reason: "send_failed",
+    message,
+  };
+}
+
 export async function trySendPoptavkaOutbound({
   kind,
   detail,
@@ -367,34 +417,26 @@ export async function trySendPoptavkaOutbound({
 }): Promise<TrySendPoptavkaOutboundResult> {
   const outbound = await preparePoptavkaOutboundMessage({ kind, detail, baseUrl, duvod });
 
-  const resendApiKey = process.env.RESEND_API_KEY?.trim();
-  if (!resendApiKey) {
-    return { ok: true, sent: false, reason: "missing_resend_key", outbound };
-  }
-
   if (!baseUrl.trim()) {
     return { ok: true, sent: false, reason: "missing_base_url", outbound };
   }
 
-  if (!outbound.emailTo) {
-    return { ok: true, sent: false, reason: "missing_email", outbound };
+  const dispatch = await dispatchPoptavkaOutboundEmail(outbound, `poptavka ${kind}`);
+
+  if (dispatch.sent) {
+    return { ok: true, sent: true, outbound };
   }
 
-  const resend = new Resend(resendApiKey);
-  const { error } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL?.trim() || "WEST COUNTY <onboarding@resend.dev>",
-    to: outbound.emailTo,
-    subject: outbound.subject,
-    text: outbound.text,
-    html: outbound.html,
-  });
-
-  if (error) {
-    console.warn(`Poptavka outbound email (${kind}) failed:`, error.message);
-    return { ok: false, reason: "send_failed", message: error.message, outbound };
+  if (dispatch.reason === "send_failed") {
+    return {
+      ok: false,
+      reason: "send_failed",
+      message: dispatch.message,
+      outbound,
+    };
   }
 
-  return { ok: true, sent: true, outbound };
+  return { ok: true, sent: false, reason: dispatch.reason, outbound };
 }
 
 export async function preparePoptavkaBindingOrderOutboundMessage({
@@ -406,11 +448,11 @@ export async function preparePoptavkaBindingOrderOutboundMessage({
   publicLink: string;
   emailTo: string | null;
 }): Promise<PoptavkaOutboundMessage> {
-  const { text, html } = buildBindingOrderEmailBody(publicLink, cisloPoptavky);
+  const { text, html } = buildBindingOrderEmailBody(publicLink);
 
   return {
     kind: "binding_order",
-    subject: buildBindingOrderEmailSubject(cisloPoptavky),
+    subject: buildBindingOrderEmailSubject(),
     text,
     html,
     link: publicLink,
@@ -433,34 +475,26 @@ export async function trySendPoptavkaBindingOrderOutbound({
     emailTo,
   });
 
-  const resendApiKey = process.env.RESEND_API_KEY?.trim();
-  if (!resendApiKey) {
-    return { ok: true, sent: false, reason: "missing_resend_key", outbound };
-  }
-
   if (!publicLink.startsWith("http://") && !publicLink.startsWith("https://")) {
     return { ok: true, sent: false, reason: "missing_base_url", outbound };
   }
 
-  if (!outbound.emailTo) {
-    return { ok: true, sent: false, reason: "missing_email", outbound };
+  const dispatch = await dispatchPoptavkaOutboundEmail(outbound, "poptavka binding_order");
+
+  if (dispatch.sent) {
+    return { ok: true, sent: true, outbound };
   }
 
-  const resend = new Resend(resendApiKey);
-  const { error } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL?.trim() || "WEST COUNTY <onboarding@resend.dev>",
-    to: outbound.emailTo,
-    subject: outbound.subject,
-    text: outbound.text,
-    html: outbound.html,
-  });
-
-  if (error) {
-    console.warn("Poptavka binding order outbound email failed:", error.message);
-    return { ok: false, reason: "send_failed", message: error.message, outbound };
+  if (dispatch.reason === "send_failed") {
+    return {
+      ok: false,
+      reason: "send_failed",
+      message: dispatch.message,
+      outbound,
+    };
   }
 
-  return { ok: true, sent: true, outbound };
+  return { ok: true, sent: false, reason: dispatch.reason, outbound };
 }
 
 /** Potvrzovací e-mail klientovi po odeslání poptávky — neblokuje submit při chybě. */

@@ -279,7 +279,8 @@ export default function PoptavkaObjednavkaDraftEditor({
 
       {saved ? (
         <p className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
-          Návrh objednávky byl uložen.
+          Návrh objednávky byl uložen k této poptávce. Klient ho zatím nevidí. Pro odeslání
+          klientovi použijte tlačítko Odeslat klientovi ke schválení.
         </p>
       ) : null}
 

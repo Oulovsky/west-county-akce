@@ -64,12 +64,15 @@ const SAVED_MESSAGES: Record<string, string> = {
 const EMAIL_STATUS_MESSAGES: Record<string, string> = {
   sent: "Klientovi byl odeslán informační e-mail s odkazem do klientské zóny.",
   missing_email:
-    "Stav poptávky byl uložen, ale klient nemá dostupný e-mail pro upozornění.",
+    "Stav poptávky byl uložen, ale klient nemá dostupný e-mail pro upozornění. Text zprávy si můžete zkopírovat níže.",
   missing_resend_key:
-    "Stav poptávky byl uložen, ale chybí RESEND_API_KEY — e-mail klientovi nebyl odeslán.",
+    "Stav poptávky byl uložen, ale chybí RESEND_API_KEY — e-mail klientovi nebyl odeslán. Text zprávy si můžete zkopírovat níže.",
+  missing_from:
+    "Stav poptávky byl uložen, ale chybí RESEND_FROM_EMAIL — e-mail klientovi nebyl odeslán. Text zprávy si můžete zkopírovat níže.",
   missing_base_url:
     "Stav poptávky byl uložen, ale nepodařilo se sestavit veřejnou URL aplikace pro e-mail.",
-  failed: "Stav poptávky byl uložen, ale odeslání e-mailu klientovi selhalo.",
+  failed:
+    "Stav poptávky byl uložen, ale odeslání e-mailu klientovi selhalo. Text zprávy si můžete zkopírovat níže.",
 };
 
 const SAVED_TO_OUTBOUND_KIND: Partial<
