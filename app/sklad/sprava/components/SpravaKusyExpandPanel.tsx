@@ -113,6 +113,8 @@ type Props = {
   obsahPolozkaUpdaters?: SpravaObsahPolozkaUpdaters;
   /** false = bez router.replace na /sklad při rozbalení case (modal výběru) */
   syncObsahUrl?: boolean;
+  /** Modal výběru pro objednávku — klik na řádek kusu vybere kus. */
+  selectionMode?: boolean;
 };
 
 function SpravaKusCheckbox({
@@ -175,6 +177,7 @@ function SpravaExpandKusRow({
   onUpdated,
   activeChildren,
   obsahTree,
+  selectionMode = false,
 }: {
   kus: SkladKusRow;
   polozkaNazev: string;
@@ -188,6 +191,7 @@ function SpravaExpandKusRow({
   onUpdated: () => Promise<void>;
   activeChildren: SkladKusObsahChildRow[];
   obsahTree: SpravaCaseObsahTreeBindings;
+  selectionMode?: boolean;
 }) {
   const { caseMetadata, isKusSelected, toggleKus } = useSpravaKusSelection();
   const [poradiDraft, setPoradiDraft] = useState(() => String(kus.poradove_cislo));
@@ -273,7 +277,37 @@ function SpravaExpandKusRow({
         isObsahExpanded ? SPRAVA_CASE_EXPANDED_BLOCK_CLASS : "",
       ].join(" ")}
     >
-      <div className={SPRAVA_TABLE_BODY_SUBROW_GRID} style={spravaTableGridStyle}>
+      <div
+        className={SPRAVA_TABLE_BODY_SUBROW_GRID}
+        onClick={
+          selectionMode && !readOnly
+            ? (e) => {
+                const target = e.target as HTMLElement;
+                if (
+                  target.closest("input, button, select, textarea, a, [data-no-row-select]")
+                ) {
+                  return;
+                }
+                toggleKus(vybranyKus);
+              }
+            : undefined
+        }
+        role={selectionMode && !readOnly ? "button" : undefined}
+        tabIndex={selectionMode && !readOnly ? 0 : undefined}
+        onKeyDown={
+          selectionMode && !readOnly
+            ? (e) => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                toggleKus(vybranyKus);
+              }
+            : undefined
+        }
+        style={{
+          ...spravaTableGridStyle,
+          cursor: selectionMode && !readOnly ? "pointer" : undefined,
+        }}
+      >
         <div
           className={`sticky left-0 z-10 flex min-h-8 min-w-0 flex-col gap-0.5 bg-inherit pr-1 pt-0.5 ${SPRAVA_KUS_NAME_INDENT_CLASS}`}
         >
@@ -453,6 +487,7 @@ export function SpravaKusyExpandPanel({
   onCatalogConfigChanged,
   obsahPolozkaUpdaters,
   syncObsahUrl = true,
+  selectionMode = false,
 }: Props) {
   const celkem = toNumber(celkemKDispozici);
   const isCasePolozka = isCaseJednotka(polozkaJednotka);
@@ -956,6 +991,7 @@ export function SpravaKusyExpandPanel({
                   onUpdated={refreshAfterPoradi}
                   activeChildren={childrenByParentKusId.get(kus.kus_id) ?? []}
                   obsahTree={obsahTree}
+                  selectionMode={selectionMode}
                 />
               ))}
             </ul>

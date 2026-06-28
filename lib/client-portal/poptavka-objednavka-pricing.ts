@@ -69,6 +69,10 @@ type AggregatedQty = {
   mnozstvi: number;
   zdroj: "setup" | "extra";
   setupNazev?: string;
+  /** Název pro breakdown (u konkrétního kusu label kusu). */
+  displayNazev?: string;
+  skladovyKusId?: string | null;
+  typVyberu?: ObjednavkaExtraPolozka["typVyberu"];
 };
 
 function aggregateSkladQuantities(
@@ -96,10 +100,26 @@ function aggregateSkladQuantities(
   }
 
   for (const extra of extraPolozky) {
-    if (!extra.skladovaPolozkaId || extra.mnozstvi <= 0) continue;
+    if (!extra.skladovaPolozkaId) continue;
+
+    if (extra.typVyberu === "kus") {
+      if (!extra.skladovyKusId) continue;
+      push(extra.skladovaPolozkaId, {
+        mnozstvi: 1,
+        zdroj: "extra",
+        displayNazev: extra.nazev,
+        skladovyKusId: extra.skladovyKusId,
+        typVyberu: "kus",
+      });
+      continue;
+    }
+
+    if (extra.mnozstvi <= 0) continue;
     push(extra.skladovaPolozkaId, {
       mnozstvi: extra.mnozstvi,
       zdroj: "extra",
+      displayNazev: extra.nazev,
+      typVyberu: "polozka",
     });
   }
 
@@ -131,10 +151,11 @@ export function computeObjednavkaPricingBreakdown(input: {
 
   for (const [skladId, entries] of aggregated) {
     const meta = sklad.get(skladId);
-    const nazev = meta?.nazev ?? skladId;
+    const catalogNazev = meta?.nazev ?? skladId;
     const cenaAkce = meta?.fakturacniCena ?? null;
 
     for (const entry of entries) {
+      const nazev = entry.displayNazev ?? catalogNazev;
       const celkem = cenaAkce != null ? entry.mnozstvi * cenaAkce : 0;
       if (cenaAkce == null) {
         polozkyBezCeny.push(`${nazev} (${entry.mnozstvi}×)`);
@@ -146,12 +167,14 @@ export function computeObjednavkaPricingBreakdown(input: {
       }
       polozky.push({
         skladovaPolozkaId: skladId,
+        skladovyKusId: entry.skladovyKusId ?? null,
         nazev,
         mnozstvi: entry.mnozstvi,
         cenaAkce,
         celkem,
         zdroj: entry.zdroj,
         setupNazev: entry.setupNazev,
+        typVyberu: entry.typVyberu,
       });
     }
   }

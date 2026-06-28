@@ -567,13 +567,29 @@ function normalizeSmluvniPodminky(block: SmluvniPodminkyBlock): SmluvniPodminkyB
 
 function normalizeExtraPolozky(rows: ObjednavkaExtraPolozka[] | undefined): ObjednavkaExtraPolozka[] {
   return (rows ?? [])
-    .map((row, index) => ({
-      localId: row.localId?.trim() || `extra-${index + 1}`,
-      skladovaPolozkaId: row.skladovaPolozkaId.trim(),
-      nazev: row.nazev.trim(),
-      mnozstvi: Math.max(0, Number(row.mnozstvi) || 0),
-    }))
-    .filter((row) => row.skladovaPolozkaId && row.mnozstvi > 0);
+    .map((row, index) => {
+      const skladovyKusId = row.skladovyKusId?.trim() || null;
+      const typVyberu =
+        row.typVyberu === "kus" || skladovyKusId ? ("kus" as const) : ("polozka" as const);
+      const mnozstvi =
+        typVyberu === "kus" ? 1 : Math.max(0, Number(row.mnozstvi) || 0);
+
+      return {
+        localId: row.localId?.trim() || `extra-${index + 1}`,
+        typVyberu,
+        skladovaPolozkaId: row.skladovaPolozkaId.trim(),
+        skladovyKusId: typVyberu === "kus" ? skladovyKusId : null,
+        nazev: row.nazev.trim(),
+        polozkaNazev: row.polozkaNazev?.trim() || null,
+        mnozstvi,
+        jednotka: row.jednotka?.trim() || null,
+      };
+    })
+    .filter((row) => {
+      if (!row.skladovaPolozkaId || row.mnozstvi <= 0) return false;
+      if (row.typVyberu === "kus") return Boolean(row.skladovyKusId);
+      return true;
+    });
 }
 
 function normalizePricingBlock(input: ObjednavkaPricingBlock | null | undefined): ObjednavkaPricingBlock | null {

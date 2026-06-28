@@ -31,7 +31,14 @@ type SpravaSelectionContextValue = {
 const SpravaSelectionContext =
   createContext<SpravaSelectionContextValue | null>(null);
 
-export function SpravaKusSelectionProvider({ children }: { children: ReactNode }) {
+export function SpravaKusSelectionProvider({
+  children,
+  singleKusSelection = false,
+}: {
+  children: ReactNode;
+  /** V modalu objednávky — najednou jen jeden konkrétní kus. */
+  singleKusSelection?: boolean;
+}) {
   const [caseMetadata, setCaseMetadata] = useState<SpravaCaseMetadata>(
     EMPTY_SPRAVA_CASE_METADATA
   );
@@ -62,18 +69,25 @@ export function SpravaKusSelectionProvider({ children }: { children: ReactNode }
     );
   }, []);
 
-  const toggleKus = useCallback((entry: SpravaVybranyKus) => {
-    setSelectedPolozka(null);
-    setSelectedKusy((prev) => {
-      const next = new Map(prev);
-      if (next.has(entry.kusId)) {
-        next.delete(entry.kusId);
-      } else {
-        next.set(entry.kusId, entry);
-      }
-      return next;
-    });
-  }, []);
+  const toggleKus = useCallback(
+    (entry: SpravaVybranyKus) => {
+      setSelectedPolozka(null);
+      setSelectedKusy((prev) => {
+        if (singleKusSelection) {
+          if (prev.has(entry.kusId)) return new Map();
+          return new Map([[entry.kusId, entry]]);
+        }
+        const next = new Map(prev);
+        if (next.has(entry.kusId)) {
+          next.delete(entry.kusId);
+        } else {
+          next.set(entry.kusId, entry);
+        }
+        return next;
+      });
+    },
+    [singleKusSelection]
+  );
 
   const isKusSelected = useCallback(
     (kusId: string) => selectedKusy.has(kusId),

@@ -7,11 +7,21 @@ import {
   useSpravaKusSelection,
 } from "@/app/sklad/sprava/components/SpravaKusSelectionContext";
 
-export type SkladPolozkaSelectResult = {
-  skladovaPolozkaId: string;
-  nazev: string;
-  mnozstvi: number;
-};
+export type SkladPolozkaSelectResult =
+  | {
+      typVyberu: "polozka";
+      skladovaPolozkaId: string;
+      nazev: string;
+      mnozstvi: number;
+    }
+  | {
+      typVyberu: "kus";
+      skladovaPolozkaId: string;
+      skladovyKusId: string;
+      nazev: string;
+      polozkaNazev: string;
+      mnozstvi: 1;
+    };
 
 type Props = {
   open: boolean;
@@ -28,8 +38,13 @@ function SkladPolozkySelectDialogBody({
   disabled,
   confirmLabel = "Přidat položku",
 }: Omit<Props, "open" | "title">) {
-  const { selectedPolozka, hasSelection, clearSelection } = useSpravaKusSelection();
+  const { selectedPolozka, selectedKusList, hasSelection, clearSelection } =
+    useSpravaKusSelection();
   const [mnozstvi, setMnozstvi] = useState("1");
+
+  const selectedKus = selectedKusList.length === 1 ? selectedKusList[0]! : null;
+  const isKusSelection = selectedKus !== null;
+  const isPolozkaSelection = selectedPolozka !== null && !isKusSelection;
 
   useEffect(() => {
     return () => {
@@ -38,9 +53,27 @@ function SkladPolozkySelectDialogBody({
   }, [clearSelection]);
 
   function handleConfirm() {
-    if (!selectedPolozka || disabled) return;
+    if (disabled) return;
+
+    if (isKusSelection && selectedKus) {
+      onConfirm({
+        typVyberu: "kus",
+        skladovaPolozkaId: selectedKus.skladovaPolozkaId,
+        skladovyKusId: selectedKus.kusId,
+        nazev: selectedKus.label,
+        polozkaNazev: selectedKus.polozkaNazev,
+        mnozstvi: 1,
+      });
+      clearSelection();
+      setMnozstvi("1");
+      onClose();
+      return;
+    }
+
+    if (!selectedPolozka) return;
     const qty = Math.max(0.01, Number(mnozstvi.replace(",", ".")) || 1);
     onConfirm({
+      typVyberu: "polozka",
       skladovaPolozkaId: selectedPolozka.skladovaPolozkaId,
       nazev: selectedPolozka.nazev,
       mnozstvi: qty,
@@ -50,9 +83,7 @@ function SkladPolozkySelectDialogBody({
     onClose();
   }
 
-  const selectionLabel = selectedPolozka
-    ? `Položka: ${selectedPolozka.nazev}`
-    : "Nic není vybráno";
+  const canConfirm = isKusSelection || isPolozkaSelection;
 
   return (
     <>
@@ -71,11 +102,32 @@ function SkladPolozkySelectDialogBody({
 
       <div className="shrink-0 border-t border-slate-800 bg-slate-950/90 px-4 py-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0">
+          <div className="min-w-0 space-y-1">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Vybraná položka
             </div>
-            <p className="mt-1 truncate text-sm text-slate-300">{selectionLabel}</p>
+            {!hasSelection ? (
+              <p className="text-sm text-slate-500">Nic není vybráno</p>
+            ) : isKusSelection && selectedKus ? (
+              <>
+                <p className="truncate text-sm text-white">
+                  Konkrétní kus:{" "}
+                  <span className="font-medium text-indigo-200">{selectedKus.label}</span>
+                </p>
+                <p className="truncate text-sm text-slate-400">
+                  Skladová položka: {selectedKus.polozkaNazev}
+                </p>
+                <p className="text-xs text-slate-500">Režim: konkrétní kus</p>
+              </>
+            ) : isPolozkaSelection && selectedPolozka ? (
+              <>
+                <p className="truncate text-sm text-white">
+                  Položka:{" "}
+                  <span className="font-medium text-indigo-200">{selectedPolozka.nazev}</span>
+                </p>
+                <p className="text-xs text-slate-500">Režim: obecná položka</p>
+              </>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-end gap-3">
@@ -83,13 +135,18 @@ function SkladPolozkySelectDialogBody({
               <span className="text-xs text-slate-400">Množství</span>
               <input
                 type="number"
-                min="0.01"
-                step="0.01"
-                value={mnozstvi}
+                min={isKusSelection ? "1" : "0.01"}
+                max={isKusSelection ? "1" : undefined}
+                step={isKusSelection ? "1" : "0.01"}
+                value={isKusSelection ? "1" : mnozstvi}
                 onChange={(e) => setMnozstvi(e.target.value)}
-                disabled={disabled}
-                className="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60"
+                disabled={disabled || isKusSelection}
+                readOnly={isKusSelection}
+                className="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60 read-only:cursor-default"
               />
+              {isKusSelection ? (
+                <span className="text-[11px] text-slate-500">1 ks (konkrétní kus)</span>
+              ) : null}
             </label>
             <button
               type="button"
@@ -101,7 +158,7 @@ function SkladPolozkySelectDialogBody({
             </button>
             <button
               type="button"
-              disabled={disabled || !selectedPolozka}
+              disabled={disabled || !canConfirm}
               onClick={handleConfirm}
               className="rounded-lg border border-indigo-500 bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-45"
             >
@@ -164,7 +221,8 @@ export default function SkladPolozkySelectDialog({
               {title}
             </h2>
             <p className="mt-0.5 text-sm text-slate-400">
-              Stejné zobrazení jako ve skladu — vyberte položku checkboxem nebo kliknutím na řádek.
+              Vyberte obecnou položku (množství) nebo konkrétní kus v rozpisu — checkboxem nebo
+              kliknutím na řádek.
             </p>
           </div>
           <button
@@ -176,7 +234,7 @@ export default function SkladPolozkySelectDialog({
           </button>
         </div>
 
-        <SpravaKusSelectionProvider>
+        <SpravaKusSelectionProvider singleKusSelection>
           <SkladPolozkySelectDialogBody
             onClose={onClose}
             onConfirm={onConfirm}

@@ -229,6 +229,25 @@ export default function PoptavkaObjednavkaDocument({ data, meta }: Props) {
           )}
         </DocSection>
 
+        {data.technickePlneni.extraPolozky.length > 0 ? (
+          <DocSection title="Doplňkové položky">
+            <ul className="space-y-2">
+              {data.technickePlneni.extraPolozky.map((row) => (
+                <li
+                  key={row.localId}
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+                >
+                  <span className="font-medium">{row.nazev}</span>
+                  {row.typVyberu === "kus" ? (
+                    <span className="text-slate-500"> — konkrétní kus</span>
+                  ) : null}
+                  <span className="text-slate-500"> — {row.mnozstvi} ks</span>
+                </li>
+              ))}
+            </ul>
+          </DocSection>
+        ) : null}
+
         {data.pricing?.konecnaCena != null ? (
           <DocSection title="Cenová nabídka">
             <dl>

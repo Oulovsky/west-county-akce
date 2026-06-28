@@ -48,6 +48,7 @@ export default function PoptavkaObjednavkaPricingPanel({
   onPricingChange,
 }: Props) {
   const [skladDialogOpen, setSkladDialogOpen] = useState(false);
+  const [duplicateKusInfo, setDuplicateKusInfo] = useState<string | null>(null);
   const [pozadovanaInput, setPozadovanaInput] = useState(
     pricing?.pozadovanaCena != null ? String(Math.round(pricing.pozadovanaCena)) : ""
   );
@@ -81,14 +82,41 @@ export default function PoptavkaObjednavkaPricingPanel({
   );
 
   function addExtraPolozka(result: SkladPolozkaSelectResult) {
+    setDuplicateKusInfo(null);
+
+    if (result.typVyberu === "kus") {
+      const existing = extraPolozky.find(
+        (row) => row.typVyberu === "kus" && row.skladovyKusId === result.skladovyKusId
+      );
+      if (existing) {
+        setDuplicateKusInfo(`Kus „${result.nazev}“ je už v extra položkách.`);
+        return;
+      }
+
+      onExtraPolozkyChange([
+        ...extraPolozky,
+        {
+          localId: newLocalId(),
+          typVyberu: "kus",
+          skladovaPolozkaId: result.skladovaPolozkaId,
+          skladovyKusId: result.skladovyKusId,
+          nazev: result.nazev,
+          polozkaNazev: result.polozkaNazev,
+          mnozstvi: 1,
+        },
+      ]);
+      return;
+    }
+
     const existing = extraPolozky.find(
-      (row) => row.skladovaPolozkaId === result.skladovaPolozkaId
+      (row) =>
+        row.typVyberu === "polozka" && row.skladovaPolozkaId === result.skladovaPolozkaId
     );
 
     if (existing) {
       onExtraPolozkyChange(
         extraPolozky.map((item) =>
-          item.skladovaPolozkaId === result.skladovaPolozkaId
+          item.localId === existing.localId
             ? { ...item, mnozstvi: item.mnozstvi + result.mnozstvi }
             : item
         )
@@ -100,8 +128,11 @@ export default function PoptavkaObjednavkaPricingPanel({
       ...extraPolozky,
       {
         localId: newLocalId(),
+        typVyberu: "polozka",
         skladovaPolozkaId: result.skladovaPolozkaId,
+        skladovyKusId: null,
         nazev: result.nazev,
+        polozkaNazev: null,
         mnozstvi: result.mnozstvi,
       },
     ]);
@@ -157,22 +188,37 @@ export default function PoptavkaObjednavkaPricingPanel({
           confirmLabel="Přidat do extra položek"
         />
 
+        {duplicateKusInfo ? (
+          <p className="mt-3 rounded-lg border border-sky-500/30 bg-sky-950/30 px-3 py-2 text-sm text-sky-100">
+            {duplicateKusInfo}
+          </p>
+        ) : null}
+
         {extraPolozky.length === 0 ? (
           <p className="mt-4 text-sm text-slate-500">Zatím nejsou přidané extra položky.</p>
         ) : (
           <ul className="mt-4 space-y-2">
-            {extraPolozky.map((row) => (
+            {extraPolozky.map((row) => {
+              const isKus = row.typVyberu === "kus";
+              return (
               <li
                 key={row.localId}
                 className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm"
               >
-                <span className="min-w-0 flex-1 font-medium text-white">{row.nazev}</span>
+                <span className="min-w-0 flex-1 font-medium text-white">
+                  {row.nazev}
+                  {isKus ? (
+                    <span className="font-normal text-slate-400"> — konkrétní kus</span>
+                  ) : null}
+                  <span className="font-normal text-slate-400"> — {row.mnozstvi} ks</span>
+                </span>
                 <input
                   type="number"
                   min="0.01"
                   step="0.01"
                   value={row.mnozstvi}
-                  disabled={disabled}
+                  disabled={disabled || isKus}
+                  readOnly={isKus}
                   onChange={(e) => {
                     const mnozstvi = Math.max(0, Number(e.target.value.replace(",", ".")) || 0);
                     onExtraPolozkyChange(
@@ -181,7 +227,7 @@ export default function PoptavkaObjednavkaPricingPanel({
                       )
                     );
                   }}
-                  className="w-24 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-white disabled:opacity-60"
+                  className="w-24 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-white disabled:opacity-60 read-only:cursor-default"
                 />
                 <button
                   type="button"
@@ -194,7 +240,8 @@ export default function PoptavkaObjednavkaPricingPanel({
                   Odebrat
                 </button>
               </li>
-            ))}
+            );
+            })}
           </ul>
         )}
       </div>

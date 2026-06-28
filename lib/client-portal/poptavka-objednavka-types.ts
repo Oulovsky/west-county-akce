@@ -120,21 +120,33 @@ export type TechnickePlneniBlock = {
   poznamkaKTechnice: string | null;
 };
 
+export type ObjednavkaExtraVyberTyp = "polozka" | "kus";
+
 export type ObjednavkaExtraPolozka = {
   localId: string;
+  /** Obecná skladová položka (množství) nebo konkrétní fyzický kus. */
+  typVyberu: ObjednavkaExtraVyberTyp;
   skladovaPolozkaId: string;
+  /** Vyplněno pouze pro typVyberu === "kus". */
+  skladovyKusId?: string | null;
+  /** Název položky nebo konkrétního kusu (např. „Procesor #2“). */
   nazev: string;
+  /** Parent položka u konkrétního kusu (např. „Procesor“). */
+  polozkaNazev?: string | null;
   mnozstvi: number;
+  jednotka?: string | null;
 };
 
 export type ObjednavkaPricingPolozkaLine = {
   skladovaPolozkaId: string;
+  skladovyKusId?: string | null;
   nazev: string;
   mnozstvi: number;
   cenaAkce: number | null;
   celkem: number;
   zdroj: "setup" | "extra";
   setupNazev?: string;
+  typVyberu?: ObjednavkaExtraVyberTyp;
 };
 
 export type ObjednavkaPricingBlock = {

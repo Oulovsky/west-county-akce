@@ -584,6 +584,7 @@ export function SkladTableRow({
           onCatalogConfigChanged={onCatalogConfigChanged}
           obsahPolozkaUpdaters={obsahPolozkaUpdaters}
           syncObsahUrl={!selectionMode}
+          selectionMode={selectionMode}
         />
       ) : null}
     </div>
