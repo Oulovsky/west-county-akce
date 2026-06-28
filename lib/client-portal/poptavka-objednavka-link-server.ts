@@ -11,6 +11,7 @@ import {
   draftToPoptavkaObjednavkaSnapshot,
   normalizePoptavkaObjednavkaDraftData,
 } from "@/lib/client-portal/poptavka-objednavka-draft";
+import { prepareObjednavkaDraftForSave } from "@/lib/client-portal/poptavka-objednavka-pricing-server";
 import {
   ACTIVE_POPTAVKA_OBJEDNAVKA_DRAFT_STAVY,
   loadActiveDraftRow,
@@ -477,11 +478,14 @@ export async function createPoptavkaObjednavkaLinkFromDraft(
   const normalizedDraft = normalizePoptavkaObjednavkaDraftData(
     parsePoptavkaObjednavkaDraftData(draftRow.draft_data)
   );
+  const preparedDraft = await prepareObjednavkaDraftForSave(supabase, normalizedDraft, {
+    freezeBreakdown: true,
+  });
   const preparedByUserId = await resolvePreparedByUserId(supabase, options.preparedByUserId);
   const emailTo = await resolveEmailTo(
     supabase,
     poptavka,
-    normalizedDraft.klient.email,
+    preparedDraft.klient.email,
     options.emailTo
   );
 
@@ -493,7 +497,7 @@ export async function createPoptavkaObjednavkaLinkFromDraft(
 
   const fotkaSignedSeconds = Math.max(expiresInDays, 1) * 24 * 60 * 60;
   const fotkaPublicUrls = await resolveDraftFotkaSignedUrls(
-    normalizedDraft.fotky,
+    preparedDraft.fotky,
     fotkaSignedSeconds
   );
 
@@ -501,7 +505,7 @@ export async function createPoptavkaObjednavkaLinkFromDraft(
   const navrhVerze = previousVersionCount + 1;
 
   const snapshot = draftToPoptavkaObjednavkaSnapshot({
-    draft: normalizedDraft,
+    draft: preparedDraft,
     draftId: draftRow.draft_id,
     linkId,
     meta: {

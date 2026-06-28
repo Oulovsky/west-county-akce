@@ -14,6 +14,8 @@ import {
 } from "@/lib/client-portal/sestava-konfigurator-form";
 import { calculateIbcWaterRequirement } from "@/lib/client-portal/sestava-ibc-water";
 import { syncPoptavkaObjednavkaDraftDerived } from "@/lib/client-portal/poptavka-objednavka-draft-sync";
+import { finalizeObjednavkaDraftPricing } from "@/lib/client-portal/poptavka-objednavka-pricing";
+import type { ObjednavkaExtraPolozka, ObjednavkaPricingBlock } from "@/lib/client-portal/poptavka-objednavka-types";
 import type { PortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-types";
 import {
   EMPTY_POPTAVKA_TECHNIKA,
@@ -204,6 +206,7 @@ function emptyOblastiPlneni(): Record<SetupOblast, OblastPlneniBlock> {
 function emptyTechnickePlneni(): TechnickePlneniBlock {
   return {
     setupy: [],
+    extraPolozky: [],
     oblasti: emptyOblastiPlneni(),
     poznamkaKTechnice: null,
   };
@@ -438,6 +441,7 @@ function buildTechnickePlneniBlock(detail: InternalPoptavkaDetail): TechnickePln
 
   return {
     setupy,
+    extraPolozky: [],
     oblasti: emptyOblastiPlneni(),
     poznamkaKTechnice:
       joinNonEmpty([setupNotes.length > 0 ? setupNotes.join("\n") : null, sestavaSummary || null]) ??
@@ -561,6 +565,40 @@ function normalizeSmluvniPodminky(block: SmluvniPodminkyBlock): SmluvniPodminkyB
   };
 }
 
+function normalizeExtraPolozky(rows: ObjednavkaExtraPolozka[] | undefined): ObjednavkaExtraPolozka[] {
+  return (rows ?? [])
+    .map((row, index) => ({
+      localId: row.localId?.trim() || `extra-${index + 1}`,
+      skladovaPolozkaId: row.skladovaPolozkaId.trim(),
+      nazev: row.nazev.trim(),
+      mnozstvi: Math.max(0, Number(row.mnozstvi) || 0),
+    }))
+    .filter((row) => row.skladovaPolozkaId && row.mnozstvi > 0);
+}
+
+function normalizePricingBlock(input: ObjednavkaPricingBlock | null | undefined): ObjednavkaPricingBlock | null {
+  if (!input) return null;
+  return {
+    vypoctovaCena: Math.max(0, Number(input.vypoctovaCena) || 0),
+    pozadovanaCena:
+      input.pozadovanaCena != null && Number.isFinite(Number(input.pozadovanaCena))
+        ? Math.max(0, Number(input.pozadovanaCena))
+        : null,
+    slevaProcent:
+      input.slevaProcent != null && Number.isFinite(Number(input.slevaProcent))
+        ? Number(input.slevaProcent)
+        : null,
+    konecnaCena:
+      input.konecnaCena != null && Number.isFinite(Number(input.konecnaCena))
+        ? Math.max(0, Number(input.konecnaCena))
+        : null,
+    setupCastka: Math.max(0, Number(input.setupCastka) || 0),
+    extraCastka: Math.max(0, Number(input.extraCastka) || 0),
+    polozky: input.polozky,
+    polozkyBezCeny: input.polozkyBezCeny ?? [],
+  };
+}
+
 export function normalizePoptavkaObjednavkaDraftData(
   input: PoptavkaObjednavkaDraftData
 ): PoptavkaObjednavkaDraftData {
@@ -634,6 +672,7 @@ export function normalizePoptavkaObjednavkaDraftData(
         poznamkaKlienta: nullableText(row.poznamkaKlienta),
         poznamkaInterni: nullableText(row.poznamkaInterni),
       })),
+      extraPolozky: normalizeExtraPolozky(input.technickePlneni?.extraPolozky),
       oblasti: Object.fromEntries(
         SETUP_OBLASTI.map((oblast) => [
           oblast,
@@ -668,7 +707,7 @@ export function normalizePoptavkaObjednavkaDraftData(
       ...EMPTY_POPTAVKA_TECHNIKA,
       ...(input.technika ?? {}),
     },
-    pricing: null,
+    pricing: normalizePricingBlock(input.pricing),
     validationWarnings: [],
   };
 
@@ -730,7 +769,11 @@ function hasTechnikaKonfigurace(values: PoptavkaTechnikaFormValues): boolean {
 export function hydrateObjednavkaDraftKonfigurace(
   draftData: PoptavkaObjednavkaDraftData,
   detail: InternalPoptavkaDetail,
-  katalog: PortalSestavaKatalog = DEFAULT_PORTAL_SESTAVA_KATALOG
+  katalog: PortalSestavaKatalog = DEFAULT_PORTAL_SESTAVA_KATALOG,
+  options: {
+    pricingCatalog?: import("@/lib/client-portal/poptavka-objednavka-pricing").ObjednavkaPricingCatalog;
+    portalSetups?: import("@/lib/client-portal/poptavka-server").PortalSetupsByOblast;
+  } = {}
 ): PoptavkaObjednavkaDraftData {
   const poptavkaSestava = enrichSestavaForEditor(
     katalog,
@@ -748,7 +791,7 @@ export function hydrateObjednavkaDraftKonfigurace(
       ? poptavkaTechnika
       : draftData.technika;
 
-  return syncPoptavkaObjednavkaDraftDerived(
+  let draft = syncPoptavkaObjednavkaDraftDerived(
     normalizePoptavkaObjednavkaDraftData({
       ...draftData,
       sestava: enrichSestavaForEditor(katalog, sestavaSource),
@@ -756,6 +799,16 @@ export function hydrateObjednavkaDraftKonfigurace(
     }),
     { katalog }
   );
+
+  if (options.pricingCatalog && options.portalSetups) {
+    draft = finalizeObjednavkaDraftPricing(draft, {
+      pricingCatalog: options.pricingCatalog,
+      katalog,
+      portalSetups: options.portalSetups,
+    });
+  }
+
+  return draft;
 }
 
 async function loadMistoKonani(
@@ -849,7 +902,7 @@ function snapshotBlocksFromDraft(draft: PoptavkaObjednavkaDraftData): Pick<
     textProKlienta: draft.textProKlienta,
     sestava: draft.sestava,
     technika: draft.technika,
-    pricing: null,
+    pricing: draft.pricing,
   };
 }
 

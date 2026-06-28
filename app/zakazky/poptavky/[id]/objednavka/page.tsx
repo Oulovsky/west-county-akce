@@ -17,6 +17,7 @@ import { hydrateObjednavkaDraftKonfigurace } from "@/lib/client-portal/poptavka-
 import { buildPoptavkaObjednavkaUrl, countPoptavkaObjednavkaLinkVersions } from "@/lib/client-portal/poptavka-objednavka-link-server";
 import { loadPortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-server";
 import { loadPortalSetups } from "@/lib/client-portal/poptavka-server";
+import { loadObjednavkaPricingCatalog } from "@/lib/client-portal/poptavka-objednavka-pricing-server";
 import { createClient } from "@/lib/supabase/server";
 import PoptavkaOutboundMessagePanel from "../../PoptavkaOutboundMessagePanel";
 import PoptavkaObjednavkaDraftEditor from "./PoptavkaObjednavkaDraftEditor";
@@ -141,9 +142,10 @@ export default async function PoptavkaObjednavkaEditorPage({
     !orderSent &&
     canSendPoptavkaBindingOrder(detail.stav);
 
-  const [sestavaKatalog, setupsByOblast] = await Promise.all([
+  const [sestavaKatalog, setupsByOblast, pricingCatalog] = await Promise.all([
     loadPortalSestavaKatalog(),
     loadPortalSetups(supabase),
+    loadObjednavkaPricingCatalog(supabase),
   ]);
 
   const draftRaw = readOnly
@@ -161,7 +163,8 @@ export default async function PoptavkaObjednavkaEditorPage({
         draftData: hydrateObjednavkaDraftKonfigurace(
           draftRaw.draftData,
           detail,
-          sestavaKatalog
+          sestavaKatalog,
+          { pricingCatalog, portalSetups: setupsByOblast }
         ),
       }
     : null;
@@ -351,6 +354,7 @@ export default async function PoptavkaObjednavkaEditorPage({
         errorCode={resolvedSearchParams?.error ?? null}
         sestavaKatalog={sestavaKatalog}
         setupsByOblast={setupsByOblast}
+        pricingCatalog={pricingCatalog}
         initialFotky={detail.fotky}
       />
     </div>

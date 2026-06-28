@@ -8,6 +8,8 @@ import {
   formatObjednavkaTriVolba,
 } from "@/lib/client-portal/poptavka-objednavka-document";
 import { POPTAVKA_FOTKA_TYP_LABELS } from "@/lib/client-portal/poptavka-fotky-shared";
+import { formatMoneyCzk } from "@/lib/payments";
+import { formatDiscountPercent } from "@/lib/pricing/discount";
 import type {
   PartyBlock,
   PoptavkaObjednavkaDocumentData,
@@ -226,6 +228,27 @@ export default function PoptavkaObjednavkaDocument({ data, meta }: Props) {
             <p className="mb-4 text-sm text-slate-500">Konfigurace sestavy není uvedena.</p>
           )}
         </DocSection>
+
+        {data.pricing?.konecnaCena != null ? (
+          <DocSection title="Cenová nabídka">
+            <dl>
+              <DocRow
+                label="Cena dle ceníku"
+                value={formatMoneyCzk(data.pricing.vypoctovaCena)}
+              />
+              {data.pricing.slevaProcent != null ? (
+                <DocRow
+                  label="Poskytnutá sleva"
+                  value={`${formatDiscountPercent(data.pricing.slevaProcent)} %`}
+                />
+              ) : null}
+              <DocRow
+                label="Konečná cena"
+                value={formatMoneyCzk(data.pricing.konecnaCena)}
+              />
+            </dl>
+          </DocSection>
+        ) : null}
 
         {data.fotky.length > 0 ? (
           <DocSection title="Fotografie místa">

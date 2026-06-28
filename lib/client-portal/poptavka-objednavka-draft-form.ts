@@ -1,7 +1,11 @@
 import { TYP_AKCE_OPTIONS } from "@/lib/client-portal/poptavka-form";
 import { parseSestavaKonfiguratorJson } from "@/lib/client-portal/sestava-konfigurator-form";
 import { parseTechnikaJson } from "@/lib/client-portal/poptavka-technika-form";
-import type { PoptavkaObjednavkaDraftData } from "@/lib/client-portal/poptavka-objednavka-types";
+import type {
+  ObjednavkaExtraPolozka,
+  ObjednavkaPricingBlock,
+  PoptavkaObjednavkaDraftData,
+} from "@/lib/client-portal/poptavka-objednavka-types";
 import { POPTAVKA_OBJEDNAVKA_DRAFT_DATA_VERSION } from "@/lib/client-portal/poptavka-objednavka-types";
 import { parseDatetimeLocalToIso } from "@/lib/logistika-okna";
 
@@ -30,12 +34,37 @@ function normalizeTime(value: string) {
   return trimmed;
 }
 
+function parseJsonArray<T>(raw: string): T[] | null {
+  if (!raw.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as T[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function parsePricingJson(raw: string): ObjednavkaPricingBlock | null {
+  if (!raw.trim()) return null;
+  try {
+    return JSON.parse(raw) as ObjednavkaPricingBlock;
+  } catch {
+    return null;
+  }
+}
+
 export function mergeObjednavkaDraftFromFormData(
   base: PoptavkaObjednavkaDraftData,
   formData: FormData
 ): PoptavkaObjednavkaDraftData {
   const sestavaJson = field(formData, "sestava_konfigurator_json");
   const technikaJson = field(formData, "technika_json");
+  const extraPolozkyJson = field(formData, "extra_polozky_json");
+  const pricingJson = field(formData, "pricing_json");
+
+  const extraPolozky =
+    parseJsonArray<ObjednavkaExtraPolozka>(extraPolozkyJson) ?? base.technickePlneni.extraPolozky;
+  const pricing = parsePricingJson(pricingJson) ?? base.pricing;
 
   return {
     draftVersion: POPTAVKA_OBJEDNAVKA_DRAFT_DATA_VERSION,
@@ -120,6 +149,7 @@ export function mergeObjednavkaDraftFromFormData(
     },
     technickePlneni: {
       setupy: base.technickePlneni.setupy,
+      extraPolozky,
       oblasti: base.technickePlneni.oblasti,
       poznamkaKTechnice: base.technickePlneni.poznamkaKTechnice,
     },
@@ -139,7 +169,7 @@ export function mergeObjednavkaDraftFromFormData(
       poznamkaSefa: nullableField(formData, "text_poznamka_sefa"),
     },
     fotky: base.fotky,
-    pricing: null,
+    pricing,
     validationWarnings: [],
   };
 }

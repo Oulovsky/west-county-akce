@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireInternalWriteAdminOrSef } from "@/lib/auth/admin-access-server";
 import { mergeObjednavkaDraftFromFormData } from "@/lib/client-portal/poptavka-objednavka-draft-form";
+import { prepareObjednavkaDraftForSave } from "@/lib/client-portal/poptavka-objednavka-pricing-server";
 import {
   getPortalAppBaseUrl,
   outboundResultToEmailQuery,
@@ -71,8 +72,9 @@ export async function savePoptavkaObjednavkaDraftAction(formData: FormData) {
 
   const baseDraft = parsePoptavkaObjednavkaDraftData(row.draft_data);
   const merged = mergeObjednavkaDraftFromFormData(baseDraft, formData);
+  const prepared = await prepareObjednavkaDraftForSave(supabase, merged);
 
-  const result = await savePoptavkaObjednavkaDraft(supabase, draftId, merged);
+  const result = await savePoptavkaObjednavkaDraft(supabase, draftId, prepared);
 
   if (!result.ok) {
     const errorCode =
@@ -115,8 +117,11 @@ export async function sendPoptavkaObjednavkaAction(formData: FormData) {
 
   const baseDraft = parsePoptavkaObjednavkaDraftData(row.draft_data);
   const merged = mergeObjednavkaDraftFromFormData(baseDraft, formData);
+  const prepared = await prepareObjednavkaDraftForSave(supabase, merged, {
+    freezeBreakdown: true,
+  });
 
-  const saveResult = await savePoptavkaObjednavkaDraft(supabase, draftId, merged);
+  const saveResult = await savePoptavkaObjednavkaDraft(supabase, draftId, prepared);
 
   if (!saveResult.ok) {
     const errorCode =

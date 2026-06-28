@@ -118,6 +118,7 @@ function mergeDraftDataFromJson(raw: unknown): PoptavkaObjednavkaDraftData {
       ...src.technickePlneni,
       oblasti: { ...base.technickePlneni.oblasti, ...src.technickePlneni?.oblasti },
       setupy: src.technickePlneni?.setupy ?? base.technickePlneni.setupy,
+      extraPolozky: src.technickePlneni?.extraPolozky ?? base.technickePlneni.extraPolozky,
     },
     smluvniPodminky: { ...base.smluvniPodminky, ...src.smluvniPodminky },
     textProKlienta: { ...base.textProKlienta, ...src.textProKlienta },
@@ -127,7 +128,7 @@ function mergeDraftDataFromJson(raw: unknown): PoptavkaObjednavkaDraftData {
         base.sestava
     ),
     technika: { ...EMPTY_POPTAVKA_TECHNIKA, ...(src.technika ?? {}) },
-    pricing: null,
+    pricing: src.pricing ?? base.pricing,
     upravenoOprotiPoptavce: Boolean(src.upravenoOprotiPoptavce),
     validationWarnings: [],
   };

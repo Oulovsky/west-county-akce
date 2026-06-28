@@ -23,7 +23,7 @@ export const VYCHOZI_SMLOUVNI_PODMINKY: SmluvniPodminkyBlock = {
     "Klient a pořadatel akce odpovídají za bezpečnost návštěvníků a dodržení platných předpisů. " +
     "WEST COUNTY provádí instalaci v souladu s obvyklými bezpečnostními standardy oboru.",
   platebni:
-    "Platební podmínky budou upřesněny ve fakturační dokumentaci. Tato objednávka sama o sobě neobsahuje konečnou cenovou nabídku.",
+    "Platební podmínky budou upřesněny ve fakturační dokumentaci. Tato objednávka obsahuje konečnou cenu sjednanou pro uvedený rozsah dodávky. Případné vícepráce, změny rozsahu nebo dodatečné požadavky klienta budou řešeny samostatnou dohodou.",
 };
 
 export function cloneVychoziSmluvniPodminky(): SmluvniPodminkyBlock {

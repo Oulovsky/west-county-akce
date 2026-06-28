@@ -114,8 +114,39 @@ export type OblastPlneniBlock = {
 
 export type TechnickePlneniBlock = {
   setupy: ObjednavkaSetupPolozka[];
+  /** Ručně doplněné skladové položky mimo setupy (plán množství). */
+  extraPolozky: ObjednavkaExtraPolozka[];
   oblasti: Record<SetupOblast, OblastPlneniBlock>;
   poznamkaKTechnice: string | null;
+};
+
+export type ObjednavkaExtraPolozka = {
+  localId: string;
+  skladovaPolozkaId: string;
+  nazev: string;
+  mnozstvi: number;
+};
+
+export type ObjednavkaPricingPolozkaLine = {
+  skladovaPolozkaId: string;
+  nazev: string;
+  mnozstvi: number;
+  cenaAkce: number | null;
+  celkem: number;
+  zdroj: "setup" | "extra";
+  setupNazev?: string;
+};
+
+export type ObjednavkaPricingBlock = {
+  vypoctovaCena: number;
+  pozadovanaCena: number | null;
+  slevaProcent: number | null;
+  konecnaCena: number | null;
+  setupCastka: number;
+  extraCastka: number;
+  /** Detailní rozpis — zmrazen ve snapshotu odeslané objednávky. */
+  polozky?: ObjednavkaPricingPolozkaLine[];
+  polozkyBezCeny: string[];
 };
 
 export type SmluvniPodminkyBlock = {
@@ -172,7 +203,7 @@ export type PoptavkaObjednavkaDraftData = {
   smluvniPodminky: SmluvniPodminkyBlock;
   textProKlienta: TextProKlientaBlock;
   fotky: FotkaDraft[];
-  pricing: null;
+  pricing: ObjednavkaPricingBlock | null;
   validationWarnings: string[];
 };
 
@@ -210,7 +241,7 @@ export type PoptavkaObjednavkaSnapshot = {
   smluvniPodminky: SmluvniPodminkyBlock;
   textProKlienta: TextProKlientaBlock;
   fotky: FotkaSnapshot[];
-  pricing: null;
+  pricing: ObjednavkaPricingBlock | null;
   sources: PoptavkaObjednavkaSnapshotSources;
 };
 
@@ -248,6 +279,7 @@ export type PoptavkaObjednavkaDocumentData = {
   fotky: PoptavkaObjednavkaDocumentFotka[];
   /** Textový výpis konfigurace sestavy pro dokument. */
   sestavaSummary?: string | null;
+  pricing?: ObjednavkaPricingBlock | null;
 };
 
 export type PoptavkaObjednavkaDocumentMeta = {

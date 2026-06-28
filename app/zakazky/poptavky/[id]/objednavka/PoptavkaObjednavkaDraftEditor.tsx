@@ -2,17 +2,29 @@
 
 import Link from "next/link";
 import type { FormEvent, ReactNode } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import PoptavkaSestavaKonfigurator from "@/components/portal/PoptavkaSestavaKonfigurator";
 import PoptavkaTechnickePodminkyStep, {
   createInitialSectionPhotos,
 } from "@/components/portal/PoptavkaTechnickePodminkyStep";
+import PoptavkaObjednavkaPricingPanel, {
+  syncPricingHiddenFields,
+} from "@/components/poptavka/PoptavkaObjednavkaPricingPanel";
 import {
   savePoptavkaObjednavkaDraftAction,
   sendPoptavkaObjednavkaAction,
 } from "@/app/zakazky/poptavky/[id]/objednavka/actions";
 import { OBJEDNAVKA_DRAFT_STAV_LABELS } from "@/lib/client-portal/poptavka-objednavka-draft-form";
 import type { PoptavkaObjednavkaDraftData } from "@/lib/client-portal/poptavka-objednavka-types";
+import type {
+  ObjednavkaExtraPolozka,
+  ObjednavkaPricingBlock,
+} from "@/lib/client-portal/poptavka-objednavka-types";
+import {
+  buildObjednavkaPricingBlock,
+  deriveObjednavkaSetupyFromSestava,
+  type ObjednavkaPricingCatalog,
+} from "@/lib/client-portal/poptavka-objednavka-pricing";
 import { TYP_AKCE_OPTIONS } from "@/lib/client-portal/poptavka-form";
 import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-shared";
 import type { PortalSetupsByOblast } from "@/lib/client-portal/poptavka-server";
@@ -56,6 +68,7 @@ type Props = {
   errorCode: string | null;
   sestavaKatalog: PortalSestavaKatalog;
   setupsByOblast: PortalSetupsByOblast;
+  pricingCatalog: ObjednavkaPricingCatalog;
   initialFotky: PoptavkaFotkaWithUrl[];
 };
 
@@ -185,6 +198,7 @@ export default function PoptavkaObjednavkaDraftEditor({
   errorCode,
   sestavaKatalog,
   setupsByOblast,
+  pricingCatalog,
   initialFotky,
 }: Props) {
   const d = draftData;
@@ -192,6 +206,10 @@ export default function PoptavkaObjednavkaDraftEditor({
 
   const [sestava, setSestava] = useState<SestavaKonfiguratorState>(d.sestava);
   const [technika, setTechnika] = useState<PoptavkaTechnikaFormValues>(d.technika);
+  const [extraPolozky, setExtraPolozky] = useState<ObjednavkaExtraPolozka[]>(
+    d.technickePlneni.extraPolozky ?? []
+  );
+  const [pricing, setPricing] = useState<ObjednavkaPricingBlock | null>(d.pricing);
   const [uiRezim, setUiRezim] = useState<TechnickeRezim | null>(
     d.technika.technicke_rezim === "klient_vyplni" || d.technika.technicke_rezim === "vyjezd_technika"
       ? d.technika.technicke_rezim
@@ -206,11 +224,29 @@ export default function PoptavkaObjednavkaDraftEditor({
   const optionCardClass =
     "flex gap-2 rounded-xl border border-slate-700 bg-slate-900/50 p-3 text-sm text-slate-200";
 
+  const setupy = useMemo(
+    () => deriveObjednavkaSetupyFromSestava(sestava, sestavaKatalog, setupsByOblast),
+    [sestava, sestavaKatalog, setupsByOblast]
+  );
+
+  const livePricing = useMemo(
+    () =>
+      buildObjednavkaPricingBlock({
+        setupy,
+        extraPolozky,
+        pricingCatalog,
+        pozadovanaCena: pricing?.pozadovanaCena ?? null,
+        previous: pricing,
+      }),
+    [setupy, extraPolozky, pricingCatalog, pricing]
+  );
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     syncJsonFields(event.currentTarget, sestava, {
       ...technika,
       technicke_rezim: uiRezim ?? technika.technicke_rezim,
     });
+    syncPricingHiddenFields(event.currentTarget, extraPolozky, livePricing);
   }
 
   function handleSendClick(event: React.MouseEvent<HTMLButtonElement>) {
@@ -278,6 +314,8 @@ export default function PoptavkaObjednavkaDraftEditor({
           ...technika,
           technicke_rezim: uiRezim ?? technika.technicke_rezim,
         })} />
+        <input type="hidden" name="extra_polozky_json" defaultValue={JSON.stringify(d.technickePlneni.extraPolozky ?? [])} />
+        <input type="hidden" name="pricing_json" defaultValue={JSON.stringify(d.pricing)} />
         <input type="hidden" name="stavba_okno_od" value={d.organizace.stavba.oknoOd ?? ""} />
         <input type="hidden" name="stavba_okno_do" value={d.organizace.stavba.oknoDo ?? ""} />
         <input type="hidden" name="bourani_okno_od" value={d.organizace.bourani.oknoOd ?? ""} />
@@ -390,7 +428,21 @@ export default function PoptavkaObjednavkaDraftEditor({
           />
         </Section>
 
-        <Section step={4} title="Technické podmínky">
+        <Section step={4} title="Extra položky a cenový výpočet">
+          <PoptavkaObjednavkaPricingPanel
+            sestava={sestava}
+            extraPolozky={extraPolozky}
+            pricing={pricing}
+            pricingCatalog={pricingCatalog}
+            sestavaKatalog={sestavaKatalog}
+            setupsByOblast={setupsByOblast}
+            disabled={disabled}
+            onExtraPolozkyChange={setExtraPolozky}
+            onPricingChange={setPricing}
+          />
+        </Section>
+
+        <Section step={5} title="Technické podmínky">
           <PoptavkaTechnickePodminkyStep
             technika={technika}
             onChange={setTechnika}
@@ -416,7 +468,7 @@ export default function PoptavkaObjednavkaDraftEditor({
           />
         </Section>
 
-        <Section step={5} title="Interní termíny a organizace">
+        <Section step={6} title="Interní termíny a organizace">
           <p className="text-sm text-slate-400">
             Domluvené termíny realizace doplňují klientskou poptávku a po potvrzení se propíší do zakázky.
           </p>
@@ -453,7 +505,7 @@ export default function PoptavkaObjednavkaDraftEditor({
           </div>
         </Section>
 
-        <Section step={6} title="Smluvní podmínky">
+        <Section step={7} title="Smluvní podmínky">
           <p className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">
             Text smluvních podmínek je pracovní šablona a musí projít právní kontrolou.
           </p>
@@ -469,7 +521,7 @@ export default function PoptavkaObjednavkaDraftEditor({
           </div>
         </Section>
 
-        <Section step={7} title="Text pro klienta">
+        <Section step={8} title="Text pro klienta">
           <div className="space-y-4">
             <TextArea label="Úvodní text" name="text_uvod" defaultValue={d.textProKlienta.uvod} rows={3} disabled={disabled} />
             <TextArea label="Závěrečný text" name="text_zaver" defaultValue={d.textProKlienta.zaver} rows={3} disabled={disabled} />

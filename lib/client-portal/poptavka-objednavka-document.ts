@@ -46,6 +46,7 @@ export function draftDataToDocumentData(
     sestavaSummary: hasSestavaKonfigurace(draft.sestava)
       ? formatSestavaSummaryText(draft.sestava, DEFAULT_PORTAL_SESTAVA_KATALOG)
       : draft.technickePlneni.poznamkaKTechnice,
+    pricing: draft.pricing,
   };
 }
 
@@ -74,6 +75,7 @@ export function snapshotToDocumentData(
     sestavaSummary: hasSestavaKonfigurace(sestava)
       ? formatSestavaSummaryText(sestava, DEFAULT_PORTAL_SESTAVA_KATALOG)
       : snapshot.technickePlneni.poznamkaKTechnice,
+    pricing: snapshot.pricing ?? null,
   };
 }
 
