@@ -29,8 +29,8 @@ import {
   canAcceptPoptavkaForProcessing,
   canInternalActOnPoptavka,
   canInternalApproveForConvert,
+  canInitialSendPoptavkaBindingOrder,
   canOpenObjednavkaEditor,
-  canSendPoptavkaBindingOrder,
   loadInternalPoptavkaDetail,
 } from "@/lib/client-portal/poptavka-internal-server";
 import { loadPoptavkaObjednavkaDraft } from "@/lib/client-portal/poptavka-objednavka-draft-server";
@@ -183,11 +183,11 @@ export default async function ZakazkyPoptavkaDetailPage({
             detail.stav === "objednavka_odeslana" ? (
               <Link
                 href={`/zakazky/poptavky/${id}/objednavka`}
-                className="rounded-xl border border-blue-500/40 px-4 py-2 text-sm font-semibold text-blue-100 hover:bg-blue-950/40"
+                className="rounded-xl border border-emerald-500/40 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-950/40"
               >
-                Závazná objednávka odeslána
+                Znovu odeslat e-mail klientovi
               </Link>
-            ) : canSendPoptavkaBindingOrder(detail.stav) ? (
+            ) : canInitialSendPoptavkaBindingOrder(detail.stav) ? (
               <Link
                 href={`/zakazky/poptavky/${id}/objednavka`}
                 className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"

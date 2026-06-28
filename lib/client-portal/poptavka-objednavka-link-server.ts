@@ -26,8 +26,12 @@ import {
   type PoptavkaObjednavkaSnapshot,
 } from "@/lib/client-portal/poptavka-objednavka-types";
 import type { PoptavkaStav } from "@/lib/client-portal/types";
-import { SEND_BINDING_ORDER_POPTAVKA_STAVY } from "@/lib/client-portal/types";
-import { canSendPoptavkaBindingOrder } from "@/lib/client-portal/poptavka-internal-server";
+import { INITIAL_SEND_BINDING_ORDER_POPTAVKA_STAVY } from "@/lib/client-portal/types";
+import {
+  canInitialSendPoptavkaBindingOrder,
+  canResendPoptavkaBindingOrder,
+} from "@/lib/client-portal/poptavka-internal-server";
+import { resolvePoptavkaClientEmail } from "@/lib/client-portal/poptavka-email-server";
 import {
   notifyInternalTeamAboutPoptavkaObjednavkaConfirmed,
   notifyInternalTeamAboutPoptavkaObjednavkaRejected,
@@ -458,7 +462,7 @@ export async function createPoptavkaObjednavkaLinkFromDraft(
   }
 
   const poptavkaStav = poptavka.stav as PoptavkaStav;
-  if (!canSendPoptavkaBindingOrder(poptavkaStav)) {
+  if (!canInitialSendPoptavkaBindingOrder(poptavkaStav)) {
     return { ok: false, error: "invalid_state" };
   }
 
@@ -584,7 +588,7 @@ export async function createPoptavkaObjednavkaLinkFromDraft(
       objednavka_odeslana_user_id: preparedByUserId,
     })
     .eq("poptavka_id", poptavkaId)
-    .in("stav", [...SEND_BINDING_ORDER_POPTAVKA_STAVY])
+    .in("stav", [...INITIAL_SEND_BINDING_ORDER_POPTAVKA_STAVY])
     .select("poptavka_id")
     .maybeSingle();
 
@@ -593,6 +597,150 @@ export async function createPoptavkaObjednavkaLinkFromDraft(
       ok: false,
       error: "poptavka_update_failed",
       message: poptavkaUpdateError?.message ?? "poptavka_not_updated",
+    };
+  }
+
+  const relativeUrl = buildPoptavkaObjednavkaRelativeUrl(rawToken);
+  const publicUrl = options.baseUrl?.trim()
+    ? buildPoptavkaObjednavkaUrl(options.baseUrl, rawToken)
+    : null;
+
+  return {
+    ok: true,
+    link: mapLinkRow(inserted as Record<string, unknown>),
+    rawToken,
+    relativeUrl,
+    publicUrl,
+    snapshot,
+  };
+}
+
+export type ResendPoptavkaObjednavkaLinkOptions = {
+  emailTo?: string | null;
+  baseUrl?: string | null;
+  expiresInDays?: number;
+};
+
+export type ResendPoptavkaObjednavkaLinkResult =
+  | {
+      ok: true;
+      link: PoptavkaObjednavkaLinkRow;
+      rawToken: string;
+      relativeUrl: string;
+      publicUrl: string | null;
+      snapshot: PoptavkaObjednavkaSnapshot;
+    }
+  | {
+      ok: false;
+      error:
+        | "poptavka_not_found"
+        | "invalid_state"
+        | "no_active_link"
+        | "invalid_snapshot"
+        | "revoke_failed"
+        | "link_insert_failed";
+      message?: string;
+    };
+
+/**
+ * Znovuodeslání závazné objednávky — nový token/link se stejným snapshotem.
+ * Staré nezrušené linky se revokují; stav poptávky zůstává `objednavka_odeslana`.
+ */
+export async function resendPoptavkaObjednavkaLink(
+  supabase: SupabaseClient,
+  poptavkaId: string,
+  options: ResendPoptavkaObjednavkaLinkOptions = {}
+): Promise<ResendPoptavkaObjednavkaLinkResult> {
+  const expiresInDays = options.expiresInDays ?? DEFAULT_EXPIRES_IN_DAYS;
+
+  const { data: poptavka, error: poptavkaError } = await supabase
+    .from("poptavky")
+    .select("poptavka_id, cislo_poptavky, klient_id, kontakt_email, stav")
+    .eq("poptavka_id", poptavkaId)
+    .maybeSingle();
+
+  if (poptavkaError) {
+    return { ok: false, error: "poptavka_not_found", message: poptavkaError.message };
+  }
+
+  if (!poptavka) {
+    return { ok: false, error: "poptavka_not_found" };
+  }
+
+  const poptavkaStav = poptavka.stav as PoptavkaStav;
+  if (!canResendPoptavkaBindingOrder(poptavkaStav)) {
+    return { ok: false, error: "invalid_state" };
+  }
+
+  const activeLink = await loadActivePoptavkaObjednavkaLink(supabase, poptavkaId);
+  if (!activeLink) {
+    return { ok: false, error: "no_active_link" };
+  }
+
+  if (isPoptavkaObjednavkaLinkConfirmed(activeLink) || isPoptavkaObjednavkaLinkRejected(activeLink)) {
+    return { ok: false, error: "no_active_link" };
+  }
+
+  const baseSnapshot = activeLink.objednavka_snapshot;
+  if (!baseSnapshot) {
+    return { ok: false, error: "invalid_snapshot" };
+  }
+
+  const emailTo = await resolveEmailTo(
+    supabase,
+    poptavka,
+    baseSnapshot.klient?.email ?? null,
+    options.emailTo
+  );
+
+  const now = new Date().toISOString();
+  const linkId = randomUUID();
+  const rawToken = createClientApprovalToken();
+  const tokenHash = hashClientApprovalToken(rawToken);
+  const expiresAt = addDaysIso(expiresInDays);
+
+  const snapshot: PoptavkaObjednavkaSnapshot = {
+    ...baseSnapshot,
+    frozenAt: now,
+    meta: {
+      ...baseSnapshot.meta,
+      linkId,
+    },
+  };
+
+  const { error: revokeError } = await supabase
+    .from("poptavka_objednavka_links")
+    .update({ revoked_at: now, stav: "revoked" })
+    .eq("poptavka_id", poptavkaId)
+    .is("revoked_at", null);
+
+  if (revokeError) {
+    return { ok: false, error: "revoke_failed", message: revokeError.message };
+  }
+
+  const { data: inserted, error: insertError } = await supabase
+    .from("poptavka_objednavka_links")
+    .insert({
+      link_id: linkId,
+      poptavka_id: poptavkaId,
+      klient_id: poptavka.klient_id,
+      draft_id: activeLink.draft_id,
+      token_hash: tokenHash,
+      email_to: emailTo,
+      stav: "vytvoren",
+      objednavka_snapshot: snapshot,
+      objednavka_snapshot_created_at: now,
+      snapshot_schema_version: activeLink.snapshot_schema_version,
+      expires_at: expiresAt,
+    })
+    .select(LINK_ROW_SELECT)
+    .single();
+
+  if (insertError || !inserted) {
+    return {
+      ok: false,
+      error: "link_insert_failed",
+      message: insertError?.message ?? "insert_failed",
     };
   }
 

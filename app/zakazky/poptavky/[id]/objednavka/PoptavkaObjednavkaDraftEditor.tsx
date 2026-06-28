@@ -547,7 +547,7 @@ export default function PoptavkaObjednavkaDraftEditor({
               onClick={handleSendClick}
               className="rounded-xl border border-emerald-500/50 bg-emerald-950/40 px-5 py-2.5 text-sm font-semibold text-emerald-100 hover:bg-emerald-900/50"
             >
-              Odeslat klientovi ke schválení
+              Odeslat závaznou objednávku klientovi
             </button>
           ) : null}
           <Link href={`/zakazky/poptavky/${poptavkaId}/objednavka/nahled`} className="rounded-xl border border-slate-600 px-5 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-900">

@@ -7,6 +7,10 @@ import {
   loadPoptavkaObjednavkaDraft,
   resolveDraftFotkaSignedUrls,
 } from "@/lib/client-portal/poptavka-objednavka-draft-server";
+import {
+  loadActivePoptavkaObjednavkaLink,
+} from "@/lib/client-portal/poptavka-objednavka-link-server";
+import { snapshotToDocumentData } from "@/lib/client-portal/poptavka-objednavka-document";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function PoptavkaObjednavkaNahledPage({
@@ -28,9 +32,10 @@ export default async function PoptavkaObjednavkaNahledPage({
     );
   }
 
-  const [detail, draft] = await Promise.all([
+  const [detail, draft, activeLink] = await Promise.all([
     loadInternalPoptavkaDetail(supabase, poptavkaId),
     loadPoptavkaObjednavkaDraft(supabase, poptavkaId),
+    loadActivePoptavkaObjednavkaLink(supabase, poptavkaId),
   ]);
 
   if (!detail) {
@@ -46,6 +51,45 @@ export default async function PoptavkaObjednavkaNahledPage({
   }
 
   if (!draft) {
+    if (activeLink?.objednavka_snapshot) {
+      const documentData = snapshotToDocumentData(activeLink.objednavka_snapshot);
+      return (
+        <div className="min-h-screen bg-slate-950 p-6">
+          <div className="mx-auto max-w-5xl space-y-6">
+            <div className="rounded-2xl border border-blue-500/30 bg-blue-950/30 px-4 py-3 text-sm text-blue-100">
+              <p className="font-semibold">Náhled odeslané objednávky</p>
+              <p className="mt-1 text-blue-200/90">
+                Zobrazení odpovídá snapshotu odeslané verze pro klienta.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <Link
+                  href={`/zakazky/poptavky/${poptavkaId}/objednavka`}
+                  className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+                >
+                  ← Zpět
+                </Link>
+                <Link
+                  href={`/zakazky/poptavky/${poptavkaId}`}
+                  className="rounded-lg border border-blue-400/40 px-3 py-1.5 text-xs font-semibold text-blue-100 hover:bg-blue-900/40"
+                >
+                  Detail poptávky
+                </Link>
+              </div>
+            </div>
+
+            <PoptavkaObjednavkaDocument
+              data={documentData}
+              meta={{
+                cisloPoptavky: detail.cislo_poptavky,
+                nazevAkce: detail.misto_nazev,
+                upravenoOprotiPoptavce: activeLink.objednavka_snapshot.meta.upravenoOprotiPoptavce,
+              }}
+            />
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-4 p-6">
         <h1 className="text-3xl font-bold text-white">Náhled objednávky</h1>

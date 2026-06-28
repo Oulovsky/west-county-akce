@@ -57,10 +57,21 @@ export const PENDING_INTERNAL_POPTAVKA_STAVY: readonly PoptavkaStav[] = [
   "objednavka_potvrzena",
 ] as const;
 
-/** Stavy, ze kterých smí interní tým odeslat závaznou objednávku klientovi. */
-export const SEND_BINDING_ORDER_POPTAVKA_STAVY: readonly PoptavkaStav[] = [
+/** První odeslání závazné objednávky z aktivního draftu. */
+export const INITIAL_SEND_BINDING_ORDER_POPTAVKA_STAVY: readonly PoptavkaStav[] = [
   "prijata_k_reseni",
   "objednavka_odmitnuta",
+] as const;
+
+/** Znovuodeslání e-mailu / nový token se stejným snapshotem (bez úpravy draftu). */
+export const RESEND_BINDING_ORDER_POPTAVKA_STAVY: readonly PoptavkaStav[] = [
+  "objednavka_odeslana",
+] as const;
+
+/** Stavy, ze kterých smí interní tým odeslat nebo znovu odeslat závaznou objednávku. */
+export const SEND_BINDING_ORDER_POPTAVKA_STAVY: readonly PoptavkaStav[] = [
+  ...INITIAL_SEND_BINDING_ORDER_POPTAVKA_STAVY,
+  ...RESEND_BINDING_ORDER_POPTAVKA_STAVY,
 ] as const;
 
 /** Stavy, ve kterých smí interní tým otevřít editor / náhled závazné objednávky. */

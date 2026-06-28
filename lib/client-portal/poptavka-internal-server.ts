@@ -6,8 +6,10 @@ import {
   INTERNAL_INBOX_POPTAVKA_STAVY,
   INTERNAL_ACTIVE_POPTAVKA_STAVY,
   INTERNAL_REJECTED_POPTAVKA_STAVY,
+  INITIAL_SEND_BINDING_ORDER_POPTAVKA_STAVY,
   OPEN_OBJEDNAVKA_EDITOR_POPTAVKA_STAVY,
   PENDING_INTERNAL_POPTAVKA_STAVY,
+  RESEND_BINDING_ORDER_POPTAVKA_STAVY,
   SEND_BINDING_ORDER_POPTAVKA_STAVY,
 } from "@/lib/client-portal/types";
 import { loadPoptavkaFotkyWithUrls } from "@/lib/client-portal/poptavka-fotky-server";
@@ -197,7 +199,17 @@ export function canInternalFirstReactOnPoptavka(stav: PoptavkaStav) {
   return stav === "odeslana" || stav === "v_revizi";
 }
 
-/** Odeslání závazné objednávky klientovi. */
+/** První odeslání závazné objednávky z draftu. */
+export function canInitialSendPoptavkaBindingOrder(stav: PoptavkaStav) {
+  return (INITIAL_SEND_BINDING_ORDER_POPTAVKA_STAVY as readonly string[]).includes(stav);
+}
+
+/** Znovuodeslání e-mailu s novým tokenem (poptávka už čeká na klienta). */
+export function canResendPoptavkaBindingOrder(stav: PoptavkaStav) {
+  return (RESEND_BINDING_ORDER_POPTAVKA_STAVY as readonly string[]).includes(stav);
+}
+
+/** Odeslání nebo znovuodeslání závazné objednávky klientovi. */
 export function canSendPoptavkaBindingOrder(stav: PoptavkaStav) {
   return (SEND_BINDING_ORDER_POPTAVKA_STAVY as readonly string[]).includes(stav);
 }
