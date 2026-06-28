@@ -105,6 +105,8 @@ type Props = {
   obsahPolozkaUpdaters?: SpravaObsahPolozkaUpdaters;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   readOnly?: boolean;
+  /** Režim výběru položky (modal) — klik na název řádku přepne checkbox. */
+  selectionMode?: boolean;
 };
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
@@ -151,6 +153,7 @@ export function SkladTableRow({
   obsahPolozkaUpdaters,
   onKeyDown,
   readOnly = false,
+  selectionMode = false,
 }: Props) {
   const [isExpanded, setIsExpanded] = useState(autoExpandKusy);
   const {
@@ -166,6 +169,25 @@ export function SkladTableRow({
     item.nazev,
     caseMetadata.polozkaFlags
   );
+
+  function togglePolozkaSelection() {
+    togglePolozka({
+      skladovaPolozkaId: item.skladova_polozka_id,
+      nazev: item.nazev,
+      isCase: polozkaJeCase,
+      celkemKDispozici: toNumber(item.celkem_k_dispozici),
+    });
+  }
+
+  function handleNazevCellClick() {
+    if (selectionMode && !isEditing) {
+      togglePolozkaSelection();
+      return;
+    }
+    if (!readOnly && !isEditing) {
+      beginEdit("nazev");
+    }
+  }
 
   useLayoutEffect(() => {
     if (autoExpandKusy) {
@@ -223,21 +245,14 @@ export function SkladTableRow({
     >
       <div className={rowClass} style={spravaTableGridStyle}>
         <div
-          onClick={() => !readOnly && !isEditing && beginEdit("nazev")}
+          onClick={handleNazevCellClick}
           className={SPRAVA_TABLE_CELL_STICKY}
-          style={{ cursor: readOnly || isEditing ? "default" : "pointer" }}
+          style={{ cursor: selectionMode || (!readOnly && !isEditing) ? "pointer" : "default" }}
         >
           <input
             type="checkbox"
             checked={polozkaChecked}
-            onChange={() =>
-              togglePolozka({
-                skladovaPolozkaId: item.skladova_polozka_id,
-                nazev: item.nazev,
-                isCase: polozkaJeCase,
-                celkemKDispozici: toNumber(item.celkem_k_dispozici),
-              })
-            }
+            onChange={togglePolozkaSelection}
             onClick={(e) => e.stopPropagation()}
             aria-label={`Vybrat položku ${item.nazev}`}
             className="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-950 text-blue-600 focus:ring-blue-500/50"

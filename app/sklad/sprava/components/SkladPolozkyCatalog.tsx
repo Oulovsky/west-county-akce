@@ -87,7 +87,7 @@ type RpcErrorResult = {
 type AddItemMode = "polozka" | "case";
 
 type SkladPolozkyCatalogProps = {
-  catalogMode?: "sprava" | "setup";
+  catalogMode?: "sprava" | "setup" | "select";
   setupId?: string;
 };
 
@@ -96,6 +96,7 @@ export function SkladPolozkyCatalog({
   setupId,
 }: SkladPolozkyCatalogProps = {}) {
   const isSetupMode = catalogMode === "setup";
+  const isSelectMode = catalogMode === "select";
   const searchParams = useSearchParams();
   const obsahPolozkaId = searchParams.get("obsahPolozka");
   const openCaseKusId = searchParams.get("obsahCase");
@@ -104,7 +105,7 @@ export function SkladPolozkyCatalog({
   const obsahError = searchParams.get("obsahError");
 
   const { nav } = useProfileRole();
-  const readOnly = isSetupMode ? true : nav.readOnly;
+  const readOnly = isSetupMode || isSelectMode ? true : nav.readOnly;
   const { caseMetadata, setCaseMetadata, registerAfterKusMutation } =
     useSpravaKusSelection();
   const [items, setItems] = useState<SkladPolozkaRow[]>([]);
@@ -1438,7 +1439,7 @@ export function SkladPolozkyCatalog({
 
   return (
     <div className="flex flex-col gap-3">
-      {isSetupMode ? null : <SkladPolozkyHeader readOnly={readOnly} />}
+      {isSetupMode || isSelectMode ? null : <SkladPolozkyHeader readOnly={readOnly} />}
 
       <SpravaInventoryFilters
           filters={inventoryFilters}
@@ -1451,7 +1452,7 @@ export function SkladPolozkyCatalog({
 
         {isSetupMode && setupId ? (
           <SetupSelectionPanel setupId={setupId} />
-        ) : (
+        ) : isSelectMode ? null : (
           <>
             <SpravaActionPanel
               onAddPolozka={() => openAddModal("polozka")}
@@ -1558,6 +1559,7 @@ export function SkladPolozkyCatalog({
                 handleKeyDown(e, i.skladova_polozka_id);
               }}
               readOnly={readOnly}
+              selectionMode={isSelectMode}
               />
             );
           })}

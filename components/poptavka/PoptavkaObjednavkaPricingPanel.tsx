@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import SkladovaPolozkaPicker, {
-  skladPolozkaPricingRowToPickerItem,
-} from "@/components/sklad/SkladovaPolozkaPicker";
+import SkladPolozkySelectDialog, {
+  type SkladPolozkaSelectResult,
+} from "@/components/sklad/SkladPolozkySelectDialog";
 import { formatMoneyCzk } from "@/lib/payments";
 import { applyDiscountFromTargetPrice, formatDiscountPercent } from "@/lib/pricing/discount";
 import {
@@ -47,17 +47,11 @@ export default function PoptavkaObjednavkaPricingPanel({
   onExtraPolozkyChange,
   onPricingChange,
 }: Props) {
-  const [selectedPolozkaId, setSelectedPolozkaId] = useState<string | null>(null);
-  const [newQty, setNewQty] = useState("1");
+  const [skladDialogOpen, setSkladDialogOpen] = useState(false);
   const [pozadovanaInput, setPozadovanaInput] = useState(
     pricing?.pozadovanaCena != null ? String(Math.round(pricing.pozadovanaCena)) : ""
   );
   const [discountError, setDiscountError] = useState<string | null>(null);
-
-  const pickerItems = useMemo(
-    () => pricingCatalog.skladPolozky.map(skladPolozkaPricingRowToPickerItem),
-    [pricingCatalog.skladPolozky]
-  );
 
   const setupy = useMemo(
     () => deriveObjednavkaSetupyFromSestava(sestava, sestavaKatalog, setupsByOblast),
@@ -86,40 +80,31 @@ export default function PoptavkaObjednavkaPricingPanel({
     [setupy, extraPolozky, pricingCatalog, pricing]
   );
 
-  function handleAddExtra() {
-    if (!selectedPolozkaId) return;
-    const qty = Math.max(0.01, Number(newQty.replace(",", ".")) || 1);
-    const meta = pricingCatalog.skladPolozky.find(
-      (row) => row.skladovaPolozkaId === selectedPolozkaId
-    );
-    if (!meta) return;
-
+  function addExtraPolozka(result: SkladPolozkaSelectResult) {
     const existing = extraPolozky.find(
-      (row) => row.skladovaPolozkaId === meta.skladovaPolozkaId
+      (row) => row.skladovaPolozkaId === result.skladovaPolozkaId
     );
 
     if (existing) {
       onExtraPolozkyChange(
         extraPolozky.map((item) =>
-          item.skladovaPolozkaId === meta.skladovaPolozkaId
-            ? { ...item, mnozstvi: item.mnozstvi + qty }
+          item.skladovaPolozkaId === result.skladovaPolozkaId
+            ? { ...item, mnozstvi: item.mnozstvi + result.mnozstvi }
             : item
         )
       );
-    } else {
-      onExtraPolozkyChange([
-        ...extraPolozky,
-        {
-          localId: newLocalId(),
-          skladovaPolozkaId: meta.skladovaPolozkaId,
-          nazev: meta.nazev,
-          mnozstvi: qty,
-        },
-      ]);
+      return;
     }
 
-    setSelectedPolozkaId(null);
-    setNewQty("1");
+    onExtraPolozkyChange([
+      ...extraPolozky,
+      {
+        localId: newLocalId(),
+        skladovaPolozkaId: result.skladovaPolozkaId,
+        nazev: result.nazev,
+        mnozstvi: result.mnozstvi,
+      },
+    ]);
   }
 
   function handleApplyDiscount() {
@@ -153,36 +138,24 @@ export default function PoptavkaObjednavkaPricingPanel({
           „Cena pro akce“ (fakturacni_cena) ve skladu.
         </p>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-[1fr_120px_auto] md:items-end">
-          <SkladovaPolozkaPicker
-            items={pickerItems}
-            value={selectedPolozkaId}
-            onChange={(item) => setSelectedPolozkaId(item?.id ?? null)}
-            disabled={disabled}
-            placeholder="Vyberte skladovou položku…"
-            label="Skladová položka"
-          />
-          <label className="block space-y-1">
-            <span className="text-xs text-slate-400">Množství</span>
-            <input
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={newQty}
-              onChange={(e) => setNewQty(e.target.value)}
-              disabled={disabled}
-              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60"
-            />
-          </label>
+        <div className="mt-4">
           <button
             type="button"
-            onClick={handleAddExtra}
-            disabled={disabled || !selectedPolozkaId}
-            className="rounded-xl border border-indigo-500/40 bg-indigo-950/40 px-4 py-2 text-sm font-semibold text-indigo-100 hover:bg-indigo-900/50 disabled:opacity-50"
+            onClick={() => setSkladDialogOpen(true)}
+            disabled={disabled}
+            className="rounded-xl border border-indigo-500/40 bg-indigo-950/40 px-4 py-2.5 text-sm font-semibold text-indigo-100 hover:bg-indigo-900/50 disabled:opacity-50"
           >
-            Přidat položku
+            Vybrat ze skladu
           </button>
         </div>
+
+        <SkladPolozkySelectDialog
+          open={skladDialogOpen}
+          onClose={() => setSkladDialogOpen(false)}
+          onConfirm={addExtraPolozka}
+          disabled={disabled}
+          confirmLabel="Přidat do extra položek"
+        />
 
         {extraPolozky.length === 0 ? (
           <p className="mt-4 text-sm text-slate-500">Zatím nejsou přidané extra položky.</p>
