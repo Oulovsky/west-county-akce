@@ -1,13 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import SkladovaPolozkaPicker, {
+  skladPolozkaPricingRowToPickerItem,
+} from "@/components/sklad/SkladovaPolozkaPicker";
 import { formatMoneyCzk } from "@/lib/payments";
 import { applyDiscountFromTargetPrice, formatDiscountPercent } from "@/lib/pricing/discount";
 import {
   buildObjednavkaPricingBlock,
   computeObjednavkaPricingBreakdown,
   deriveObjednavkaSetupyFromSestava,
-  formatSkladPolozkaPricingLabel,
   type ObjednavkaPricingCatalog,
 } from "@/lib/client-portal/poptavka-objednavka-pricing";
 import type {
@@ -45,12 +47,17 @@ export default function PoptavkaObjednavkaPricingPanel({
   onExtraPolozkyChange,
   onPricingChange,
 }: Props) {
-  const [selectedPolozkaId, setSelectedPolozkaId] = useState("");
+  const [selectedPolozkaId, setSelectedPolozkaId] = useState<string | null>(null);
   const [newQty, setNewQty] = useState("1");
   const [pozadovanaInput, setPozadovanaInput] = useState(
     pricing?.pozadovanaCena != null ? String(Math.round(pricing.pozadovanaCena)) : ""
   );
   const [discountError, setDiscountError] = useState<string | null>(null);
+
+  const pickerItems = useMemo(
+    () => pricingCatalog.skladPolozky.map(skladPolozkaPricingRowToPickerItem),
+    [pricingCatalog.skladPolozky]
+  );
 
   const setupy = useMemo(
     () => deriveObjednavkaSetupyFromSestava(sestava, sestavaKatalog, setupsByOblast),
@@ -87,16 +94,31 @@ export default function PoptavkaObjednavkaPricingPanel({
     );
     if (!meta) return;
 
-    onExtraPolozkyChange([
-      ...extraPolozky,
-      {
-        localId: newLocalId(),
-        skladovaPolozkaId: meta.skladovaPolozkaId,
-        nazev: meta.nazev,
-        mnozstvi: qty,
-      },
-    ]);
-    setSelectedPolozkaId("");
+    const existing = extraPolozky.find(
+      (row) => row.skladovaPolozkaId === meta.skladovaPolozkaId
+    );
+
+    if (existing) {
+      onExtraPolozkyChange(
+        extraPolozky.map((item) =>
+          item.skladovaPolozkaId === meta.skladovaPolozkaId
+            ? { ...item, mnozstvi: item.mnozstvi + qty }
+            : item
+        )
+      );
+    } else {
+      onExtraPolozkyChange([
+        ...extraPolozky,
+        {
+          localId: newLocalId(),
+          skladovaPolozkaId: meta.skladovaPolozkaId,
+          nazev: meta.nazev,
+          mnozstvi: qty,
+        },
+      ]);
+    }
+
+    setSelectedPolozkaId(null);
     setNewQty("1");
   }
 
@@ -132,22 +154,14 @@ export default function PoptavkaObjednavkaPricingPanel({
         </p>
 
         <div className="mt-4 grid gap-3 md:grid-cols-[1fr_120px_auto] md:items-end">
-          <label className="block space-y-1">
-            <span className="text-xs text-slate-400">Skladová položka</span>
-            <select
-              value={selectedPolozkaId}
-              onChange={(e) => setSelectedPolozkaId(e.target.value)}
-              disabled={disabled}
-              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60"
-            >
-              <option value="">— vyberte položku —</option>
-              {pricingCatalog.skladPolozky.map((row) => (
-                <option key={row.skladovaPolozkaId} value={row.skladovaPolozkaId}>
-                  {formatSkladPolozkaPricingLabel(row)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SkladovaPolozkaPicker
+            items={pickerItems}
+            value={selectedPolozkaId}
+            onChange={(item) => setSelectedPolozkaId(item?.id ?? null)}
+            disabled={disabled}
+            placeholder="Vyberte skladovou položku…"
+            label="Skladová položka"
+          />
           <label className="block space-y-1">
             <span className="text-xs text-slate-400">Množství</span>
             <input

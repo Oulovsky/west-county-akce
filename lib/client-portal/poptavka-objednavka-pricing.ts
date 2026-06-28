@@ -17,6 +17,9 @@ export type SkladPolozkaPricingRow = {
   fakturacniCena: number | null;
   okruhNazev: string | null;
   kategorieNazev: string | null;
+  podkategorieNazev: string | null;
+  pozice: string | null;
+  celkemKDispozici: number | null;
 };
 
 export type SetupPolozkaPricingRow = {

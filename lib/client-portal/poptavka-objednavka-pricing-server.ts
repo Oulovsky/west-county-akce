@@ -24,11 +24,12 @@ export async function loadObjednavkaPricingCatalog(
     { data: setupyRaw, error: setupyError },
     { data: blokyRaw, error: blokyError },
     { data: kategorieRaw, error: kategorieError },
+    { data: podkategorieRaw, error: podkategorieError },
   ] = await Promise.all([
     supabase
       .from("skladove_polozky")
       .select(
-        "skladova_polozka_id, nazev, fakturacni_cena, aktivni, sklad_blok_id, kategorie_techniky_id"
+        "skladova_polozka_id, nazev, fakturacni_cena, aktivni, sklad_blok_id, kategorie_techniky_id, podkategorie_techniky_id, pozice, celkem_k_dispozici"
       )
       .eq("aktivni", true)
       .order("nazev", { ascending: true }),
@@ -42,6 +43,7 @@ export async function loadObjednavkaPricingCatalog(
       .eq("aktivni", true),
     supabase.from("sklad_bloky").select("sklad_blok_id, nazev"),
     supabase.from("kategorie_techniky").select("kategorie_techniky_id, nazev"),
+    supabase.from("podkategorie_techniky").select("podkategorie_techniky_id, nazev"),
   ]);
 
   const error =
@@ -49,7 +51,8 @@ export async function loadObjednavkaPricingCatalog(
     setupPolozkyError?.message ??
     setupyError?.message ??
     blokyError?.message ??
-    kategorieError?.message;
+    kategorieError?.message ??
+    podkategorieError?.message;
 
   if (error) {
     throw new Error(error);
@@ -61,6 +64,12 @@ export async function loadObjednavkaPricingCatalog(
   const kategorieMap = new Map(
     (kategorieRaw ?? []).map((row) => [row.kategorie_techniky_id as string, row.nazev as string])
   );
+  const podkategorieMap = new Map(
+    (podkategorieRaw ?? []).map((row) => [
+      row.podkategorie_techniky_id as string,
+      row.nazev as string,
+    ])
+  );
 
   const skladPolozky = (polozkyRaw ?? []).map((row) => ({
     skladovaPolozkaId: row.skladova_polozka_id as string,
@@ -70,6 +79,11 @@ export async function loadObjednavkaPricingCatalog(
     kategorieNazev: row.kategorie_techniky_id
       ? kategorieMap.get(row.kategorie_techniky_id as string) ?? null
       : null,
+    podkategorieNazev: row.podkategorie_techniky_id
+      ? podkategorieMap.get(row.podkategorie_techniky_id as string) ?? null
+      : null,
+    pozice: row.pozice != null ? String(row.pozice).trim() || null : null,
+    celkemKDispozici: toOptionalPrice(row.celkem_k_dispozici),
   }));
 
   const setupPolozkyBySetupId: ObjednavkaPricingCatalog["setupPolozkyBySetupId"] = {};
