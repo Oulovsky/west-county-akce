@@ -6,14 +6,18 @@ import type { InternalPoptavkaDetail } from "@/lib/client-portal/poptavka-intern
 import { DEFAULT_PORTAL_SESTAVA_KATALOG } from "@/lib/client-portal/sestava-konfigurator-katalog";
 import {
   EMPTY_SESTAVA_KONFIGURATOR,
+  enrichSestavaForEditor,
   formatSestavaSummaryText,
+  hasSestavaKonfigurace,
   migrateLegacySestavaState,
   sestavaFromOdpovediExtra,
 } from "@/lib/client-portal/sestava-konfigurator-form";
 import { syncPoptavkaObjednavkaDraftDerived } from "@/lib/client-portal/poptavka-objednavka-draft-sync";
+import type { PortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-types";
 import {
   EMPTY_POPTAVKA_TECHNIKA,
   technikaFromRecord,
+  type PoptavkaTechnikaFormValues,
 } from "@/lib/client-portal/poptavka-technika-form";
 import { loadInternalPoptavkaDetail } from "@/lib/client-portal/poptavka-internal-server";
 import { cloneVychoziSmluvniPodminky } from "@/lib/client-portal/poptavka-objednavka-sablony";
@@ -82,6 +86,7 @@ export { cloneVychoziSmluvniPodminky, VYCHOZI_SMLOUVNI_PODMINKY } from "@/lib/cl
 export type BuildPoptavkaObjednavkaDraftOptions = {
   fakturacniFirmaId?: string | null;
   fakturacniFirma?: FakturacniFirma | null;
+  katalog?: PortalSestavaKatalog;
 };
 
 type MistoKonaniRow = {
@@ -685,10 +690,66 @@ export function buildPoptavkaObjednavkaDraftFromDetail(
   draft.smluvniPodminky = cloneVychoziSmluvniPodminky();
   draft.textProKlienta = emptyTextProKlienta();
   draft.fotky = buildFotkyDraft(detail);
-  draft.sestava = sestavaFromOdpovediExtra(technika?.odpovedi_extra ?? {});
+  draft.sestava = enrichSestavaForEditor(
+    options.katalog ?? DEFAULT_PORTAL_SESTAVA_KATALOG,
+    sestavaFromOdpovediExtra(technika?.odpovedi_extra ?? {})
+  );
   draft.technika = technikaFromRecord(technika);
 
-  return syncPoptavkaObjednavkaDraftDerived(normalizePoptavkaObjednavkaDraftData(draft));
+  return syncPoptavkaObjednavkaDraftDerived(
+    normalizePoptavkaObjednavkaDraftData(draft),
+    { katalog: options.katalog ?? DEFAULT_PORTAL_SESTAVA_KATALOG }
+  );
+}
+
+function hasTechnikaKonfigurace(values: PoptavkaTechnikaFormValues): boolean {
+  if (
+    values.technicke_rezim === "klient_vyplni" ||
+    values.technicke_rezim === "vyjezd_technika"
+  ) {
+    return true;
+  }
+  return [
+    values.prijezd_poznamka,
+    values.elektro_pripojka,
+    values.elektro_zdroj_typ,
+    values.misto_stage,
+    values.misto_foh,
+    values.rozvadece_poznamka,
+    values.dalsi_poznamky,
+  ].some((value) => Boolean(String(value ?? "").trim()));
+}
+
+/** Draft má prioritu; prázdné konfigurace se doplní z klientské poptávky. */
+export function hydrateObjednavkaDraftKonfigurace(
+  draftData: PoptavkaObjednavkaDraftData,
+  detail: InternalPoptavkaDetail,
+  katalog: PortalSestavaKatalog = DEFAULT_PORTAL_SESTAVA_KATALOG
+): PoptavkaObjednavkaDraftData {
+  const poptavkaSestava = enrichSestavaForEditor(
+    katalog,
+    sestavaFromOdpovediExtra(detail.technicke_udaje?.odpovedi_extra ?? {})
+  );
+  const poptavkaTechnika = technikaFromRecord(detail.technicke_udaje);
+
+  const sestavaSource = hasSestavaKonfigurace(draftData.sestava)
+    ? draftData.sestava
+    : poptavkaSestava;
+
+  const technikaSource = hasTechnikaKonfigurace(draftData.technika)
+    ? draftData.technika
+    : hasTechnikaKonfigurace(poptavkaTechnika)
+      ? poptavkaTechnika
+      : draftData.technika;
+
+  return syncPoptavkaObjednavkaDraftDerived(
+    normalizePoptavkaObjednavkaDraftData({
+      ...draftData,
+      sestava: enrichSestavaForEditor(katalog, sestavaSource),
+      technika: technikaSource,
+    }),
+    { katalog }
+  );
 }
 
 async function loadMistoKonani(

@@ -13,6 +13,7 @@ import {
   createOrLoadPoptavkaObjednavkaDraft,
   loadPoptavkaObjednavkaDraft,
 } from "@/lib/client-portal/poptavka-objednavka-draft-server";
+import { hydrateObjednavkaDraftKonfigurace } from "@/lib/client-portal/poptavka-objednavka-draft";
 import { buildPoptavkaObjednavkaUrl, countPoptavkaObjednavkaLinkVersions } from "@/lib/client-portal/poptavka-objednavka-link-server";
 import { loadPortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-server";
 import { loadPortalSetups } from "@/lib/client-portal/poptavka-server";
@@ -140,13 +141,30 @@ export default async function PoptavkaObjednavkaEditorPage({
     !orderSent &&
     canSendPoptavkaBindingOrder(detail.stav);
 
-  const draft = readOnly
+  const [sestavaKatalog, setupsByOblast] = await Promise.all([
+    loadPortalSestavaKatalog(),
+    loadPortalSetups(supabase),
+  ]);
+
+  const draftRaw = readOnly
     ? await loadPoptavkaObjednavkaDraft(supabase, poptavkaId)
     : shouldAutoCreateDraft
       ? await createOrLoadPoptavkaObjednavkaDraft(supabase, poptavkaId, {
           preparedByUserId: undefined,
+          katalog: sestavaKatalog,
         })
       : await loadPoptavkaObjednavkaDraft(supabase, poptavkaId);
+
+  const draft = draftRaw
+    ? {
+        ...draftRaw,
+        draftData: hydrateObjednavkaDraftKonfigurace(
+          draftRaw.draftData,
+          detail,
+          sestavaKatalog
+        ),
+      }
+    : null;
 
   if (!draft && orderSent) {
     const orderEmailStatus = resolvedSearchParams?.email ?? null;
@@ -263,10 +281,6 @@ export default async function PoptavkaObjednavkaEditorPage({
   const canSend = canSendPoptavkaBindingOrder(detail.stav);
   const odeslanychVerzi = await countPoptavkaObjednavkaLinkVersions(supabase, poptavkaId);
   const dalsiNavrhVerze = odeslanychVerzi + 1;
-  const [sestavaKatalog, setupsByOblast] = await Promise.all([
-    loadPortalSestavaKatalog(),
-    loadPortalSetups(supabase),
-  ]);
 
   return (
     <div className="space-y-6 p-6">

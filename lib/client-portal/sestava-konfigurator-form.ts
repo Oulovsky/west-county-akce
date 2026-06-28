@@ -234,7 +234,100 @@ export function migrateLegacySestavaState(
     }
   }
 
+  const legacyPraktikablIds: Record<string, string> = {
+    maly: "2x2",
+    standard: "2x3",
+    velky: "2x3",
+  };
+  if (base.praktikabl_variant_id && legacyPraktikablIds[base.praktikabl_variant_id]) {
+    base.praktikabl_variant_id = legacyPraktikablIds[base.praktikabl_variant_id];
+  }
+
   return normalizeSestavaStateForSave(base);
+}
+
+/** Doplní setup/variant ID pro dropdowny editoru z katalogu a rozměrů. */
+export function enrichSestavaForEditor(
+  katalog: PortalSestavaKatalog,
+  state: SestavaKonfiguratorState
+): SestavaKonfiguratorState {
+  let next = migrateLegacySestavaState(state);
+
+  if (next.stage_typ === "zastresene") {
+    if (next.zastreseni_setup_id && !next.zastreseni_variant_id) {
+      const variant = katalog.zastreseni_varianty.find(
+        (row) => row.setup_id === next.zastreseni_setup_id
+      );
+      if (variant) {
+        next = {
+          ...next,
+          zastreseni_variant_id: variant.id,
+          zastreseni_sirka_m: variant.sirka_m,
+          zastreseni_hloubka_m: variant.hloubka_m,
+        };
+      }
+    }
+
+    if (!next.zastreseni_variant_id && next.zastreseni_sirka_m && next.zastreseni_hloubka_m) {
+      const variant = katalog.zastreseni_varianty.find(
+        (row) =>
+          row.sirka_m === next.zastreseni_sirka_m && row.hloubka_m === next.zastreseni_hloubka_m
+      );
+      if (variant) {
+        next = {
+          ...next,
+          zastreseni_variant_id: variant.id,
+          zastreseni_setup_id: variant.setup_id ?? next.zastreseni_setup_id,
+        };
+      }
+    }
+
+    if (next.podium_variant_id) {
+      const podium = findPodiumVariant(katalog, next.podium_variant_id);
+      if (podium) {
+        next = {
+          ...next,
+          podium_sirka_m: podium.sirka_m,
+          podium_hloubka_m: podium.hloubka_m,
+          podium_setup_id: podium.setup_id ?? next.podium_setup_id,
+        };
+      }
+    } else if (next.podium_sirka_m && next.podium_hloubka_m && next.zastreseni_variant_id) {
+      const podium = resolvePodiumVariantFromDimensions(
+        katalog,
+        next.zastreseni_variant_id,
+        next.podium_sirka_m,
+        next.podium_hloubka_m
+      );
+      if (podium) {
+        next = {
+          ...next,
+          podium_variant_id: podium.id,
+          podium_setup_id: podium.setup_id ?? null,
+        };
+      }
+    }
+  }
+
+  if (next.stage_typ === "mobilni" && !next.mobilni_setup_id) {
+    next = { ...next, mobilni_setup_id: katalog.mobilni_stage.setup_id ?? null };
+  }
+
+  if (next.zvuk_preset && !next.zvuk_setup_id) {
+    const preset = katalog.zvuk_presety.find((row) => row.kod === next.zvuk_preset);
+    if (preset?.setup_id) {
+      next = { ...next, zvuk_setup_id: preset.setup_id };
+    }
+  }
+
+  if (next.svetla_preset && !next.svetla_setup_id) {
+    const preset = katalog.svetla_presety.find((row) => row.kod === next.svetla_preset);
+    if (preset?.setup_id) {
+      next = { ...next, svetla_setup_id: preset.setup_id };
+    }
+  }
+
+  return normalizeSestavaStateForSave(next);
 }
 
 export function normalizeSestavaStateForSave(

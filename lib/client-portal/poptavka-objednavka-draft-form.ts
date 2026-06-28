@@ -40,8 +40,10 @@ export function mergeObjednavkaDraftFromFormData(
   return {
     draftVersion: POPTAVKA_OBJEDNAVKA_DRAFT_DATA_VERSION,
     upravenoOprotiPoptavce: formData.get("upraveno_oproti_poptavce") === "on",
-    sestava: parseSestavaKonfiguratorJson(sestavaJson || null) ?? base.sestava,
-    technika: parseTechnikaJson(technikaJson || null) ?? base.technika,
+    sestava: sestavaJson.trim()
+      ? parseSestavaKonfiguratorJson(sestavaJson)
+      : base.sestava,
+    technika: technikaJson.trim() ? parseTechnikaJson(technikaJson) ?? base.technika : base.technika,
     klient: {
       nazev: nullableField(formData, "klient_nazev"),
       ico: nullableField(formData, "klient_ico"),

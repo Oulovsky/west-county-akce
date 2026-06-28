@@ -273,8 +273,11 @@ export default function PoptavkaObjednavkaDraftEditor({
       <form action={savePoptavkaObjednavkaDraftAction} onSubmit={handleSubmit} className="space-y-6">
         <input type="hidden" name="draft_id" value={draftId} />
         <input type="hidden" name="poptavka_id" value={poptavkaId} />
-        <input type="hidden" name="sestava_konfigurator_json" defaultValue="" />
-        <input type="hidden" name="technika_json" defaultValue="" />
+        <input type="hidden" name="sestava_konfigurator_json" defaultValue={JSON.stringify(normalizeSestavaStateForSave(d.sestava))} />
+        <input type="hidden" name="technika_json" defaultValue={JSON.stringify({
+          ...technika,
+          technicke_rezim: uiRezim ?? technika.technicke_rezim,
+        })} />
         <input type="hidden" name="stavba_okno_od" value={d.organizace.stavba.oknoOd ?? ""} />
         <input type="hidden" name="stavba_okno_do" value={d.organizace.stavba.oknoDo ?? ""} />
         <input type="hidden" name="bourani_okno_od" value={d.organizace.bourani.oknoOd ?? ""} />
