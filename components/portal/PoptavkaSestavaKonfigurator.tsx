@@ -14,6 +14,7 @@ import {
   buildSvetlaVolby,
   buildZastreseniVolby,
   buildZvukVolby,
+  resolveZastreseniVolbaValue,
 } from "@/lib/client-portal/sestava-konfigurator-options";
 import {
   findPodiumVariant,
@@ -159,8 +160,10 @@ export default function PoptavkaSestavaKonfigurator({
   const kotveniOptions = getAvailableKotveniTypy(state.kotveni_povrch);
   const schodyVolba = schodyVolbaFromState(state);
 
-  const zastreseniSelectedValue =
-    state.zastreseni_setup_id ?? state.zastreseni_variant_id ?? "";
+  const zastreseniSelectedValue = useMemo(
+    () => resolveZastreseniVolbaValue(zastreseniVolby, state, katalog),
+    [zastreseniVolby, state, katalog]
+  );
   const zvukSelectedValue = state.zvuk_setup_id ?? state.zvuk_preset ?? "";
   const svetlaSelectedValue = state.svetla_setup_id ?? state.svetla_preset ?? "";
 

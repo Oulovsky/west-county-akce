@@ -11,6 +11,7 @@ import {
   resolvePodiumVariantFromDimensions,
   sanitizePodiumForZastreseni,
 } from "@/lib/client-portal/sestava-konfigurator-katalog";
+import { normalizeKonfiguratorMatchText } from "@/lib/client-portal/sestava-konfigurator-options";
 import { computeNakladkaFromSestava } from "@/lib/client-portal/sestava-nakladka";
 import type {
   KotveniPovrch,
@@ -246,6 +247,44 @@ export function migrateLegacySestavaState(
   return normalizeSestavaStateForSave(base);
 }
 
+function resolveZastreseniVariantForEditor(
+  katalog: PortalSestavaKatalog,
+  state: Pick<
+    SestavaKonfiguratorState,
+    "zastreseni_setup_id" | "zastreseni_variant_id" | "zastreseni_sirka_m" | "zastreseni_hloubka_m"
+  >
+) {
+  if (state.zastreseni_variant_id) {
+    const byId = findZastreseniVariant(katalog, state.zastreseni_variant_id);
+    if (byId) return byId;
+
+    const normId = normalizeKonfiguratorMatchText(state.zastreseni_variant_id);
+    const byNormId = katalog.zastreseni_varianty.find(
+      (row) =>
+        normalizeKonfiguratorMatchText(row.id) === normId ||
+        normalizeKonfiguratorMatchText(row.nazev) === normId
+    );
+    if (byNormId) return byNormId;
+  }
+
+  if (state.zastreseni_setup_id) {
+    const bySetup = katalog.zastreseni_varianty.find(
+      (row) => row.setup_id === state.zastreseni_setup_id
+    );
+    if (bySetup) return bySetup;
+  }
+
+  if (state.zastreseni_sirka_m && state.zastreseni_hloubka_m) {
+    const byDims = katalog.zastreseni_varianty.find(
+      (row) =>
+        row.sirka_m === state.zastreseni_sirka_m && row.hloubka_m === state.zastreseni_hloubka_m
+    );
+    if (byDims) return byDims;
+  }
+
+  return null;
+}
+
 /** Doplní setup/variant ID pro dropdowny editoru z katalogu a rozměrů. */
 export function enrichSestavaForEditor(
   katalog: PortalSestavaKatalog,
@@ -254,32 +293,15 @@ export function enrichSestavaForEditor(
   let next = migrateLegacySestavaState(state);
 
   if (next.stage_typ === "zastresene") {
-    if (next.zastreseni_setup_id && !next.zastreseni_variant_id) {
-      const variant = katalog.zastreseni_varianty.find(
-        (row) => row.setup_id === next.zastreseni_setup_id
-      );
-      if (variant) {
-        next = {
-          ...next,
-          zastreseni_variant_id: variant.id,
-          zastreseni_sirka_m: variant.sirka_m,
-          zastreseni_hloubka_m: variant.hloubka_m,
-        };
-      }
-    }
-
-    if (!next.zastreseni_variant_id && next.zastreseni_sirka_m && next.zastreseni_hloubka_m) {
-      const variant = katalog.zastreseni_varianty.find(
-        (row) =>
-          row.sirka_m === next.zastreseni_sirka_m && row.hloubka_m === next.zastreseni_hloubka_m
-      );
-      if (variant) {
-        next = {
-          ...next,
-          zastreseni_variant_id: variant.id,
-          zastreseni_setup_id: variant.setup_id ?? next.zastreseni_setup_id,
-        };
-      }
+    const resolved = resolveZastreseniVariantForEditor(katalog, next);
+    if (resolved) {
+      next = {
+        ...next,
+        zastreseni_variant_id: resolved.id,
+        zastreseni_setup_id: resolved.setup_id ?? next.zastreseni_setup_id,
+        zastreseni_sirka_m: next.zastreseni_sirka_m ?? resolved.sirka_m,
+        zastreseni_hloubka_m: next.zastreseni_hloubka_m ?? resolved.hloubka_m,
+      };
     }
 
     if (next.podium_variant_id) {

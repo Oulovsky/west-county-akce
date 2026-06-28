@@ -1,6 +1,26 @@
 import type { PortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-types";
+import type { SestavaKonfiguratorState } from "@/lib/client-portal/sestava-konfigurator-types";
 import type { PortalSetupsByOblast } from "@/lib/client-portal/poptavka-server";
 import type { PortalSetup } from "@/lib/client-portal/types";
+
+/** Normalizace pro porovnání názvů a rozměrů (trim, lowercase, ×/x, mezery, volitelné „m“). */
+export function normalizeKonfiguratorMatchText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/×/g, "x")
+    .replace(/\*/g, "x")
+    .replace(/\s*m\b/g, "")
+    .trim();
+}
+
+function dimensionsInText(text: string, sirka: number, hloubka: number): boolean {
+  const norm = normalizeKonfiguratorMatchText(text).replace(/\s/g, "");
+  const compact = `${sirka}x${hloubka}`;
+  return norm.includes(compact);
+}
 
 /** Obchodní volba v konfigurátoru — klient vidí label, interně může mít setup_id. */
 export type KonfiguratorVolba = {
@@ -118,4 +138,92 @@ export function buildSvetlaVolby(
 
 export function isSetupBackedVolba(volba: KonfiguratorVolba | undefined): boolean {
   return Boolean(volba?.setup_id);
+}
+
+/**
+ * Hodnota `<select>` pro zastřešení — musí odpovídat `KonfiguratorVolba.value`
+ * (setup_id ze skladu, nebo catalog variant id).
+ */
+export function resolveZastreseniVolbaValue(
+  volby: KonfiguratorVolba[],
+  state: Pick<
+    SestavaKonfiguratorState,
+    "zastreseni_setup_id" | "zastreseni_variant_id" | "zastreseni_sirka_m" | "zastreseni_hloubka_m"
+  >,
+  katalog: PortalSestavaKatalog
+): string {
+  if (volby.length === 0) return "";
+
+  const pick = (predicate: (volba: KonfiguratorVolba) => boolean): string => {
+    const found = volby.find(predicate);
+    return found?.value ?? "";
+  };
+
+  if (state.zastreseni_setup_id) {
+    const bySetup = pick(
+      (volba) =>
+        volba.value === state.zastreseni_setup_id || volba.setup_id === state.zastreseni_setup_id
+    );
+    if (bySetup) return bySetup;
+  }
+
+  if (state.zastreseni_variant_id) {
+    const byVariantValue = pick((volba) => volba.value === state.zastreseni_variant_id);
+    if (byVariantValue) return byVariantValue;
+
+    const variant = katalog.zastreseni_varianty.find((row) => row.id === state.zastreseni_variant_id);
+    if (variant) {
+      if (variant.setup_id) {
+        const byCatalogSetup = pick(
+          (volba) => volba.setup_id === variant.setup_id || volba.value === variant.setup_id
+        );
+        if (byCatalogSetup) return byCatalogSetup;
+      }
+
+      const byNazev = pick(
+        (volba) =>
+          normalizeKonfiguratorMatchText(volba.label) ===
+          normalizeKonfiguratorMatchText(variant.nazev)
+      );
+      if (byNazev) return byNazev;
+
+      const byDims = pick((volba) =>
+        dimensionsInText(volba.label, variant.sirka_m, variant.hloubka_m)
+      );
+      if (byDims) return byDims;
+    }
+
+    const normVariantId = normalizeKonfiguratorMatchText(state.zastreseni_variant_id);
+    const byNormId = pick(
+      (volba) => normalizeKonfiguratorMatchText(volba.label).includes(normVariantId)
+    );
+    if (byNormId) return byNormId;
+  }
+
+  if (state.zastreseni_sirka_m && state.zastreseni_hloubka_m) {
+    const { zastreseni_sirka_m: sirka, zastreseni_hloubka_m: hloubka } = state;
+    const byDims = pick((volba) => dimensionsInText(volba.label, sirka, hloubka));
+    if (byDims) return byDims;
+
+    const catalogVariant = katalog.zastreseni_varianty.find(
+      (row) => row.sirka_m === sirka && row.hloubka_m === hloubka
+    );
+    if (catalogVariant) {
+      if (catalogVariant.setup_id) {
+        const bySetup = pick(
+          (volba) =>
+            volba.setup_id === catalogVariant.setup_id || volba.value === catalogVariant.setup_id
+        );
+        if (bySetup) return bySetup;
+      }
+      const byName = pick(
+        (volba) =>
+          normalizeKonfiguratorMatchText(volba.label) ===
+          normalizeKonfiguratorMatchText(catalogVariant.nazev)
+      );
+      if (byName) return byName;
+    }
+  }
+
+  return "";
 }

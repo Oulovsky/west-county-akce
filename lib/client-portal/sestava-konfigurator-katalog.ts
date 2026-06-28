@@ -1,6 +1,7 @@
 import type { PortalSestavaKatalog, SestavaKonfiguratorState } from "@/lib/client-portal/sestava-konfigurator-types";
 import type { KotveniTyp } from "@/lib/client-portal/sestava-konfigurator-types";
 import { ZASTRESENI_CISTA_VYSKA_OPTIONS } from "@/lib/client-portal/sestava-konfigurator-types";
+import { normalizeKonfiguratorMatchText } from "@/lib/client-portal/sestava-konfigurator-options";
 
 /** Standardní LED panel 1 × 0,5 m = 0,5 m². */
 export const STANDARD_LED_PANEL_PLOCHA_M2 = 0.5;
@@ -333,9 +334,11 @@ export function findZastreseniVariantByNazev(
   nazev: string | null | undefined
 ) {
   if (!nazev?.trim()) return null;
-  const lower = nazev.toLowerCase().trim();
+  const norm = normalizeKonfiguratorMatchText(nazev);
   return (
-    katalog.zastreseni_varianty.find((row) => row.nazev.toLowerCase().trim() === lower) ?? null
+    katalog.zastreseni_varianty.find(
+      (row) => normalizeKonfiguratorMatchText(row.nazev) === norm
+    ) ?? null
   );
 }
 
