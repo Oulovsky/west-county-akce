@@ -11,6 +11,7 @@ import {
 } from "@/lib/client-portal/sestava-konfigurator-katalog";
 import { normalizeKonfiguratorMatchText } from "@/lib/client-portal/sestava-konfigurator-options";
 import { computeNakladkaFromSestava } from "@/lib/client-portal/sestava-nakladka";
+import { calculateIbcWaterRequirement } from "@/lib/client-portal/sestava-ibc-water";
 import type {
   KotveniPovrch,
   KotveniTyp,
@@ -623,7 +624,12 @@ export function validateSestavaKonfigurator(
   }
 
   if (state.kotveni_typ === "ibc_boxy") {
-    warnings.push("Pořadatel musí zajistit vodu pro naplnění zátěže.");
+    const ibcWater = calculateIbcWaterRequirement(state);
+    if (ibcWater) {
+      warnings.push(ibcWater.text);
+    } else {
+      warnings.push("Pořadatel musí zajistit vodu pro naplnění zátěže.");
+    }
   }
 
   const anyLed = anyLedWallBlockEnabled(state);
@@ -881,6 +887,11 @@ export function buildSestavaSummaryLines(
     lines.push(
       `Kotvení: ${KOTVENI_LABELS[migrated.kotveni_typ]} (${KOTVENI_POVRCH_LABELS[migrated.kotveni_povrch]})`
     );
+  }
+
+  const ibcWater = calculateIbcWaterRequirement(migrated);
+  if (ibcWater) {
+    lines.push(ibcWater.summaryLine);
   }
 
   lines.push(formatLedBlockLine("LED wall na pódiu", migrated.led_podium));

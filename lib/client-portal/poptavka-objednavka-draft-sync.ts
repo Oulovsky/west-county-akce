@@ -3,6 +3,7 @@ import {
   formatSestavaSummaryText,
   normalizeSestavaStateForSave,
 } from "@/lib/client-portal/sestava-konfigurator-form";
+import { calculateIbcWaterRequirement } from "@/lib/client-portal/sestava-ibc-water";
 import type { PortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-types";
 import type { PoptavkaObjednavkaDraftData, PoptavkaObjednavkaTriVolba } from "@/lib/client-portal/poptavka-objednavka-types";
 import type { SestavaKonfiguratorState } from "@/lib/client-portal/sestava-konfigurator-types";
@@ -20,9 +21,12 @@ function toOptionalNumber(value: string): number | null {
 }
 
 function kotveniTextFromSestava(sestava: SestavaKonfiguratorState): string | null {
+  const ibcWater = calculateIbcWaterRequirement(sestava);
   const typ =
     sestava.kotveni_typ === "ibc_boxy"
-      ? "Zátěž IBC boxy (pořadatel zajistí vodu)"
+      ? ibcWater
+        ? `Zátěž IBC boxy — ${ibcWater.liters} l vody`
+        : "Zátěž IBC boxy (pořadatel zajistí vodu)"
       : sestava.kotveni_typ === "zatloukane"
         ? "Zatloukané kotvení"
         : null;

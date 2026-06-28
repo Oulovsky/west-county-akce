@@ -12,6 +12,7 @@ import {
   migrateLegacySestavaState,
   sestavaFromOdpovediExtra,
 } from "@/lib/client-portal/sestava-konfigurator-form";
+import { calculateIbcWaterRequirement } from "@/lib/client-portal/sestava-ibc-water";
 import { syncPoptavkaObjednavkaDraftDerived } from "@/lib/client-portal/poptavka-objednavka-draft-sync";
 import type { PortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-types";
 import {
@@ -323,7 +324,12 @@ function buildMistoBlock(
   const sestavaSummary = formatSestavaSummaryText(sestava, DEFAULT_PORTAL_SESTAVA_KATALOG);
   const kotveniText =
     sestava.kotveni_typ === "ibc_boxy"
-      ? "Zátěž IBC boxy (pořadatel zajistí vodu)"
+      ? (() => {
+          const ibcWater = calculateIbcWaterRequirement(sestava);
+          return ibcWater
+            ? `Zátěž IBC boxy — ${ibcWater.liters} l vody`
+            : "Zátěž IBC boxy (pořadatel zajistí vodu)";
+        })()
       : sestava.kotveni_typ === "zatloukane"
         ? "Zatloukané kotvení"
         : null;

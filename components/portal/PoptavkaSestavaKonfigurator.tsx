@@ -9,6 +9,7 @@ import {
   schodyVolbaFromState,
   validateSestavaKonfigurator,
 } from "@/lib/client-portal/sestava-konfigurator-form";
+import { calculateIbcWaterRequirement } from "@/lib/client-portal/sestava-ibc-water";
 import {
   buildMobilniStageVolby,
   buildSvetlaVolby,
@@ -164,6 +165,7 @@ export default function PoptavkaSestavaKonfigurator({
     () => resolveZastreseniVolbaValue(zastreseniVolby, state, katalog),
     [zastreseniVolby, state, katalog]
   );
+  const ibcWaterRequirement = useMemo(() => calculateIbcWaterRequirement(state), [state]);
   const zvukSelectedValue = state.zvuk_setup_id ?? state.zvuk_preset ?? "";
   const svetlaSelectedValue = state.svetla_setup_id ?? state.svetla_preset ?? "";
 
@@ -655,7 +657,11 @@ export default function PoptavkaSestavaKonfigurator({
                       ))}
                   </div>
                 ) : null}
-                {state.kotveni_typ === "ibc_boxy" ? (
+                {ibcWaterRequirement ? (
+                  <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                    {ibcWaterRequirement.text}
+                  </p>
+                ) : state.kotveni_typ === "ibc_boxy" ? (
                   <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
                     Pořadatel musí zajistit vodu pro naplnění zátěže.
                   </p>
