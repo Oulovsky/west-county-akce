@@ -489,3 +489,60 @@ export function parseTechnikaJson(raw: string | null | undefined): PoptavkaTechn
     return null;
   }
 }
+
+export function hasTechnikaFormContent(values: PoptavkaTechnikaFormValues): boolean {
+  if (values.technicke_rezim) return true;
+
+  const ignoreKeys = new Set<keyof PoptavkaTechnikaFormValues>([
+    "technicke_rezim",
+    "technicke_potvrzeni_odpovednosti",
+    "technicke_potvrzeni_vyjezd_ceny",
+    "pozadovan_vyjezd_technika",
+    "technik_vyjezd_preferuje_telefon",
+    "technik_vyjezd_preferuje_email",
+    "technik_vyjezd_potvrzeni_fakturace",
+    "prijezd_dodavka_35t",
+    "prijezd_nakladni_12t",
+  ]);
+
+  for (const [key, value] of Object.entries(values) as [keyof PoptavkaTechnikaFormValues, unknown][]) {
+    if (ignoreKeys.has(key)) continue;
+    if (typeof value === "boolean" && value) return true;
+    if (typeof value === "string" && value.trim()) return true;
+  }
+
+  return false;
+}
+
+export function buildTechnikaSummaryBrief(values: PoptavkaTechnikaFormValues): string {
+  const parts: string[] = [];
+
+  if (values.technicke_rezim === "vyjezd_technika") {
+    parts.push("Vyjezd technika");
+  } else if (values.technicke_rezim === "klient_vyplni") {
+    parts.push("Klient vyplní");
+  }
+
+  const zdroj = formatElektroZdrojTyp(values.elektro_zdroj_typ);
+  if (zdroj !== "—") parts.push(zdroj);
+
+  const pripojky = formatPripojkyCounts(values);
+  if (pripojky) parts.push(pripojky);
+
+  if (values.elektro_vzdalenost_m.trim()) {
+    parts.push(`Přípojka ${values.elektro_vzdalenost_m.trim()} m`);
+  }
+
+  const prijezd = formatPrijezdAzKeStage(values);
+  if (prijezd) parts.push(prijezd);
+
+  if (values.pristup_pro_techniku.trim()) {
+    parts.push(values.pristup_pro_techniku.trim());
+  }
+
+  if (values.omezeni_prujezdu.trim()) {
+    parts.push(`Omezení: ${values.omezeni_prujezdu.trim()}`);
+  }
+
+  return parts.slice(0, 5).join(" · ") || "Technické údaje";
+}

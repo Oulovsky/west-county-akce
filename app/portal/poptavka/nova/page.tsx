@@ -3,7 +3,13 @@ import PoptavkaFormClient from "@/components/portal/PoptavkaFormClient";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
 import type { PoptavkaPrefill } from "@/lib/client-portal/poptavka-form";
 import { loadClientMistaKonaniForPortal, loadClientMistaKnowHowByIdForPortal } from "@/lib/client-portal/client-mista-server";
+import { loadClientPreviousTechnikaProfileOptionsForPortal } from "@/lib/client-portal/client-previous-technika-profiles-server";
 import { loadClientPreviousSetupOptionsForPortal } from "@/lib/client-portal/client-previous-technika-server";
+import {
+  loadClientPlacePresetsForPortal,
+  loadClientSetupPresetsForPortal,
+  loadClientTechnicalPresetsForPortal,
+} from "@/lib/client-portal/client-presets-server";
 import { loadPortalSetups } from "@/lib/client-portal/poptavka-server";
 import { loadPortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-server";
 import { createClient } from "@/lib/supabase/server";
@@ -50,11 +56,25 @@ export default async function PortalNovaPoptavkaPage({
     redirect("/portal/prihlaseni?next=/portal/poptavka/nova");
   }
 
-  const [prefill, setupsByOblast, savedMista, previousSetupOptions, sestavaKatalog] = await Promise.all([
+  const [
+    prefill,
+    setupsByOblast,
+    savedMista,
+    previousSetupOptions,
+    previousTechnikaProfileOptions,
+    savedPlacePresets,
+    savedTechnicalPresets,
+    savedSetupPresets,
+    sestavaKatalog,
+  ] = await Promise.all([
     loadPoptavkaPrefill(supabase, session),
     loadPortalSetups(supabase),
     loadClientMistaKonaniForPortal(supabase),
     loadClientPreviousSetupOptionsForPortal(supabase),
+    loadClientPreviousTechnikaProfileOptionsForPortal(supabase),
+    loadClientPlacePresetsForPortal(supabase),
+    loadClientTechnicalPresetsForPortal(supabase),
+    loadClientSetupPresetsForPortal(supabase),
     loadPortalSestavaKatalog(),
   ]);
 
@@ -71,6 +91,10 @@ export default async function PortalNovaPoptavkaPage({
       savedMista={savedMista}
       savedMistaKnowHowById={savedMistaKnowHowById}
       previousSetupOptions={previousSetupOptions}
+      previousTechnikaProfileOptions={previousTechnikaProfileOptions}
+      savedPlacePresets={savedPlacePresets}
+      savedTechnicalPresets={savedTechnicalPresets}
+      savedSetupPresets={savedSetupPresets}
       sestavaKatalog={sestavaKatalog}
       errorCode={resolvedSearchParams?.error ?? null}
     />

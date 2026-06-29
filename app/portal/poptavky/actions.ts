@@ -56,6 +56,14 @@ import {
   createPoptavkaStepTimer,
   summarizePhotoUploadBatch,
 } from "@/lib/client-portal/poptavka-server-timing";
+import {
+  copyTechnikaPhotosFromSourcePoptavka,
+  deletePoptavkaDraftForClient,
+} from "@/lib/client-portal/poptavka-fotky-server";
+import {
+  saveSetupPresetFromPoptavkaHistory,
+  saveTechnicalPresetFromPoptavkaHistory,
+} from "@/lib/client-portal/client-presets-server";
 
 function redirectWithError(path: string, error: string): never {
   redirect(`${path}?error=${encodeURIComponent(error)}`);
@@ -953,4 +961,91 @@ export async function orderTechnikVyjezdAndSubmitPoptavkaAction(formData: FormDa
   await finalizePoptavkaSubmission(supabase, poptavkaId, detail, {
     redirectQuery: "technik_vyjezd_ordered=1",
   });
+}
+
+export async function deletePoptavkaDraftAction(poptavkaId: string) {
+  const id = poptavkaId.trim();
+  if (!id) {
+    redirect("/portal/poptavky?error=not_found");
+  }
+
+  const supabase = await createClient();
+  await requireActiveClientPortalSession(supabase);
+
+  try {
+    await deletePoptavkaDraftForClient(supabase, id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "delete_failed";
+    redirect(`/portal/poptavka/${id}?error=${encodeURIComponent(message)}`);
+  }
+
+  revalidatePath("/portal/poptavky");
+  redirect("/portal/poptavky");
+}
+
+export async function copyHistoricalTechnikaPhotosAction(input: {
+  targetPoptavkaId: string;
+  sourcePoptavkaId: string;
+}) {
+  const targetPoptavkaId = input.targetPoptavkaId.trim();
+  const sourcePoptavkaId = input.sourcePoptavkaId.trim();
+
+  if (!targetPoptavkaId || !sourcePoptavkaId) {
+    return { ok: false as const, message: "Chybí identifikátor poptávky." };
+  }
+
+  const supabase = await createClient();
+  await requireActiveClientPortalSession(supabase);
+
+  try {
+    const fotky = await copyTechnikaPhotosFromSourcePoptavka(
+      supabase,
+      targetPoptavkaId,
+      sourcePoptavkaId
+    );
+    return { ok: true as const, fotky };
+  } catch (error) {
+    return {
+      ok: false as const,
+      message: error instanceof Error ? error.message : "Kopírování fotek se nezdařilo.",
+    };
+  }
+}
+
+export async function saveHistorySetupPresetAction(input: {
+  poptavkaId: string;
+  nazev?: string;
+}) {
+  const supabase = await createClient();
+  await requireActiveClientPortalSession(supabase);
+
+  try {
+    await saveSetupPresetFromPoptavkaHistory(supabase, input);
+    revalidatePath("/portal/presety");
+    return { ok: true as const };
+  } catch (error) {
+    return {
+      ok: false as const,
+      message: error instanceof Error ? error.message : "Uložení presetu se nezdařilo.",
+    };
+  }
+}
+
+export async function saveHistoryTechnicalPresetAction(input: {
+  poptavkaId: string;
+  nazev?: string;
+}) {
+  const supabase = await createClient();
+  await requireActiveClientPortalSession(supabase);
+
+  try {
+    await saveTechnicalPresetFromPoptavkaHistory(supabase, input);
+    revalidatePath("/portal/presety");
+    return { ok: true as const };
+  } catch (error) {
+    return {
+      ok: false as const,
+      message: error instanceof Error ? error.message : "Uložení presetu se nezdařilo.",
+    };
+  }
 }

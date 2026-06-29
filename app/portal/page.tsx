@@ -125,6 +125,12 @@ export default async function PortalPage({
             Moje zakázky
           </Link>
           <Link
+            href="/portal/presety"
+            className="rounded-xl border border-violet-500/40 bg-violet-500/15 px-4 py-3 text-sm font-semibold text-violet-50 transition hover:border-violet-500/60 hover:bg-violet-500/25"
+          >
+            Moje místa a presety
+          </Link>
+          <Link
             href="/portal/profil"
             className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-amber-500/30 hover:bg-white/[0.05]"
           >

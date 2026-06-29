@@ -21,7 +21,13 @@ import {
 } from "@/lib/client-portal/sestava-konfigurator-form";
 import { loadPortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-server";
 import { loadClientMistaKonaniForPortal, loadClientMistaKnowHowByIdForPortal } from "@/lib/client-portal/client-mista-server";
+import { loadClientPreviousTechnikaProfileOptionsForPortal } from "@/lib/client-portal/client-previous-technika-profiles-server";
 import { loadClientPreviousSetupOptionsForPortal } from "@/lib/client-portal/client-previous-technika-server";
+import {
+  loadClientPlacePresetsForPortal,
+  loadClientSetupPresetsForPortal,
+  loadClientTechnicalPresetsForPortal,
+} from "@/lib/client-portal/client-presets-server";
 import { loadPortalPoptavkaObjednavkaDecisionView } from "@/lib/client-portal/poptavka-objednavka-link-server";
 import {
   isPoptavkaEditable,
@@ -114,8 +120,17 @@ export default async function PortalPoptavkaDetailPage({
   const editable = isPoptavkaEditable(detail);
 
   if (editable) {
-    const [{ data: klient }, setupsByOblast, savedMista, previousSetupOptions, sestavaKatalog] =
-      await Promise.all([
+    const [
+      { data: klient },
+      setupsByOblast,
+      savedMista,
+      previousSetupOptions,
+      previousTechnikaProfileOptions,
+      savedPlacePresets,
+      savedTechnicalPresets,
+      savedSetupPresets,
+      sestavaKatalog,
+    ] = await Promise.all([
       supabase
         .from("klienti")
         .select("nazev, ico, email, telefon")
@@ -126,6 +141,12 @@ export default async function PortalPoptavkaDetailPage({
       loadClientPreviousSetupOptionsForPortal(supabase, {
         excludePoptavkaId: detail.poptavka_id,
       }),
+      loadClientPreviousTechnikaProfileOptionsForPortal(supabase, {
+        excludePoptavkaId: detail.poptavka_id,
+      }),
+      loadClientPlacePresetsForPortal(supabase),
+      loadClientTechnicalPresetsForPortal(supabase),
+      loadClientSetupPresetsForPortal(supabase),
       loadPortalSestavaKatalog(),
     ]);
 
@@ -153,6 +174,11 @@ export default async function PortalPoptavkaDetailPage({
         savedMista={savedMista}
         savedMistaKnowHowById={savedMistaKnowHowById}
         previousSetupOptions={previousSetupOptions}
+        previousTechnikaProfileOptions={previousTechnikaProfileOptions}
+        savedPlacePresets={savedPlacePresets}
+        savedTechnicalPresets={savedTechnicalPresets}
+        savedSetupPresets={savedSetupPresets}
+        poptavkaStav={detail.stav}
         sestavaKatalog={sestavaKatalog}
         initialSestava={sestavaFromOdpovediExtra(detail.technicke_udaje?.odpovedi_extra ?? {})}
         initialValues={{

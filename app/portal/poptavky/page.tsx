@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import PoptavkaKonceptDeleteButton from "@/components/portal/PoptavkaKonceptDeleteButton";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
 import { CLIENT_POPTAVKA_STAV_LABELS } from "@/lib/client-portal/labels";
@@ -68,9 +69,14 @@ export default async function PortalPoptavkyPage() {
                         </Link>
                       ) : null}
                     </div>
-                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
-                      {CLIENT_POPTAVKA_STAV_LABELS[row.stav]}
-                    </span>
+                    <div className="flex flex-col items-end gap-2">
+                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
+                        {CLIENT_POPTAVKA_STAV_LABELS[row.stav]}
+                      </span>
+                      {row.stav === "koncept" ? (
+                        <PoptavkaKonceptDeleteButton poptavkaId={row.poptavka_id} />
+                      ) : null}
+                    </div>
                   </div>
                 </li>
               );

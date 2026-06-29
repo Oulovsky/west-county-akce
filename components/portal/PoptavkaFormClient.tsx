@@ -6,11 +6,17 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Spinner } from "@/components/ui/SubmitButton";
 import PoptavkaSaveProgress from "@/components/portal/PoptavkaSaveProgress";
 import PoptavkaPreviousTechnikaPanel from "@/components/portal/PoptavkaPreviousTechnikaPanel";
+import PoptavkaPreviousTechnikaProfilesPanel from "@/components/portal/PoptavkaPreviousTechnikaProfilesPanel";
+import PoptavkaSavedSetupPresetsPanel from "@/components/portal/PoptavkaSavedSetupPresetsPanel";
 import { rethrowIfNextRedirect } from "@/lib/next/isRedirectError";
 import {
+  copyHistoricalTechnikaPhotosAction,
   createPoptavkaAction,
+  deletePoptavkaDraftAction,
   orderTechnikVyjezdAndSubmitPoptavkaAction,
   saveDraftPoptavkaReturnIdAction,
+  saveHistorySetupPresetAction,
+  saveHistoryTechnicalPresetAction,
   submitKlientPoptavkaAction,
   updatePoptavkaAction,
 } from "@/app/portal/poptavky/actions";
@@ -40,6 +46,7 @@ import {
 } from "@/lib/client-portal/poptavka-section-photo-state";
 import type { TechnickeRezim, TechnikaSectionPhotoKey } from "@/lib/client-portal/poptavka-technika-podminky";
 import { TECHNIKA_SECTION_PHOTOS } from "@/lib/client-portal/poptavka-technika-podminky";
+import { PREVIOUS_TECHNIKA_PROFILE_WARNING } from "@/lib/client-portal/client-previous-technika-profiles-shared";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
 import {
   appendPoptavkaFormValuesToFormData,
@@ -49,7 +56,14 @@ import {
   type PoptavkaSetupInput,
 } from "@/lib/client-portal/poptavka-form";
 import { appendTechnikaFormValuesToFormData } from "@/lib/client-portal/poptavka-technika-form";
-import { buildPlaceFieldsFromSavedMisto } from "@/lib/client-portal/client-mista-place-data";
+import { buildPlaceFieldsFromSavedMisto, buildPlaceFieldsFromPlacePreset } from "@/lib/client-portal/client-mista-place-data";
+import type { ClientPortalPreviousTechnikaProfileOption } from "@/lib/client-portal/client-previous-technika-profiles-shared";
+import type {
+  ClientPlacePreset,
+  ClientSetupPresetView,
+  ClientTechnicalPreset,
+} from "@/lib/client-portal/client-presets-shared";
+import { sortPortalHistoryByCurrentMisto } from "@/lib/client-portal/portal-history-sort";
 import type { ClientPortalPreviousTechnikaOption } from "@/lib/client-portal/client-previous-technika-shared";
 import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-shared";
 import type { ClientPortalMistoSummary, ClientPortalMistoKnowHow } from "@/lib/client-portal/client-mista-shared";
@@ -61,6 +75,7 @@ import {
 } from "@/lib/client-portal/poptavka-save-progress";
 import {
   EMPTY_POPTAVKA_TECHNIKA,
+  hasTechnikaFormContent,
   type PoptavkaTechnikaFormValues,
 } from "@/lib/client-portal/poptavka-technika-form";
 import type { PortalSetupsByOblast } from "@/lib/client-portal/poptavka-server";
@@ -111,6 +126,11 @@ type Props = {
   savedMista?: ClientPortalMistoSummary[];
   savedMistaKnowHowById?: Record<string, ClientPortalMistoKnowHow>;
   previousSetupOptions?: ClientPortalPreviousTechnikaOption[];
+  previousTechnikaProfileOptions?: ClientPortalPreviousTechnikaProfileOption[];
+  savedPlacePresets?: ClientPlacePreset[];
+  savedTechnicalPresets?: ClientTechnicalPreset[];
+  savedSetupPresets?: ClientSetupPresetView[];
+  poptavkaStav?: string;
   sestavaKatalog: PortalSestavaKatalog;
   initialSestava?: SestavaKonfiguratorState;
   initialValues?: Partial<PoptavkaFormValues> & { wizard_krok?: number | null };
@@ -168,6 +188,11 @@ function PoptavkaFormClientInner({
   savedMista = [],
   savedMistaKnowHowById = {},
   previousSetupOptions = [],
+  previousTechnikaProfileOptions = [],
+  savedPlacePresets = [],
+  savedTechnicalPresets = [],
+  savedSetupPresets = [],
+  poptavkaStav,
   sestavaKatalog,
   initialSestava,
   initialValues,
@@ -197,6 +222,10 @@ function PoptavkaFormClientInner({
   const [saveProgress, setSaveProgress] = useState<PoptavkaSaveProgressState | null>(null);
   const [saveLongRunning, setSaveLongRunning] = useState(false);
   const [workingPoptavkaId, setWorkingPoptavkaId] = useState(poptavkaId);
+  const [savingSetupPresetId, setSavingSetupPresetId] = useState<string | null>(null);
+  const [savingTechnicalPresetId, setSavingTechnicalPresetId] = useState<string | null>(null);
+  const [applyingTechnikaId, setApplyingTechnikaId] = useState<string | null>(null);
+  const [deletingDraft, setDeletingDraft] = useState(false);
   const sestavaConfiguredRef = useRef(false);
   const draftEnsurePromiseRef = useRef<Promise<string | null> | null>(null);
   const [technickeUiRezim, setTechnickeUiRezim] = useState<TechnickeRezim | null>(() => {
@@ -579,15 +608,80 @@ function PoptavkaFormClientInner({
     setMistoAdresaAuto(false);
   }
 
-  const visiblePreviousSetupOptions = useMemo(() => {
-    if (!form.misto_id) return previousSetupOptions;
-    const forMisto = previousSetupOptions.filter((row) => row.misto_id === form.misto_id);
-    return forMisto.length > 0 ? forMisto : previousSetupOptions;
-  }, [form.misto_id, previousSetupOptions]);
+  function selectSavedPlacePreset(presetId: string) {
+    const preset = savedPlacePresets.find((row) => row.preset_id === presetId);
+    if (!preset) return;
+    setForm((current) => ({
+      ...current,
+      ...buildPlaceFieldsFromPlacePreset(preset, current),
+    }));
+    setMistoAdresaAuto(false);
+  }
 
-  const previousSetupPanelTitle = form.misto_id
-    ? "Použít sestavu z minulé akce na tomto místě"
-    : "Použít sestavu z minulé akce";
+  const sortedPreviousSetupOptions = useMemo(
+    () => sortPortalHistoryByCurrentMisto(previousSetupOptions, form.misto_id),
+    [form.misto_id, previousSetupOptions]
+  );
+
+  const sortedSavedSetupPresets = useMemo(
+    () =>
+      sortPortalHistoryByCurrentMisto(
+        savedSetupPresets.map((preset) => ({
+          ...preset,
+          misto_id: preset.source_misto_id,
+        })),
+        form.misto_id
+      ),
+    [form.misto_id, savedSetupPresets]
+  );
+
+  const sortedPreviousTechnikaProfiles = useMemo(
+    () => sortPortalHistoryByCurrentMisto(previousTechnikaProfileOptions, form.misto_id),
+    [form.misto_id, previousTechnikaProfileOptions]
+  );
+
+  const sortedSavedTechnicalPresets = useMemo(
+    () =>
+      sortPortalHistoryByCurrentMisto(
+        savedTechnicalPresets.map((preset) => ({
+          ...preset,
+          misto_id: preset.source_misto_id,
+        })),
+        form.misto_id
+      ),
+    [form.misto_id, savedTechnicalPresets]
+  );
+
+  const previousSetupPanelTitle = "Použít sestavu z předchozí akce";
+
+  function applySavedSetupPreset(preset: ClientSetupPresetView) {
+    const hasExisting =
+      sestavaConfiguredRef.current ||
+      hasSestavaKonfigurace(sestava) ||
+      Object.keys(selectedSetups).length > 0;
+
+    if (hasExisting) {
+      const confirmed = window.confirm(
+        "Tímto nahradíte aktuálně vybranou sestavu. Pokračovat?"
+      );
+      if (!confirmed) return;
+    }
+
+    if (hasSestavaKonfigurace(preset.sestava_konfigurator)) {
+      setSestava(normalizeSestavaStateForSave(preset.sestava_konfigurator));
+    }
+
+    const nextSetups: Record<string, PoptavkaSetupInput> = {};
+    for (const row of preset.setupy) {
+      nextSetups[row.setup_id] = {
+        setup_id: row.setup_id,
+        mnozstvi: row.mnozstvi,
+        poznamka_klienta: row.poznamka_klienta ?? "",
+      };
+    }
+    setSelectedSetups(nextSetups);
+    sestavaConfiguredRef.current = true;
+  }
 
   function applyPreviousSetup(option: ClientPortalPreviousTechnikaOption) {
     const hasExisting =
@@ -597,7 +691,7 @@ function PoptavkaFormClientInner({
 
     if (hasExisting) {
       const confirmed = window.confirm(
-        "Přepsat aktuální konfiguraci sestavy návrhem z předchozí akce?"
+        "Tímto nahradíte aktuálně vybranou sestavu. Pokračovat?"
       );
       if (!confirmed) return;
     }
@@ -616,6 +710,171 @@ function PoptavkaFormClientInner({
     }
     setSelectedSetups(nextSetups);
     sestavaConfiguredRef.current = true;
+  }
+
+  async function handleSaveHistorySetupPreset(option: ClientPortalPreviousTechnikaOption) {
+    const nazev = window.prompt(
+      "Název uložené sestavy",
+      `${option.akce_nazev} — sestava`
+    );
+    if (nazev === null) return;
+
+    setSavingSetupPresetId(option.option_id);
+    try {
+      const result = await saveHistorySetupPresetAction({
+        poptavkaId: option.poptavka_id,
+        nazev: nazev.trim() || undefined,
+      });
+      if (!result.ok) {
+        window.alert(result.message);
+        return;
+      }
+      window.alert("Sestava byla uložena do Moje místa a presety.");
+      router.refresh();
+    } finally {
+      setSavingSetupPresetId(null);
+    }
+  }
+
+  async function mergeCopiedTechnikaPhotos(
+    fotky: Array<{
+      id: string;
+      typ: string;
+      popis: string | null;
+      original_filename: string | null;
+      signedUrl: string | null;
+    }>
+  ) {
+    if (fotky.length === 0) return;
+
+    setSectionPhotos((current) => {
+      const next = { ...current };
+      for (const section of TECHNIKA_SECTION_PHOTOS) {
+        const sectionFotky = fotky.filter((row) => row.typ === section.typ);
+        if (sectionFotky.length === 0) continue;
+
+        const existing = next[section.key] ?? emptySectionPhotoState();
+        next[section.key] = {
+          ...existing,
+          saved: [
+            ...existing.saved,
+            ...sectionFotky.map((row) => ({
+              id: row.id,
+              typ: row.typ as import("@/lib/client-portal/types").PoptavkaFotkaTyp,
+              popis: row.popis,
+              original_filename: row.original_filename,
+              signedUrl: row.signedUrl,
+            })),
+          ],
+        };
+      }
+      return next;
+    });
+  }
+
+  async function applyTechnikaValues(
+    values: PoptavkaTechnikaFormValues,
+    sourcePoptavkaId?: string
+  ) {
+    if (!window.confirm(PREVIOUS_TECHNIKA_PROFILE_WARNING)) {
+      return;
+    }
+
+    if (hasTechnikaFormContent(technika)) {
+      const confirmed = window.confirm(
+        "Přepsat aktuálně vyplněné technické údaje vybranou variantou?"
+      );
+      if (!confirmed) return;
+    }
+
+    setTechnika({
+      ...values,
+      technicke_potvrzeni_odpovednosti: false,
+      technicke_potvrzeni_vyjezd_ceny: false,
+      technik_vyjezd_potvrzeni_fakturace: false,
+    });
+
+    if (values.technicke_rezim === "klient_vyplni" || values.technicke_rezim === "vyjezd_technika") {
+      setTechnickeUiRezim(values.technicke_rezim);
+      setTechnickeUiPotvrzeno(false);
+    }
+
+    const targetId = workingPoptavkaId ?? poptavkaId;
+    if (!targetId || !sourcePoptavkaId) return;
+
+    const result = await copyHistoricalTechnikaPhotosAction({
+      targetPoptavkaId: targetId,
+      sourcePoptavkaId,
+    });
+
+    if (!result.ok) {
+      window.alert(result.message);
+      return;
+    }
+
+    await mergeCopiedTechnikaPhotos(result.fotky);
+  }
+
+  async function applyPreviousTechnikaProfile(option: ClientPortalPreviousTechnikaProfileOption) {
+    setApplyingTechnikaId(option.option_id);
+    try {
+      await applyTechnikaValues(option.technika_values, option.poptavka_id);
+    } finally {
+      setApplyingTechnikaId(null);
+    }
+  }
+
+  async function applySavedTechnicalPreset(preset: ClientTechnicalPreset) {
+    setApplyingTechnikaId(`preset:${preset.preset_id}`);
+    try {
+      await applyTechnikaValues(preset.technicke_data);
+    } finally {
+      setApplyingTechnikaId(null);
+    }
+  }
+
+  async function handleSaveHistoryTechnicalPreset(
+    option: ClientPortalPreviousTechnikaProfileOption
+  ) {
+    const nazev = window.prompt(
+      "Název technického profilu",
+      `${option.akce_nazev} — technika`
+    );
+    if (nazev === null) return;
+
+    setSavingTechnicalPresetId(option.option_id);
+    try {
+      const result = await saveHistoryTechnicalPresetAction({
+        poptavkaId: option.poptavka_id,
+        nazev: nazev.trim() || undefined,
+      });
+      if (!result.ok) {
+        window.alert(result.message);
+        return;
+      }
+      window.alert("Technický profil byl uložen do Moje místa a presety.");
+      router.refresh();
+    } finally {
+      setSavingTechnicalPresetId(null);
+    }
+  }
+
+  async function handleDeleteDraft() {
+    const id = workingPoptavkaId ?? poptavkaId;
+    if (!id) return;
+
+    const confirmed = window.confirm(
+      "Opravdu chcete smazat tento rozpracovaný koncept? Tato akce je nevratná."
+    );
+    if (!confirmed) return;
+
+    setDeletingDraft(true);
+    try {
+      await deletePoptavkaDraftAction(id);
+    } catch (error) {
+      rethrowIfNextRedirect(error);
+      setDeletingDraft(false);
+    }
   }
 
   function buildFormDataFromState(intent: PendingIntent): FormData {
@@ -1068,6 +1327,18 @@ function PoptavkaFormClientInner({
             Poptávka byla uložena jako koncept.
           </p>
         ) : null}
+        {!readOnly && poptavkaStav === "koncept" && (workingPoptavkaId ?? poptavkaId) ? (
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void handleDeleteDraft()}
+              disabled={deletingDraft}
+              className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-100 hover:bg-red-500/20 disabled:opacity-60"
+            >
+              {deletingDraft ? "Mažu koncept…" : "Smazat koncept"}
+            </button>
+          </div>
+        ) : null}
         {saved && urlPhotosFailed ? (
           <p className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
             Text konceptu byl uložen, ale fotky nejsou uložené.
@@ -1424,9 +1695,36 @@ function PoptavkaFormClientInner({
                 </select>
               </label>
 
-              {hasSavedMista ? (
+              {hasSavedMista || savedPlacePresets.length > 0 ? (
                 <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.02] p-4">
                   <span className={labelClass}>Místo konání</span>
+                  {savedPlacePresets.length > 0 ? (
+                    <label className="block space-y-2">
+                      <span className="text-sm text-slate-400">Moje uložená místa (presety)</span>
+                      <select
+                        defaultValue=""
+                        onChange={(e) => {
+                          if (e.target.value) selectSavedPlacePreset(e.target.value);
+                          e.target.value = "";
+                        }}
+                        disabled={readOnly}
+                        className={inputClass}
+                      >
+                        <option value="">Vyberte uložené místo z presetů</option>
+                        {savedPlacePresets.map((preset) => (
+                          <option key={preset.preset_id} value={preset.preset_id}>
+                            {preset.nazev}
+                            {preset.adresa_text ? ` — ${preset.adresa_text}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-slate-500">
+                        Načte se jen místo — sestava a technické podmínky zůstanou beze změny.
+                      </p>
+                    </label>
+                  ) : null}
+                  {hasSavedMista ? (
+                  <>
                   <div className="grid gap-2 sm:grid-cols-2">
                     <label className={optionCardClass}>
                       <input
@@ -1483,6 +1781,8 @@ function PoptavkaFormClientInner({
                         <PoptavkaMistoKnowHowPanel knowHow={selectedMistoKnowHow} />
                       ) : null}
                     </label>
+                  ) : null}
+                  </>
                   ) : null}
                 </div>
               ) : (
@@ -1623,11 +1923,18 @@ function PoptavkaFormClientInner({
                   sestav — schéma se aktualizuje podle vašich voleb.
                 </p>
               </div>
+              <PoptavkaSavedSetupPresetsPanel
+                presets={sortedSavedSetupPresets}
+                readOnly={readOnly}
+                onApply={applySavedSetupPreset}
+              />
               <PoptavkaPreviousTechnikaPanel
                 title={previousSetupPanelTitle}
-                options={visiblePreviousSetupOptions}
+                options={sortedPreviousSetupOptions}
                 readOnly={readOnly}
                 onApply={applyPreviousSetup}
+                onSaveAsPreset={readOnly ? undefined : handleSaveHistorySetupPreset}
+                savingPresetId={savingSetupPresetId}
               />
               <PoptavkaSestavaKonfigurator
                 katalog={sestavaKatalog}
@@ -1646,7 +1953,20 @@ function PoptavkaFormClientInner({
           )}
 
           {(readOnly || step === 4) && (
-            <PoptavkaTechnickePodminkyStep
+            <div className="space-y-4">
+              <PoptavkaPreviousTechnikaProfilesPanel
+                historyOptions={sortedPreviousTechnikaProfiles}
+                savedPresets={sortedSavedTechnicalPresets}
+                readOnly={readOnly}
+                applyingId={applyingTechnikaId}
+                savingPresetId={savingTechnicalPresetId}
+                onApplyHistory={(option) => void applyPreviousTechnikaProfile(option)}
+                onApplySavedPreset={(preset) => void applySavedTechnicalPreset(preset)}
+                onSaveHistoryAsPreset={
+                  readOnly ? undefined : (option) => void handleSaveHistoryTechnicalPreset(option)
+                }
+              />
+              <PoptavkaTechnickePodminkyStep
               technika={technika}
               onChange={setTechnika}
               uiRezim={technickeUiRezim}
@@ -1671,6 +1991,7 @@ function PoptavkaFormClientInner({
               kontaktEmail={form.kontakt_email}
               highlightMissingPhotos={highlightMissingPhotos}
             />
+            </div>
           )}
 
           <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-6">

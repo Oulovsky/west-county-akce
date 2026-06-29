@@ -21,7 +21,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export type { ClientPortalPreviousTechnikaOption } from "@/lib/client-portal/client-previous-technika-shared";
 
-const PREVIOUS_TECHNIKA_OPTIONS_LIMIT = 5;
+const PREVIOUS_TECHNIKA_OPTIONS_LIMIT = 15;
 const POPTAVKA_CANDIDATE_LIMIT = 20;
 
 type PortalSetupMeta = {
@@ -167,7 +167,10 @@ function buildOptionFromSetups(params: {
   filterResult: FilterSetupsResult;
   sestavaKonfigurator?: SestavaKonfiguratorState | null;
 }): ClientPortalPreviousTechnikaOption | null {
-  if (params.filterResult.setupy.length === 0) {
+  const hasSestava = Boolean(
+    params.sestavaKonfigurator && hasSestavaKonfigurace(params.sestavaKonfigurator)
+  );
+  if (params.filterResult.setupy.length === 0 && !hasSestava) {
     return null;
   }
 
@@ -356,7 +359,7 @@ async function loadPoptavkaCandidates(
 
 export async function loadClientPreviousTechnikaOptionsForPortal(
   supabase: SupabaseClient,
-  options?: { excludePoptavkaId?: string; mistoId?: string | null }
+  options?: { excludePoptavkaId?: string }
 ): Promise<ClientPortalPreviousTechnikaOption[]> {
   const session = await requireActiveClientPortalSession(supabase);
   const klientId = session.account.klient_id!;
@@ -366,15 +369,10 @@ export async function loadClientPreviousTechnikaOptionsForPortal(
     loadPoptavkaCandidates(supabase, klientId, options?.excludePoptavkaId),
   ]);
 
-  const mistoFilter = options?.mistoId?.trim() || null;
   const result: ClientPortalPreviousTechnikaOption[] = [];
   const seenPoptavkaIds = new Set<string>();
 
   for (const candidate of candidates) {
-    if (mistoFilter && candidate.misto_id !== mistoFilter) {
-      continue;
-    }
-
     if (seenPoptavkaIds.has(candidate.poptavka_id)) {
       continue;
     }
@@ -395,5 +393,5 @@ export async function loadClientPreviousTechnikaOptionsForPortal(
   return result;
 }
 
-/** Načte návrhy sestavy / setupů z minulých akcí — volitelně jen pro dané místo. */
+/** Načte návrhy sestavy / setupů ze všech minulých akcí klienta (bez filtru místa). */
 export const loadClientPreviousSetupOptionsForPortal = loadClientPreviousTechnikaOptionsForPortal;

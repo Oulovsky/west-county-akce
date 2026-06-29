@@ -224,3 +224,189 @@ export async function deletePoptavkaFotkaForClient(
 }
 
 export { resolvePoptavkaPhotoMimeType };
+
+const TECHNIKA_FOTKA_TYPY = new Set([
+  "rozvadec",
+  "prijezd",
+  "plocha_stage",
+  "povrch_pristup",
+  "jina",
+  "misto_akce",
+]);
+
+export async function copyTechnikaPhotosFromSourcePoptavka(
+  supabase: SupabaseClient,
+  targetPoptavkaId: string,
+  sourcePoptavkaId: string
+): Promise<PoptavkaFotkaWithUrl[]> {
+  if (targetPoptavkaId === sourcePoptavkaId) {
+    return loadPoptavkaFotkyWithUrls(supabase, targetPoptavkaId);
+  }
+
+  const { data: sourceRows, error: sourceError } = await supabase
+    .from("poptavka_fotky")
+    .select(
+      "id, storage_bucket, storage_path, typ, popis, poradi, original_filename, mime_type, size_bytes"
+    )
+    .eq("poptavka_id", sourcePoptavkaId)
+    .order("poradi", { ascending: true });
+
+  if (sourceError) {
+    throw new Error(sourceError.message);
+  }
+
+  const technikaRows = (sourceRows ?? []).filter((row) =>
+    TECHNIKA_FOTKA_TYPY.has(row.typ as string)
+  );
+
+  if (technikaRows.length === 0) {
+    return [];
+  }
+
+  const admin = createAdminClient();
+
+  const { count, error: countError } = await supabase
+    .from("poptavka_fotky")
+    .select("id", { count: "exact", head: true })
+    .eq("poptavka_id", targetPoptavkaId);
+
+  if (countError) {
+    throw new Error(countError.message);
+  }
+
+  let poradi = count ?? 0;
+  const copied: PoptavkaFotkaWithUrl[] = [];
+
+  for (const row of technikaRows) {
+    const bucket = (row.storage_bucket as string) || POPTAVKA_FOTKY_BUCKET;
+    const sourcePath = row.storage_path as string;
+    const mimeType = (row.mime_type as string) || "image/jpeg";
+    const extension = getPoptavkaFotkaExtension(mimeType);
+    const targetPath = `poptavka/${targetPoptavkaId}/${randomUUID()}.${extension}`;
+
+    const { data: blob, error: downloadError } = await admin.storage
+      .from(bucket)
+      .download(sourcePath);
+
+    if (downloadError || !blob) {
+      console.error("[poptavka fotky] copy download failed", {
+        sourcePoptavkaId,
+        targetPoptavkaId,
+        message: downloadError?.message ?? "no blob",
+      });
+      continue;
+    }
+
+    const body = await blob.arrayBuffer();
+    const { error: uploadError } = await admin.storage.from(POPTAVKA_FOTKY_BUCKET).upload(targetPath, body, {
+      contentType: mimeType,
+      upsert: false,
+    });
+
+    if (uploadError) {
+      console.error("[poptavka fotky] copy upload failed", {
+        sourcePoptavkaId,
+        targetPoptavkaId,
+        message: uploadError.message,
+      });
+      continue;
+    }
+
+    const { data: inserted, error: insertError } = await supabase
+      .from("poptavka_fotky")
+      .insert({
+        poptavka_id: targetPoptavkaId,
+        storage_bucket: POPTAVKA_FOTKY_BUCKET,
+        storage_path: targetPath,
+        typ: row.typ,
+        popis: row.popis,
+        poradi,
+        original_filename: row.original_filename,
+        mime_type: mimeType,
+        size_bytes: row.size_bytes,
+      })
+      .select(
+        "id, poptavka_id, storage_bucket, storage_path, typ, popis, poradi, original_filename, mime_type, size_bytes, created_at"
+      )
+      .single();
+
+    if (insertError || !inserted) {
+      await admin.storage.from(POPTAVKA_FOTKY_BUCKET).remove([targetPath]);
+      console.error("[poptavka fotky] copy db insert failed", {
+        sourcePoptavkaId,
+        targetPoptavkaId,
+        message: insertError?.message ?? "no row",
+      });
+      continue;
+    }
+
+    poradi += 1;
+    copied.push(await signPoptavkaFotkaRow(inserted as PoptavkaFotka));
+  }
+
+  return copied;
+}
+
+export async function deletePoptavkaDraftForClient(
+  supabase: SupabaseClient,
+  poptavkaId: string
+) {
+  const { data: row, error } = await supabase
+    .from("poptavky")
+    .select("poptavka_id, stav")
+    .eq("poptavka_id", poptavkaId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!row) {
+    throw new Error("Koncept nenalezen.");
+  }
+
+  if (row.stav !== "koncept") {
+    throw new Error("Smazat lze pouze neodeslaný koncept.");
+  }
+
+  const { data: fotky, error: fotkyError } = await supabase
+    .from("poptavka_fotky")
+    .select("storage_bucket, storage_path")
+    .eq("poptavka_id", poptavkaId);
+
+  if (fotkyError) {
+    throw new Error(fotkyError.message);
+  }
+
+  const admin = createAdminClient();
+  const pathsByBucket = new Map<string, string[]>();
+
+  for (const fotka of fotky ?? []) {
+    const bucket = (fotka.storage_bucket as string) || POPTAVKA_FOTKY_BUCKET;
+    const path = fotka.storage_path as string;
+    const list = pathsByBucket.get(bucket) ?? [];
+    list.push(path);
+    pathsByBucket.set(bucket, list);
+  }
+
+  for (const [bucket, paths] of pathsByBucket) {
+    if (paths.length === 0) continue;
+    const { error: removeError } = await admin.storage.from(bucket).remove(paths);
+    if (removeError) {
+      console.error("[poptavka draft delete] storage cleanup failed", {
+        poptavkaId,
+        bucket,
+        message: removeError.message,
+      });
+    }
+  }
+
+  const { error: deleteError } = await supabase
+    .from("poptavky")
+    .delete()
+    .eq("poptavka_id", poptavkaId);
+
+  if (deleteError) {
+    throw new Error(deleteError.message);
+  }
+}
