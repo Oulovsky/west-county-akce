@@ -291,6 +291,7 @@ export type PoptavkaFotka = {
   original_filename: string | null;
   mime_type: string | null;
   size_bytes: number | null;
+  source_fotka_id: string | null;
   created_at: string;
 };
 

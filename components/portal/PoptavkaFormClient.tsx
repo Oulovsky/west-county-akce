@@ -64,6 +64,7 @@ import type {
   ClientTechnicalPreset,
 } from "@/lib/client-portal/client-presets-shared";
 import { sortPortalHistoryByCurrentMisto } from "@/lib/client-portal/portal-history-sort";
+import { mergeSavedSectionFotky, dedupeSavedSectionFotky } from "@/lib/client-portal/poptavka-fotky-dedup";
 import type { ClientPortalPreviousTechnikaOption } from "@/lib/client-portal/client-previous-technika-shared";
 import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-shared";
 import type { ClientPortalMistoSummary, ClientPortalMistoKnowHow } from "@/lib/client-portal/client-mista-shared";
@@ -384,13 +385,15 @@ function PoptavkaFormClientInner({
         const key = section.key;
         const serverState = fromServer[key] ?? emptySectionPhotoState();
         const currentState = current[key] ?? emptySectionPhotoState();
+        const serverSaved = dedupeSavedSectionFotky(serverState.saved);
+        const currentSaved = dedupeSavedSectionFotky(currentState.saved);
 
         const savedChanged =
-          serverState.saved.length !== currentState.saved.length ||
-          serverState.saved.some((row, index) => row.id !== currentState.saved[index]?.id);
+          serverSaved.length !== currentSaved.length ||
+          serverSaved.some((row, index) => row.id !== currentSaved[index]?.id);
 
         let pending = currentState.pending;
-        if (savedChanged && serverState.saved.length > currentState.saved.length) {
+        if (savedChanged && serverSaved.length > currentSaved.length) {
           for (const photo of pending) {
             URL.revokeObjectURL(photo.previewUrl);
           }
@@ -399,7 +402,7 @@ function PoptavkaFormClientInner({
 
         const merged = {
           pending,
-          saved: serverState.saved,
+          saved: serverSaved,
         };
 
         if (
@@ -756,16 +759,16 @@ function PoptavkaFormClientInner({
         const existing = next[section.key] ?? emptySectionPhotoState();
         next[section.key] = {
           ...existing,
-          saved: [
-            ...existing.saved,
-            ...sectionFotky.map((row) => ({
+          saved: mergeSavedSectionFotky(
+            existing.saved,
+            sectionFotky.map((row) => ({
               id: row.id,
               typ: row.typ as import("@/lib/client-portal/types").PoptavkaFotkaTyp,
               popis: row.popis,
               original_filename: row.original_filename,
               signedUrl: row.signedUrl,
-            })),
-          ],
+            }))
+          ),
         };
       }
       return next;
@@ -812,7 +815,13 @@ function PoptavkaFormClientInner({
       return;
     }
 
-    await mergeCopiedTechnikaPhotos(result.fotky);
+    if (result.fotky.length > 0) {
+      await mergeCopiedTechnikaPhotos(result.fotky);
+    }
+
+    if (result.skippedDuplicateCount > 0) {
+      router.refresh();
+    }
   }
 
   async function applyPreviousTechnikaProfile(option: ClientPortalPreviousTechnikaProfileOption) {

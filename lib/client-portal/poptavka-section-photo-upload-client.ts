@@ -8,6 +8,7 @@ import {
   type PendingPhoto,
   type SectionPhotoState,
 } from "@/lib/client-portal/poptavka-section-photo-state";
+import { mergeSavedSectionFotky } from "@/lib/client-portal/poptavka-fotky-dedup";
 
 export type PendingSectionPhoto = PendingPhoto;
 
@@ -278,17 +279,18 @@ export function applySectionPhotoUploadResults(
       }
     }
 
-    const newSaved = result.uploaded.map((row) => ({
-      id: row.fotka.id,
-      typ: row.fotka.typ,
-      popis: row.fotka.popis,
-      original_filename: row.fotka.original_filename,
-      signedUrl: row.fotka.signedUrl,
-    }));
-
     next[section.key] = {
       pending: remainingPending,
-      saved: [...state.saved, ...newSaved],
+      saved: mergeSavedSectionFotky(
+        state.saved,
+        result.uploaded.map((row) => ({
+          id: row.fotka.id,
+          typ: row.fotka.typ,
+          popis: row.fotka.popis,
+          original_filename: row.fotka.original_filename,
+          signedUrl: row.fotka.signedUrl,
+        }))
+      ),
     };
   }
 

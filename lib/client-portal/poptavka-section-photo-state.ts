@@ -1,6 +1,7 @@
 import { TECHNIKA_SECTION_PHOTOS } from "@/lib/client-portal/poptavka-technika-podminky";
 import type { TechnikaSectionPhotoKey } from "@/lib/client-portal/poptavka-technika-podminky";
 import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-shared";
+import { dedupeSavedSectionFotky } from "@/lib/client-portal/poptavka-fotky-dedup";
 import type { PoptavkaFotkaTyp } from "@/lib/client-portal/types";
 
 export type SavedSectionFotka = {
@@ -36,15 +37,17 @@ export function createInitialSectionPhotos(
   for (const section of TECHNIKA_SECTION_PHOTOS) {
     map[section.key] = {
       ...emptySectionPhotoState(),
-      saved: initialFotky
-        .filter((row) => row.typ === section.typ)
-        .map((row) => ({
-          id: row.id,
-          typ: row.typ,
-          popis: row.popis,
-          original_filename: row.original_filename,
-          signedUrl: row.signedUrl,
-        })),
+      saved: dedupeSavedSectionFotky(
+        initialFotky
+          .filter((row) => row.typ === section.typ)
+          .map((row) => ({
+            id: row.id,
+            typ: row.typ,
+            popis: row.popis,
+            original_filename: row.original_filename,
+            signedUrl: row.signedUrl,
+          }))
+      ),
     };
   }
 

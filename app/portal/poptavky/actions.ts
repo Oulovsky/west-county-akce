@@ -1014,12 +1014,19 @@ export async function copyHistoricalTechnikaPhotosAction(input: {
   await requireActiveClientPortalSession(supabase);
 
   try {
-    const fotky = await copyTechnikaPhotosFromSourcePoptavka(
+    const copyResult = await copyTechnikaPhotosFromSourcePoptavka(
       supabase,
       targetPoptavkaId,
       sourcePoptavkaId
     );
-    return { ok: true as const, fotky };
+    return {
+      ok: true as const,
+      fotky: copyResult.fotky,
+      copiedFromHistoryCount: copyResult.copiedFromHistoryCount,
+      skippedDuplicateCount: copyResult.skippedDuplicateCount,
+      existingKeptCount: copyResult.existingKeptCount,
+      finalCount: copyResult.finalCount,
+    };
   } catch (error) {
     return {
       ok: false as const,
