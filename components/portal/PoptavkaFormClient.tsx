@@ -8,7 +8,7 @@ import PoptavkaSaveProgress from "@/components/portal/PoptavkaSaveProgress";
 import PoptavkaPreviousTechnikaPanel from "@/components/portal/PoptavkaPreviousTechnikaPanel";
 import PoptavkaPreviousTechnikaProfilesPanel from "@/components/portal/PoptavkaPreviousTechnikaProfilesPanel";
 import PoptavkaSavedSetupPresetsPanel from "@/components/portal/PoptavkaSavedSetupPresetsPanel";
-import { rethrowIfNextRedirect } from "@/lib/next/isRedirectError";
+import { rethrowIfNextRedirect, isNextRedirectError } from "@/lib/next/isRedirectError";
 import {
   copyHistoricalTechnikaPhotosAction,
   createPoptavkaAction,
@@ -1224,14 +1224,7 @@ function PoptavkaFormClientInner({
         setSaveProgress(progressForPhase("sestava", SAVE_PROGRESS_LABELS.sestava));
       }
 
-      setSaveProgress(
-        progressForPhase(
-          "finalize",
-          intent === "submit_klient"
-            ? SAVE_PROGRESS_LABELS.finalizeEmail
-            : SAVE_PROGRESS_LABELS.finalize
-        )
-      );
+      setSaveProgress(progressForPhase("finalize", SAVE_PROGRESS_LABELS.finalize));
 
       if (intent === "order_technik_vyjezd") {
         await orderTechnikVyjezdAndSubmitPoptavkaAction(formData);
@@ -1241,7 +1234,11 @@ function PoptavkaFormClientInner({
 
       setSaveProgress(progressForPhase("done", SAVE_PROGRESS_LABELS.done));
     } catch (error) {
-      rethrowIfNextRedirect(error);
+      if (isNextRedirectError(error)) {
+        setPendingIntent(null);
+        setSaveProgress(null);
+        rethrowIfNextRedirect(error);
+      }
       setPendingIntent(null);
       setSaveProgress(null);
       if (intent === "submit_klient") {

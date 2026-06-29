@@ -56,6 +56,7 @@ import {
   createPoptavkaStepTimer,
   summarizePhotoUploadBatch,
 } from "@/lib/client-portal/poptavka-server-timing";
+import { replacePoptavkaSetups } from "@/lib/client-portal/poptavka-setupy-server";
 import {
   copyTechnikaPhotosFromSourcePoptavka,
   deletePoptavkaDraftForClient,
@@ -101,9 +102,16 @@ async function finalizePoptavkaSubmission(
   supabase: Awaited<ReturnType<typeof createClient>>,
   poptavkaId: string,
   detail: NonNullable<Awaited<ReturnType<typeof loadPoptavkaDetail>>>,
-  options?: { redirectQuery?: string }
+  options?: { redirectQuery?: string; submitStartedAt?: number }
 ) {
-  console.info("[poptavka submit] finalize start", { poptavkaId, stavBefore: detail.stav });
+  const elapsedMs = () =>
+    options?.submitStartedAt != null ? Date.now() - options.submitStartedAt : undefined;
+
+  console.info("[poptavka submit] finalize start", {
+    poptavkaId,
+    stavBefore: detail.stav,
+    ms: elapsedMs(),
+  });
 
   if (
     !detail.kontakt_jmeno ||
@@ -139,8 +147,12 @@ async function finalizePoptavkaSubmission(
     redirectWithError(`/portal/poptavka/${poptavkaId}`, "submit_failed");
   }
 
-  console.info("[poptavka submit] stav updated", { poptavkaId, stav: "odeslana" });
+  console.info("[poptavka submit] status update done ms", {
+    poptavkaId,
+    ms: elapsedMs(),
+  });
 
+  const emailStartedAt = Date.now();
   try {
     await notifyInternalTeamAboutSubmittedPoptavka({
       poptavkaId,
@@ -176,12 +188,22 @@ async function finalizePoptavkaSubmission(
     console.warn("[poptavka submit] confirmation email failed:", emailError);
   }
 
+  console.info("[poptavka submit] email done ms", {
+    poptavkaId,
+    emailMs: Date.now() - emailStartedAt,
+    ms: elapsedMs(),
+  });
+
   revalidatePath("/portal/poptavky");
   revalidatePath(`/portal/poptavka/${poptavkaId}`);
   revalidatePath("/zakazky/poptavky");
   revalidatePath(`/zakazky/poptavky/${poptavkaId}`);
   const redirectTarget = `/portal/poptavka/${poptavkaId}?${options?.redirectQuery ?? "submitted=1"}`;
-  console.info("[poptavka submit] redirect", { poptavkaId, redirectTarget });
+  console.info("[poptavka submit] done total ms", {
+    poptavkaId,
+    redirectTarget,
+    ms: elapsedMs(),
+  });
   redirect(redirectTarget);
 }
 
@@ -463,7 +485,8 @@ async function persistPoptavkaFromFormData(
   supabase: Awaited<ReturnType<typeof createClient>>,
   session: Awaited<ReturnType<typeof requireActiveClientPortalSession>>,
   formData: FormData,
-  existingPoptavkaId?: string
+  existingPoptavkaId?: string,
+  options?: { skipSetupsIfUnchanged?: boolean }
 ) {
   formData = stripFilesFromFormData(formData);
   const values = parsePoptavkaFormData(formData);
@@ -504,7 +527,9 @@ async function persistPoptavkaFromFormData(
 
     if (error) redirectWithError(`/portal/poptavka/${existingPoptavkaId}`, "save_failed");
 
-    await replacePoptavkaSetups(supabase, existingPoptavkaId, setupResult.setupy);
+    await replacePoptavkaSetups(supabase, existingPoptavkaId, setupResult.setupy, {
+      skipIfUnchanged: options?.skipSetupsIfUnchanged,
+    });
     await upsertTechnickeUdaje(supabase, existingPoptavkaId, formData);
     return existingPoptavkaId;
   }
@@ -625,39 +650,6 @@ async function resolveSetupsWithSestava(
   const merged = sestava.rezim === "atypicka" ? [] : mergeSetupSelections([], derived);
 
   return resolvePortalSetupsForSave(supabase, merged);
-}
-
-async function replacePoptavkaSetups(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  poptavkaId: string,
-  setupy: ReturnType<typeof parsePoptavkaFormData>["setupy"]
-) {
-  const { error: deleteError } = await supabase
-    .from("poptavka_setupy")
-    .delete()
-    .eq("poptavka_id", poptavkaId);
-
-  if (deleteError) {
-    throw new Error(deleteError.message);
-  }
-
-  if (setupy.length === 0) {
-    return;
-  }
-
-  const rows = setupy.map((row, index) => ({
-    poptavka_id: poptavkaId,
-    setup_id: row.setup_id,
-    mnozstvi: row.mnozstvi,
-    poznamka_klienta: row.poznamka_klienta,
-    poradi: index,
-  }));
-
-  const { error: insertError } = await supabase.from("poptavka_setupy").insert(rows);
-
-  if (insertError) {
-    throw new Error(insertError.message);
-  }
 }
 
 export async function saveDraftPoptavkaReturnIdAction(formData: FormData): Promise<
@@ -809,10 +801,14 @@ export async function submitKlientPoptavkaAction(formData: FormData) {
     : "/portal/poptavka/nova";
 
   const wizardKrok = readWizardKrok(formData);
+  const submitStartedAt = Date.now();
+  const elapsedMs = () => Date.now() - submitStartedAt;
+
   console.info("[poptavka submit] start", {
     poptavkaId: existingPoptavkaId ?? "new",
     wizardKrok,
     intent: "submit_klient",
+    ms: 0,
   });
 
   if (wizardKrok < 4) {
@@ -851,17 +847,31 @@ export async function submitKlientPoptavkaAction(formData: FormData) {
   }
 
   let poptavkaId: string;
+  console.info("[poptavka submit] setupy start", {
+    poptavkaId: existingPoptavkaId ?? "new",
+    ms: elapsedMs(),
+  });
   try {
-    poptavkaId = await persistPoptavkaFromFormData(supabase, session, formData, existingPoptavkaId);
+    poptavkaId = await persistPoptavkaFromFormData(
+      supabase,
+      session,
+      formData,
+      existingPoptavkaId,
+      { skipSetupsIfUnchanged: Boolean(existingPoptavkaId) }
+    );
   } catch (persistError) {
     console.error("[poptavka submit] persist failed", {
       poptavkaId: existingPoptavkaId ?? "new",
       message: persistError instanceof Error ? persistError.message : "unknown",
+      ms: elapsedMs(),
     });
     redirectWithError(errorPath, "setups_failed");
   }
 
-  console.info("[poptavka submit] persisted", { poptavkaId });
+  console.info("[poptavka submit] setupy done ms", {
+    poptavkaId,
+    ms: elapsedMs(),
+  });
 
   photoCounts = await countSectionPhotosForSubmit(supabase, poptavkaId);
   const photoRecheck = validateKlientSubmitComplete({
@@ -893,7 +903,7 @@ export async function submitKlientPoptavkaAction(formData: FormData) {
     redirectWithError(errorPath, "save_failed");
   }
 
-  await finalizePoptavkaSubmission(supabase, poptavkaId, detail);
+  await finalizePoptavkaSubmission(supabase, poptavkaId, detail, { submitStartedAt });
 }
 
 export async function submitPoptavkaAction(formData: FormData) {
@@ -947,7 +957,13 @@ export async function orderTechnikVyjezdAndSubmitPoptavkaAction(formData: FormDa
 
   let poptavkaId: string;
   try {
-    poptavkaId = await persistPoptavkaFromFormData(supabase, session, formData, existingPoptavkaId);
+    poptavkaId = await persistPoptavkaFromFormData(
+      supabase,
+      session,
+      formData,
+      existingPoptavkaId,
+      { skipSetupsIfUnchanged: Boolean(existingPoptavkaId) }
+    );
     await upsertTechnikVyjezdOrder(supabase, poptavkaId, formData, values);
   } catch {
     redirectWithError(errorPath, "setups_failed");
