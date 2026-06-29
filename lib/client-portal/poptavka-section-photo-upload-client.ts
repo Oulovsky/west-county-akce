@@ -9,6 +9,7 @@ import {
   type SectionPhotoState,
 } from "@/lib/client-portal/poptavka-section-photo-state";
 import { mergeSavedSectionFotky } from "@/lib/client-portal/poptavka-fotky-dedup";
+import { appendClientPhotoThumbnailToFormData } from "@/lib/client-portal/poptavka-fotky-thumbnail-client";
 
 export type PendingSectionPhoto = PendingPhoto;
 
@@ -61,6 +62,7 @@ async function uploadSectionPhotosViaApi(
     formData.append("photo_types", typ);
     formData.append("photo_descriptions", "");
     formData.append("photo_client_ids", photo.id);
+    await appendClientPhotoThumbnailToFormData(formData, photo.id, photo.file);
   }
 
   const response = await fetch("/api/portal/poptavka-fotky/upload", {

@@ -110,6 +110,31 @@ export function getPoptavkaFotkaExtension(mimeType: string) {
   return "jpg";
 }
 
+/** Vrátí klientský thumbnail z FormData podle clientId (volitelný). */
+export function getPoptavkaPhotoThumbnailFromFormData(
+  formData: FormData,
+  clientId: string
+): File | null {
+  if (!clientId) return null;
+  const value = formData.get(`photo_thumbnail_${clientId}`);
+  if (value != null && isFormDataUploadFile(value) && value.size > 0) {
+    return value;
+  }
+  return null;
+}
+
+export function collectPoptavkaPhotoThumbnailsForUpload(
+  files: File[],
+  clientIds: string[] | undefined,
+  formData: FormData
+): Array<File | null> {
+  return files.map((_, index) => {
+    const clientId = clientIds?.[index]?.trim();
+    if (!clientId) return null;
+    return getPoptavkaPhotoThumbnailFromFormData(formData, clientId);
+  });
+}
+
 export function poptavkaPhotoValidationMessage(code: PoptavkaPhotoValidationError): string {
   if (code === "empty_file") return "Soubor je prázdný.";
   return "Povolené formáty: JPG, PNG, WebP, HEIC.";

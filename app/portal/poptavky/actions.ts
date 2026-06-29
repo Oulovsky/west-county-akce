@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { requireActiveClientPortalSession } from "@/lib/auth/client-portal-access-server";
 import {
   isFormDataUploadFile,
+  collectPoptavkaPhotoThumbnailsForUpload,
   stripFilesFromFormData,
 } from "@/lib/client-portal/poptavka-fotky-shared";
 import {
@@ -744,7 +745,8 @@ export async function uploadPoptavkaFotkyAction(formData: FormData) {
       files,
       photoTypes,
       photoDescriptions,
-      clientIds
+      clientIds,
+      collectPoptavkaPhotoThumbnailsForUpload(files, clientIds, formData)
     );
     const uploaded = results.filter((row) => row.ok);
     const errors = results.filter((row): row is Extract<typeof row, { ok: false }> => !row.ok);

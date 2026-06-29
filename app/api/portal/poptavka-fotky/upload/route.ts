@@ -3,6 +3,7 @@ import { requireActiveClientPortalSession } from "@/lib/auth/client-portal-acces
 import {
   isFormDataUploadFile,
   isAllowedPoptavkaFotkaTyp,
+  collectPoptavkaPhotoThumbnailsForUpload,
 } from "@/lib/client-portal/poptavka-fotky-shared";
 import { uploadPoptavkaFotkyForClient } from "@/lib/client-portal/poptavka-fotky-server";
 import { summarizePhotoUploadBatch } from "@/lib/client-portal/poptavka-server-timing";
@@ -74,7 +75,8 @@ export async function POST(request: Request) {
       files,
       photoTypes,
       photoDescriptions,
-      clientIds
+      clientIds,
+      collectPoptavkaPhotoThumbnailsForUpload(files, clientIds, formData)
     );
 
     const uploaded = results.filter((row) => row.ok);

@@ -9,7 +9,6 @@ import {
   validatePoptavkaPhotoFile,
   type PoptavkaFotkaWithUrl,
 } from "@/lib/client-portal/poptavka-fotky-shared";
-import { generatePoptavkaPhotoThumbnail } from "@/lib/client-portal/poptavka-fotky-thumbnail";
 import type { PoptavkaFotka } from "@/lib/client-portal/types";
 import { POPTAVKA_FOTKY_BUCKET } from "@/lib/client-portal/types";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -121,23 +120,35 @@ async function signPoptavkaFotkaRowAfterUpload(row: PoptavkaFotka): Promise<Popt
   };
 }
 
-async function uploadThumbnailForOriginal(
+async function uploadClientThumbnailFile(
   admin: ReturnType<typeof createAdminClient>,
   poptavkaId: string,
-  originalBuffer: Buffer
+  thumbnailFile: File
 ): Promise<{ thumbnailPath: string; thumbnailSizeBytes: number } | null> {
+  if (thumbnailFile.size <= 0) {
+    return null;
+  }
+
+  const mimeType =
+    thumbnailFile.type === "image/webp"
+      ? "image/webp"
+      : thumbnailFile.type === "image/jpeg"
+        ? "image/jpeg"
+        : "image/webp";
+  const extension = mimeType === "image/jpeg" ? "jpg" : "webp";
+  const thumbnailPath = `poptavka/${poptavkaId}/${randomUUID()}.${extension}`;
+
   try {
-    const thumbnail = await generatePoptavkaPhotoThumbnail(originalBuffer);
-    const thumbnailPath = `poptavka/${poptavkaId}/${randomUUID()}.webp`;
+    const body = Buffer.from(await thumbnailFile.arrayBuffer());
     const { error: thumbUploadError } = await admin.storage
       .from(POPTAVKA_FOTKY_BUCKET)
-      .upload(thumbnailPath, thumbnail.buffer, {
-        contentType: thumbnail.mimeType,
+      .upload(thumbnailPath, body, {
+        contentType: mimeType,
         upsert: false,
       });
 
     if (thumbUploadError) {
-      console.error("[poptavka fotky] thumbnail upload failed", {
+      console.error("[poptavka fotky] client thumbnail upload failed", {
         poptavkaId,
         message: thumbUploadError.message,
       });
@@ -146,10 +157,10 @@ async function uploadThumbnailForOriginal(
 
     return {
       thumbnailPath,
-      thumbnailSizeBytes: thumbnail.sizeBytes,
+      thumbnailSizeBytes: thumbnailFile.size,
     };
   } catch (error) {
-    console.error("[poptavka fotky] thumbnail generation failed", {
+    console.error("[poptavka fotky] client thumbnail upload failed", {
       poptavkaId,
       message: error instanceof Error ? error.message : "unknown",
     });
@@ -174,7 +185,8 @@ export async function uploadPoptavkaFotkyForClient(
   files: File[],
   types: string[],
   descriptions: string[],
-  clientIds?: string[]
+  clientIds?: string[],
+  thumbnailFiles?: Array<File | null | undefined>
 ): Promise<UploadPoptavkaFotkaItemResult[]> {
   const admin = createAdminClient();
   const results: UploadPoptavkaFotkaItemResult[] = [];
@@ -229,7 +241,11 @@ export async function uploadPoptavkaFotkyForClient(
         continue;
       }
 
-      const thumbnailResult = await uploadThumbnailForOriginal(admin, poptavkaId, body);
+      const thumbnailFile = thumbnailFiles?.[index] ?? null;
+      const thumbnailResult =
+        thumbnailFile && thumbnailFile.size > 0
+          ? await uploadClientThumbnailFile(admin, poptavkaId, thumbnailFile)
+          : null;
 
       const metadataRow = {
         poptavka_id: poptavkaId,
@@ -533,14 +549,6 @@ export async function copyTechnikaPhotosFromSourcePoptavka(
       if (copiedThumb) {
         thumbnailPath = copiedThumbPath;
         thumbnailSizeBytes = (row.thumbnail_size_bytes as number | null) ?? null;
-      }
-    }
-
-    if (!thumbnailPath) {
-      const generated = await uploadThumbnailForOriginal(admin, targetPoptavkaId, body);
-      if (generated) {
-        thumbnailPath = generated.thumbnailPath;
-        thumbnailSizeBytes = generated.thumbnailSizeBytes;
       }
     }
 

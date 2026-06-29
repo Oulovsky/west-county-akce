@@ -11,6 +11,7 @@ import {
   POPTAVKA_FOTKA_TYP_LABELS,
   validatePoptavkaPhotoFile,
 } from "@/lib/client-portal/poptavka-fotky-shared";
+import { appendClientPhotoThumbnailToFormData } from "@/lib/client-portal/poptavka-fotky-thumbnail-client";
 import type { PoptavkaFotkaTyp } from "@/lib/client-portal/types";
 import { POPTAVKA_FOTKA_TYPY } from "@/lib/client-portal/types";
 
@@ -91,15 +92,17 @@ export default function PoptavkaFotkyClient({
   function uploadPending() {
     if (!pending.length || readOnly) return;
 
-    const formData = new FormData();
-    formData.set("poptavka_id", poptavkaId);
-    for (const photo of pending) {
-      formData.append("photo_files", photo.file, photo.file.name);
-      formData.append("photo_types", photo.typ);
-      formData.append("photo_descriptions", photo.popis);
-    }
-
     startTransition(async () => {
+      const formData = new FormData();
+      formData.set("poptavka_id", poptavkaId);
+      for (const photo of pending) {
+        formData.append("photo_files", photo.file, photo.file.name);
+        formData.append("photo_types", photo.typ);
+        formData.append("photo_descriptions", photo.popis);
+        formData.append("photo_client_ids", photo.id);
+        await appendClientPhotoThumbnailToFormData(formData, photo.id, photo.file);
+      }
+
       const result = await uploadPoptavkaFotkyAction(formData);
       if (!result.ok) {
         setError(UPLOAD_ERRORS[result.error ?? ""] ?? UPLOAD_ERRORS.upload_failed);
