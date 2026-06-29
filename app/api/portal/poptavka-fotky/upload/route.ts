@@ -5,6 +5,7 @@ import {
   isAllowedPoptavkaFotkaTyp,
 } from "@/lib/client-portal/poptavka-fotky-shared";
 import { uploadPoptavkaFotkyForClient } from "@/lib/client-portal/poptavka-fotky-server";
+import { summarizePhotoUploadBatch } from "@/lib/client-portal/poptavka-server-timing";
 import { isPoptavkaEditable, loadPoptavkaDetail } from "@/lib/client-portal/poptavka-server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
 
   console.info("[poptavka fotky] api upload start", {
     poptavkaId,
-    fileCount: files.length,
+    ...summarizePhotoUploadBatch(files),
   });
 
   try {

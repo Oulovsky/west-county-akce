@@ -8,8 +8,13 @@ import type {
   ClientPortalPreviousTechnikaSourceKind,
 } from "@/lib/client-portal/client-previous-technika-shared";
 import { formatPoptavkaDateRange } from "@/lib/client-portal/poptavka-form";
+import {
+  hasSestavaKonfigurace,
+  sestavaFromOdpovediExtra,
+} from "@/lib/client-portal/sestava-konfigurator-form";
 import { validatePoptavkaObjednavkaSnapshot } from "@/lib/client-portal/poptavka-objednavka-link-server";
 import type { PoptavkaObjednavkaSnapshot } from "@/lib/client-portal/poptavka-objednavka-types";
+import type { SestavaKonfiguratorState } from "@/lib/client-portal/sestava-konfigurator-types";
 import type { SetupOblast } from "@/lib/client-portal/types";
 import { isSetupOblast } from "@/lib/client-portal/types";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -160,6 +165,7 @@ function buildOptionFromSetups(params: {
   mistoId: string | null;
   mistoLabel: string | null;
   filterResult: FilterSetupsResult;
+  sestavaKonfigurator?: SestavaKonfiguratorState | null;
 }): ClientPortalPreviousTechnikaOption | null {
   if (params.filterResult.setupy.length === 0) {
     return null;
@@ -183,6 +189,7 @@ function buildOptionFromSetups(params: {
     oblast_badges: [...oblastSet],
     skipped_setup_count: params.filterResult.skippedCount,
     warnings: params.filterResult.warnings,
+    sestava_konfigurator: params.sestavaKonfigurator ?? null,
   };
 }
 
@@ -222,12 +229,31 @@ async function loadPoptavkaSetupRowsForFallback(
   return filterSetupRowsForPortal(rows, portalSetups);
 }
 
+async function loadSestavaKonfiguratorForPoptavka(
+  supabase: SupabaseClient,
+  poptavkaId: string
+): Promise<SestavaKonfiguratorState | null> {
+  const { data, error } = await supabase
+    .from("poptavka_technicke_udaje")
+    .select("odpovedi_extra")
+    .eq("poptavka_id", poptavkaId)
+    .maybeSingle();
+
+  if (error || !data?.odpovedi_extra) {
+    return null;
+  }
+
+  const sestava = sestavaFromOdpovediExtra(data.odpovedi_extra as Record<string, unknown>);
+  return hasSestavaKonfigurace(sestava) ? sestava : null;
+}
+
 async function buildOptionForCandidate(
   supabase: SupabaseClient,
   row: PoptavkaCandidateRow,
   portalSetups: Map<string, PortalSetupMeta>
 ): Promise<ClientPortalPreviousTechnikaOption | null> {
   const mistoLabel = buildMistoLabel(row);
+  const sestavaKonfigurator = await loadSestavaKonfiguratorForPoptavka(supabase, row.poptavka_id);
 
   if (row.objednavka_potvrzena_at) {
     const snapshot = await loadConfirmedSnapshotForPoptavka(row.poptavka_id);
@@ -254,6 +280,7 @@ async function buildOptionForCandidate(
         mistoId: row.misto_id,
         mistoLabel: nullableText(snapshot.misto.nazev) ?? nullableText(snapshot.misto.adresa) ?? mistoLabel,
         filterResult,
+        sestavaKonfigurator,
       });
 
       if (option) {
@@ -276,6 +303,7 @@ async function buildOptionForCandidate(
       mistoId: row.misto_id,
       mistoLabel,
       filterResult: fallbackResult,
+      sestavaKonfigurator,
     });
   }
 
@@ -295,6 +323,7 @@ async function buildOptionForCandidate(
     mistoId: row.misto_id,
     mistoLabel,
     filterResult: fallbackResult,
+    sestavaKonfigurator,
   });
 }
 
@@ -327,7 +356,7 @@ async function loadPoptavkaCandidates(
 
 export async function loadClientPreviousTechnikaOptionsForPortal(
   supabase: SupabaseClient,
-  options?: { excludePoptavkaId?: string }
+  options?: { excludePoptavkaId?: string; mistoId?: string | null }
 ): Promise<ClientPortalPreviousTechnikaOption[]> {
   const session = await requireActiveClientPortalSession(supabase);
   const klientId = session.account.klient_id!;
@@ -337,10 +366,15 @@ export async function loadClientPreviousTechnikaOptionsForPortal(
     loadPoptavkaCandidates(supabase, klientId, options?.excludePoptavkaId),
   ]);
 
+  const mistoFilter = options?.mistoId?.trim() || null;
   const result: ClientPortalPreviousTechnikaOption[] = [];
   const seenPoptavkaIds = new Set<string>();
 
   for (const candidate of candidates) {
+    if (mistoFilter && candidate.misto_id !== mistoFilter) {
+      continue;
+    }
+
     if (seenPoptavkaIds.has(candidate.poptavka_id)) {
       continue;
     }
@@ -360,3 +394,6 @@ export async function loadClientPreviousTechnikaOptionsForPortal(
 
   return result;
 }
+
+/** Načte návrhy sestavy / setupů z minulých akcí — volitelně jen pro dané místo. */
+export const loadClientPreviousSetupOptionsForPortal = loadClientPreviousTechnikaOptionsForPortal;

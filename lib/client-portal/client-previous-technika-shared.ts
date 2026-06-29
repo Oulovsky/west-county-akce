@@ -1,4 +1,5 @@
 import type { SetupOblast } from "@/lib/client-portal/types";
+import type { SestavaKonfiguratorState } from "@/lib/client-portal/sestava-konfigurator-types";
 
 export type ClientPortalPreviousTechnikaSourceKind = "confirmed_order" | "previous_poptavka";
 
@@ -23,6 +24,8 @@ export type ClientPortalPreviousTechnikaOption = {
   oblast_badges: SetupOblast[];
   skipped_setup_count: number;
   warnings: string[];
+  /** Konfigurace sestavy z předchozí akce — pouze pro vědomé použití na kroku 3. */
+  sestava_konfigurator?: SestavaKonfiguratorState | null;
 };
 
 export const PREVIOUS_TECHNIKA_DISCLAIMER =

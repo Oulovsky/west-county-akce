@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Spinner } from "@/components/ui/SubmitButton";
+import PoptavkaSaveProgress from "@/components/portal/PoptavkaSaveProgress";
+import PoptavkaPreviousTechnikaPanel from "@/components/portal/PoptavkaPreviousTechnikaPanel";
 import { rethrowIfNextRedirect } from "@/lib/next/isRedirectError";
 import {
   createPoptavkaAction,
@@ -15,8 +17,10 @@ import {
 import {
   applySectionPhotoUploadResults,
   collectPendingPhotosBySection,
+  countPendingUploadablePhotos,
   markPendingPhotosUploading,
   uploadPendingSectionPhotosForPoptavka,
+  uploadSinglePendingSectionPhoto,
 } from "@/lib/client-portal/poptavka-section-photo-upload-client";
 import { stripFilesFromFormData } from "@/lib/client-portal/poptavka-fotky-shared";
 import PoptavkaGpsLocationPanel from "@/components/portal/PoptavkaGpsLocationPanel";
@@ -45,16 +49,25 @@ import {
   type PoptavkaSetupInput,
 } from "@/lib/client-portal/poptavka-form";
 import { appendTechnikaFormValuesToFormData } from "@/lib/client-portal/poptavka-technika-form";
-import type { ClientPortalMistoSummary, ClientPortalMistoKnowHow } from "@/lib/client-portal/client-mista-shared";
+import { buildPlaceFieldsFromSavedMisto } from "@/lib/client-portal/client-mista-place-data";
+import type { ClientPortalPreviousTechnikaOption } from "@/lib/client-portal/client-previous-technika-shared";
 import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-shared";
-import type { PortalSetupsByOblast } from "@/lib/client-portal/poptavka-server";
+import type { ClientPortalMistoSummary, ClientPortalMistoKnowHow } from "@/lib/client-portal/client-mista-shared";
+import {
+  photoUploadLabel,
+  progressForPhase,
+  SAVE_PROGRESS_LABELS,
+  type PoptavkaSaveProgressState,
+} from "@/lib/client-portal/poptavka-save-progress";
 import {
   EMPTY_POPTAVKA_TECHNIKA,
   type PoptavkaTechnikaFormValues,
 } from "@/lib/client-portal/poptavka-technika-form";
+import type { PortalSetupsByOblast } from "@/lib/client-portal/poptavka-server";
 import {
   EMPTY_SESTAVA_KONFIGURATOR,
   deriveSetupSelectionsFromSestava,
+  hasSestavaKonfigurace,
   migrateLegacySestavaState,
   normalizeSestavaStateForSave,
 } from "@/lib/client-portal/sestava-konfigurator-form";
@@ -97,6 +110,7 @@ type Props = {
   setupsByOblast: PortalSetupsByOblast;
   savedMista?: ClientPortalMistoSummary[];
   savedMistaKnowHowById?: Record<string, ClientPortalMistoKnowHow>;
+  previousSetupOptions?: ClientPortalPreviousTechnikaOption[];
   sestavaKatalog: PortalSestavaKatalog;
   initialSestava?: SestavaKonfiguratorState;
   initialValues?: Partial<PoptavkaFormValues> & { wizard_krok?: number | null };
@@ -153,6 +167,7 @@ function PoptavkaFormClientInner({
   setupsByOblast,
   savedMista = [],
   savedMistaKnowHowById = {},
+  previousSetupOptions = [],
   sestavaKatalog,
   initialSestava,
   initialValues,
@@ -179,6 +194,11 @@ function PoptavkaFormClientInner({
     initialFormErrorKind(errorCode, saved, submitted)
   );
   const [pendingIntent, setPendingIntent] = useState<PendingIntent | null>(null);
+  const [saveProgress, setSaveProgress] = useState<PoptavkaSaveProgressState | null>(null);
+  const [saveLongRunning, setSaveLongRunning] = useState(false);
+  const [workingPoptavkaId, setWorkingPoptavkaId] = useState(poptavkaId);
+  const sestavaConfiguredRef = useRef(false);
+  const draftEnsurePromiseRef = useRef<Promise<string | null> | null>(null);
   const [technickeUiRezim, setTechnickeUiRezim] = useState<TechnickeRezim | null>(() => {
     const rezim = initialTechnika?.technicke_rezim;
     return rezim === "klient_vyplni" || rezim === "vyjezd_technika" ? rezim : null;
@@ -283,6 +303,12 @@ function PoptavkaFormClientInner({
     () => initialFotky.map((fotka) => fotka.id).sort().join(","),
     [initialFotky]
   );
+
+  useEffect(() => {
+    if (poptavkaId) {
+      setWorkingPoptavkaId(poptavkaId);
+    }
+  }, [poptavkaId]);
 
   const resumedRef = useRef(false);
   useEffect(() => {
@@ -548,13 +574,116 @@ function PoptavkaFormClientInner({
 
     setForm((current) => ({
       ...current,
-      misto_source: "saved",
-      misto_id: misto.misto_id,
-      misto_adresa: misto.adresa_text?.trim() ?? "",
-      misto_lat: misto.lat,
-      misto_lng: misto.lng,
-      misto_poznamka: misto.poznamka?.trim() ?? "",
+      ...buildPlaceFieldsFromSavedMisto(misto, current),
     }));
+    setMistoAdresaAuto(false);
+  }
+
+  const visiblePreviousSetupOptions = useMemo(() => {
+    if (!form.misto_id) return previousSetupOptions;
+    const forMisto = previousSetupOptions.filter((row) => row.misto_id === form.misto_id);
+    return forMisto.length > 0 ? forMisto : previousSetupOptions;
+  }, [form.misto_id, previousSetupOptions]);
+
+  const previousSetupPanelTitle = form.misto_id
+    ? "Použít sestavu z minulé akce na tomto místě"
+    : "Použít sestavu z minulé akce";
+
+  function applyPreviousSetup(option: ClientPortalPreviousTechnikaOption) {
+    const hasExisting =
+      sestavaConfiguredRef.current ||
+      hasSestavaKonfigurace(sestava) ||
+      Object.keys(selectedSetups).length > 0;
+
+    if (hasExisting) {
+      const confirmed = window.confirm(
+        "Přepsat aktuální konfiguraci sestavy návrhem z předchozí akce?"
+      );
+      if (!confirmed) return;
+    }
+
+    if (option.sestava_konfigurator && hasSestavaKonfigurace(option.sestava_konfigurator)) {
+      setSestava(normalizeSestavaStateForSave(option.sestava_konfigurator));
+    }
+
+    const nextSetups: Record<string, PoptavkaSetupInput> = {};
+    for (const row of option.setupy) {
+      nextSetups[row.setup_id] = {
+        setup_id: row.setup_id,
+        mnozstvi: row.mnozstvi,
+        poznamka_klienta: row.poznamka_klienta ?? "",
+      };
+    }
+    setSelectedSetups(nextSetups);
+    sestavaConfiguredRef.current = true;
+  }
+
+  function buildFormDataFromState(intent: PendingIntent): FormData {
+    const formData = new FormData();
+    formData.set("wizard_step", String(step));
+    formData.set("save_intent", intent);
+    formData.set("sestava_konfigurator_json", sestavaJson);
+    formData.set("setupy_json", setupyJson);
+    appendPoptavkaFormValuesToFormData(formData, form);
+    appendTechnikaFormValuesToFormData(formData, technikaForValidation);
+    if (workingPoptavkaId) {
+      formData.set("poptavka_id", workingPoptavkaId);
+    }
+    return stripFilesFromFormData(formData);
+  }
+
+  async function ensureWorkingPoptavkaId(): Promise<string | null> {
+    if (workingPoptavkaId) return workingPoptavkaId;
+    if (draftEnsurePromiseRef.current) return draftEnsurePromiseRef.current;
+
+    const promise = (async () => {
+      const draftError = validatePoptavkaDraftMinima(form);
+      if (draftError) return null;
+
+      const saveResult = await saveDraftPoptavkaReturnIdAction(
+        buildFormDataFromState("draft")
+      );
+      if (!saveResult.ok) return null;
+
+      setWorkingPoptavkaId(saveResult.poptavkaId);
+      return saveResult.poptavkaId;
+    })();
+
+    draftEnsurePromiseRef.current = promise;
+    try {
+      return await promise;
+    } finally {
+      draftEnsurePromiseRef.current = null;
+    }
+  }
+
+  async function handlePendingPhotosAdded(
+    sectionKey: TechnikaSectionPhotoKey,
+    photos: import("@/lib/client-portal/poptavka-section-photo-state").PendingPhoto[]
+  ) {
+    if (readOnly || photos.length === 0) return;
+
+    const targetId = workingPoptavkaId ?? (await ensureWorkingPoptavkaId());
+    if (!targetId) return;
+
+    const section = TECHNIKA_SECTION_PHOTOS.find((row) => row.key === sectionKey);
+    if (!section) return;
+
+    setSectionPhotos((current) =>
+      markPendingPhotosUploading(current, { [sectionKey]: photos })
+    );
+
+    for (const photo of photos) {
+      const result = await uploadSinglePendingSectionPhoto(
+        targetId,
+        sectionKey,
+        section.typ,
+        photo
+      );
+      setSectionPhotos((current) =>
+        applySectionPhotoUploadResults(current, { [sectionKey]: result })
+      );
+    }
   }
 
   const hasSavedMista = savedMista.length > 0;
@@ -676,16 +805,15 @@ function PoptavkaFormClientInner({
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (readOnly) return;
+    if (readOnly || pendingIntent) return;
 
     clearUrlError();
 
-    const formData = stripFilesFromFormData(new FormData(event.currentTarget));
-    formData.set("wizard_step", String(step));
-    formData.set("sestava_konfigurator_json", sestavaJson);
-    formData.set("setupy_json", setupyJson);
-    appendPoptavkaFormValuesToFormData(formData, form);
-    appendTechnikaFormValuesToFormData(formData, technikaForValidation);
+    const formData = buildFormDataFromState(
+      normalizeSubmitIntent(
+        String(new FormData(event.currentTarget).get("save_intent") ?? "draft")
+      )
+    );
     const intent = normalizeSubmitIntent(String(formData.get("save_intent") ?? "draft"));
 
     if (intent === "order_technik_vyjezd") {
@@ -729,26 +857,39 @@ function PoptavkaFormClientInner({
     }
 
     setPendingIntent(intent);
+    setSaveLongRunning(false);
+    setSaveProgress(progressForPhase("validate", SAVE_PROGRESS_LABELS.validate));
 
     let workingSectionPhotos = sectionPhotos;
-    let activePoptavkaId = poptavkaId;
-    const pendingBySection = collectPendingPhotosBySection(workingSectionPhotos);
-    const hasPendingPhotos = Object.values(pendingBySection).some(
-      (photos) => (photos?.length ?? 0) > 0
-    );
+    let activePoptavkaId = workingPoptavkaId ?? poptavkaId;
+    const pendingPhotoTotal = countPendingUploadablePhotos(workingSectionPhotos);
 
     async function uploadPendingPhotosForId(targetPoptavkaId: string) {
       const pending = collectPendingPhotosBySection(workingSectionPhotos);
-      if (!Object.values(pending).some((photos) => (photos?.length ?? 0) > 0)) {
+      const pendingCount = countPendingUploadablePhotos(workingSectionPhotos);
+      if (pendingCount === 0) {
         return { totalErrors: 0, totalUploaded: 0 };
       }
 
       setSectionPhotos((current) => markPendingPhotosUploading(current, pending));
       const uploadResult = await uploadPendingSectionPhotosForPoptavka(
         targetPoptavkaId,
-        pending
+        pending,
+        {
+          onPhotoUploaded: (uploaded, total) => {
+            setSaveProgress(
+              progressForPhase("photos", photoUploadLabel(uploaded, total), {
+                photoUploaded: uploaded,
+                photoTotal: total,
+              })
+            );
+          },
+        }
       );
-      workingSectionPhotos = applySectionPhotoUploadResults(workingSectionPhotos, uploadResult.bySection);
+      workingSectionPhotos = applySectionPhotoUploadResults(
+        workingSectionPhotos,
+        uploadResult.bySection
+      );
       setSectionPhotos(workingSectionPhotos);
       return {
         totalErrors: uploadResult.totalErrors,
@@ -756,93 +897,94 @@ function PoptavkaFormClientInner({
       };
     }
 
-    if (intent === "draft" && mode === "create" && !activePoptavkaId) {
-      const saveResult = await saveDraftPoptavkaReturnIdAction(formData);
-      if (!saveResult.ok) {
-        setPendingIntent(null);
-        showDraftValidationError(saveResult.error);
-        return;
-      }
-      activePoptavkaId = saveResult.poptavkaId;
-      let photosFailed = false;
-      if (hasPendingPhotos) {
-        const uploadStats = await uploadPendingPhotosForId(activePoptavkaId);
-        photosFailed = uploadStats.totalErrors > 0;
-      }
-      setPendingIntent(null);
-      router.push(
-        `/portal/poptavka/${activePoptavkaId}?saved=1${photosFailed ? "&photos_failed=1" : ""}`
-      );
-      router.refresh();
-      return;
-    }
+    try {
+      if (intent === "draft") {
+        setSaveProgress(progressForPhase("basic", SAVE_PROGRESS_LABELS.basic));
+        const saveResult = await saveDraftPoptavkaReturnIdAction(formData);
+        if (!saveResult.ok) {
+          setPendingIntent(null);
+          setSaveProgress(null);
+          showDraftValidationError(saveResult.error);
+          return;
+        }
+        activePoptavkaId = saveResult.poptavkaId;
+        setWorkingPoptavkaId(saveResult.poptavkaId);
+        formData.set("poptavka_id", saveResult.poptavkaId);
 
-    let draftPhotosFailed = false;
-    if (intent === "draft" && activePoptavkaId && hasPendingPhotos) {
-      const uploadStats = await uploadPendingPhotosForId(activePoptavkaId);
-      draftPhotosFailed = uploadStats.totalErrors > 0;
-      if (uploadStats.totalUploaded > 0) {
+        let photosFailed = false;
+        if (pendingPhotoTotal > 0) {
+          const uploadStats = await uploadPendingPhotosForId(saveResult.poptavkaId);
+          photosFailed = uploadStats.totalErrors > 0;
+        }
+
+        setSaveProgress(progressForPhase("done", SAVE_PROGRESS_LABELS.done));
+        setPendingIntent(null);
+        router.push(
+          `/portal/poptavka/${saveResult.poptavkaId}?saved=1${photosFailed ? "&photos_failed=1" : ""}`
+        );
         router.refresh();
-      }
-    }
-
-    if (intent === "draft") {
-      const saveResult = await saveDraftPoptavkaReturnIdAction(formData);
-      if (!saveResult.ok) {
-        setPendingIntent(null);
-        showDraftValidationError(saveResult.error);
         return;
       }
-      setPendingIntent(null);
-      router.push(
-        `/portal/poptavka/${saveResult.poptavkaId}?saved=1${draftPhotosFailed ? "&photos_failed=1" : ""}`
-      );
-      router.refresh();
-      return;
-    }
 
-    if (intent === "submit_klient" && !activePoptavkaId) {
-      const saveResult = await saveDraftPoptavkaReturnIdAction(formData);
-      if (!saveResult.ok) {
-        setPendingIntent(null);
-        showSubmitValidationFailure({
-          ok: false,
-          code: saveResult.error,
-          message: resolvePoptavkaFormError(saveResult.error),
-          issues: [
-            {
-              step: wizardErrorStep(saveResult.error),
+      setSaveProgress(progressForPhase("basic", SAVE_PROGRESS_LABELS.basic));
+
+      if (!activePoptavkaId) {
+        const saveResult = await saveDraftPoptavkaReturnIdAction(formData);
+        if (!saveResult.ok) {
+          setPendingIntent(null);
+          setSaveProgress(null);
+          if (intent === "submit_klient") {
+            showSubmitValidationFailure({
+              ok: false,
               code: saveResult.error,
-              label: resolvePoptavkaFormError(saveResult.error),
-            },
-          ],
-        });
-        return;
+              message: resolvePoptavkaFormError(saveResult.error),
+              issues: [
+                {
+                  step: wizardErrorStep(saveResult.error),
+                  code: saveResult.error,
+                  label: resolvePoptavkaFormError(saveResult.error),
+                },
+              ],
+            });
+          } else {
+            showStepValidationError(saveResult.error);
+          }
+          return;
+        }
+        activePoptavkaId = saveResult.poptavkaId;
+        setWorkingPoptavkaId(saveResult.poptavkaId);
+        formData.set("poptavka_id", activePoptavkaId);
       }
-      activePoptavkaId = saveResult.poptavkaId;
-      formData.set("poptavka_id", activePoptavkaId);
-      if (hasPendingPhotos) {
+
+      setSaveProgress(progressForPhase("place_technika", SAVE_PROGRESS_LABELS.place_technika));
+
+      if (pendingPhotoTotal > 0) {
         await uploadPendingPhotosForId(activePoptavkaId);
         router.refresh();
+      } else {
+        setSaveProgress(progressForPhase("sestava", SAVE_PROGRESS_LABELS.sestava));
       }
-    } else if (
-      (intent === "submit_klient" || intent === "order_technik_vyjezd") &&
-      activePoptavkaId &&
-      hasPendingPhotos
-    ) {
-      await uploadPendingPhotosForId(activePoptavkaId);
-      router.refresh();
-    }
 
-    try {
+      setSaveProgress(
+        progressForPhase(
+          "finalize",
+          intent === "submit_klient"
+            ? SAVE_PROGRESS_LABELS.finalizeEmail
+            : SAVE_PROGRESS_LABELS.finalize
+        )
+      );
+
       if (intent === "order_technik_vyjezd") {
         await orderTechnikVyjezdAndSubmitPoptavkaAction(formData);
       } else {
         await submitKlientPoptavkaAction(formData);
       }
+
+      setSaveProgress(progressForPhase("done", SAVE_PROGRESS_LABELS.done));
     } catch (error) {
       rethrowIfNextRedirect(error);
       setPendingIntent(null);
+      setSaveProgress(null);
       if (intent === "submit_klient") {
         showSubmitValidationFailure({
           ok: false,
@@ -861,6 +1003,23 @@ function PoptavkaFormClientInner({
       }
     }
   }
+
+  useEffect(() => {
+    if (!saveProgress) {
+      setSaveLongRunning(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setSaveLongRunning(true), 15_000);
+    return () => window.clearTimeout(timer);
+  }, [saveProgress]);
+
+  useEffect(() => {
+    if (readOnly || step !== 4 || workingPoptavkaId) return;
+    const draftError = validatePoptavkaDraftMinima(form);
+    if (draftError) return;
+    void ensureWorkingPoptavkaId();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-create draft when entering photo step
+  }, [readOnly, step, workingPoptavkaId, form.kontakt_jmeno, form.misto_adresa, form.datum_od]);
 
   function handleFormKeyDown(event: React.KeyboardEvent<HTMLFormElement>) {
     if (event.key !== "Enter") return;
@@ -1317,8 +1476,8 @@ function PoptavkaFormClientInner({
                         <p className="text-xs text-amber-200/90">Vyberte místo ze seznamu.</p>
                       ) : null}
                       <p className="text-xs text-slate-500">
-                        Adresa a poznámka se předvyplní z uloženého místa. Můžete je upravit pro
-                        tuto konkrétní akci.
+                        Doplní se adresa, GPS a poznámka k místu. Konfigurace sestavy zůstává na
+                        kroku 3 — zde se nepřebírá automaticky.
                       </p>
                       {form.misto_id ? (
                         <PoptavkaMistoKnowHowPanel knowHow={selectedMistoKnowHow} />
@@ -1464,11 +1623,20 @@ function PoptavkaFormClientInner({
                   sestav — schéma se aktualizuje podle vašich voleb.
                 </p>
               </div>
+              <PoptavkaPreviousTechnikaPanel
+                title={previousSetupPanelTitle}
+                options={visiblePreviousSetupOptions}
+                readOnly={readOnly}
+                onApply={applyPreviousSetup}
+              />
               <PoptavkaSestavaKonfigurator
                 katalog={sestavaKatalog}
                 setupsByOblast={setupsByOblast}
                 state={sestava}
-                onChange={(next) => setSestava(normalizeSestavaStateForSave(next))}
+                onChange={(next) => {
+                  sestavaConfiguredRef.current = true;
+                  setSestava(normalizeSestavaStateForSave(next));
+                }}
                 readOnly={readOnly}
                 inputClass={inputClass}
                 labelClass={labelClass}
@@ -1486,7 +1654,8 @@ function PoptavkaFormClientInner({
               onUiRezimChange={setTechnickeUiRezim}
               onUiPotvrzenoChange={setTechnickeUiPotvrzeno}
               readOnly={readOnly}
-              poptavkaId={poptavkaId}
+              poptavkaId={workingPoptavkaId ?? poptavkaId}
+              onPendingPhotosAdded={handlePendingPhotosAdded}
               initialFotky={initialFotky}
               sectionPhotos={sectionPhotos}
               onSectionPhotosChange={(key, next) =>
@@ -1505,25 +1674,8 @@ function PoptavkaFormClientInner({
           )}
 
           <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-6">
-            {pendingIntent === "submit_klient" || pendingIntent === "order_technik_vyjezd" ? (
-              <p
-                className="flex w-full basis-full items-center gap-2 text-sm text-blue-200/90"
-                role="status"
-                aria-live="polite"
-              >
-                <Spinner />
-                Odesíláme poptávku, ukládáme data a posíláme potvrzovací e-mail…
-              </p>
-            ) : null}
-            {pendingIntent === "draft" ? (
-              <p
-                className="flex w-full basis-full items-center gap-2 text-sm text-amber-200/90"
-                role="status"
-                aria-live="polite"
-              >
-                <Spinner />
-                Ukládáme koncept poptávky…
-              </p>
+            {saveProgress ? (
+              <PoptavkaSaveProgress progress={saveProgress} longRunning={saveLongRunning} />
             ) : null}
 
             {!readOnly && step > 1 ? (

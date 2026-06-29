@@ -26,6 +26,7 @@ export default function PoptavkaTechnikaSectionPhoto({
   readOnly,
   state,
   onPendingChange,
+  onPendingPhotosAdded,
 }: {
   sectionKey: TechnikaSectionPhotoKey;
   typ: PoptavkaFotkaTyp;
@@ -35,6 +36,7 @@ export default function PoptavkaTechnikaSectionPhoto({
   readOnly?: boolean;
   state: SectionPhotoState;
   onPendingChange: (next: SectionPhotoState) => void;
+  onPendingPhotosAdded?: (photos: PendingPhoto[]) => void;
 }) {
   const captureInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -45,22 +47,26 @@ export default function PoptavkaTechnikaSectionPhoto({
     setError(null);
 
     const nextPending = [...state.pending];
+    const added: PendingPhoto[] = [];
     for (const file of Array.from(files)) {
       const validation = validatePoptavkaPhotoFile(file);
       if (!validation.ok) {
         setError(validation.message);
         continue;
       }
-      nextPending.push({
+      const photo: PendingPhoto = {
         id: `${sectionKey}-${file.name}-${file.size}-${crypto.randomUUID()}`,
         file,
         previewUrl: URL.createObjectURL(file),
         status: "pending",
-      });
+      };
+      nextPending.push(photo);
+      added.push(photo);
     }
 
-    if (nextPending.length !== state.pending.length) {
+    if (added.length > 0) {
       onPendingChange({ ...state, pending: nextPending });
+      onPendingPhotosAdded?.(added);
     }
   }
 
@@ -183,8 +189,11 @@ export default function PoptavkaTechnikaSectionPhoto({
 
       {!readOnly && !poptavkaId && state.pending.length > 0 ? (
         <p className="text-[11px] text-slate-500">
-          Fotky se uloží spolu s konceptem.
+          Po uložení konceptu se fotky nahrávají průběžně na pozadí.
         </p>
+      ) : null}
+      {!readOnly && poptavkaId && state.pending.some((photo) => photo.status === "uploading") ? (
+        <p className="text-[11px] text-blue-200/80">Nahrávám na server…</p>
       ) : null}
 
       {readOnly && !hasPhotos ? (

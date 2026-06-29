@@ -35,6 +35,14 @@ type UploadApiResponse = {
   error?: string;
 };
 
+type PendingUploadTask = {
+  sectionKey: TechnikaSectionPhotoKey;
+  typ: string;
+  photo: PendingSectionPhoto;
+};
+
+const UPLOAD_CONCURRENCY = 3;
+
 async function uploadSectionPhotosViaApi(
   poptavkaId: string,
   sectionKey: TechnikaSectionPhotoKey,
@@ -127,25 +135,93 @@ async function uploadSectionPhotosViaApi(
   return { hadPending: true, uploaded, errors };
 }
 
+async function uploadSinglePhotoViaApi(
+  poptavkaId: string,
+  sectionKey: TechnikaSectionPhotoKey,
+  typ: string,
+  photo: PendingSectionPhoto
+): Promise<SectionPhotoUploadResult> {
+  return uploadSectionPhotosViaApi(poptavkaId, sectionKey, typ, [photo]);
+}
+
+function mergeSectionResult(
+  current: SectionPhotoUploadResult | undefined,
+  next: SectionPhotoUploadResult
+): SectionPhotoUploadResult {
+  if (!current) return next;
+  return {
+    hadPending: current.hadPending || next.hadPending,
+    uploaded: [...current.uploaded, ...next.uploaded],
+    errors: [...current.errors, ...next.errors],
+  };
+}
+
+async function runWithConcurrency<T>(
+  tasks: Array<() => Promise<T>>,
+  concurrency: number,
+  onTaskDone?: () => void
+): Promise<T[]> {
+  if (tasks.length === 0) return [];
+  const results: T[] = new Array(tasks.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < tasks.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await tasks[index]();
+      onTaskDone?.();
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
 export async function uploadPendingSectionPhotosForPoptavka(
   poptavkaId: string,
-  pendingBySection: Partial<Record<TechnikaSectionPhotoKey, PendingSectionPhoto[]>>
+  pendingBySection: Partial<Record<TechnikaSectionPhotoKey, PendingSectionPhoto[]>>,
+  options?: {
+    onPhotoUploaded?: (uploaded: number, total: number) => void;
+  }
 ): Promise<AllSectionsPhotoUploadResult> {
   const bySection: Partial<Record<TechnikaSectionPhotoKey, SectionPhotoUploadResult>> = {};
   let totalUploaded = 0;
   let totalErrors = 0;
 
+  const tasks: PendingUploadTask[] = [];
   for (const section of TECHNIKA_SECTION_PHOTOS) {
     const photos = (pendingBySection[section.key] ?? []).filter(
       (photo) => photo.status !== "uploading"
     );
-    if (!photos.length) continue;
-
-    const result = await uploadSectionPhotosViaApi(poptavkaId, section.key, section.typ, photos);
-    bySection[section.key] = result;
-    totalUploaded += result.uploaded.length;
-    totalErrors += result.errors.length;
+    for (const photo of photos) {
+      tasks.push({ sectionKey: section.key, typ: section.typ, photo });
+    }
   }
+
+  const total = tasks.length;
+  let uploadedCount = 0;
+
+  await runWithConcurrency(
+    tasks.map((task) => async () => {
+      const result = await uploadSinglePhotoViaApi(
+        poptavkaId,
+        task.sectionKey,
+        task.typ,
+        task.photo
+      );
+      bySection[task.sectionKey] = mergeSectionResult(bySection[task.sectionKey], result);
+      totalUploaded += result.uploaded.length;
+      totalErrors += result.errors.length;
+      if (result.uploaded.length > 0) {
+        uploadedCount += result.uploaded.length;
+        options?.onPhotoUploaded?.(uploadedCount, total);
+      }
+      return result;
+    }),
+    UPLOAD_CONCURRENCY
+  );
 
   const anyPendingRemaining = Object.values(pendingBySection).some(
     (photos) => (photos?.length ?? 0) > 0
@@ -157,6 +233,15 @@ export async function uploadPendingSectionPhotosForPoptavka(
     totalErrors,
     anyPendingRemaining,
   };
+}
+
+export async function uploadSinglePendingSectionPhoto(
+  poptavkaId: string,
+  sectionKey: TechnikaSectionPhotoKey,
+  typ: string,
+  photo: PendingSectionPhoto
+): Promise<SectionPhotoUploadResult> {
+  return uploadSinglePhotoViaApi(poptavkaId, sectionKey, typ, photo);
 }
 
 export function applySectionPhotoUploadResults(
@@ -249,4 +334,13 @@ export function collectPendingPhotosBySection(
   }
 
   return pendingBySection;
+}
+
+export function countPendingUploadablePhotos(
+  sectionPhotos: Partial<Record<TechnikaSectionPhotoKey, SectionPhotoState>>
+) {
+  return Object.values(collectPendingPhotosBySection(sectionPhotos)).reduce(
+    (sum, photos) => sum + (photos?.length ?? 0),
+    0
+  );
 }

@@ -102,7 +102,7 @@ export default function PoptavkaPreviousTechnikaPanel({
                   onClick={() => onApply(option)}
                   className="shrink-0 rounded-xl border border-blue-500/50 bg-blue-500/20 px-4 py-2 text-sm font-semibold text-blue-50 hover:bg-blue-500/30"
                 >
-                  Použít tuto techniku
+                  Použít tuto sestavu
                 </button>
               ) : null}
             </div>

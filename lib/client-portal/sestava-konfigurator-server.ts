@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   DEFAULT_PORTAL_SESTAVA_KATALOG,
@@ -164,12 +165,12 @@ function filterActiveKatalogForPortal(katalog: PortalSestavaKatalog): PortalSest
   };
 }
 
-export async function loadPortalSestavaKatalog(): Promise<PortalSestavaKatalog> {
+export const loadPortalSestavaKatalog = cache(async function loadPortalSestavaKatalog(): Promise<PortalSestavaKatalog> {
   const fromDb = await loadKatalogFromDb();
   const base = normalizePortalSestavaKatalog(fromDb ?? DEFAULT_PORTAL_SESTAVA_KATALOG);
   const withStock = await enrichLedStock(base);
   const withSetups = await enrichKatalogSetupIds(withStock);
   return filterActiveKatalogForPortal(withSetups);
-}
+});
 
 export type { KatalogRow };

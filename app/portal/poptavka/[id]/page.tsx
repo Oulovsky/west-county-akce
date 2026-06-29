@@ -21,6 +21,7 @@ import {
 } from "@/lib/client-portal/sestava-konfigurator-form";
 import { loadPortalSestavaKatalog } from "@/lib/client-portal/sestava-konfigurator-server";
 import { loadClientMistaKonaniForPortal, loadClientMistaKnowHowByIdForPortal } from "@/lib/client-portal/client-mista-server";
+import { loadClientPreviousSetupOptionsForPortal } from "@/lib/client-portal/client-previous-technika-server";
 import { loadPortalPoptavkaObjednavkaDecisionView } from "@/lib/client-portal/poptavka-objednavka-link-server";
 import {
   isPoptavkaEditable,
@@ -113,7 +114,8 @@ export default async function PortalPoptavkaDetailPage({
   const editable = isPoptavkaEditable(detail);
 
   if (editable) {
-    const [{ data: klient }, setupsByOblast, savedMista, sestavaKatalog] = await Promise.all([
+    const [{ data: klient }, setupsByOblast, savedMista, previousSetupOptions, sestavaKatalog] =
+      await Promise.all([
       supabase
         .from("klienti")
         .select("nazev, ico, email, telefon")
@@ -121,6 +123,9 @@ export default async function PortalPoptavkaDetailPage({
         .single(),
       loadPortalSetups(supabase),
       loadClientMistaKonaniForPortal(supabase),
+      loadClientPreviousSetupOptionsForPortal(supabase, {
+        excludePoptavkaId: detail.poptavka_id,
+      }),
       loadPortalSestavaKatalog(),
     ]);
 
@@ -147,6 +152,7 @@ export default async function PortalPoptavkaDetailPage({
         setupsByOblast={setupsByOblast}
         savedMista={savedMista}
         savedMistaKnowHowById={savedMistaKnowHowById}
+        previousSetupOptions={previousSetupOptions}
         sestavaKatalog={sestavaKatalog}
         initialSestava={sestavaFromOdpovediExtra(detail.technicke_udaje?.odpovedi_extra ?? {})}
         initialValues={{

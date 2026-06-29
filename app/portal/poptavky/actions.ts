@@ -52,6 +52,10 @@ import {
 import { loadInternalPoptavkaDetail } from "@/lib/client-portal/poptavka-internal-server";
 import { calculateTechnikVyjezdDoprava } from "@/lib/client-portal/technik-vyjezd-pricing";
 import { createClient } from "@/lib/supabase/server";
+import {
+  createPoptavkaStepTimer,
+  summarizePhotoUploadBatch,
+} from "@/lib/client-portal/poptavka-server-timing";
 
 function redirectWithError(path: string, error: string): never {
   redirect(`${path}?error=${encodeURIComponent(error)}`);
@@ -323,6 +327,11 @@ async function saveDraftPoptavkaCore(
   const values = parsePoptavkaFormData(formData);
   const wizardKrok = readWizardKrok(formData);
 
+  const timer = createPoptavkaStepTimer("poptavka draft", {
+    poptavkaId: existingPoptavkaId ?? "new",
+    wizardKrok,
+  });
+
   console.info("[poptavka draft] start", {
     poptavkaId: existingPoptavkaId ?? "new",
     wizardKrok,
@@ -331,23 +340,21 @@ async function saveDraftPoptavkaCore(
 
   const validationError = validatePoptavkaDraftMinima(values);
   if (validationError) {
-    console.info("[poptavka draft] validation failed", {
-      poptavkaId: existingPoptavkaId ?? "new",
-      code: validationError,
-    });
+    timer.log("validation_failed", { code: validationError });
     return { ok: false, error: validationError };
   }
 
   const mistoResult = await resolveValidatedMistoIdForSave(supabase, values, { draft: true });
+  timer.log("misto_validated", { ok: mistoResult.ok });
   if (!mistoResult.ok) {
-    console.info("[poptavka draft] misto validation failed", {
-      poptavkaId: existingPoptavkaId ?? "new",
-      code: mistoResult.error,
-    });
     return { ok: false, error: mistoResult.error };
   }
 
   const setupResult = await resolveSetupsForDraft(supabase, formData);
+  timer.log("setups_resolved", {
+    ok: setupResult.ok,
+    skipReplace: "skipReplace" in setupResult ? setupResult.skipReplace : false,
+  });
   let draftSetups: ReturnType<typeof parsePoptavkaFormData>["setupy"] | null = null;
   if (setupResult.ok) {
     draftSetups = setupResult.setupy;
@@ -395,7 +402,7 @@ async function saveDraftPoptavkaCore(
       await replacePoptavkaSetups(supabase, existingPoptavkaId, draftSetups);
     }
     await upsertTechnickeUdaje(supabase, existingPoptavkaId, formData);
-    console.info("[poptavka draft] saved", { poptavkaId: existingPoptavkaId });
+    timer.finish({ poptavkaId: existingPoptavkaId, operation: "update" });
     return { ok: true, poptavkaId: existingPoptavkaId };
   }
 
@@ -423,7 +430,7 @@ async function saveDraftPoptavkaCore(
     await replacePoptavkaSetups(supabase, created.poptavka_id, draftSetups);
   }
   await upsertTechnickeUdaje(supabase, created.poptavka_id, formData);
-  console.info("[poptavka draft] saved", { poptavkaId: created.poptavka_id });
+  timer.finish({ poptavkaId: created.poptavka_id, operation: "insert" });
   return { ok: true, poptavkaId: created.poptavka_id };
 }
 

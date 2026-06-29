@@ -47,6 +47,10 @@ type Props = {
     key: TechnikaSectionPhotoKey,
     next: SectionPhotoState
   ) => void;
+  onPendingPhotosAdded?: (
+    sectionKey: TechnikaSectionPhotoKey,
+    photos: import("@/lib/client-portal/poptavka-section-photo-state").PendingPhoto[]
+  ) => void;
   inputClass: string;
   labelClass: string;
   optionCardClass: string;
@@ -76,6 +80,7 @@ export default function PoptavkaTechnickePodminkyStep({
   initialFotky = [],
   sectionPhotos,
   onSectionPhotosChange,
+  onPendingPhotosAdded,
   inputClass,
   labelClass,
   optionCardClass,
@@ -182,6 +187,7 @@ export default function PoptavkaTechnickePodminkyStep({
           readOnly={readOnly}
           state={state}
           onPendingChange={(next) => onSectionPhotosChange(key, next)}
+          onPendingPhotosAdded={(photos) => onPendingPhotosAdded?.(key, photos)}
         />
       </div>
     );
