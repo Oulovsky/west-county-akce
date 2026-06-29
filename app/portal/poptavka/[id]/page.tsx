@@ -112,7 +112,7 @@ export default async function PortalPoptavkaDetailPage({
     redirect(`/portal/prihlaseni?next=/portal/poptavka/${id}`);
   }
 
-  const detail = await loadPoptavkaDetail(supabase, id);
+  const detail = await loadPoptavkaDetail(supabase, id, { logTiming: true });
   if (!detail) {
     redirect("/portal/poptavky?error=not_found");
   }
@@ -421,7 +421,11 @@ export default async function PortalPoptavkaDetailPage({
           katalog={sestavaKatalog}
         />
 
-        <PoptavkaTechnickePodminkyReadOnly row={detail.technicke_udaje} fotky={detail.fotky} />
+        <PoptavkaTechnickePodminkyReadOnly
+          row={detail.technicke_udaje}
+          fotky={detail.fotky}
+          poptavkaId={detail.poptavka_id}
+        />
 
         <div className="mt-8 flex flex-wrap gap-3">
           <Link

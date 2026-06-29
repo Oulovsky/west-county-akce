@@ -2,8 +2,18 @@ import type { PoptavkaFotkaTyp, PoptavkaFotka } from "@/lib/client-portal/types"
 import { POPTAVKA_FOTKA_TYPY } from "@/lib/client-portal/types";
 
 export type PoptavkaFotkaWithUrl = PoptavkaFotka & {
+  /** Signed URL náhledu (primární pro UI). */
+  thumbnailSignedUrl: string | null;
+  /** Signed URL originálu — null při seznamovém načtení, na vyžádání po kliknutí. */
   signedUrl: string | null;
 };
+
+/** URL pro zobrazení v mřížce — náhled, případně fallback na originál. */
+export function poptavkaFotkaPreviewUrl(
+  fotka: Pick<PoptavkaFotkaWithUrl, "thumbnailSignedUrl" | "signedUrl">
+): string | null {
+  return fotka.thumbnailSignedUrl ?? fotka.signedUrl;
+}
 
 export const POPTAVKA_FOTKY_ALLOWED_MIME_TYPES = [
   "image/jpeg",

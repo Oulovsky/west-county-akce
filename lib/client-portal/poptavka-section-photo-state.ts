@@ -9,6 +9,7 @@ export type SavedSectionFotka = {
   typ: PoptavkaFotkaTyp;
   popis: string | null;
   original_filename: string | null;
+  thumbnailSignedUrl: string | null;
   signedUrl: string | null;
 };
 
@@ -45,6 +46,7 @@ export function createInitialSectionPhotos(
             typ: row.typ,
             popis: row.popis,
             original_filename: row.original_filename,
+            thumbnailSignedUrl: row.thumbnailSignedUrl,
             signedUrl: row.signedUrl,
           }))
       ),

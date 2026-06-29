@@ -64,7 +64,11 @@ import type {
   ClientTechnicalPreset,
 } from "@/lib/client-portal/client-presets-shared";
 import { sortPortalHistoryByCurrentMisto } from "@/lib/client-portal/portal-history-sort";
-import { mergeSavedSectionFotky, dedupeSavedSectionFotky } from "@/lib/client-portal/poptavka-fotky-dedup";
+import { mergeSavedSectionFotky } from "@/lib/client-portal/poptavka-fotky-dedup";
+import {
+  logSectionPhotoSync,
+  mergeSectionPhotoStateFromServer,
+} from "@/lib/client-portal/poptavka-section-photo-sync";
 import type { ClientPortalPreviousTechnikaOption } from "@/lib/client-portal/client-previous-technika-shared";
 import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-shared";
 import type { ClientPortalMistoSummary, ClientPortalMistoKnowHow } from "@/lib/client-portal/client-mista-shared";
@@ -380,39 +384,50 @@ function PoptavkaFormClientInner({
     setSectionPhotos((current) => {
       let changed = false;
       const next = { ...current };
+      let totalSkippedOverwrite = 0;
 
       for (const section of TECHNIKA_SECTION_PHOTOS) {
         const key = section.key;
         const serverState = fromServer[key] ?? emptySectionPhotoState();
         const currentState = current[key] ?? emptySectionPhotoState();
-        const serverSaved = dedupeSavedSectionFotky(serverState.saved);
-        const currentSaved = dedupeSavedSectionFotky(currentState.saved);
 
-        const savedChanged =
-          serverSaved.length !== currentSaved.length ||
-          serverSaved.some((row, index) => row.id !== currentSaved[index]?.id);
-
-        let pending = currentState.pending;
-        if (savedChanged && serverSaved.length > currentSaved.length) {
-          for (const photo of pending) {
-            URL.revokeObjectURL(photo.previewUrl);
-          }
-          pending = [];
-        }
-
-        const merged = {
-          pending,
-          saved: serverSaved,
-        };
+        const { state: merged, stats } = mergeSectionPhotoStateFromServer(
+          currentState,
+          serverState.saved
+        );
+        totalSkippedOverwrite += stats.skippedOverwriteCount;
 
         if (
-          savedChanged ||
-          pending.length !== currentState.pending.length ||
-          merged.saved.length !== currentState.saved.length
+          merged.pending.length !== currentState.pending.length ||
+          merged.saved.length !== currentState.saved.length ||
+          merged.saved.some((row, index) => row.id !== currentState.saved[index]?.id)
         ) {
           next[key] = merged;
           changed = true;
         }
+      }
+
+      if (changed) {
+        logSectionPhotoSync("initialFotky merge", {
+          pendingBefore: Object.values(current).reduce(
+            (sum, state) => sum + (state?.pending.length ?? 0),
+            0
+          ),
+          localSavedBefore: Object.values(current).reduce(
+            (sum, state) => sum + (state?.saved.length ?? 0),
+            0
+          ),
+          serverSavedCount: initialFotky.length,
+          mergedSavedCount: Object.values(next).reduce(
+            (sum, state) => sum + (state?.saved.length ?? 0),
+            0
+          ),
+          skippedOverwriteCount: totalSkippedOverwrite,
+          pendingAfter: Object.values(next).reduce(
+            (sum, state) => sum + (state?.pending.length ?? 0),
+            0
+          ),
+        });
       }
 
       return changed ? next : current;
@@ -745,6 +760,7 @@ function PoptavkaFormClientInner({
       typ: string;
       popis: string | null;
       original_filename: string | null;
+      thumbnailSignedUrl: string | null;
       signedUrl: string | null;
     }>
   ) {
@@ -766,6 +782,7 @@ function PoptavkaFormClientInner({
               typ: row.typ as import("@/lib/client-portal/types").PoptavkaFotkaTyp,
               popis: row.popis,
               original_filename: row.original_filename,
+              thumbnailSignedUrl: row.thumbnailSignedUrl,
               signedUrl: row.signedUrl,
             }))
           ),
@@ -948,9 +965,18 @@ function PoptavkaFormClientInner({
         section.typ,
         photo
       );
-      setSectionPhotos((current) =>
-        applySectionPhotoUploadResults(current, { [sectionKey]: result })
-      );
+      setSectionPhotos((current) => {
+        const next = applySectionPhotoUploadResults(current, { [sectionKey]: result });
+        const sectionState = next[sectionKey];
+        console.info("[poptavka fotky] upload merge", {
+          sectionKey,
+          pendingBefore: 1,
+          uploadResultCount: result.uploaded.length,
+          localPhotosAfterMerge: sectionState?.saved.length ?? 0,
+          errors: result.errors.length,
+        });
+        return next;
+      });
     }
   }
 

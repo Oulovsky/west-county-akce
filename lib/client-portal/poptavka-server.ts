@@ -12,7 +12,10 @@ import {
   isClientEditablePoptavkaStav,
   isSetupOblast,
 } from "@/lib/client-portal/types";
-import { loadPoptavkaFotkyWithUrls, type PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-server";
+import {
+  signPoptavkaFotkaThumbnailUrls,
+  type PoptavkaFotkaWithUrl,
+} from "@/lib/client-portal/poptavka-fotky-server";
 import { requireActiveClientPortalSession } from "@/lib/auth/client-portal-access-server";
 
 export type PortalSetupSelection = PoptavkaSetup & {
@@ -146,8 +149,16 @@ export async function loadClientPoptavkyList(supabase: SupabaseClient) {
 
 export async function loadPoptavkaDetail(
   supabase: SupabaseClient,
-  poptavkaId: string
+  poptavkaId: string,
+  options?: { logTiming?: boolean }
 ): Promise<PoptavkaDetail | null> {
+  const logTiming = options?.logTiming ?? false;
+  const startedAt = Date.now();
+
+  if (logTiming) {
+    console.info("[portal poptavka detail] start", { poptavkaId });
+  }
+
   await requireActiveClientPortalSession(supabase);
 
   const { data: poptavka, error } = await supabase
@@ -162,6 +173,11 @@ export async function loadPoptavkaDetail(
 
   if (!poptavka) {
     return null;
+  }
+
+  const baseDataMs = Date.now() - startedAt;
+  if (logTiming) {
+    console.info("[portal poptavka detail] base data ms", { poptavkaId, ms: baseDataMs });
   }
 
   const { data: setupRows, error: setupError } = await supabase
@@ -195,7 +211,8 @@ export async function loadPoptavkaDetail(
     })
     .filter((row): row is PortalSetupSelection => row !== null);
 
-  const [{ data: technickeRow }, fotky] = await Promise.all([
+  const fotkyMetadataStartedAt = Date.now();
+  const [{ data: technickeRow }, fotkyMetadata] = await Promise.all([
     supabase
       .from("poptavka_technicke_udaje")
       .select(
@@ -203,8 +220,46 @@ export async function loadPoptavkaDetail(
       )
       .eq("poptavka_id", poptavkaId)
       .maybeSingle(),
-    loadPoptavkaFotkyWithUrls(supabase, poptavkaId),
+    supabase
+      .from("poptavka_fotky")
+      .select(
+        "id, poptavka_id, storage_bucket, storage_path, thumbnail_storage_path, typ, popis, poradi, original_filename, mime_type, size_bytes, thumbnail_size_bytes, source_fotka_id, created_at"
+      )
+      .eq("poptavka_id", poptavkaId)
+      .order("poradi", { ascending: true })
+      .order("created_at", { ascending: true }),
   ]);
+
+  const fotkyMetadataMs = Date.now() - fotkyMetadataStartedAt;
+  if (logTiming) {
+    console.info("[portal poptavka detail] fotky metadata count/ms", {
+      poptavkaId,
+      count: fotkyMetadata.data?.length ?? 0,
+      ms: fotkyMetadataMs,
+    });
+  }
+
+  if (fotkyMetadata.error) {
+    throw new Error(fotkyMetadata.error.message);
+  }
+
+  const thumbnailStartedAt = Date.now();
+  const fotky = await signPoptavkaFotkaThumbnailUrls(
+    (fotkyMetadata.data ?? []) as import("@/lib/client-portal/types").PoptavkaFotka[]
+  );
+  const thumbnailMs = Date.now() - thumbnailStartedAt;
+  if (logTiming) {
+    console.info("[portal poptavka detail] thumbnail urls count/ms", {
+      poptavkaId,
+      count: fotky.filter((row) => row.thumbnailSignedUrl).length,
+      total: fotky.length,
+      ms: thumbnailMs,
+    });
+    console.info("[portal poptavka detail] total ms", {
+      poptavkaId,
+      ms: Date.now() - startedAt,
+    });
+  }
 
   return {
     ...(poptavka as Poptavka),

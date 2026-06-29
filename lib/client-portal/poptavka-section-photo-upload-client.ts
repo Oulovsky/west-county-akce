@@ -194,7 +194,7 @@ export async function uploadPendingSectionPhotosForPoptavka(
   const tasks: PendingUploadTask[] = [];
   for (const section of TECHNIKA_SECTION_PHOTOS) {
     const photos = (pendingBySection[section.key] ?? []).filter(
-      (photo) => photo.status !== "uploading"
+      (photo) => photo.status !== "uploading" && photo.status !== "failed"
     );
     for (const photo of photos) {
       tasks.push({ sectionKey: section.key, typ: section.typ, photo });
@@ -288,6 +288,7 @@ export function applySectionPhotoUploadResults(
           typ: row.fotka.typ,
           popis: row.fotka.popis,
           original_filename: row.fotka.original_filename,
+          thumbnailSignedUrl: row.fotka.thumbnailSignedUrl,
           signedUrl: row.fotka.signedUrl,
         }))
       ),
@@ -328,7 +329,7 @@ export function collectPendingPhotosBySection(
 
   for (const [key, state] of Object.entries(sectionPhotos)) {
     const uploadable = (state?.pending ?? []).filter(
-      (photo) => photo.status !== "uploading"
+      (photo) => photo.status !== "uploading" && photo.status !== "failed"
     );
     if (uploadable.length) {
       pendingBySection[key as TechnikaSectionPhotoKey] = uploadable;

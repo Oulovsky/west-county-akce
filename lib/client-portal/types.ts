@@ -285,12 +285,14 @@ export type PoptavkaFotka = {
   poptavka_id: string;
   storage_bucket: string;
   storage_path: string;
+  thumbnail_storage_path: string | null;
   typ: PoptavkaFotkaTyp;
   popis: string | null;
   poradi: number;
   original_filename: string | null;
   mime_type: string | null;
   size_bytes: number | null;
+  thumbnail_size_bytes: number | null;
   source_fotka_id: string | null;
   created_at: string;
 };

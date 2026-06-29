@@ -9,6 +9,7 @@ import {
   validatePoptavkaPhotoFile,
   type PoptavkaFotkaWithUrl,
 } from "@/lib/client-portal/poptavka-fotky-shared";
+import { generatePoptavkaPhotoThumbnail } from "@/lib/client-portal/poptavka-fotky-thumbnail";
 import type { PoptavkaFotka } from "@/lib/client-portal/types";
 import { POPTAVKA_FOTKY_BUCKET } from "@/lib/client-portal/types";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -16,15 +17,18 @@ import { logPoptavkaFotkyPersistStats } from "@/lib/client-portal/poptavka-fotky
 
 export type { PoptavkaFotkaWithUrl };
 
-export async function loadPoptavkaFotkyWithUrls(
+const SIGNED_URL_TTL_SECONDS = 60 * 60;
+
+const POPTAVKA_FOTKA_SELECT =
+  "id, poptavka_id, storage_bucket, storage_path, thumbnail_storage_path, typ, popis, poradi, original_filename, mime_type, size_bytes, thumbnail_size_bytes, source_fotka_id, created_at" as const;
+
+export async function loadPoptavkaFotkyMetadata(
   supabase: SupabaseClient,
   poptavkaId: string
-): Promise<PoptavkaFotkaWithUrl[]> {
+): Promise<PoptavkaFotka[]> {
   const { data, error } = await supabase
     .from("poptavka_fotky")
-    .select(
-      "id, poptavka_id, storage_bucket, storage_path, typ, popis, poradi, original_filename, mime_type, size_bytes, source_fotka_id, created_at"
-    )
+    .select(POPTAVKA_FOTKA_SELECT)
     .eq("poptavka_id", poptavkaId)
     .order("poradi", { ascending: true })
     .order("created_at", { ascending: true });
@@ -33,32 +37,124 @@ export async function loadPoptavkaFotkyWithUrls(
     throw new Error(error.message);
   }
 
+  return (data ?? []) as PoptavkaFotka[];
+}
+
+async function signStoragePath(bucket: string, path: string): Promise<string | null> {
   const admin = createAdminClient();
-  const rows = (data ?? []) as PoptavkaFotka[];
+  const { data: signed } = await admin.storage
+    .from(bucket)
+    .createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
+  return signed?.signedUrl ?? null;
+}
 
+export async function signPoptavkaFotkaThumbnailUrl(row: PoptavkaFotka): Promise<string | null> {
+  const bucket = row.storage_bucket || POPTAVKA_FOTKY_BUCKET;
+  if (row.thumbnail_storage_path) {
+    return signStoragePath(bucket, row.thumbnail_storage_path);
+  }
+  return null;
+}
+
+export async function signPoptavkaFotkaOriginalUrl(row: PoptavkaFotka): Promise<string | null> {
+  const bucket = row.storage_bucket || POPTAVKA_FOTKY_BUCKET;
+  return signStoragePath(bucket, row.storage_path);
+}
+
+export async function signPoptavkaFotkaThumbnailUrls(
+  rows: PoptavkaFotka[]
+): Promise<PoptavkaFotkaWithUrl[]> {
   return Promise.all(
-    rows.map(async (row) => {
-      const { data: signed } = await admin.storage
-        .from(row.storage_bucket || POPTAVKA_FOTKY_BUCKET)
-        .createSignedUrl(row.storage_path, 60 * 60);
-
-      return {
-        ...row,
-        signedUrl: signed?.signedUrl ?? null,
-      };
-    })
+    rows.map(async (row) => ({
+      ...row,
+      thumbnailSignedUrl: await signPoptavkaFotkaThumbnailUrl(row),
+      signedUrl: null,
+    }))
   );
 }
 
-async function signPoptavkaFotkaRow(row: PoptavkaFotka): Promise<PoptavkaFotkaWithUrl> {
-  const admin = createAdminClient();
-  const { data: signed } = await admin.storage
-    .from(row.storage_bucket || POPTAVKA_FOTKY_BUCKET)
-    .createSignedUrl(row.storage_path, 60 * 60);
+/** Načte metadata + paralelně podepíše jen náhledy (originál až na vyžádání). */
+export async function loadPoptavkaFotkyWithThumbnailUrls(
+  supabase: SupabaseClient,
+  poptavkaId: string
+): Promise<PoptavkaFotkaWithUrl[]> {
+  const rows = await loadPoptavkaFotkyMetadata(supabase, poptavkaId);
+  return signPoptavkaFotkaThumbnailUrls(rows);
+}
+
+/** @deprecated Prefer loadPoptavkaFotkyWithThumbnailUrls — podepisuje jen náhledy. */
+export async function loadPoptavkaFotkyWithUrls(
+  supabase: SupabaseClient,
+  poptavkaId: string
+): Promise<PoptavkaFotkaWithUrl[]> {
+  return loadPoptavkaFotkyWithThumbnailUrls(supabase, poptavkaId);
+}
+
+export async function loadPoptavkaFotkaOriginalSignedUrlForClient(
+  supabase: SupabaseClient,
+  poptavkaId: string,
+  fotkaId: string
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("poptavka_fotky")
+    .select(POPTAVKA_FOTKA_SELECT)
+    .eq("id", fotkaId)
+    .eq("poptavka_id", poptavkaId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+  if (!data) {
+    return null;
+  }
+
+  return signPoptavkaFotkaOriginalUrl(data as PoptavkaFotka);
+}
+
+async function signPoptavkaFotkaRowAfterUpload(row: PoptavkaFotka): Promise<PoptavkaFotkaWithUrl> {
+  const thumbnailSignedUrl = await signPoptavkaFotkaThumbnailUrl(row);
   return {
     ...row,
-    signedUrl: signed?.signedUrl ?? null,
+    thumbnailSignedUrl,
+    signedUrl: null,
   };
+}
+
+async function uploadThumbnailForOriginal(
+  admin: ReturnType<typeof createAdminClient>,
+  poptavkaId: string,
+  originalBuffer: Buffer
+): Promise<{ thumbnailPath: string; thumbnailSizeBytes: number } | null> {
+  try {
+    const thumbnail = await generatePoptavkaPhotoThumbnail(originalBuffer);
+    const thumbnailPath = `poptavka/${poptavkaId}/${randomUUID()}.webp`;
+    const { error: thumbUploadError } = await admin.storage
+      .from(POPTAVKA_FOTKY_BUCKET)
+      .upload(thumbnailPath, thumbnail.buffer, {
+        contentType: thumbnail.mimeType,
+        upsert: false,
+      });
+
+    if (thumbUploadError) {
+      console.error("[poptavka fotky] thumbnail upload failed", {
+        poptavkaId,
+        message: thumbUploadError.message,
+      });
+      return null;
+    }
+
+    return {
+      thumbnailPath,
+      thumbnailSizeBytes: thumbnail.sizeBytes,
+    };
+  } catch (error) {
+    console.error("[poptavka fotky] thumbnail generation failed", {
+      poptavkaId,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return null;
+  }
 }
 
 export type UploadPoptavkaFotkaInput = {
@@ -111,7 +207,7 @@ export async function uploadPoptavkaFotkyForClient(
     const storagePath = `poptavka/${poptavkaId}/${randomUUID()}.${extension}`;
 
     try {
-      const body = await file.arrayBuffer();
+      const body = Buffer.from(await file.arrayBuffer());
       const { error: uploadError } = await admin.storage
         .from(POPTAVKA_FOTKY_BUCKET)
         .upload(storagePath, body, {
@@ -133,25 +229,27 @@ export async function uploadPoptavkaFotkyForClient(
         continue;
       }
 
+      const thumbnailResult = await uploadThumbnailForOriginal(admin, poptavkaId, body);
+
       const metadataRow = {
         poptavka_id: poptavkaId,
         storage_bucket: POPTAVKA_FOTKY_BUCKET,
         storage_path: storagePath,
+        thumbnail_storage_path: thumbnailResult?.thumbnailPath ?? null,
         typ,
         popis: descriptions[index]?.trim() || null,
         poradi,
         original_filename: file.name || null,
         mime_type: mimeType,
         size_bytes: file.size,
+        thumbnail_size_bytes: thumbnailResult?.thumbnailSizeBytes ?? null,
       };
       poradi += 1;
 
       const { data: inserted, error: insertError } = await supabase
         .from("poptavka_fotky")
         .insert(metadataRow)
-        .select(
-          "id, poptavka_id, storage_bucket, storage_path, typ, popis, poradi, original_filename, mime_type, size_bytes, source_fotka_id, created_at"
-        )
+        .select(POPTAVKA_FOTKA_SELECT)
         .single();
 
       if (insertError || !inserted) {
@@ -159,7 +257,11 @@ export async function uploadPoptavkaFotkyForClient(
           poptavkaId,
           message: insertError?.message ?? "no row",
         });
-        await admin.storage.from(POPTAVKA_FOTKY_BUCKET).remove([storagePath]);
+        const pathsToRemove = [storagePath];
+        if (thumbnailResult?.thumbnailPath) {
+          pathsToRemove.push(thumbnailResult.thumbnailPath);
+        }
+        await admin.storage.from(POPTAVKA_FOTKY_BUCKET).remove(pathsToRemove);
         results.push({
           ok: false,
           clientId,
@@ -169,7 +271,7 @@ export async function uploadPoptavkaFotkyForClient(
         continue;
       }
 
-      const fotka = await signPoptavkaFotkaRow(inserted as PoptavkaFotka);
+      const fotka = await signPoptavkaFotkaRowAfterUpload(inserted as PoptavkaFotka);
       results.push({ ok: true, clientId, fotka });
       insertedCount += 1;
     } catch (error) {
@@ -190,7 +292,10 @@ export async function uploadPoptavkaFotkyForClient(
     pendingUploadCount: files.length,
     existingKeptCount: existingCount,
     copiedFromHistoryCount: 0,
-    skippedDuplicateCount: Math.max(0, files.length - insertedCount - results.filter((row) => !row.ok).length),
+    skippedDuplicateCount: Math.max(
+      0,
+      files.length - insertedCount - results.filter((row) => !row.ok).length
+    ),
     finalCount: existingCount + insertedCount,
   });
 
@@ -204,7 +309,7 @@ export async function deletePoptavkaFotkaForClient(
 ) {
   const { data: row, error } = await supabase
     .from("poptavka_fotky")
-    .select("id, storage_bucket, storage_path")
+    .select("id, storage_bucket, storage_path, thumbnail_storage_path")
     .eq("id", fotkaId)
     .eq("poptavka_id", poptavkaId)
     .maybeSingle();
@@ -218,7 +323,12 @@ export async function deletePoptavkaFotkaForClient(
   }
 
   const admin = createAdminClient();
-  await admin.storage.from(row.storage_bucket || POPTAVKA_FOTKY_BUCKET).remove([row.storage_path]);
+  const bucket = row.storage_bucket || POPTAVKA_FOTKY_BUCKET;
+  const paths = [row.storage_path as string];
+  if (row.thumbnail_storage_path) {
+    paths.push(row.thumbnail_storage_path as string);
+  }
+  await admin.storage.from(bucket).remove(paths);
 
   const { error: deleteError } = await supabase
     .from("poptavka_fotky")
@@ -263,6 +373,30 @@ export type CopyTechnikaPhotosResult = {
   finalCount: number;
 };
 
+async function copyStorageObject(
+  admin: ReturnType<typeof createAdminClient>,
+  sourceBucket: string,
+  sourcePath: string,
+  targetPath: string,
+  contentType: string
+): Promise<boolean> {
+  const { data: blob, error: downloadError } = await admin.storage
+    .from(sourceBucket)
+    .download(sourcePath);
+
+  if (downloadError || !blob) {
+    return false;
+  }
+
+  const body = await blob.arrayBuffer();
+  const { error: uploadError } = await admin.storage.from(POPTAVKA_FOTKY_BUCKET).upload(targetPath, body, {
+    contentType,
+    upsert: false,
+  });
+
+  return !uploadError;
+}
+
 export async function copyTechnikaPhotosFromSourcePoptavka(
   supabase: SupabaseClient,
   targetPoptavkaId: string,
@@ -271,7 +405,7 @@ export async function copyTechnikaPhotosFromSourcePoptavka(
   const existingKeptCount = await countPoptavkaFotky(supabase, targetPoptavkaId);
 
   if (targetPoptavkaId === sourcePoptavkaId) {
-    const fotky = await loadPoptavkaFotkyWithUrls(supabase, targetPoptavkaId);
+    const fotky = await loadPoptavkaFotkyWithThumbnailUrls(supabase, targetPoptavkaId);
     logPoptavkaFotkyPersistStats("copied from history count", targetPoptavkaId, {
       existingKeptCount,
       copiedFromHistoryCount: 0,
@@ -291,9 +425,7 @@ export async function copyTechnikaPhotosFromSourcePoptavka(
     await Promise.all([
       supabase
         .from("poptavka_fotky")
-        .select(
-          "id, storage_bucket, storage_path, typ, popis, poradi, original_filename, mime_type, size_bytes"
-        )
+        .select(POPTAVKA_FOTKA_SELECT)
         .eq("poptavka_id", sourcePoptavkaId)
         .order("poradi", { ascending: true }),
       supabase
@@ -369,7 +501,7 @@ export async function copyTechnikaPhotosFromSourcePoptavka(
       continue;
     }
 
-    const body = await blob.arrayBuffer();
+    const body = Buffer.from(await blob.arrayBuffer());
     const { error: uploadError } = await admin.storage.from(POPTAVKA_FOTKY_BUCKET).upload(targetPath, body, {
       contentType: mimeType,
       upsert: false,
@@ -385,27 +517,56 @@ export async function copyTechnikaPhotosFromSourcePoptavka(
       continue;
     }
 
+    let thumbnailPath: string | null = null;
+    let thumbnailSizeBytes: number | null = null;
+    const sourceThumbPath = row.thumbnail_storage_path as string | null;
+
+    if (sourceThumbPath) {
+      const copiedThumbPath = `poptavka/${targetPoptavkaId}/${randomUUID()}.webp`;
+      const copiedThumb = await copyStorageObject(
+        admin,
+        bucket,
+        sourceThumbPath,
+        copiedThumbPath,
+        "image/webp"
+      );
+      if (copiedThumb) {
+        thumbnailPath = copiedThumbPath;
+        thumbnailSizeBytes = (row.thumbnail_size_bytes as number | null) ?? null;
+      }
+    }
+
+    if (!thumbnailPath) {
+      const generated = await uploadThumbnailForOriginal(admin, targetPoptavkaId, body);
+      if (generated) {
+        thumbnailPath = generated.thumbnailPath;
+        thumbnailSizeBytes = generated.thumbnailSizeBytes;
+      }
+    }
+
     const { data: inserted, error: insertError } = await supabase
       .from("poptavka_fotky")
       .insert({
         poptavka_id: targetPoptavkaId,
         storage_bucket: POPTAVKA_FOTKY_BUCKET,
         storage_path: targetPath,
+        thumbnail_storage_path: thumbnailPath,
         typ: row.typ,
         popis: row.popis,
         poradi,
         original_filename: row.original_filename,
         mime_type: mimeType,
         size_bytes: row.size_bytes,
+        thumbnail_size_bytes: thumbnailSizeBytes,
         source_fotka_id: sourceFotkaId,
       })
-      .select(
-        "id, poptavka_id, storage_bucket, storage_path, typ, popis, poradi, original_filename, mime_type, size_bytes, source_fotka_id, created_at"
-      )
+      .select(POPTAVKA_FOTKA_SELECT)
       .single();
 
     if (insertError || !inserted) {
-      await admin.storage.from(POPTAVKA_FOTKY_BUCKET).remove([targetPath]);
+      const pathsToRemove = [targetPath];
+      if (thumbnailPath) pathsToRemove.push(thumbnailPath);
+      await admin.storage.from(POPTAVKA_FOTKY_BUCKET).remove(pathsToRemove);
       if (insertError?.code === "23505") {
         skippedDuplicateCount += 1;
         existingSourceIds.add(sourceFotkaId);
@@ -423,7 +584,7 @@ export async function copyTechnikaPhotosFromSourcePoptavka(
     poradi += 1;
     copiedFromHistoryCount += 1;
     existingSourceIds.add(sourceFotkaId);
-    copied.push(await signPoptavkaFotkaRow(inserted as PoptavkaFotka));
+    copied.push(await signPoptavkaFotkaRowAfterUpload(inserted as PoptavkaFotka));
   }
 
   const finalCount = existingKeptCount + copiedFromHistoryCount;
@@ -477,7 +638,7 @@ export async function deletePoptavkaDraftForClient(
 
   const { data: fotky, error: fotkyError } = await supabase
     .from("poptavka_fotky")
-    .select("storage_bucket, storage_path")
+    .select("storage_bucket, storage_path, thumbnail_storage_path")
     .eq("poptavka_id", poptavkaId);
 
   if (fotkyError) {
@@ -489,9 +650,11 @@ export async function deletePoptavkaDraftForClient(
 
   for (const fotka of fotky ?? []) {
     const bucket = (fotka.storage_bucket as string) || POPTAVKA_FOTKY_BUCKET;
-    const path = fotka.storage_path as string;
     const list = pathsByBucket.get(bucket) ?? [];
-    list.push(path);
+    list.push(fotka.storage_path as string);
+    if (fotka.thumbnail_storage_path) {
+      list.push(fotka.thumbnail_storage_path as string);
+    }
     pathsByBucket.set(bucket, list);
   }
 

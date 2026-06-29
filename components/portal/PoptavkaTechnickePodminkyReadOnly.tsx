@@ -20,6 +20,7 @@ import {
   formatTriVolba,
   technikaFromRecord,
 } from "@/lib/client-portal/poptavka-technika-form";
+import PoptavkaFotkaImage from "@/components/portal/PoptavkaFotkaImage";
 import { POPTAVKA_FOTKA_TYP_LABELS } from "@/lib/client-portal/poptavka-fotky-shared";
 import type { PoptavkaFotkaWithUrl } from "@/lib/client-portal/poptavka-fotky-shared";
 import type { PoptavkaTechnickeUdaje } from "@/lib/client-portal/types";
@@ -37,9 +38,11 @@ function ReadOnlyField({ label, value }: { label: string; value: string | null |
 export default function PoptavkaTechnickePodminkyReadOnly({
   row,
   fotky = [],
+  poptavkaId,
 }: {
   row: PoptavkaTechnickeUdaje | null;
   fotky?: PoptavkaFotkaWithUrl[];
+  poptavkaId?: string;
 }) {
   if (!row) {
     return (
@@ -219,17 +222,15 @@ export default function PoptavkaTechnickePodminkyReadOnly({
                       key={fotka.id}
                       className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.02]"
                     >
-                      {fotka.signedUrl ? (
-                        <img
-                          src={fotka.signedUrl}
-                          alt={fotka.original_filename ?? POPTAVKA_FOTKA_TYP_LABELS[fotka.typ]}
-                          className="aspect-[4/3] w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex aspect-[4/3] items-center justify-center text-sm text-slate-500">
-                          Náhled nedostupný
-                        </div>
-                      )}
+                      <PoptavkaFotkaImage
+                        fotkaId={fotka.id}
+                        poptavkaId={poptavkaId}
+                        alt={fotka.original_filename ?? POPTAVKA_FOTKA_TYP_LABELS[fotka.typ]}
+                        thumbnailSignedUrl={fotka.thumbnailSignedUrl}
+                        signedUrl={fotka.signedUrl}
+                        className="aspect-[4/3] w-full object-cover"
+                        lazyOriginalFallback={!fotka.thumbnailSignedUrl}
+                      />
                       {fotka.original_filename ? (
                         <div className="truncate px-3 py-2 text-xs text-slate-400">
                           {fotka.original_filename}

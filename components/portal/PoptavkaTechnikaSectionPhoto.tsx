@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import PoptavkaFotkaImage from "@/components/portal/PoptavkaFotkaImage";
 import {
   POPTAVKA_FOTKY_ACCEPT,
   POPTAVKA_FOTKA_TYP_LABELS,
@@ -79,6 +80,16 @@ export default function PoptavkaTechnikaSectionPhoto({
     });
   }
 
+  function retryPending(photo: PendingPhoto) {
+    const nextPending = state.pending.map((row) =>
+      row.id === photo.id
+        ? { ...row, status: "pending" as const, errorMessage: undefined }
+        : row
+    );
+    onPendingChange({ ...state, pending: nextPending });
+    onPendingPhotosAdded?.([{ ...photo, status: "pending", errorMessage: undefined }]);
+  }
+
   const hasPhotos = state.pending.length > 0 || state.saved.length > 0;
   const actionButtonClass =
     "inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-amber-500/40 hover:bg-white/[0.04]";
@@ -139,6 +150,8 @@ export default function PoptavkaTechnikaSectionPhoto({
                 className={`aspect-square w-full object-cover ${
                   photo.status === "uploading" ? "opacity-60" : ""
                 }`}
+                loading="lazy"
+                decoding="async"
               />
               {photo.status === "uploading" ? (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-[10px] font-semibold text-amber-100">
@@ -146,8 +159,19 @@ export default function PoptavkaTechnikaSectionPhoto({
                 </div>
               ) : null}
               {photo.status === "failed" ? (
-                <div className="absolute inset-x-0 bottom-0 bg-red-950/90 px-1 py-1 text-[10px] leading-tight text-red-100">
-                  {photo.errorMessage ?? "Nepodařilo se uložit"}
+                <div className="absolute inset-x-0 bottom-0 space-y-1 bg-red-950/90 px-1 py-1">
+                  <p className="text-[10px] leading-tight text-red-100">
+                    {photo.errorMessage ?? "Nepodařilo se uložit"}
+                  </p>
+                  {!readOnly ? (
+                    <button
+                      type="button"
+                      onClick={() => retryPending(photo)}
+                      className="text-[10px] font-semibold text-amber-200 hover:text-amber-100"
+                    >
+                      Zkusit znovu
+                    </button>
+                  ) : null}
                 </div>
               ) : photo.status === "pending" || !photo.status ? (
                 <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5 text-[10px] text-slate-200">
@@ -168,17 +192,14 @@ export default function PoptavkaTechnikaSectionPhoto({
 
           {state.saved.map((fotka) => (
             <div key={fotka.id} className="relative overflow-hidden rounded-lg border border-emerald-500/30">
-              {fotka.signedUrl ? (
-                <img
-                  src={fotka.signedUrl}
-                  alt={fotka.original_filename ?? POPTAVKA_FOTKA_TYP_LABELS[fotka.typ]}
-                  className="aspect-square w-full object-cover"
-                />
-              ) : (
-                <div className="flex aspect-square items-center justify-center bg-white/5 text-[10px] text-slate-500">
-                  Náhled
-                </div>
-              )}
+              <PoptavkaFotkaImage
+                fotkaId={fotka.id}
+                poptavkaId={poptavkaId}
+                alt={fotka.original_filename ?? POPTAVKA_FOTKA_TYP_LABELS[fotka.typ]}
+                thumbnailSignedUrl={fotka.thumbnailSignedUrl}
+                signedUrl={fotka.signedUrl}
+                lazyOriginalFallback={!fotka.thumbnailSignedUrl}
+              />
               <div className="absolute inset-x-0 bottom-0 bg-emerald-950/80 px-1 py-0.5 text-[10px] text-emerald-100">
                 Uložená
               </div>
