@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { fetchKlientFromAres, normalizeIco } from "@/lib/ares/klient-ares";
+import EmailDomainHint from "@/components/portal/EmailDomainHint";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
 import { portalRegisterAction } from "@/app/portal/actions";
 
@@ -253,6 +254,7 @@ export default function PortalRegistraceClient() {
               autoComplete="email"
               className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none ring-amber-500/40 focus:ring-2"
             />
+            <EmailDomainHint email={form.email} />
           </label>
 
           <label className="block space-y-2">

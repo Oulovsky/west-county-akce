@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { verifyInternalKlientiReadPage } from "@/lib/auth/admin-access-server";
 import { loadInternalKlientDetail } from "@/lib/admin/klienti-server";
-import { POPTAVKA_STAV_LABELS } from "@/lib/client-portal/labels";
 import { createClient } from "@/lib/supabase/server";
+import KlientPoptavkyDiagnosticPanel from "../KlientPoptavkyDiagnosticPanel";
 
 function formatDate(value: string | null) {
   if (!value) return "—";
@@ -29,10 +29,13 @@ function DetailField({ label, value }: { label: string; value: string | null | u
 
 export default async function AdminKlientDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ saved?: string; email?: string; error?: string }>;
 }) {
   const { id } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const supabase = await createClient();
   const access = await verifyInternalKlientiReadPage(supabase);
 
@@ -61,8 +64,21 @@ export default async function AdminKlientDetailPage({
 
   const { klient } = detail;
 
+  const savedKey = resolvedSearchParams?.saved;
+  const savedMessage =
+    savedKey === "resend_submitted"
+      ? "Potvrzovací e-mail o přijetí poptávky byl znovu odeslán."
+      : savedKey === "released_koncept"
+        ? "Koncept byl uvolněn do interního inboxu a klientovi odesláno potvrzení."
+        : null;
+
   return (
     <div className="space-y-6 p-6">
+      {savedMessage ? (
+        <p className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
+          {savedMessage}
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="text-xs uppercase tracking-[0.14em] text-slate-500">
@@ -102,35 +118,11 @@ export default async function AdminKlientDetailPage({
 
       <section className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
         <h2 className="text-lg font-semibold text-white">Poptávky</h2>
-        {detail.poptavky.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-500">Žádné poptávky.</p>
-        ) : (
-          <ul className="mt-4 space-y-2">
-            {detail.poptavky.map((row) => (
-              <li
-                key={row.poptavka_id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3 text-sm"
-              >
-                <div>
-                  <div className="font-medium text-white">
-                    {row.cislo_poptavky} · {row.misto_nazev ?? "—"}
-                  </div>
-                  <div className="text-slate-500">
-                    {POPTAVKA_STAV_LABELS[row.stav as keyof typeof POPTAVKA_STAV_LABELS] ??
-                      row.stav}{" "}
-                    · odesláno {formatDate(row.odeslano_at)}
-                  </div>
-                </div>
-                <Link
-                  href={`/zakazky/poptavky/${row.poptavka_id}`}
-                  className="font-semibold text-blue-300 hover:text-blue-200"
-                >
-                  Detail poptávky
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
+        <p className="mt-1 text-xs text-slate-500">
+          Počet v seznamu klientů zahrnuje i koncepty. Interní inbox /zakazky/poptavky zobrazuje
+          jen odeslané a další zpracovávané stavy.
+        </p>
+        <KlientPoptavkyDiagnosticPanel klientId={id} poptavky={detail.poptavky} />
       </section>
 
       <section className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">

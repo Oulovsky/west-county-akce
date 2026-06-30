@@ -8,6 +8,7 @@ import {
   getPortalAppBaseUrl,
   outboundResultToEmailQuery,
   trySendPoptavkaOutbound,
+  trySendPoptavkaSubmittedConfirmation,
 } from "@/lib/client-portal/poptavka-email-server";
 import {
   canAcceptPoptavkaForProcessing,
@@ -15,9 +16,21 @@ import {
   canInternalApproveForConvert,
   loadInternalPoptavkaDetail,
 } from "@/lib/client-portal/poptavka-internal-server";
+import {
+  canAdminReleaseKonceptToInbox,
+  canResendPoptavkaSubmittedConfirmation,
+} from "@/lib/client-portal/poptavka-inbox-visibility";
+import { notifyInternalTeamAboutSubmittedPoptavka } from "@/lib/client-portal/poptavka-notifications-server";
+import { getSafeNextPath } from "@/lib/auth/oauth-redirect";
 
 function redirectWithError(path: string, error: string): never {
   redirect(`${path}?error=${encodeURIComponent(error)}`);
+}
+
+function resolvePoptavkaActionRedirect(formData: FormData, poptavkaId: string, query = "") {
+  const redirectTo = getSafeNextPath(String(formData.get("redirect_to") ?? ""));
+  const base = redirectTo || `/zakazky/poptavky/${poptavkaId}`;
+  return query ? `${base}${base.includes("?") ? "&" : "?"}${query}` : base;
 }
 
 export async function returnPoptavkaToRevisionAction(formData: FormData) {
@@ -275,4 +288,116 @@ export async function convertPoptavkaToZakazkaAction(formData: FormData) {
     redirectUrl += "&misto_enrich_warning=1";
   }
   redirect(redirectUrl);
+}
+
+export async function resendPoptavkaSubmittedConfirmationAction(formData: FormData) {
+  const poptavkaId = String(formData.get("poptavka_id") ?? "").trim();
+  if (!poptavkaId) {
+    redirectWithError("/zakazky/poptavky", "missing_id");
+  }
+
+  const { supabase } = await requireInternalWriteAdminOrSef();
+  const detail = await loadInternalPoptavkaDetail(supabase, poptavkaId);
+
+  if (!detail) {
+    redirectWithError(resolvePoptavkaActionRedirect(formData, poptavkaId), "not_found");
+  }
+
+  if (!canResendPoptavkaSubmittedConfirmation(detail.stav)) {
+    redirectWithError(
+      resolvePoptavkaActionRedirect(formData, poptavkaId),
+      "invalid_state"
+    );
+  }
+
+  const emailResult = await trySendPoptavkaSubmittedConfirmation({
+    detail,
+    baseUrl: getPortalAppBaseUrl(await headers()),
+  });
+
+  revalidatePath("/zakazky/poptavky");
+  revalidatePath(`/zakazky/poptavky/${poptavkaId}`);
+  revalidatePath("/admin/klienti");
+
+  const emailQuery = outboundResultToEmailQuery(emailResult);
+  redirect(
+    resolvePoptavkaActionRedirect(
+      formData,
+      poptavkaId,
+      `saved=resend_submitted&email=${encodeURIComponent(emailQuery)}`
+    )
+  );
+}
+
+/** Uvolní dokončený koncept do inboxu (stav odeslana) a pošle potvrzení klientovi. */
+export async function adminReleaseKonceptPoptavkaAction(formData: FormData) {
+  const poptavkaId = String(formData.get("poptavka_id") ?? "").trim();
+  if (!poptavkaId) {
+    redirectWithError("/zakazky/poptavky", "missing_id");
+  }
+
+  const { supabase } = await requireInternalWriteAdminOrSef();
+  const detail = await loadInternalPoptavkaDetail(supabase, poptavkaId);
+
+  if (!detail) {
+    redirectWithError(resolvePoptavkaActionRedirect(formData, poptavkaId), "not_found");
+  }
+
+  if (!canAdminReleaseKonceptToInbox(detail.stav)) {
+    redirectWithError(
+      resolvePoptavkaActionRedirect(formData, poptavkaId),
+      "invalid_state"
+    );
+  }
+
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("poptavky")
+    .update({
+      stav: "odeslana",
+      odeslano_at: now,
+      zamitnuto_duvod: null,
+      updated_at: now,
+    })
+    .eq("poptavka_id", poptavkaId)
+    .eq("stav", "koncept");
+
+  if (error) {
+    redirectWithError(
+      resolvePoptavkaActionRedirect(formData, poptavkaId),
+      "save_failed"
+    );
+  }
+
+  try {
+    await notifyInternalTeamAboutSubmittedPoptavka({
+      poptavkaId,
+      cisloPoptavky: detail.cislo_poptavky,
+      mistoNazev: detail.misto_nazev,
+      isResubmit: false,
+    });
+  } catch (notifyError) {
+    console.warn("[admin release koncept] internal notification failed:", notifyError);
+  }
+
+  const refreshedDetail = (await loadInternalPoptavkaDetail(supabase, poptavkaId)) ?? detail;
+  const emailResult = await trySendPoptavkaSubmittedConfirmation({
+    detail: refreshedDetail,
+    baseUrl: getPortalAppBaseUrl(await headers()),
+  });
+
+  revalidatePath("/zakazky/poptavky");
+  revalidatePath(`/zakazky/poptavky/${poptavkaId}`);
+  revalidatePath(`/portal/poptavka/${poptavkaId}`);
+  revalidatePath("/portal/poptavky");
+  revalidatePath("/admin/klienti");
+
+  const emailQuery = outboundResultToEmailQuery(emailResult);
+  redirect(
+    resolvePoptavkaActionRedirect(
+      formData,
+      poptavkaId,
+      `saved=released_koncept&email=${encodeURIComponent(emailQuery)}`
+    )
+  );
 }

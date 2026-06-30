@@ -46,6 +46,8 @@ export type KlientDetailData = {
     datum_od: string | null;
     datum_do: string | null;
     odeslano_at: string | null;
+    kontakt_email: string | null;
+    created_at: string;
   }>;
   zakazky: Array<{
     zakazka_id: string;
@@ -292,10 +294,10 @@ export async function loadInternalKlientDetail(
     supabase
       .from("poptavky")
       .select(
-        "poptavka_id, cislo_poptavky, stav, misto_nazev, datum_od, datum_do, odeslano_at"
+        "poptavka_id, cislo_poptavky, stav, misto_nazev, datum_od, datum_do, odeslano_at, kontakt_email, created_at"
       )
       .eq("klient_id", klientId)
-      .order("odeslano_at", { ascending: false }),
+      .order("created_at", { ascending: false }),
     supabase
       .from("zakazky")
       .select("zakazka_id, cislo_zakazky, nazev, datum_od, zrusena")

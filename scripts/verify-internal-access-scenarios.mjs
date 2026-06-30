@@ -15,9 +15,15 @@ const normalizeScenariosUrl = pathToFileURL(
 ).href;
 
 const { runInternalAccessScenarios } = await import(scenariosUrl);
-const { runNormalizeAuthEmailScenarios } = await import(normalizeScenariosUrl);
+const { runNormalizeAuthEmailScenarios, runEmailDomainHintScenarios } = await import(
+  normalizeScenariosUrl
+);
 
-const results = [...runInternalAccessScenarios(), ...runNormalizeAuthEmailScenarios()];
+const results = [
+  ...runInternalAccessScenarios(),
+  ...runNormalizeAuthEmailScenarios(),
+  ...runEmailDomainHintScenarios(),
+];
 let failed = 0;
 
 for (const row of results) {

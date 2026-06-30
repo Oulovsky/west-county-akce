@@ -39,6 +39,7 @@ import { createClient } from "@/lib/supabase/server";
 import PoptavkaInboxActions, {
   PoptavkaInterniPoznamkaForm,
 } from "../PoptavkaInboxActions";
+import PoptavkaSubmittedEmailActions from "../PoptavkaSubmittedEmailActions";
 import PoptavkaOutboundMessagePanel from "../PoptavkaOutboundMessagePanel";
 
 function ReadOnlyField({ label, value }: { label: string; value: string | null | undefined }) {
@@ -58,6 +59,8 @@ const SAVED_MESSAGES: Record<string, string> = {
   approved: "Poptávka byla schválena k převodu na zakázku.",
   note: "Interní poznámka byla uložena.",
   converted: "Interní zakázka byla vytvořena.",
+  resend_submitted: "Potvrzovací e-mail o přijetí poptávky byl znovu odeslán.",
+  released_koncept: "Koncept byl uvolněn do inboxu a klientovi odesláno potvrzení.",
 };
 
 const EMAIL_STATUS_MESSAGES: Record<string, string> = {
@@ -512,6 +515,13 @@ export default async function ZakazkyPoptavkaDetailPage({
       <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
         <PoptavkaTechnickePodminkyReadOnly row={detail.technicke_udaje} fotky={detail.fotky} />
       </div>
+
+      <PoptavkaSubmittedEmailActions
+        poptavkaId={detail.poptavka_id}
+        stav={detail.stav}
+        odeslanoAt={detail.odeslano_at}
+        readOnly={readOnly}
+      />
 
       <PoptavkaInterniPoznamkaForm
         poptavkaId={detail.poptavka_id}

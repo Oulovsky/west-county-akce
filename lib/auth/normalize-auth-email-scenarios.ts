@@ -3,6 +3,7 @@ import {
   getAuthEmailDisplayValue,
   normalizeAuthEmailForComparison,
 } from "@/lib/auth/normalize-auth-email";
+import { getEmailComTypoHint } from "@/lib/client-portal/email-domain-hint";
 
 export type ScenarioResult = { name: string; ok: boolean };
 
@@ -45,6 +46,20 @@ export function runNormalizeAuthEmailScenarios(): ScenarioResult[] {
     run(
       "non-gmail display only trims",
       getAuthEmailDisplayValue("  First.Last@Firma.cz  ") === "First.Last@Firma.cz"
+    ),
+  ];
+}
+
+export function runEmailDomainHintScenarios(): ScenarioResult[] {
+  return [
+    run(
+      "email.com typo hint shown",
+      getEmailComTypoHint("prchal.jarda@email.com") ===
+        "Zadali jste adresu @email.com. Nemysleli jste @email.cz?"
+    ),
+    run(
+      "email.cz no typo hint",
+      getEmailComTypoHint("prchal.jarda@email.cz") === null
     ),
   ];
 }

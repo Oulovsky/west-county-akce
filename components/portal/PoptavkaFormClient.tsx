@@ -39,6 +39,7 @@ import PoptavkaLogistikaOknaPanel from "@/components/portal/PoptavkaLogistikaOkn
 import PoptavkaMistoKnowHowPanel from "@/components/portal/PoptavkaMistoKnowHowPanel";
 import PoptavkaSestavaKonfigurator from "@/components/portal/PoptavkaSestavaKonfigurator";
 import PoptavkaTechnickePodminkyStep from "@/components/portal/PoptavkaTechnickePodminkyStep";
+import EmailDomainHint from "@/components/portal/EmailDomainHint";
 import {
   createInitialSectionPhotos,
   emptySectionPhotoState,
@@ -1694,6 +1695,7 @@ function PoptavkaFormClientInner({
                     required
                     className={inputClass}
                   />
+                  <EmailDomainHint email={form.kontakt_email} />
                 </label>
               </div>
             </section>
