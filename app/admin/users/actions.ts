@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAppAdmin } from "@/lib/auth/admin-access-server";
+import {
+  emailsMatchForAuthComparison,
+  normalizeAuthEmailForComparison,
+} from "@/lib/auth/normalize-auth-email";
 import { shouldShowInAdminEmployeeList } from "@/lib/auth/client-profile-isolation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -346,7 +350,7 @@ async function findAuthUserIdByEmail(
   admin: ReturnType<typeof createAdminClient>,
   email: string
 ): Promise<string | null> {
-  const normalized = email.trim().toLowerCase();
+  const normalized = normalizeAuthEmailForComparison(email);
   if (!normalized) return null;
 
   const perPage = 200;
@@ -359,8 +363,8 @@ async function findAuthUserIdByEmail(
     }
 
     const users = data.users ?? [];
-    const match = users.find(
-      (user) => user.email?.trim().toLowerCase() === normalized
+    const match = users.find((user) =>
+      emailsMatchForAuthComparison(user.email, email)
     );
     if (match?.id) return match.id;
 
@@ -378,14 +382,12 @@ async function isEmailUsedByOtherActiveProfile(
 ) {
   const { data, error } = await admin
     .from("profiles")
-    .select("user_id")
-    .eq("email", email)
+    .select("user_id, email")
     .eq("aktivni", true)
-    .neq("user_id", excludeUserId)
-    .limit(1);
+    .neq("user_id", excludeUserId);
 
   if (error) throw new Error(error.message);
-  return (data ?? []).length > 0;
+  return (data ?? []).some((row) => emailsMatchForAuthComparison(row.email, email));
 }
 
 export async function updateUserEmail(

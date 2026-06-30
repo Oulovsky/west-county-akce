@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { checkSystemAdminEmail } from "@/lib/auth/admin-access";
+import { getAuthEmailDisplayValue } from "@/lib/auth/normalize-auth-email";
 import {
   getAuthProvidersFromUser,
   isEmployeeLoginAllowed,
@@ -56,7 +57,7 @@ export default function AuthGate({
         return;
       }
 
-      const email = session.user.email?.trim().toLowerCase();
+      const email = getAuthEmailDisplayValue(session.user.email);
       if (!email) {
         await supabase.auth.signOut();
         if (!mounted) return;

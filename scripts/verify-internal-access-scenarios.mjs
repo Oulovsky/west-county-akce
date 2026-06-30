@@ -10,10 +10,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const scenariosUrl = pathToFileURL(
   join(__dirname, "..", "lib", "auth", "internal-access-scenarios.ts")
 ).href;
+const normalizeScenariosUrl = pathToFileURL(
+  join(__dirname, "..", "lib", "auth", "normalize-auth-email-scenarios.ts")
+).href;
 
 const { runInternalAccessScenarios } = await import(scenariosUrl);
+const { runNormalizeAuthEmailScenarios } = await import(normalizeScenariosUrl);
 
-const results = runInternalAccessScenarios();
+const results = [...runInternalAccessScenarios(), ...runNormalizeAuthEmailScenarios()];
 let failed = 0;
 
 for (const row of results) {

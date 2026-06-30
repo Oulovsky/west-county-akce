@@ -3,6 +3,10 @@ import "server-only";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 import { checkSystemAdminEmail } from "@/lib/auth/admin-access";
+import {
+  emailsMatchForAuthComparison,
+  getAuthEmailDisplayValue,
+} from "@/lib/auth/normalize-auth-email";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
 import {
   getAuthProvidersFromUser,
@@ -80,7 +84,7 @@ function buildAuthAccessContext(
     return emptyContext();
   }
 
-  const email = user.email?.trim().toLowerCase() ?? null;
+  const email = getAuthEmailDisplayValue(user.email);
   const authProviders = getAuthProvidersFromUser(user);
   const profileRole = profile?.role ?? null;
   const profileProvisioned = isProvisionedInternalProfile(profile ?? null);
@@ -119,11 +123,13 @@ export async function resolveAuthAccessContext(
     return emptyContext();
   }
 
-  const email = user.email?.trim().toLowerCase() ?? null;
+  const displayEmail = getAuthEmailDisplayValue(user.email);
   const [{ data: profile }, clientSession, systemAdminCheck] = await Promise.all([
     loadEmployeeProfile(supabase, user.id),
     loadClientPortalSession(supabase),
-    email ? checkSystemAdminEmail(supabase, email) : Promise.resolve({ isSystemAdmin: false, error: null }),
+    displayEmail
+      ? checkSystemAdminEmail(supabase, displayEmail)
+      : Promise.resolve({ isSystemAdmin: false, error: null }),
   ]);
 
   const hasActiveClientAccount = clientSession.kind === "active";
@@ -199,7 +205,11 @@ export async function isInternalEmployeeAllowed(
   email: string
 ): Promise<boolean> {
   const context = await resolveAuthAccessContext(supabase);
-  return context.userId === userId && context.email === email && context.isInternalEmployee;
+  return (
+    context.userId === userId &&
+    emailsMatchForAuthComparison(context.email, email) &&
+    context.isInternalEmployee
+  );
 }
 
 export async function isActiveClientOnlyUser(
@@ -208,7 +218,11 @@ export async function isActiveClientOnlyUser(
   email: string
 ): Promise<boolean> {
   const context = await resolveAuthAccessContext(supabase);
-  return context.userId === userId && context.email === email && context.isClientOnly;
+  return (
+    context.userId === userId &&
+    emailsMatchForAuthComparison(context.email, email) &&
+    context.isClientOnly
+  );
 }
 
 export async function assertInternalApiAccess(

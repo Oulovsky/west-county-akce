@@ -1,11 +1,18 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  emailsMatchForAuthComparison,
+  normalizeAuthEmail,
+  normalizeAuthEmailForComparison,
+} from "@/lib/auth/normalize-auth-email";
 
 export const SYSTEM_ADMIN_EMAILS_TABLE = "system_admin_emails";
 
-export function normalizeAuthEmail(email?: string | null): string | null {
-  const normalized = email?.trim().toLowerCase();
-  return normalized || null;
-}
+export {
+  emailsMatchForAuthComparison,
+  getAuthEmailDisplayValue,
+  normalizeAuthEmail,
+  normalizeAuthEmailForComparison,
+} from "@/lib/auth/normalize-auth-email";
 
 export function isAdminRole(role: string | null | undefined): boolean {
   return role === "admin";
@@ -72,16 +79,14 @@ export async function checkSystemAdminEmail(
   supabase: SupabaseClient,
   email?: string | null
 ): Promise<SystemAdminEmailCheckResult> {
-  const normalized = normalizeAuthEmail(email);
+  const normalized = normalizeAuthEmailForComparison(email);
   if (!normalized) {
     return { isSystemAdmin: false, error: null };
   }
 
   const { data, error } = await supabase
     .from(SYSTEM_ADMIN_EMAILS_TABLE)
-    .select("email")
-    .eq("email", normalized)
-    .maybeSingle();
+    .select("email");
 
   if (error) {
     if (isMissingTableError(error.message)) {
@@ -94,7 +99,11 @@ export async function checkSystemAdminEmail(
     return { isSystemAdmin: false, error: error.message };
   }
 
-  return { isSystemAdmin: Boolean(data), error: null };
+  const isSystemAdmin = (data ?? []).some((row) =>
+    emailsMatchForAuthComparison(row.email, email)
+  );
+
+  return { isSystemAdmin, error: null };
 }
 
 export async function resolveAppAdminAccess(
