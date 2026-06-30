@@ -55,19 +55,26 @@ using (
   )
 );
 
-drop policy if exists "system_admin_emails_select_own" on public.system_admin_emails;
-create policy "system_admin_emails_select_own"
-on public.system_admin_emails
-for select
-to authenticated
-using (
-  public.normalize_auth_email_for_comparison(email) = public.normalize_auth_email_for_comparison(
-    coalesce(
-      (select u.email::text from auth.users u where u.id = auth.uid()),
-      ''
-    )
-  )
-);
-
 comment on table public.povolene_emaily is
   'Interní beta allowlist. Porovnání přes normalize_auth_email_for_comparison (Gmail tečky/+tag).';
+
+-- system_admin_emails nemusí v produkci existovat (volitelná migrace 20260520120000).
+do $$
+begin
+  if to_regclass('public.system_admin_emails') is not null then
+    drop policy if exists "system_admin_emails_select_own" on public.system_admin_emails;
+
+    create policy "system_admin_emails_select_own"
+    on public.system_admin_emails
+    for select
+    to authenticated
+    using (
+      public.normalize_auth_email_for_comparison(email) = public.normalize_auth_email_for_comparison(
+        coalesce(
+          (select u.email::text from auth.users u where u.id = auth.uid()),
+          ''
+        )
+      )
+    );
+  end if;
+end $$;
