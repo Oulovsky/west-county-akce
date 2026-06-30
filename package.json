@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "verify:auth-isolation": "npx tsx scripts/verify-internal-access-scenarios.mjs",
     "manual:pdf": "node scripts/generate-interni-manual-pdf.mjs"
   },
   "dependencies": {

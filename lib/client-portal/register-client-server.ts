@@ -6,6 +6,7 @@ import type { ClientRegistrationFormSnapshot } from "@/lib/client-portal/registr
 import { splitContactName } from "@/lib/client-portal/registration-snapshot";
 import type { ClientRegistrationSnapshot } from "@/lib/client-portal/registration-snapshot";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { removeSpuriousProfileForClientOnlyUser } from "@/lib/auth/client-profile-isolation";
 
 function throwDbError(error: { message: string; code?: string; details?: string; hint?: string }) {
   const err = new Error(error.message) as Error & {
@@ -146,6 +147,11 @@ export async function activateClientPortalRegistration({
   if (registrationError) {
     throwDbError(registrationError);
   }
+
+  const { removeSpuriousProfileForClientOnlyUser } = await import(
+    "@/lib/auth/client-profile-isolation"
+  );
+  await removeSpuriousProfileForClientOnlyUser(admin, userId);
 
   return { klientId };
 }

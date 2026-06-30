@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAppAdmin } from "@/lib/auth/admin-access-server";
+import { isProvisionedInternalEmployeeRow } from "@/lib/auth/client-profile-isolation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -53,7 +54,7 @@ export async function getUsers() {
     throw new Error(error.message);
   }
 
-  const users = data ?? [];
+  const users = (data ?? []).filter((row) => isProvisionedInternalEmployeeRow(row));
   const userIds = users.map((row) => row.user_id).filter(Boolean);
 
   if (userIds.length === 0) return users;
