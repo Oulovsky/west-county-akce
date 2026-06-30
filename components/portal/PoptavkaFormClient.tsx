@@ -762,6 +762,9 @@ function PoptavkaFormClientInner({
       original_filename: string | null;
       thumbnailSignedUrl: string | null;
       signedUrl: string | null;
+      source_fotka_id?: string | null;
+      size_bytes?: number | null;
+      storage_path?: string | null;
     }>
   ) {
     if (fotky.length === 0) return;
@@ -784,6 +787,9 @@ function PoptavkaFormClientInner({
               original_filename: row.original_filename,
               thumbnailSignedUrl: row.thumbnailSignedUrl,
               signedUrl: row.signedUrl,
+              source_fotka_id: row.source_fotka_id ?? null,
+              size_bytes: row.size_bytes ?? null,
+              storage_path: row.storage_path ?? null,
             }))
           ),
         };

@@ -11,6 +11,9 @@ export type SavedSectionFotka = {
   original_filename: string | null;
   thumbnailSignedUrl: string | null;
   signedUrl: string | null;
+  source_fotka_id?: string | null;
+  size_bytes?: number | null;
+  storage_path?: string | null;
 };
 
 export type PendingPhoto = {
@@ -48,6 +51,9 @@ export function createInitialSectionPhotos(
             original_filename: row.original_filename,
             thumbnailSignedUrl: row.thumbnailSignedUrl,
             signedUrl: row.signedUrl,
+            source_fotka_id: row.source_fotka_id,
+            size_bytes: row.size_bytes,
+            storage_path: row.storage_path,
           }))
       ),
     };

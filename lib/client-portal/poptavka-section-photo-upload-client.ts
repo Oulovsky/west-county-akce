@@ -292,6 +292,9 @@ export function applySectionPhotoUploadResults(
           original_filename: row.fotka.original_filename,
           thumbnailSignedUrl: row.fotka.thumbnailSignedUrl,
           signedUrl: row.fotka.signedUrl,
+          source_fotka_id: row.fotka.source_fotka_id,
+          size_bytes: row.fotka.size_bytes,
+          storage_path: row.fotka.storage_path,
         }))
       ),
     };

@@ -16,6 +16,10 @@ import {
   signPoptavkaFotkaThumbnailUrls,
   type PoptavkaFotkaWithUrl,
 } from "@/lib/client-portal/poptavka-fotky-server";
+import {
+  logPoptavkaFotkyLoadStats,
+  normalizePoptavkaFotkyRows,
+} from "@/lib/client-portal/poptavka-fotky-dedup";
 import { requireActiveClientPortalSession } from "@/lib/auth/client-portal-access-server";
 
 export type PortalSetupSelection = PoptavkaSetup & {
@@ -244,9 +248,16 @@ export async function loadPoptavkaDetail(
   }
 
   const thumbnailStartedAt = Date.now();
-  const fotky = await signPoptavkaFotkaThumbnailUrls(
-    (fotkyMetadata.data ?? []) as import("@/lib/client-portal/types").PoptavkaFotka[]
+  const rawFotky = (fotkyMetadata.data ?? []) as import("@/lib/client-portal/types").PoptavkaFotka[];
+  const { rows: normalizedFotky, duplicatesRemoved, byTyp } = normalizePoptavkaFotkyRows(rawFotky);
+  logPoptavkaFotkyLoadStats(
+    poptavkaId,
+    rawFotky.length,
+    normalizedFotky.length,
+    duplicatesRemoved,
+    byTyp
   );
+  const fotky = await signPoptavkaFotkaThumbnailUrls(normalizedFotky);
   const thumbnailMs = Date.now() - thumbnailStartedAt;
   if (logTiming) {
     console.info("[portal poptavka detail] thumbnail urls count/ms", {

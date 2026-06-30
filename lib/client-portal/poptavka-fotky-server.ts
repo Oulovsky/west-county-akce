@@ -12,7 +12,7 @@ import {
 import type { PoptavkaFotka } from "@/lib/client-portal/types";
 import { POPTAVKA_FOTKY_BUCKET } from "@/lib/client-portal/types";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { logPoptavkaFotkyPersistStats } from "@/lib/client-portal/poptavka-fotky-dedup";
+import { logPoptavkaFotkyPersistStats, logPoptavkaFotkyLoadStats, normalizePoptavkaFotkyRows, getCanonicalSourceFotkaId, hasExistingPoptavkaFotkaDuplicate } from "@/lib/client-portal/poptavka-fotky-dedup";
 
 export type { PoptavkaFotkaWithUrl };
 
@@ -77,7 +77,15 @@ export async function loadPoptavkaFotkyWithThumbnailUrls(
   supabase: SupabaseClient,
   poptavkaId: string
 ): Promise<PoptavkaFotkaWithUrl[]> {
-  const rows = await loadPoptavkaFotkyMetadata(supabase, poptavkaId);
+  const rawRows = await loadPoptavkaFotkyMetadata(supabase, poptavkaId);
+  const { rows, duplicatesRemoved, byTyp } = normalizePoptavkaFotkyRows(rawRows);
+  logPoptavkaFotkyLoadStats(
+    poptavkaId,
+    rawRows.length,
+    rows.length,
+    duplicatesRemoved,
+    byTyp
+  );
   return signPoptavkaFotkaThumbnailUrls(rows);
 }
 
@@ -446,7 +454,9 @@ export async function copyTechnikaPhotosFromSourcePoptavka(
         .order("poradi", { ascending: true }),
       supabase
         .from("poptavka_fotky")
-        .select("id, source_fotka_id, typ, storage_path")
+        .select(
+          "id, source_fotka_id, typ, storage_path, original_filename, size_bytes, created_at"
+        )
         .eq("poptavka_id", targetPoptavkaId),
     ]);
 
@@ -461,12 +471,14 @@ export async function copyTechnikaPhotosFromSourcePoptavka(
     TECHNIKA_FOTKA_TYPY.has(row.typ as string)
   );
 
-  const existingSourceIds = new Set<string>();
-  for (const row of existingTarget ?? []) {
-    if (row.source_fotka_id) {
-      existingSourceIds.add(row.source_fotka_id as string);
-    }
-  }
+  const existingTargetRows = (existingTarget ?? []) as PoptavkaFotka[];
+
+  console.info("[poptavka fotky copy] start", {
+    sourcePoptavkaId,
+    targetPoptavkaId,
+    sourcePhotosCount: technikaRows.length,
+    existingTargetCount: existingTargetRows.length,
+  });
 
   if (technikaRows.length === 0) {
     logPoptavkaFotkyPersistStats("copied from history count", targetPoptavkaId, {
@@ -491,8 +503,17 @@ export async function copyTechnikaPhotosFromSourcePoptavka(
   let skippedDuplicateCount = 0;
 
   for (const row of technikaRows) {
-    const sourceFotkaId = row.id as string;
-    if (existingSourceIds.has(sourceFotkaId)) {
+    const canonicalSourceFotkaId = getCanonicalSourceFotkaId(row as PoptavkaFotka);
+    const candidate = {
+      id: canonicalSourceFotkaId,
+      typ: row.typ as string,
+      source_fotka_id: canonicalSourceFotkaId,
+      storage_path: row.storage_path as string,
+      original_filename: row.original_filename as string | null,
+      size_bytes: row.size_bytes as number | null,
+    };
+
+    if (hasExistingPoptavkaFotkaDuplicate(existingTargetRows, candidate)) {
       skippedDuplicateCount += 1;
       continue;
     }
@@ -511,7 +532,7 @@ export async function copyTechnikaPhotosFromSourcePoptavka(
       console.error("[poptavka fotky] copy download failed", {
         sourcePoptavkaId,
         targetPoptavkaId,
-        sourceFotkaId,
+        sourceFotkaId: canonicalSourceFotkaId,
         message: downloadError?.message ?? "no blob",
       });
       continue;
@@ -527,7 +548,7 @@ export async function copyTechnikaPhotosFromSourcePoptavka(
       console.error("[poptavka fotky] copy upload failed", {
         sourcePoptavkaId,
         targetPoptavkaId,
-        sourceFotkaId,
+        sourceFotkaId: canonicalSourceFotkaId,
         message: uploadError.message,
       });
       continue;
@@ -566,7 +587,7 @@ export async function copyTechnikaPhotosFromSourcePoptavka(
         mime_type: mimeType,
         size_bytes: row.size_bytes,
         thumbnail_size_bytes: thumbnailSizeBytes,
-        source_fotka_id: sourceFotkaId,
+        source_fotka_id: canonicalSourceFotkaId,
       })
       .select(POPTAVKA_FOTKA_SELECT)
       .single();
@@ -577,13 +598,12 @@ export async function copyTechnikaPhotosFromSourcePoptavka(
       await admin.storage.from(POPTAVKA_FOTKY_BUCKET).remove(pathsToRemove);
       if (insertError?.code === "23505") {
         skippedDuplicateCount += 1;
-        existingSourceIds.add(sourceFotkaId);
         continue;
       }
       console.error("[poptavka fotky] copy db insert failed", {
         sourcePoptavkaId,
         targetPoptavkaId,
-        sourceFotkaId,
+        sourceFotkaId: canonicalSourceFotkaId,
         message: insertError?.message ?? "no row",
       });
       continue;
@@ -591,11 +611,19 @@ export async function copyTechnikaPhotosFromSourcePoptavka(
 
     poradi += 1;
     copiedFromHistoryCount += 1;
-    existingSourceIds.add(sourceFotkaId);
+    existingTargetRows.push(inserted as PoptavkaFotka);
     copied.push(await signPoptavkaFotkaRowAfterUpload(inserted as PoptavkaFotka));
   }
 
   const finalCount = existingKeptCount + copiedFromHistoryCount;
+  console.info("[poptavka fotky copy] done", {
+    sourcePoptavkaId,
+    targetPoptavkaId,
+    sourcePhotosCount: technikaRows.length,
+    copiedCount: copiedFromHistoryCount,
+    skippedDuplicateCount,
+    finalTargetCount: finalCount,
+  });
   logPoptavkaFotkyPersistStats("copied from history count", targetPoptavkaId, {
     existingKeptCount,
     copiedFromHistoryCount,

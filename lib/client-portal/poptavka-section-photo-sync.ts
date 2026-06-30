@@ -1,4 +1,4 @@
-import { dedupeSavedSectionFotky } from "@/lib/client-portal/poptavka-fotky-dedup";
+import { dedupeSavedSectionFotky, buildPoptavkaFotkaSemanticKeys } from "@/lib/client-portal/poptavka-fotky-dedup";
 import type {
   SavedSectionFotka,
   SectionPhotoState,
@@ -13,6 +13,28 @@ export type SectionPhotoSyncStats = {
   pendingAfter: number;
 };
 
+function isSameSavedSectionFotka(a: SavedSectionFotka, b: SavedSectionFotka) {
+  const keysA = buildPoptavkaFotkaSemanticKeys({
+    id: a.id,
+    typ: a.typ,
+    storage_path: a.storage_path ?? null,
+    source_fotka_id: a.source_fotka_id ?? null,
+    original_filename: a.original_filename,
+    size_bytes: a.size_bytes ?? null,
+  });
+  const keysB = new Set(
+    buildPoptavkaFotkaSemanticKeys({
+      id: b.id,
+      typ: b.typ,
+      storage_path: b.storage_path ?? null,
+      source_fotka_id: b.source_fotka_id ?? null,
+      original_filename: b.original_filename,
+      size_bytes: b.size_bytes ?? null,
+    })
+  );
+  return keysA.some((key) => keysB.has(key));
+}
+
 export function mergeSectionPhotoStateFromServer(
   current: SectionPhotoState,
   serverSaved: SavedSectionFotka[]
@@ -21,36 +43,15 @@ export function mergeSectionPhotoStateFromServer(
   const localDeduped = dedupeSavedSectionFotky(current.saved);
   const pendingBefore = current.pending.length;
 
-  const savedById = new Map<string, SavedSectionFotka>();
-  let skippedOverwriteCount = 0;
-
-  for (const row of localDeduped) {
-    savedById.set(row.id, row);
-  }
-
-  for (const row of serverDeduped) {
-    const existing = savedById.get(row.id);
-    if (!existing) {
-      savedById.set(row.id, row);
-      continue;
-    }
-
-    skippedOverwriteCount += 1;
-    savedById.set(row.id, {
-      ...existing,
-      popis: existing.popis ?? row.popis,
-      original_filename: existing.original_filename ?? row.original_filename,
-      thumbnailSignedUrl: existing.thumbnailSignedUrl ?? row.thumbnailSignedUrl,
-      signedUrl: existing.signedUrl ?? row.signedUrl,
-    });
-  }
-
-  const mergedSaved = dedupeSavedSectionFotky(Array.from(savedById.values()));
-  const pending = current.pending;
+  const serverOnly = serverDeduped.filter(
+    (row) => !localDeduped.some((local) => isSameSavedSectionFotka(local, row))
+  );
+  const skippedOverwriteCount = serverDeduped.length - serverOnly.length;
+  const mergedSaved = dedupeSavedSectionFotky([...localDeduped, ...serverOnly]);
 
   return {
     state: {
-      pending,
+      pending: current.pending,
       saved: mergedSaved,
     },
     stats: {
@@ -59,7 +60,7 @@ export function mergeSectionPhotoStateFromServer(
       serverSavedCount: serverDeduped.length,
       mergedSavedCount: mergedSaved.length,
       skippedOverwriteCount,
-      pendingAfter: pending.length,
+      pendingAfter: current.pending.length,
     },
   };
 }
