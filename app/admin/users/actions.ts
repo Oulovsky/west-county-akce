@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAppAdmin } from "@/lib/auth/admin-access-server";
-import { isProvisionedInternalEmployeeRow } from "@/lib/auth/client-profile-isolation";
+import { shouldShowInAdminEmployeeList } from "@/lib/auth/client-profile-isolation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -43,18 +43,40 @@ export async function getUsers() {
 
   const { supabase } = result;
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("user_id, email, role, jmeno, prijmeni, hodinovy_naklad_akce, bank_account_number, bank_code, iban, aktivni")
-    .order("aktivni", { ascending: false })
-    .order("prijmeni", { ascending: true })
-    .order("jmeno", { ascending: true });
+  const [{ data, error }, { data: clientAccounts, error: clientAccountsError }] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select(
+          "user_id, email, role, jmeno, prijmeni, hodinovy_naklad_akce, bank_account_number, bank_code, iban, aktivni"
+        )
+        .order("aktivni", { ascending: false })
+        .order("prijmeni", { ascending: true })
+        .order("jmeno", { ascending: true }),
+      supabase
+        .from("client_accounts")
+        .select("user_id")
+        .eq("stav", "active")
+        .not("klient_id", "is", null),
+    ]);
 
   if (error) {
     throw new Error(error.message);
   }
 
-  const users = (data ?? []).filter((row) => isProvisionedInternalEmployeeRow(row));
+  if (clientAccountsError) {
+    throw new Error(clientAccountsError.message);
+  }
+
+  const activeClientUserIds = new Set(
+    (clientAccounts ?? [])
+      .map((row) => row.user_id)
+      .filter((userId): userId is string => Boolean(userId))
+  );
+
+  const users = (data ?? []).filter((row) =>
+    shouldShowInAdminEmployeeList(row, activeClientUserIds)
+  );
   const userIds = users.map((row) => row.user_id).filter(Boolean);
 
   if (userIds.length === 0) return users;

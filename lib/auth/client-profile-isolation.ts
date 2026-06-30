@@ -1,18 +1,42 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isProvisionedInternalProfile } from "@/lib/auth/internal-access-rules";
+import {
+  isClientOnlyOrphanProfile,
+  isExplicitInternalRole,
+  shouldShowInAdminEmployeeList,
+} from "@/lib/auth/internal-access-rules";
 
 export type RemoveSpuriousProfileResult = "none" | "kept_internal" | "removed";
 
+export { shouldShowInAdminEmployeeList };
+
 /**
- * Odstraní řádek v profiles vytvořený automaticky při auth signup (trigger),
- * pokud jde o čistě klientský účet bez založeného interního profilu.
+ * Runtime cleanup po klientské registraci.
+ * Nikdy nemazat profily s interní rolí (admin, sef, zamestnanec, …).
+ * Mazat jen ne-interní orphan řádky u aktivního klientského účtu (edge case).
  */
 export async function removeSpuriousProfileForClientOnlyUser(
   supabase: SupabaseClient,
   userId: string
 ): Promise<RemoveSpuriousProfileResult> {
+  const { data: clientAccount, error: clientAccountError } = await supabase
+    .from("client_accounts")
+    .select("account_id, stav, klient_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (clientAccountError) {
+    throw new Error(clientAccountError.message);
+  }
+
+  const hasActiveClientAccount =
+    clientAccount?.stav === "active" && Boolean(clientAccount.klient_id);
+
+  if (!hasActiveClientAccount) {
+    return "none";
+  }
+
   const { data: profile, error } = await supabase
     .from("profiles")
     .select("user_id, email, role, aktivni, jmeno, prijmeni")
@@ -27,12 +51,16 @@ export async function removeSpuriousProfileForClientOnlyUser(
     return "none";
   }
 
-  if (isProvisionedInternalProfile(profile)) {
-    console.info("[client-profile-isolation] keep provisioned internal profile", {
+  if (isExplicitInternalRole(profile.role)) {
+    console.info("[client-profile-isolation] keep internal role profile", {
       userId,
       email: profile.email,
       role: profile.role,
     });
+    return "kept_internal";
+  }
+
+  if (!isClientOnlyOrphanProfile(profile, hasActiveClientAccount)) {
     return "kept_internal";
   }
 
@@ -45,25 +73,11 @@ export async function removeSpuriousProfileForClientOnlyUser(
     throw new Error(deleteError.message);
   }
 
-  console.info("[client-profile-isolation] removed spurious profile for client-only user", {
+  console.info("[client-profile-isolation] removed non-internal orphan profile", {
     userId,
     email: profile.email,
     role: profile.role,
   });
 
   return "removed";
-}
-
-export function isProvisionedInternalEmployeeRow(row: {
-  role: string;
-  aktivni?: boolean | null;
-  jmeno?: string | null;
-  prijmeni?: string | null;
-}) {
-  return isProvisionedInternalProfile({
-    role: row.role,
-    aktivni: row.aktivni ?? null,
-    jmeno: row.jmeno,
-    prijmeni: row.prijmeni,
-  });
 }

@@ -6,18 +6,19 @@ drop trigger if exists on_auth_user_created on auth.users;
 
 drop function if exists public.handle_new_user() cascade;
 
--- 2) Odstranit falešné profiles u aktivních klientských účtů bez založeného interního profilu
+-- 2) Cílený cleanup falešného orphan profilu u klientského účtu (viz také 20260629200000).
+-- Nesmí mazat reálné zaměstnance bez jména, kteří nemají aktivní client_accounts.
 delete from public.profiles p
-where exists (
-  select 1
-  from public.client_accounts ca
-  where ca.user_id = p.user_id
-    and ca.stav = 'active'
-    and ca.klient_id is not null
-)
-and p.role <> 'admin'
-and coalesce(btrim(p.jmeno), '') = ''
-and coalesce(btrim(p.prijmeni), '') = '';
+where lower(btrim(coalesce(p.email, ''))) = 'prchal.jarda@email.com'
+  and exists (
+    select 1
+    from public.client_accounts ca
+    where ca.user_id = p.user_id
+      and ca.stav = 'active'
+      and ca.klient_id is not null
+  )
+  and coalesce(btrim(p.jmeno), '') = ''
+  and coalesce(btrim(p.prijmeni), '') = '';
 
 -- 3) Interní beta allowlist — správný e-mail šéfa (gmail, ne klientský email.com)
 insert into public.povolene_emaily (email)
