@@ -18,8 +18,7 @@ set
   email = excluded.email,
   role = 'zamestnanec',
   aktivni = true,
-  hodinovy_naklad_akce = 0,
-  updated_at = now();
+  hodinovy_naklad_akce = 0;
 
 -- 2) Odstranit falešný orphan profil u klientského účtu šéfa (ne interní gmail účet)
 delete from public.profiles p
