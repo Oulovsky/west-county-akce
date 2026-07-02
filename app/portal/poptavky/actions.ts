@@ -18,7 +18,11 @@ import {
   buildTechnikaRowPayload,
   parseTechnikaFormData,
 } from "@/lib/client-portal/poptavka-technika-form";
-import { validateTechnickePodminkyForSave, type TechnikaSectionPhotoKey } from "@/lib/client-portal/poptavka-technika-podminky";
+import {
+  REQUIRED_SECTION_PHOTO_KEYS,
+  validateTechnickePodminkyForSave,
+  type TechnikaSectionPhotoKey,
+} from "@/lib/client-portal/poptavka-technika-podminky";
 import {
   validateKlientSubmitComplete,
   validateKlientSubmitDetailed,
@@ -90,14 +94,7 @@ function getStringList(formData: FormData, name: string) {
   return formData.getAll(name).map((value) => String(value ?? "").trim());
 }
 
-const TECHNIKA_SECTION_PHOTO_KEYS: TechnikaSectionPhotoKey[] = [
-  "rozvadec",
-  "prijezd",
-  "plocha_stage",
-  "povrch_pristup",
-  "jina",
-  "misto_akce",
-];
+const TECHNIKA_SECTION_PHOTO_KEYS: TechnikaSectionPhotoKey[] = [...REQUIRED_SECTION_PHOTO_KEYS];
 
 function validateTechnickeForSave(formData: FormData, errorPath: string) {
   const wizardStep = Number(String(formData.get("wizard_step") ?? "0"));

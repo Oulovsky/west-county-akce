@@ -21,7 +21,7 @@ export default function PoptavkaFotkaImage({
   alt,
   thumbnailSignedUrl = null,
   signedUrl = null,
-  className = "aspect-square w-full object-cover",
+  className = "aspect-square w-full bg-black/20 object-contain",
   aspectClassName,
   lazyOriginalFallback = true,
   onClickExpand = true,

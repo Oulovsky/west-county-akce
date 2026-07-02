@@ -28,8 +28,7 @@ export type TechnikaSectionPhotoKey =
   | "prijezd"
   | "plocha_stage"
   | "povrch_pristup"
-  | "jina"
-  | "misto_akce";
+  | "jina";
 
 export const TECHNIKA_SECTION_PHOTOS: {
   key: TechnikaSectionPhotoKey;
@@ -71,13 +70,6 @@ export const TECHNIKA_SECTION_PHOTOS: {
     typ: "jina",
     label: "Fotka překážek / průjezdu",
     captureLabel: "Vyfotit překážky / průjezd",
-    uploadLabel: "Nahrát fotku",
-  },
-  {
-    key: "misto_akce",
-    typ: "misto_akce",
-    label: "Fotka parkování",
-    captureLabel: "Vyfotit parkování",
     uploadLabel: "Nahrát fotku",
   },
 ];

@@ -11,7 +11,11 @@ type SelectedPhoto = {
   popis: string;
 };
 
-const MAX_PHOTO_SIZE_BYTES = 10 * 1024 * 1024;
+import {
+  PHOTO_UPLOAD_ACCEPT,
+  PHOTO_UPLOAD_INFO_TEXT,
+  validatePhotoUploadFile,
+} from "@/lib/photos/upload-limits";
 const ALLOWED_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function fieldClassName() {
@@ -53,13 +57,9 @@ export function DotaznikFormClient({ token }: { token: string }) {
 
     const nextPhotos: SelectedPhoto[] = [];
     for (const file of Array.from(files)) {
-      if (!ALLOWED_PHOTO_TYPES.has(file.type)) {
-        setPhotoError("Nahrajte prosím jen fotky JPG, PNG nebo WebP.");
-        continue;
-      }
-
-      if (file.size > MAX_PHOTO_SIZE_BYTES) {
-        setPhotoError("Jedna fotka může mít maximálně 10 MB.");
+      const validation = validatePhotoUploadFile(file);
+      if (!validation.ok) {
+        setPhotoError(validation.message);
         continue;
       }
 
@@ -293,7 +293,7 @@ export function DotaznikFormClient({ token }: { token: string }) {
         <div>
           <h2 className="text-xl font-bold text-white">4. Fotky</h2>
           <p className="mt-2 text-sm leading-relaxed text-slate-300">
-            Přiložte fotky rozvaděče, příjezdu, parkování nebo prostoru. Jedna fotka může mít maximálně 10 MB.
+            Přiložte fotky rozvaděče, příjezdu nebo prostoru. {PHOTO_UPLOAD_INFO_TEXT}
           </p>
         </div>
 
@@ -302,7 +302,7 @@ export function DotaznikFormClient({ token }: { token: string }) {
           <input
             type="file"
             name="photo_input"
-            accept="image/jpeg,image/png,image/webp"
+            accept={PHOTO_UPLOAD_ACCEPT}
             multiple
             className="sr-only"
             onChange={(event) => {

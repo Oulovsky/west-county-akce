@@ -7,11 +7,14 @@ import {
   hashClientQuestionnaireToken,
   type QuestionnaireDecision,
 } from "@/lib/client-questionnaire";
+import {
+  getPhotoExtension,
+  mapStorageUploadErrorMessage,
+  validatePhotoUploadFile,
+} from "@/lib/photos/upload-limits";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const PHOTO_BUCKET = "dotaznik-fotky";
-const MAX_PHOTO_SIZE_BYTES = 10 * 1024 * 1024;
-const ALLOWED_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const ALLOWED_PHOTO_KINDS = new Set(["rozvadec", "prijezd", "parkovani", "prostor", "jina"]);
 
 type LinkRow = {
@@ -37,9 +40,7 @@ function normalizeChoice(value: FormDataEntryValue | null) {
 }
 
 function getExtension(file: File) {
-  if (file.type === "image/png") return "png";
-  if (file.type === "image/webp") return "webp";
-  return "jpg";
+  return getPhotoExtension(file.type);
 }
 
 function getStringList(formData: FormData, name: string) {
@@ -138,12 +139,9 @@ export async function submitPublicQuestionnaireAction(formData: FormData) {
   const photoDescriptions = getStringList(formData, "photo_descriptions");
 
   for (const file of files) {
-    if (!ALLOWED_PHOTO_TYPES.has(file.type)) {
-      return formError("Fotky musí být ve formátu JPG, PNG nebo WebP.");
-    }
-
-    if (file.size > MAX_PHOTO_SIZE_BYTES) {
-      return formError("Jedna fotka může mít maximálně 10 MB.");
+    const validation = validatePhotoUploadFile(file);
+    if (!validation.ok) {
+      return formError(validation.message);
     }
   }
 
@@ -231,7 +229,9 @@ export async function submitPublicQuestionnaireAction(formData: FormData) {
         });
 
       if (uploadError) {
-        return formError(`Nahrání fotky selhalo: ${uploadError.message}`);
+        return formError(
+          mapStorageUploadErrorMessage(uploadError.message) ?? "Nahrání fotky selhalo."
+        );
       }
 
       metadataRows.push({

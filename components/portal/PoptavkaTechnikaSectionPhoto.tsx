@@ -7,6 +7,10 @@ import {
   POPTAVKA_FOTKA_TYP_LABELS,
   validatePoptavkaPhotoFile,
 } from "@/lib/client-portal/poptavka-fotky-shared";
+import {
+  PHOTO_TECHNICAL_CAPTURE_HINT,
+  PHOTO_UPLOAD_INFO_TEXT,
+} from "@/lib/photos/upload-limits";
 import type { TechnikaSectionPhotoKey } from "@/lib/client-portal/poptavka-technika-podminky";
 import type { PoptavkaFotkaTyp } from "@/lib/client-portal/types";
 import {
@@ -97,6 +101,12 @@ export default function PoptavkaTechnikaSectionPhoto({
   return (
     <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.02] p-3">
       {!readOnly ? (
+        <>
+          <p className="text-[11px] leading-relaxed text-slate-500">{PHOTO_UPLOAD_INFO_TEXT}</p>
+          <p className="text-[11px] leading-relaxed text-slate-500">{PHOTO_TECHNICAL_CAPTURE_HINT}</p>
+        </>
+      ) : null}
+      {!readOnly ? (
         <div className="flex flex-wrap gap-2">
           <button type="button" className={actionButtonClass} onClick={() => captureInputRef.current?.click()}>
             {captureLabel}
@@ -147,7 +157,7 @@ export default function PoptavkaTechnikaSectionPhoto({
               <img
                 src={photo.previewUrl}
                 alt={photo.file.name}
-                className={`aspect-square w-full object-cover ${
+                className={`aspect-square w-full bg-black/20 object-contain ${
                   photo.status === "uploading" ? "opacity-60" : ""
                 }`}
                 loading="lazy"
@@ -199,6 +209,7 @@ export default function PoptavkaTechnikaSectionPhoto({
                 thumbnailSignedUrl={fotka.thumbnailSignedUrl}
                 signedUrl={fotka.signedUrl}
                 lazyOriginalFallback={!fotka.thumbnailSignedUrl}
+                className="aspect-square w-full bg-black/20 object-contain"
               />
               <div className="absolute inset-x-0 bottom-0 bg-emerald-950/80 px-1 py-0.5 text-[10px] text-emerald-100">
                 Uložená

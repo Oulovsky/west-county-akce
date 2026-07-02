@@ -11,6 +11,7 @@ import {
   POPTAVKA_FOTKA_TYP_LABELS,
   validatePoptavkaPhotoFile,
 } from "@/lib/client-portal/poptavka-fotky-shared";
+import { PHOTO_UPLOAD_INFO_TEXT } from "@/lib/photos/upload-limits";
 import { appendClientPhotoThumbnailToFormData } from "@/lib/client-portal/poptavka-fotky-thumbnail-client";
 import type { PoptavkaFotkaTyp } from "@/lib/client-portal/types";
 import { POPTAVKA_FOTKA_TYPY } from "@/lib/client-portal/types";
@@ -32,10 +33,12 @@ type PendingPhoto = {
 };
 
 const UPLOAD_ERRORS: Record<string, string> = {
-  invalid_type: "Povolené formáty: JPG, PNG, WebP, HEIC.",
+  invalid_type: "Povolené formáty: JPG, PNG, WebP.",
+  file_too_large: "Fotka je příliš velká. Maximální velikost jedné fotky je 20 MB.",
   upload_failed: "Nahrání fotek se nezdařilo.",
   no_files: "Vyberte alespoň jednu fotku.",
   not_editable: "Poptávku už nelze upravovat.",
+  storage_upload_failed: "Fotka překročila limit 20 MB.",
 };
 
 export default function PoptavkaFotkyClient({
@@ -140,7 +143,7 @@ export default function PoptavkaFotkyClient({
       <div>
         <h2 className="text-lg font-semibold text-white">5. Fotografie místa</h2>
         <p className="mt-1 text-sm text-slate-400">
-          Přiložte fotky rozvaděče, příjezdu, plochy pro stage nebo místa akce.
+          Přiložte fotky rozvaděče, příjezdu, plochy pro stage nebo místa akce. {PHOTO_UPLOAD_INFO_TEXT}
         </p>
       </div>
 
@@ -178,7 +181,7 @@ export default function PoptavkaFotkyClient({
                 <img
                   src={photo.previewUrl}
                   alt={photo.file.name}
-                  className="h-24 w-full rounded-lg object-cover sm:w-24"
+                  className="h-24 w-full rounded-lg bg-black/20 object-contain sm:w-24"
                 />
                 <div className="space-y-2">
                   <div className="text-sm font-medium text-white">{photo.file.name}</div>
@@ -246,7 +249,7 @@ export default function PoptavkaFotkyClient({
                 <img
                   src={fotka.signedUrl}
                   alt={fotka.original_filename ?? POPTAVKA_FOTKA_TYP_LABELS[fotka.typ]}
-                  className="aspect-[4/3] w-full object-cover"
+                  className="aspect-[4/3] w-full bg-black/20 object-contain"
                 />
               ) : (
                 <div className="flex aspect-[4/3] items-center justify-center text-sm text-slate-500">

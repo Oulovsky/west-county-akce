@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  computeFitInsideDimensions,
+  preservesAspectRatio,
+} from "@/lib/photos/thumbnail-fit";
+
 export const POPTAVKA_FOTKA_THUMBNAIL_MAX_SIDE = 1200;
 export const POPTAVKA_FOTKA_THUMBNAIL_QUALITY = 0.82;
 
@@ -10,6 +15,7 @@ function thumbnailFileName(originalName: string) {
 
 /**
  * Vygeneruje WebP náhled v prohlížeči (canvas / createImageBitmap).
+ * Režim „fit inside“ — zachová celý obraz a poměr stran, bez ořezu.
  * Při neúspěchu vrátí null — server pak uloží jen originál.
  */
 export async function generateClientPhotoThumbnail(
@@ -30,9 +36,11 @@ export async function generateClientPhotoThumbnail(
       return null;
     }
 
-    const scale = Math.min(1, maxSide / Math.max(width, height));
-    const targetWidth = Math.max(1, Math.round(width * scale));
-    const targetHeight = Math.max(1, Math.round(height * scale));
+    const { width: targetWidth, height: targetHeight } = computeFitInsideDimensions(
+      width,
+      height,
+      maxSide
+    );
 
     const canvas = document.createElement("canvas");
     canvas.width = targetWidth;
@@ -58,6 +66,8 @@ export async function generateClientPhotoThumbnail(
     return null;
   }
 }
+
+export { computeFitInsideDimensions, preservesAspectRatio };
 
 export async function appendClientPhotoThumbnailToFormData(
   formData: FormData,

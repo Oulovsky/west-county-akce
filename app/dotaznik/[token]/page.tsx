@@ -139,7 +139,7 @@ function getErrorMessage(error: string | undefined) {
   }
 
   if (error === "photo_size") {
-    return "Jedna fotka může mít maximálně 10 MB.";
+    return "Fotka je příliš velká. Maximální velikost jedné fotky je 20 MB.";
   }
 
   if (error === "invalid") {

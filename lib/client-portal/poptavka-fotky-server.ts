@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   getPoptavkaFotkaExtension,
   isAllowedPoptavkaFotkaTyp,
+  mapStorageUploadErrorMessage,
   resolvePoptavkaPhotoMimeType,
   validatePoptavkaPhotoFile,
   type PoptavkaFotkaWithUrl,
@@ -244,7 +245,9 @@ export async function uploadPoptavkaFotkyForClient(
           ok: false,
           clientId,
           code: "storage_upload_failed",
-          message: "Nahrání fotky do úložiště se nezdařilo.",
+          message:
+            mapStorageUploadErrorMessage(uploadError.message) ??
+            "Nahrání fotky do úložiště se nezdařilo.",
         });
         continue;
       }

@@ -135,7 +135,7 @@ export default function PoptavkaTechnickePodminkyReadOnly({
             value={formatTriVolba(String(extra.kabel_pres_silnici ?? ""))}
           />
           <ReadOnlyField label="Kabelové trasy" value={technika.kabelove_trasy} />
-          <ReadOnlyField label="Parkování" value={technika.parkovani_poznamka} />
+          <ReadOnlyField label="Popis parkování" value={technika.parkovani_poznamka} />
           <ReadOnlyField label="Poznámka" value={technika.dalsi_poznamky} />
         </dl>
       ) : null}
@@ -228,7 +228,7 @@ export default function PoptavkaTechnickePodminkyReadOnly({
                         alt={fotka.original_filename ?? POPTAVKA_FOTKA_TYP_LABELS[fotka.typ]}
                         thumbnailSignedUrl={fotka.thumbnailSignedUrl}
                         signedUrl={fotka.signedUrl}
-                        className="aspect-[4/3] w-full object-cover"
+                        className="aspect-[4/3] w-full bg-black/20 object-contain"
                         lazyOriginalFallback={!fotka.thumbnailSignedUrl}
                       />
                       {fotka.original_filename ? (
@@ -242,6 +242,35 @@ export default function PoptavkaTechnickePodminkyReadOnly({
               </div>
             );
           })}
+          {(() => {
+            const legacyParking = fotky.filter((fotka) => fotka.typ === "misto_akce");
+            if (legacyParking.length === 0) return null;
+            return (
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {POPTAVKA_FOTKA_TYP_LABELS.misto_akce} (archiv)
+                </h4>
+                <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {legacyParking.map((fotka) => (
+                    <li
+                      key={fotka.id}
+                      className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.02]"
+                    >
+                      <PoptavkaFotkaImage
+                        fotkaId={fotka.id}
+                        poptavkaId={poptavkaId}
+                        alt={fotka.original_filename ?? POPTAVKA_FOTKA_TYP_LABELS.misto_akce}
+                        thumbnailSignedUrl={fotka.thumbnailSignedUrl}
+                        signedUrl={fotka.signedUrl}
+                        className="aspect-[4/3] w-full bg-black/20 object-contain"
+                        lazyOriginalFallback={!fotka.thumbnailSignedUrl}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })()}
         </div>
       ) : (
         <p className="text-sm text-slate-500">K technickým sekcím nejsou připojené fotky.</p>

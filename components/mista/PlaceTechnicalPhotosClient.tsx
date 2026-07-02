@@ -2,6 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  getPhotoExtension,
+  mapStorageUploadErrorMessage,
+  PHOTO_UPLOAD_ACCEPT,
+  PHOTO_UPLOAD_INFO_TEXT,
+  PHOTO_UPLOAD_SIZE_MESSAGE,
+  validatePhotoUploadFile,
+} from "@/lib/photos/upload-limits";
 import { uploadPlaceTechnicalPhotosAction } from "@/app/actions/place-technical-photos";
 
 export type PlaceTechnicalPhotoGalleryItem = {
@@ -25,9 +33,6 @@ type SelectedPhoto = {
   popis: string;
   dulezite: boolean;
 };
-
-const MAX_PHOTO_SIZE_BYTES = 10 * 1024 * 1024;
-const ALLOWED_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function fieldClassName() {
   return "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white";
@@ -100,13 +105,9 @@ export function PlaceTechnicalPhotoUpload({
     const nextPhotos: SelectedPhoto[] = [];
 
     for (const file of Array.from(files)) {
-      if (!ALLOWED_PHOTO_TYPES.has(file.type)) {
-        setPhotoError("Nahrajte prosím jen fotky JPG, PNG nebo WebP.");
-        continue;
-      }
-
-      if (file.size > MAX_PHOTO_SIZE_BYTES) {
-        setPhotoError("Jedna fotka může mít maximálně 10 MB.");
+      const validation = validatePhotoUploadFile(file);
+      if (!validation.ok) {
+        setPhotoError(validation.message);
         continue;
       }
 
@@ -178,7 +179,8 @@ export function PlaceTechnicalPhotoUpload({
       <div>
         <div className="text-base font-bold text-white">Nahrát interní fotky místa</div>
         <p className="mt-1 text-sm text-slate-400">
-          Fotky se uloží jako dlouhodobé know-how místa. Nepropisují se do klientských dotazníků ani snapshotů zakázek.
+          Fotky se uloží jako dlouhodobé know-how místa. Nepropisují se do klientských dotazníků ani
+          snapshotů zakázek. {PHOTO_UPLOAD_INFO_TEXT}
         </p>
       </div>
 
@@ -186,7 +188,7 @@ export function PlaceTechnicalPhotoUpload({
         Vybrat fotky
         <input
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept={PHOTO_UPLOAD_ACCEPT}
           multiple
           className="sr-only"
           onChange={(event) => {
@@ -214,7 +216,7 @@ export function PlaceTechnicalPhotoUpload({
                 <img
                   src={photo.previewUrl}
                   alt={photo.file.name}
-                  className="h-28 w-full rounded-xl object-cover sm:w-28"
+                  className="h-28 w-full rounded-xl bg-black/20 object-contain sm:w-28"
                 />
                 <div className="space-y-2">
                   <div className="text-sm font-semibold text-white">{photo.file.name}</div>
@@ -309,7 +311,7 @@ export function PlaceTechnicalPhotoGallery({ photos }: { photos: PlaceTechnicalP
                     src={photo.signedUrl}
                     alt={photo.popis || formatPhotoType(photo.typ)}
                     loading="lazy"
-                    className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
+                    className="h-full w-full bg-black/20 object-contain"
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center px-3 text-center text-xs text-slate-500">

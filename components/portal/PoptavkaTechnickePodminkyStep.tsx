@@ -632,7 +632,7 @@ export default function PoptavkaTechnickePodminkyStep({
           <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
             <h3 className="font-semibold text-white">Parkování techniky</h3>
             <label className="block space-y-2">
-              <span className={labelClass}>Možnost parkování</span>
+              <span className={labelClass}>Popis parkování</span>
               <textarea
                 name="parkovani_poznamka"
                 value={technika.parkovani_poznamka}
@@ -642,7 +642,10 @@ export default function PoptavkaTechnickePodminkyStep({
                 className={inputClass}
               />
             </label>
-            {renderSectionPhoto("misto_akce", sectionPhotoMissing("misto_akce"))}
+            <p className="text-xs leading-relaxed text-slate-500">
+              Popište, kde lze parkovat techniku, dodávky nebo nákladní auto. Fotky parkování
+              nejsou potřeba.
+            </p>
           </div>
 
           <label className="block space-y-2">
