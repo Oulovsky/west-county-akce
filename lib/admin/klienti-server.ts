@@ -2,6 +2,11 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isClientEmailVerified } from "@/lib/auth/client-email-verification";
+import {
+  describeClientAuthDiagnostics,
+  getAuthProvidersFromUser,
+  type ClientAuthDiagnostics,
+} from "@/lib/auth/internal-access-rules";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   splitClientPoptavkaCounts,
@@ -74,6 +79,7 @@ export type KlientDetailData = {
   portal_auth_email: string | null;
   email_verified: boolean;
   email_verified_at: string | null;
+  auth_diagnostics: ClientAuthDiagnostics;
 };
 
 function formatAdresa(row: {
@@ -157,34 +163,83 @@ function resolveJednatel(
   return null;
 }
 
-async function loadPortalAuthEmailMeta(userId: string | null): Promise<{
+async function loadPortalAuthEmailMeta(
+  supabase: SupabaseClient,
+  userId: string | null,
+  hasClientAccount: boolean
+): Promise<{
   portal_auth_email: string | null;
   email_verified: boolean;
   email_verified_at: string | null;
+  auth_diagnostics: ClientAuthDiagnostics;
 }> {
+  const emptyDiagnostics: ClientAuthDiagnostics = {
+    authUserId: userId,
+    hasClientAccount,
+    hasProfile: false,
+    profileRole: null,
+    profileAktivni: null,
+    profileProvisioned: false,
+    internalAccess: false,
+    internalAccessReason: userId
+      ? "Bez interního profilu — čistý klientský účet."
+      : "Bez auth uživatele.",
+  };
+
   if (!userId) {
     return {
       portal_auth_email: null,
       email_verified: false,
       email_verified_at: null,
+      auth_diagnostics: emptyDiagnostics,
     };
   }
 
   try {
     const admin = createAdminClient();
-    const { data } = await admin.auth.admin.getUserById(userId);
+    const [{ data }, { data: profile }] = await Promise.all([
+      admin.auth.admin.getUserById(userId),
+      supabase
+        .from("profiles")
+        .select("role, aktivni, jmeno, prijmeni")
+        .eq("user_id", userId)
+        .maybeSingle(),
+    ]);
+
     const user = data.user;
+    const authProviders = user
+      ? getAuthProvidersFromUser({
+          app_metadata: user.app_metadata ?? null,
+          identities: user.identities ?? null,
+        })
+      : [];
+
+    const auth_diagnostics = describeClientAuthDiagnostics({
+      authUserId: userId,
+      hasClientAccount,
+      profile: profile
+        ? {
+            role: profile.role as string,
+            aktivni: profile.aktivni as boolean | null,
+            jmeno: profile.jmeno as string | null,
+            prijmeni: profile.prijmeni as string | null,
+          }
+        : null,
+      authProviders,
+    });
 
     return {
       portal_auth_email: user?.email ?? null,
       email_verified: isClientEmailVerified(user),
       email_verified_at: user?.email_confirmed_at ?? null,
+      auth_diagnostics,
     };
   } catch {
     return {
       portal_auth_email: null,
       email_verified: false,
       email_verified_at: null,
+      auth_diagnostics: emptyDiagnostics,
     };
   }
 }
@@ -365,8 +420,17 @@ export async function loadInternalKlientDetail(
 
   const ownerAccount =
     (accountsRaw ?? []).find((row) => row.role === "owner") ?? accountsRaw?.[0];
+  const ownerUserId = (ownerAccount?.user_id as string | undefined) ?? null;
+  const ownerHasActiveClientAccount = (accountsRaw ?? []).some(
+    (row) =>
+      row.user_id === ownerUserId &&
+      row.stav === "active" &&
+      Boolean(row.klient_id)
+  );
   const authMeta = await loadPortalAuthEmailMeta(
-    (ownerAccount?.user_id as string | undefined) ?? null
+    supabase,
+    ownerUserId,
+    ownerHasActiveClientAccount
   );
 
   return {

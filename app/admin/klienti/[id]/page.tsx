@@ -141,6 +141,61 @@ export default async function AdminKlientDetailPage({
       </section>
 
       <section className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
+        <h2 className="text-lg font-semibold text-white">
+          Diagnostika účtu (klient vs. interní)
+        </h2>
+        <dl className="mt-4 grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
+          <DetailField label="Auth user ID" value={detail.auth_diagnostics.authUserId} />
+          <DetailField
+            label="Má client_accounts"
+            value={detail.auth_diagnostics.hasClientAccount ? "ano" : "ne"}
+          />
+          <DetailField
+            label="Má profiles"
+            value={detail.auth_diagnostics.hasProfile ? "ano" : "ne"}
+          />
+          <DetailField
+            label="Profile role"
+            value={detail.auth_diagnostics.profileRole ?? "—"}
+          />
+          <DetailField
+            label="Profile aktivní"
+            value={
+              detail.auth_diagnostics.profileAktivni == null
+                ? "—"
+                : detail.auth_diagnostics.profileAktivni
+                  ? "ano"
+                  : "ne"
+            }
+          />
+          <DetailField
+            label="Profile provisioned"
+            value={detail.auth_diagnostics.profileProvisioned ? "ano" : "ne"}
+          />
+          <DetailField
+            label="Interní přístup"
+            value={detail.auth_diagnostics.internalAccess ? "ANO" : "NE"}
+          />
+        </dl>
+        <p
+          className={`mt-3 rounded-lg border px-3 py-2 text-xs ${
+            detail.auth_diagnostics.internalAccess
+              ? "border-amber-500/30 bg-amber-950/20 text-amber-100"
+              : "border-slate-700 bg-slate-900/40 text-slate-300"
+          }`}
+        >
+          {detail.auth_diagnostics.internalAccessReason}
+        </p>
+        {detail.auth_diagnostics.hasProfile &&
+        !detail.auth_diagnostics.profileProvisioned ? (
+          <p className="mt-2 rounded-lg border border-red-500/30 bg-red-950/20 px-3 py-2 text-xs text-red-100">
+            Pozor: klientský účet má interní profiles bez provisioningu (orphan).
+            Měl by být odstraněn cleanupem / migrací.
+          </p>
+        ) : null}
+      </section>
+
+      <section className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
         <h2 className="text-lg font-semibold text-white">Poptávky</h2>
         <p className="mt-1 text-xs text-slate-500">
           {poptavkyCounts.total === 0

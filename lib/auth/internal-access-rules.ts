@@ -93,6 +93,103 @@ export function usesEmailPasswordOnly(providers: string[]): boolean {
   return !providers.includes("google");
 }
 
+export type ClientAuthDiagnostics = {
+  authUserId: string | null;
+  hasClientAccount: boolean;
+  hasProfile: boolean;
+  profileRole: string | null;
+  profileAktivni: boolean | null;
+  profileProvisioned: boolean;
+  internalAccess: boolean;
+  internalAccessReason: string;
+};
+
+/**
+ * Diagnostika oddělení klient vs. interní zaměstnanec pro admin detail.
+ * Čistá funkce nad načtenými daty (bez DB), aby šla testovat.
+ */
+export function describeClientAuthDiagnostics(input: {
+  authUserId: string | null;
+  hasClientAccount: boolean;
+  profile: InternalProfileForAccess | null;
+  authProviders?: string[];
+  isSystemAdminEmail?: boolean;
+}): ClientAuthDiagnostics {
+  const { authUserId, hasClientAccount, profile } = input;
+  const authProviders = input.authProviders ?? [];
+
+  const base = {
+    authUserId,
+    hasClientAccount,
+    hasProfile: Boolean(profile),
+    profileRole: profile?.role ?? null,
+    profileAktivni: profile?.aktivni ?? null,
+    profileProvisioned: isProvisionedInternalProfile(profile),
+  };
+
+  if (!profile) {
+    return {
+      ...base,
+      internalAccess: false,
+      internalAccessReason: "Bez interního profilu — čistý klientský účet.",
+    };
+  }
+
+  if (!isExplicitInternalRole(profile.role)) {
+    return {
+      ...base,
+      internalAccess: false,
+      internalAccessReason: `Profil bez interní role (role „${profile.role}").`,
+    };
+  }
+
+  if (isClientOnlyOrphanProfile(profile, hasClientAccount)) {
+    return {
+      ...base,
+      internalAccess: false,
+      internalAccessReason:
+        "Orphan profil (interní role bez provisioningu u klientského účtu) — nemá interní přístup a měl by být odstraněn.",
+    };
+  }
+
+  if (!isProvisionedInternalProfile(profile)) {
+    return {
+      ...base,
+      internalAccess: false,
+      internalAccessReason: "Interní role bez provisioningu (chybí jméno) — nemá interní přístup.",
+    };
+  }
+
+  const internalAccess = isEmployeeLoginAllowed(profile, {
+    isSystemAdminEmail: input.isSystemAdminEmail,
+    authProviders,
+    hasActiveClientAccount: hasClientAccount,
+  });
+
+  if (internalAccess) {
+    return {
+      ...base,
+      internalAccess: true,
+      internalAccessReason: "Interní přístup povolen (provisioned interní profil).",
+    };
+  }
+
+  if (hasClientAccount && usesEmailPasswordOnly(authProviders)) {
+    return {
+      ...base,
+      internalAccess: false,
+      internalAccessReason:
+        "Interní role, ale přihlášení e-mailem/heslem + aktivní klientský účet → interní přístup blokován.",
+    };
+  }
+
+  return {
+    ...base,
+    internalAccess: false,
+    internalAccessReason: "Interní přístup zamítnut.",
+  };
+}
+
 export type EmployeeLoginAllowedOptions = {
   isSystemAdminEmail?: boolean;
   authProviders?: string[];

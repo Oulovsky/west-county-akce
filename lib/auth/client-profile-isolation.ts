@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   isClientOnlyOrphanProfile,
   isExplicitInternalRole,
+  isProvisionedInternalProfile,
   shouldShowInAdminEmployeeList,
 } from "@/lib/auth/internal-access-rules";
 
@@ -51,8 +52,9 @@ export async function removeSpuriousProfileForClientOnlyUser(
     return "none";
   }
 
-  if (isExplicitInternalRole(profile.role)) {
-    console.info("[client-profile-isolation] keep internal role profile", {
+  // Skutečný interní profil (admin nebo interní role se jménem) — nikdy nemazat.
+  if (isExplicitInternalRole(profile.role) && isProvisionedInternalProfile(profile)) {
+    console.info("[client-profile-isolation] keep provisioned internal profile", {
       userId,
       email: profile.email,
       role: profile.role,
@@ -60,7 +62,17 @@ export async function removeSpuriousProfileForClientOnlyUser(
     return "kept_internal";
   }
 
-  if (!isClientOnlyOrphanProfile(profile, hasActiveClientAccount)) {
+  // Neprovisioned orphan u klientského účtu (interní role bez jména) NEBO ne-interní řádek.
+  const isOrphan =
+    isClientOnlyOrphanProfile(profile, hasActiveClientAccount) ||
+    !isExplicitInternalRole(profile.role);
+
+  if (!isOrphan) {
+    console.info("[client-profile-isolation] keep internal role profile", {
+      userId,
+      email: profile.email,
+      role: profile.role,
+    });
     return "kept_internal";
   }
 
@@ -73,7 +85,7 @@ export async function removeSpuriousProfileForClientOnlyUser(
     throw new Error(deleteError.message);
   }
 
-  console.info("[client-profile-isolation] removed non-internal orphan profile", {
+  console.info("[client-profile-isolation] removed spurious orphan profile", {
     userId,
     email: profile.email,
     role: profile.role,
