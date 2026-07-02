@@ -17,7 +17,7 @@ import {
   markClientEmailConfirmationSent,
   sendClientEmailConfirmation,
 } from "@/lib/client-portal/portal-email-confirmation-server";
-import { updateUnverifiedClientEmail } from "@/lib/client-portal/portal-email-change-server";
+import { changeUnverifiedClientEmailByCredentials } from "@/lib/client-portal/portal-email-change-server";
 import { registerClientPortalAccount } from "@/lib/client-portal/portal-register-server";
 import { splitContactName } from "@/lib/client-portal/registration-snapshot";
 import { createClient } from "@/lib/supabase/server";
@@ -224,30 +224,42 @@ export async function portalResendEmailConfirmationAction(formData: FormData) {
 }
 
 export async function portalChangeUnverifiedEmailAction(formData: FormData) {
+  const currentEmailForm = String(formData.get("current_email") ?? "").trim().toLowerCase();
   const newEmail = String(formData.get("new_email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
 
   const supabase = await createClient();
   const session = await loadClientPortalSession(supabase);
 
-  if (session.kind !== "email_unverified") {
-    redirect("/portal/prihlaseni?error=auth_required");
+  const currentEmail =
+    session.kind === "email_unverified" ? session.email : currentEmailForm;
+
+  if (!currentEmail || !newEmail || !password) {
+    const emailParam = currentEmail
+      ? `?email=${encodeURIComponent(currentEmail)}&error=missing_fields`
+      : "?error=missing_fields";
+    redirect(`/portal/potvrzeni-emailu${emailParam}`);
   }
 
-  if (!newEmail || !password) {
-    redirect("/portal/potvrzeni-emailu?error=missing_fields");
-  }
-
-  const result = await updateUnverifiedClientEmail({
-    userId: session.account.user_id,
-    klientId: session.account.klient_id!,
-    currentEmail: session.email,
+  const result = await changeUnverifiedClientEmailByCredentials({
+    currentEmail,
     newEmail,
     password,
   });
 
   if (!result.ok) {
-    redirect(`/portal/potvrzeni-emailu?error=${encodeURIComponent(result.code)}`);
+    if (result.code === "already_confirmed") {
+      redirect("/portal");
+    }
+
+    const params = new URLSearchParams({
+      email: currentEmail,
+      error: result.code,
+    });
+    if (result.waitSeconds) {
+      params.set("wait", String(result.waitSeconds));
+    }
+    redirect(`/portal/potvrzeni-emailu?${params}`);
   }
 
   revalidatePortalPaths();

@@ -33,7 +33,7 @@ export default async function PortalPotvrzeniEmailuPage({
       ? session.email
       : String(resolved?.email ?? user?.email ?? "").trim().toLowerCase();
 
-  const canChangeEmail = session.kind === "email_unverified";
+  const canChangeEmail = Boolean(email) && !(user && isClientEmailVerified(user));
   const lastSentAt =
     session.kind === "email_unverified" ? session.emailConfirmationLastSentAt : null;
 
