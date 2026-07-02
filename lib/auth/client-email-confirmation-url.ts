@@ -8,5 +8,7 @@ export function buildClientEmailConfirmationRedirectUrl(baseUrl?: string): strin
     throw new Error("Missing NEXT_PUBLIC_APP_URL");
   }
 
-  return `${base}/auth/callback?next=${encodeURIComponent("/portal/potvrzeni-emailu?verified=1")}`;
+  // Supabase vrací tokeny v URL hash fragmentu (#access_token=...), který server
+  // nevidí. Míříme proto na klientskou potvrzovací stránku, která hash zpracuje.
+  return `${base}/portal/potvrzeni-emailu`;
 }
