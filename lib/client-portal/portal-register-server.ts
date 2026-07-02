@@ -383,9 +383,7 @@ export async function registerClientPortalAccount(
     return { ok: false, code: "confirmation_email_failed" };
   }
 
-  if (confirmation.sent) {
-    await markClientEmailConfirmationSent(userId);
-  }
+  await markClientEmailConfirmationSent(userId);
 
   let signedIn = false;
 

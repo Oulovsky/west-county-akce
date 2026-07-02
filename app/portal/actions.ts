@@ -13,6 +13,7 @@ import { mapPortalSignInErrorCode } from "@/lib/auth/portal-auth-errors";
 import { buildPortalPasswordResetRedirectUrl } from "@/lib/auth/portal-password-reset";
 import {
   loadClientAccountMetaByEmail,
+  loadPortalAuthUserById,
   markClientEmailConfirmationSent,
   sendClientEmailConfirmation,
 } from "@/lib/client-portal/portal-email-confirmation-server";
@@ -154,7 +155,6 @@ export async function portalResendEmailConfirmationAction(formData: FormData) {
   let email = formEmail;
   let userId: string | null = null;
   let lastSentAt: string | null = null;
-  let password: string | undefined;
 
   if (session.kind === "email_unverified") {
     email = session.email;
@@ -166,33 +166,56 @@ export async function portalResendEmailConfirmationAction(formData: FormData) {
       userId = accountMeta.userId;
       lastSentAt = accountMeta.lastSentAt;
     }
-  } else {
+  }
+
+  console.info("[portal-resend] start", { email: email || "(empty)" });
+
+  if (!email) {
     redirect("/portal/potvrzeni-emailu?error=missing_email");
   }
 
-  const waitSeconds = secondsUntilEmailConfirmationResend(lastSentAt);
-  if (waitSeconds > 0) {
+  const errorRedirect = (code: string, extra = "") =>
     redirect(
-      `/portal/potvrzeni-emailu?email=${encodeURIComponent(email)}&error=rate_limited&wait=${waitSeconds}`
+      `/portal/potvrzeni-emailu?email=${encodeURIComponent(email)}&error=${encodeURIComponent(code)}${extra}`
     );
+
+  if (!userId) {
+    console.info("[portal-resend] user not found", { email });
+    errorRedirect("user_not_found");
+  }
+
+  const authUser = await loadPortalAuthUserById(userId!);
+
+  if (!authUser.exists) {
+    console.info("[portal-resend] auth user not found", { email });
+    errorRedirect("user_not_found");
+  }
+
+  if (authUser.emailConfirmed) {
+    console.info("[portal-resend] already confirmed", { email });
+    errorRedirect("already_confirmed");
+  }
+
+  console.info("[portal-resend] user found, unconfirmed", { email });
+
+  const secondsUntilResend = secondsUntilEmailConfirmationResend(lastSentAt);
+  if (secondsUntilResend > 0) {
+    console.info("[portal-resend] cooldown blocked", { email, secondsUntilResend });
+    errorRedirect("cooldown", `&wait=${secondsUntilResend}`);
   }
 
   const result = await sendClientEmailConfirmation({
     email,
-    password,
-    lastSentAt,
     logContext: "portal_resend_confirmation",
   });
 
   if (!result.ok) {
-    redirect(
-      `/portal/potvrzeni-emailu?email=${encodeURIComponent(email)}&error=resend_failed`
-    );
+    console.warn("[portal-resend] failed", { email, code: result.code });
+    errorRedirect(result.code);
   }
 
-  if (result.sent && userId) {
-    await markClientEmailConfirmationSent(userId);
-  }
+  await markClientEmailConfirmationSent(userId!);
+  console.info("[portal-resend] success", { email });
 
   revalidatePortalPaths();
   redirect(

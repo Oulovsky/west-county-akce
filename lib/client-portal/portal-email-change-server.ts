@@ -96,9 +96,7 @@ export async function updateUnverifiedClientEmail(input: {
     return { ok: false, code: "confirmation_failed" };
   }
 
-  if (confirmation.sent) {
-    await markClientEmailConfirmationSent(input.userId);
-  }
+  await markClientEmailConfirmationSent(input.userId);
 
   return { ok: true, email: newEmail };
 }

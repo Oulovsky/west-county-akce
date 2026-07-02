@@ -32,10 +32,22 @@ function errorMessage(error: string | undefined, waitSeconds?: number) {
   if (error === "email_not_confirmed") {
     return "E-mail zatím není potvrzený. Zkontrolujte schránku nebo požádejte o nový odkaz.";
   }
-  if (error === "rate_limited") {
+  if (error === "cooldown" || error === "rate_limited") {
     return `Počkejte prosím ${waitSeconds ?? 60} s před dalším odesláním.`;
   }
-  if (error === "resend_failed") {
+  if (error === "already_confirmed") {
+    return "E-mail už je potvrzený. Přihlaste se do klientské zóny.";
+  }
+  if (error === "user_not_found") {
+    return "Účet k tomuto e-mailu nebyl nalezen. Zkontrolujte adresu nebo se zaregistrujte.";
+  }
+  if (error === "missing_resend_key" || error === "missing_from") {
+    return "Odesílání e-mailů není správně nakonfigurováno. Kontaktujte nás.";
+  }
+  if (error === "generate_link_failed") {
+    return "Nepodařilo se vytvořit potvrzovací odkaz. Zkuste to prosím znovu.";
+  }
+  if (error === "send_failed" || error === "resend_failed" || error === "env_missing") {
     return "Nepodařilo se odeslat potvrzovací e-mail. Zkuste to později.";
   }
   if (error === "missing_email") {
