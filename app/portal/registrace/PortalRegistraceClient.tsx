@@ -28,6 +28,8 @@ const ERROR_MESSAGES: Record<string, string> = {
     "Registraci se nepodařilo dokončit. Zkuste to znovu, případně nás kontaktujte.",
   signup_failed:
     "Registraci se nepodařilo dokončit. Zkuste to znovu, případně nás kontaktujte.",
+  confirmation_email_failed:
+    "Účet se vytvořil, ale nepodařilo se odeslat potvrzovací e-mail. Kontaktujte nás.",
   registration_save_failed:
     "Účet se podařilo založit, ale nepodařilo se dokončit údaje klienta. Kontaktujte nás.",
 };

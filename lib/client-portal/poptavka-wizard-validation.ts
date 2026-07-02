@@ -91,6 +91,7 @@ export const DRAFT_ERROR_MESSAGES: Record<string, string> = {
 export const SUBMIT_SERVER_ERROR_MESSAGES: Record<string, string> = {
   submit_failed: "Odeslání se nezdařilo. Zkuste to prosím znovu.",
   submit_incomplete: "Doplňte kontakt, název akce a termín před odesláním.",
+  email_not_verified: "Nejdříve potvrďte e-mailovou adresu.",
 };
 
 export type PoptavkaFormErrorKind = "draft" | "submit" | "wizard";

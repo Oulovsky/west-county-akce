@@ -113,6 +113,24 @@ export default async function AdminKlientDetailPage({
             <p className="text-sm font-medium text-slate-400">Kontakt</p>
             <DetailField label="Telefon" value={klient.telefon} />
             <DetailField label="Email" value={klient.email} />
+            <DetailField
+              label="Auth e-mail (přihlášení)"
+              value={detail.portal_auth_email}
+            />
+            <DetailField
+              label="Ověření e-mailu"
+              value={
+                detail.email_verified
+                  ? `Ověřen${detail.email_verified_at ? ` · ${formatDate(detail.email_verified_at)}` : ""}`
+                  : "Neověřen"
+              }
+            />
+            {!detail.email_verified ? (
+              <p className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-xs text-amber-100">
+                Klient zatím nepotvrdil e-mail. E-mailová komunikace nemusí být
+                doručitelná.
+              </p>
+            ) : null}
             <DetailField label="Poznámka" value={klient.poznamka} />
             <DetailField
               label="Datum založení / registrace"

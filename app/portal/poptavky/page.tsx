@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import PoptavkaKonceptDeleteButton from "@/components/portal/PoptavkaKonceptDeleteButton";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
+import { guardVerifiedClientPortalPage } from "@/lib/auth/client-portal-route-guard";
 import { CLIENT_POPTAVKA_STAV_LABELS } from "@/lib/client-portal/labels";
 import { formatPoptavkaDateRange } from "@/lib/client-portal/poptavka-form";
 import { loadClientPoptavkyList } from "@/lib/client-portal/poptavka-server";
@@ -12,9 +13,7 @@ export default async function PortalPoptavkyPage() {
   const supabase = await createClient();
   const session = await loadClientPortalSession(supabase);
 
-  if (session.kind !== "active") {
-    redirect("/portal/prihlaseni?next=/portal/poptavky");
-  }
+  guardVerifiedClientPortalPage(session, "/portal/poptavky");
 
   const poptavky = await loadClientPoptavkyList(supabase);
 

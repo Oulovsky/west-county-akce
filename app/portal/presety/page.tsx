@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import PortalPresetyClient from "@/components/portal/PortalPresetyClient";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
+import { guardVerifiedClientPortalPage } from "@/lib/auth/client-portal-route-guard";
 import {
   loadClientPlacePresetsForPortal,
   loadClientSetupPresetsForPortal,
@@ -18,9 +19,7 @@ export default async function PortalPresetyPage({
   const session = await loadClientPortalSession(supabase);
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
 
-  if (session.kind !== "active") {
-    redirect("/portal/prihlaseni?next=/portal/presety");
-  }
+  guardVerifiedClientPortalPage(session, "/portal/presety");
 
   const [placePresets, technicalPresets, setupPresets] = await Promise.all([
     loadClientPlacePresetsForPortal(supabase),

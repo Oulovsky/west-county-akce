@@ -8,6 +8,10 @@ export default async function PortalRegistracePage() {
   const supabase = await createClient();
   const session = await loadClientPortalSession(supabase);
 
+  if (session.kind === "email_unverified") {
+    redirect("/portal/potvrzeni-emailu");
+  }
+
   if (session.kind === "active") {
     redirect("/portal");
   }

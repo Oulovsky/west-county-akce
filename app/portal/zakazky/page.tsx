@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
+import { guardVerifiedClientPortalPage } from "@/lib/auth/client-portal-route-guard";
 import {
   formatClientZakazkaStatus,
   formatClientZakazkaTermin,
@@ -13,9 +14,7 @@ export default async function PortalZakazkyPage() {
   const supabase = await createClient();
   const session = await loadClientPortalSession(supabase);
 
-  if (session.kind !== "active") {
-    redirect("/portal/prihlaseni?next=/portal/zakazky");
-  }
+  guardVerifiedClientPortalPage(session, "/portal/zakazky");
 
   const zakazky = await loadClientZakazkyList(supabase);
 

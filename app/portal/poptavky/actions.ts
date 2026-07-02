@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireActiveClientPortalSession } from "@/lib/auth/client-portal-access-server";
+import { CLIENT_EMAIL_NOT_VERIFIED } from "@/lib/auth/client-email-verification";
 import {
   isFormDataUploadFile,
   collectPoptavkaPhotoThumbnailsForUpload,
@@ -69,6 +70,20 @@ import {
 
 function redirectWithError(path: string, error: string): never {
   redirect(`${path}?error=${encodeURIComponent(error)}`);
+}
+
+async function requireVerifiedClientPortalSessionForSubmit(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  errorPath: string
+) {
+  try {
+    return await requireActiveClientPortalSession(supabase);
+  } catch (error) {
+    if (error instanceof Error && error.message === CLIENT_EMAIL_NOT_VERIFIED) {
+      redirectWithError(errorPath, "email_not_verified");
+    }
+    redirectWithError(errorPath, "forbidden");
+  }
 }
 
 function getStringList(formData: FormData, name: string) {
@@ -795,12 +810,13 @@ export async function deletePoptavkaFotkaAction(formData: FormData) {
 export async function submitKlientPoptavkaAction(formData: FormData) {
   formData = stripFilesFromFormData(formData);
   const supabase = await createClient();
-  const session = await requireActiveClientPortalSession(supabase);
 
   const existingPoptavkaId = String(formData.get("poptavka_id") ?? "").trim() || undefined;
   const errorPath = existingPoptavkaId
     ? `/portal/poptavka/${existingPoptavkaId}`
     : "/portal/poptavka/nova";
+
+  const session = await requireVerifiedClientPortalSessionForSubmit(supabase, errorPath);
 
   const wizardKrok = readWizardKrok(formData);
   const submitStartedAt = Date.now();
@@ -910,12 +926,16 @@ export async function submitKlientPoptavkaAction(formData: FormData) {
 
 export async function submitPoptavkaAction(formData: FormData) {
   const supabase = await createClient();
-  await requireActiveClientPortalSession(supabase);
 
   const poptavkaId = String(formData.get("poptavka_id") ?? "").trim();
   if (!poptavkaId) {
     redirectWithError("/portal/poptavky", "missing_id");
   }
+
+  await requireVerifiedClientPortalSessionForSubmit(
+    supabase,
+    `/portal/poptavka/${poptavkaId}`
+  );
 
   let detail;
   try {
@@ -930,12 +950,13 @@ export async function submitPoptavkaAction(formData: FormData) {
 export async function orderTechnikVyjezdAndSubmitPoptavkaAction(formData: FormData) {
   formData = stripFilesFromFormData(formData);
   const supabase = await createClient();
-  const session = await requireActiveClientPortalSession(supabase);
 
   const existingPoptavkaId = String(formData.get("poptavka_id") ?? "").trim() || undefined;
   const errorPath = existingPoptavkaId
     ? `/portal/poptavka/${existingPoptavkaId}`
     : "/portal/poptavka/nova";
+
+  const session = await requireVerifiedClientPortalSessionForSubmit(supabase, errorPath);
 
   const wizardStep = Number(String(formData.get("wizard_step") ?? "0"));
   if (wizardStep < 4) {

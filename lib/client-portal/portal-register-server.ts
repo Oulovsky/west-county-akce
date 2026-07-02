@@ -2,7 +2,12 @@ import "server-only";
 
 import type { AuthError } from "@supabase/supabase-js";
 import type { AresSubject } from "@/lib/ares/klient-ares";
+import { isEmailNotConfirmedAuthError, portalAuthUserCreateParams } from "@/lib/auth/client-email-verification";
 import { activateClientPortalRegistration } from "@/lib/client-portal/register-client-server";
+import {
+  markClientEmailConfirmationSent,
+  sendClientEmailConfirmation,
+} from "@/lib/client-portal/portal-email-confirmation-server";
 import {
   buildClientRegistrationSnapshot,
   type ClientRegistrationSnapshot,
@@ -22,7 +27,8 @@ export type PortalRegisterErrorCode =
   | "sign_up_failed"
   | "email_provider_disabled"
   | "invalid_ico"
-  | "already_signed_in";
+  | "already_signed_in"
+  | "confirmation_email_failed";
 
 export type PortalRegisterInput = {
   email: string;
@@ -126,7 +132,10 @@ async function cleanupAuthUser(userId: string) {
   }
 }
 
-async function createConfirmedAuthUser(
+/** Parametry pro Supabase Admin createUser při registraci klienta. */
+export { portalAuthUserCreateParams } from "@/lib/auth/client-email-verification";
+
+async function createUnverifiedAuthUser(
   email: string,
   password: string
 ): Promise<
@@ -147,11 +156,9 @@ async function createConfirmedAuthUser(
     return { ok: false, code: "env_missing" };
   }
 
-  const { data, error } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  });
+  const { data, error } = await admin.auth.admin.createUser(
+    portalAuthUserCreateParams(email, password)
+  );
 
   if (error || !data.user?.id) {
     const code = mapAuthErrorToCode(error);
@@ -169,7 +176,7 @@ async function createConfirmedAuthUser(
     };
   }
 
-  logPortalRegister("[portal-register] auth user created", {
+  logPortalRegister("[portal-register] auth user created (unverified)", {
     userId: data.user.id,
     email,
   });
@@ -180,11 +187,21 @@ async function createConfirmedAuthUser(
 async function signInRegisteredUser(
   email: string,
   password: string
-): Promise<{ ok: true } | { ok: false; code: PortalRegisterErrorCode }> {
+): Promise<
+  | { ok: true }
+  | { ok: false; code: PortalRegisterErrorCode; emailNotConfirmed?: boolean }
+> {
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
+    if (isEmailNotConfirmedAuthError(error)) {
+      logPortalRegister("[portal-register] auth sign-in blocked until email confirmed", {
+        email,
+      });
+      return { ok: false, code: "auth_failed", emailNotConfirmed: true };
+    }
+
     const code = isEmailProviderDisabledError(error)
       ? "email_provider_disabled"
       : "auth_failed";
@@ -232,7 +249,14 @@ export function validatePortalRegisterInput(
 export async function registerClientPortalAccount(
   input: PortalRegisterInput
 ): Promise<
-  | { ok: true; userId: string; klientId: string; email: string }
+  | {
+      ok: true;
+      userId: string;
+      klientId: string;
+      email: string;
+      needsEmailConfirmation: true;
+      signedIn: boolean;
+    }
   | { ok: false; code: PortalRegisterErrorCode }
 > {
   logPortalRegister("[portal-register] start", {
@@ -270,19 +294,13 @@ export async function registerClientPortalAccount(
       email: input.email,
     });
   } else {
-    const authResult = await createConfirmedAuthUser(input.email, input.password);
+    const authResult = await createUnverifiedAuthUser(input.email, input.password);
     if (!authResult.ok) {
       return { ok: false, code: authResult.code };
     }
 
     userId = authResult.userId;
     createdAuthUser = true;
-
-    const signedIn = await signInRegisteredUser(input.email, input.password);
-    if (!signedIn.ok) {
-      await cleanupAuthUser(userId);
-      return { ok: false, code: signedIn.code };
-    }
   }
 
   const snapshot: ClientRegistrationSnapshot = buildClientRegistrationSnapshot({
@@ -307,21 +325,16 @@ export async function registerClientPortalAccount(
     ico: input.ico,
   });
 
+  let klientId: string;
+
   try {
-    const { klientId } = await activateClientPortalRegistration({
+    const activation = await activateClientPortalRegistration({
       userId,
       snapshot,
       ico: input.ico,
       nazev: input.nazev,
     });
-
-    logPortalRegister("[portal-register] success", {
-      userId,
-      klientId,
-      email: input.email,
-    });
-
-    return { ok: true, userId, klientId, email: input.email };
+    klientId = activation.klientId;
   } catch (error) {
     const err = error as {
       message?: string;
@@ -347,4 +360,60 @@ export async function registerClientPortalAccount(
 
     return { ok: false, code: "client_create_failed" };
   }
+
+  const confirmation = await sendClientEmailConfirmation({
+    email: input.email,
+    password: createdAuthUser ? input.password : undefined,
+    logContext: "portal_register",
+  });
+
+  if (!confirmation.ok) {
+    logPortalRegister("[portal-register] confirmation email failed", {
+      userId,
+      email: input.email,
+      code: confirmation.code,
+    });
+
+    if (createdAuthUser) {
+      await cleanupAuthUser(userId);
+    } else {
+      await supabase.auth.signOut();
+    }
+
+    return { ok: false, code: "confirmation_email_failed" };
+  }
+
+  if (confirmation.sent) {
+    await markClientEmailConfirmationSent(userId);
+  }
+
+  let signedIn = false;
+
+  if (createdAuthUser) {
+    const signedInResult = await signInRegisteredUser(input.email, input.password);
+    if (signedInResult.ok) {
+      signedIn = true;
+    } else if (!signedInResult.emailNotConfirmed) {
+      await cleanupAuthUser(userId);
+      return { ok: false, code: signedInResult.code };
+    }
+  } else {
+    signedIn = true;
+  }
+
+  logPortalRegister("[portal-register] success (awaiting email confirmation)", {
+    userId,
+    klientId,
+    email: input.email,
+    signedIn,
+  });
+
+  return {
+    ok: true,
+    userId,
+    klientId,
+    email: input.email,
+    needsEmailConfirmation: true,
+    signedIn,
+  };
 }

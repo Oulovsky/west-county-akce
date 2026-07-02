@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import PoptavkaFotkyClient from "@/components/portal/PoptavkaFotkyClient";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
+import { guardVerifiedClientPortalPage } from "@/lib/auth/client-portal-route-guard";
 import { SETUP_OBLAST_LABELS } from "@/lib/client-portal/labels";
 import {
   formatPoptavkaTime,
@@ -40,9 +41,7 @@ export default async function PortalZakazkaDetailPage({
   const supabase = await createClient();
   const session = await loadClientPortalSession(supabase);
 
-  if (session.kind !== "active") {
-    redirect(`/portal/prihlaseni?next=/portal/zakazky/${id}`);
-  }
+  guardVerifiedClientPortalPage(session, `/portal/zakazky/${id}`);
 
   const detail = await loadClientZakazkaDetail(supabase, id);
   if (!detail) {

@@ -91,6 +91,10 @@ export default async function PortalPage({
     );
   }
 
+  if (session.kind === "email_unverified") {
+    redirect("/portal/potvrzeni-emailu");
+  }
+
   if (session.kind !== "active") {
     redirect("/portal/prihlaseni");
   }

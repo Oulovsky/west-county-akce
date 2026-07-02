@@ -1,6 +1,8 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isClientEmailVerified } from "@/lib/auth/client-email-verification";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   splitClientPoptavkaCounts,
   type ClientPoptavkaCounts,
@@ -69,6 +71,9 @@ export type KlientDetailData = {
   account_stav: KlientAccountStavLabel;
   registered_at: string | null;
   jednatel: string | null;
+  portal_auth_email: string | null;
+  email_verified: boolean;
+  email_verified_at: string | null;
 };
 
 function formatAdresa(row: {
@@ -150,6 +155,38 @@ function resolveJednatel(
   }
 
   return null;
+}
+
+async function loadPortalAuthEmailMeta(userId: string | null): Promise<{
+  portal_auth_email: string | null;
+  email_verified: boolean;
+  email_verified_at: string | null;
+}> {
+  if (!userId) {
+    return {
+      portal_auth_email: null,
+      email_verified: false,
+      email_verified_at: null,
+    };
+  }
+
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin.auth.admin.getUserById(userId);
+    const user = data.user;
+
+    return {
+      portal_auth_email: user?.email ?? null,
+      email_verified: isClientEmailVerified(user),
+      email_verified_at: user?.email_confirmed_at ?? null,
+    };
+  } catch {
+    return {
+      portal_auth_email: null,
+      email_verified: false,
+      email_verified_at: null,
+    };
+  }
 }
 
 async function loadPortalKlientIds(supabase: SupabaseClient) {
@@ -296,7 +333,7 @@ export async function loadInternalKlientDetail(
   ] = await Promise.all([
     supabase
       .from("client_accounts")
-      .select("klient_id, stav, created_at, jmeno, prijmeni, role")
+      .select("klient_id, stav, created_at, jmeno, prijmeni, role, user_id")
       .eq("klient_id", klientId),
     supabase
       .from("client_registrations")
@@ -326,6 +363,12 @@ export async function loadInternalKlientDetail(
     stav: row.stav as string,
   }));
 
+  const ownerAccount =
+    (accountsRaw ?? []).find((row) => row.role === "owner") ?? accountsRaw?.[0];
+  const authMeta = await loadPortalAuthEmailMeta(
+    (ownerAccount?.user_id as string | undefined) ?? null
+  );
+
   return {
     klient: klient as KlientDetailData["klient"],
     poptavky: (poptavkyRaw ?? []) as KlientDetailData["poptavky"],
@@ -348,5 +391,6 @@ export async function loadInternalKlientDetail(
         ares_snapshot: row.ares_snapshot,
       }))
     ),
+    ...authMeta,
   };
 }

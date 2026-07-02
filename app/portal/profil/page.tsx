@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
+import { guardVerifiedClientPortalPage } from "@/lib/auth/client-portal-route-guard";
 import { createClient } from "@/lib/supabase/server";
 import { portalSignOutAction, portalUpdateProfilAction } from "../actions";
 
@@ -14,9 +15,7 @@ export default async function PortalProfilPage({
   const session = await loadClientPortalSession(supabase);
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
 
-  if (session.kind !== "active") {
-    redirect("/portal/prihlaseni?next=/portal/profil");
-  }
+  guardVerifiedClientPortalPage(session, "/portal/profil");
 
   const { data: klient } = await supabase
     .from("klienti")

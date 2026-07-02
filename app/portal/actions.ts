@@ -5,8 +5,18 @@ import { redirect } from "next/navigation";
 import { normalizeIco } from "@/lib/ares/klient-ares";
 import type { AresSubject } from "@/lib/ares/klient-ares";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
+import {
+  isEmailNotConfirmedAuthError,
+  secondsUntilEmailConfirmationResend,
+} from "@/lib/auth/client-email-verification";
 import { mapPortalSignInErrorCode } from "@/lib/auth/portal-auth-errors";
 import { buildPortalPasswordResetRedirectUrl } from "@/lib/auth/portal-password-reset";
+import {
+  loadClientAccountMetaByEmail,
+  markClientEmailConfirmationSent,
+  sendClientEmailConfirmation,
+} from "@/lib/client-portal/portal-email-confirmation-server";
+import { updateUnverifiedClientEmail } from "@/lib/client-portal/portal-email-change-server";
 import { registerClientPortalAccount } from "@/lib/client-portal/portal-register-server";
 import { splitContactName } from "@/lib/client-portal/registration-snapshot";
 import { createClient } from "@/lib/supabase/server";
@@ -15,11 +25,13 @@ function revalidatePortalPaths() {
   revalidatePath("/portal");
   revalidatePath("/portal/prihlaseni");
   revalidatePath("/portal/registrace");
+  revalidatePath("/portal/potvrzeni-emailu");
   revalidatePath("/portal/zapomenute-heslo");
   revalidatePath("/portal/nove-heslo");
   revalidatePath("/portal/profil");
   revalidatePath("/portal/poptavky");
   revalidatePath("/admin/client-registrace");
+  revalidatePath("/admin/klienti");
 }
 
 export async function portalSignInAction(formData: FormData) {
@@ -41,6 +53,11 @@ export async function portalSignInAction(formData: FormData) {
       code: error.code,
       message: error.message,
     });
+
+    if (isEmailNotConfirmedAuthError(error)) {
+      redirect(`/portal/potvrzeni-emailu?email=${encodeURIComponent(email)}&error=email_not_confirmed`);
+    }
+
     redirect(
       `/portal/prihlaseni?error=${encodeURIComponent(mapPortalSignInErrorCode(error))}`
     );
@@ -48,6 +65,10 @@ export async function portalSignInAction(formData: FormData) {
 
   const session = await loadClientPortalSession(supabase);
   revalidatePortalPaths();
+
+  if (session.kind === "email_unverified") {
+    redirect("/portal/potvrzeni-emailu");
+  }
 
   if (session.kind === "active") {
     redirect(next.startsWith("/portal") ? next : "/portal");
@@ -120,12 +141,105 @@ export async function portalRegisterAction(formData: FormData) {
   }
 
   revalidatePortalPaths();
-  redirect("/portal?registered=1");
+  redirect(
+    `/portal/potvrzeni-emailu?email=${encodeURIComponent(result.email)}&registered=1`
+  );
+}
+
+export async function portalResendEmailConfirmationAction(formData: FormData) {
+  const supabase = await createClient();
+  const session = await loadClientPortalSession(supabase);
+  const formEmail = String(formData.get("email") ?? "").trim().toLowerCase();
+
+  let email = formEmail;
+  let userId: string | null = null;
+  let lastSentAt: string | null = null;
+  let password: string | undefined;
+
+  if (session.kind === "email_unverified") {
+    email = session.email;
+    userId = session.account.user_id;
+    lastSentAt = session.emailConfirmationLastSentAt;
+  } else if (email) {
+    const accountMeta = await loadClientAccountMetaByEmail(email);
+    if (accountMeta) {
+      userId = accountMeta.userId;
+      lastSentAt = accountMeta.lastSentAt;
+    }
+  } else {
+    redirect("/portal/potvrzeni-emailu?error=missing_email");
+  }
+
+  const waitSeconds = secondsUntilEmailConfirmationResend(lastSentAt);
+  if (waitSeconds > 0) {
+    redirect(
+      `/portal/potvrzeni-emailu?email=${encodeURIComponent(email)}&error=rate_limited&wait=${waitSeconds}`
+    );
+  }
+
+  const result = await sendClientEmailConfirmation({
+    email,
+    password,
+    lastSentAt,
+    logContext: "portal_resend_confirmation",
+  });
+
+  if (!result.ok) {
+    redirect(
+      `/portal/potvrzeni-emailu?email=${encodeURIComponent(email)}&error=resend_failed`
+    );
+  }
+
+  if (result.sent && userId) {
+    await markClientEmailConfirmationSent(userId);
+  }
+
+  revalidatePortalPaths();
+  redirect(
+    `/portal/potvrzeni-emailu?email=${encodeURIComponent(email)}&status=resent`
+  );
+}
+
+export async function portalChangeUnverifiedEmailAction(formData: FormData) {
+  const newEmail = String(formData.get("new_email") ?? "").trim().toLowerCase();
+  const password = String(formData.get("password") ?? "");
+
+  const supabase = await createClient();
+  const session = await loadClientPortalSession(supabase);
+
+  if (session.kind !== "email_unverified") {
+    redirect("/portal/prihlaseni?error=auth_required");
+  }
+
+  if (!newEmail || !password) {
+    redirect("/portal/potvrzeni-emailu?error=missing_fields");
+  }
+
+  const result = await updateUnverifiedClientEmail({
+    userId: session.account.user_id,
+    klientId: session.account.klient_id!,
+    currentEmail: session.email,
+    newEmail,
+    password,
+  });
+
+  if (!result.ok) {
+    redirect(`/portal/potvrzeni-emailu?error=${encodeURIComponent(result.code)}`);
+  }
+
+  revalidatePortalPaths();
+  redirect(
+    `/portal/potvrzeni-emailu?email=${encodeURIComponent(result.email)}&status=email_changed`
+  );
 }
 
 export async function portalUpdateProfilAction(formData: FormData) {
   const supabase = await createClient();
   const session = await loadClientPortalSession(supabase);
+
+  if (session.kind === "email_unverified") {
+    redirect("/portal/potvrzeni-emailu");
+  }
 
   if (session.kind !== "active") {
     redirect("/portal/prihlaseni");

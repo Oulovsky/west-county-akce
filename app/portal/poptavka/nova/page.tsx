@@ -1,6 +1,6 @@
-import { redirect } from "next/navigation";
 import PoptavkaFormClient from "@/components/portal/PoptavkaFormClient";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
+import { guardVerifiedClientPortalPage } from "@/lib/auth/client-portal-route-guard";
 import type { PoptavkaPrefill } from "@/lib/client-portal/poptavka-form";
 import { loadClientMistaKonaniForPortal, loadClientMistaKnowHowByIdForPortal } from "@/lib/client-portal/client-mista-server";
 import { loadClientPreviousTechnikaProfileOptionsForPortal } from "@/lib/client-portal/client-previous-technika-profiles-server";
@@ -52,9 +52,7 @@ export default async function PortalNovaPoptavkaPage({
   const session = await loadClientPortalSession(supabase);
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
 
-  if (session.kind !== "active") {
-    redirect("/portal/prihlaseni?next=/portal/poptavka/nova");
-  }
+  guardVerifiedClientPortalPage(session, "/portal/poptavka/nova");
 
   const [
     prefill,

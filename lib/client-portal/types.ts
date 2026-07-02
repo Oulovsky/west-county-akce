@@ -139,6 +139,7 @@ export type ClientAccount = {
   telefon: string | null;
   schvalil_user_id: string | null;
   schvaleno_at: string | null;
+  email_confirmation_last_sent_at?: string | null;
   created_at: string;
   updated_at: string;
 };

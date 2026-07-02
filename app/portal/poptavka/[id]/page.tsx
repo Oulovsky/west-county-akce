@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import PoptavkaFormClient from "@/components/portal/PoptavkaFormClient";
 import { PortalCard, PortalShell } from "@/components/portal/PortalShell";
 import { loadClientPortalSession } from "@/lib/auth/client-portal-access-server";
+import { guardVerifiedClientPortalPage } from "@/lib/auth/client-portal-route-guard";
 import { CLIENT_POPTAVKA_STAV_LABELS, SETUP_OBLAST_LABELS } from "@/lib/client-portal/labels";
 import {
   formatPoptavkaDateRange,
@@ -108,9 +109,7 @@ export default async function PortalPoptavkaDetailPage({
   const supabase = await createClient();
   const session = await loadClientPortalSession(supabase);
 
-  if (session.kind !== "active") {
-    redirect(`/portal/prihlaseni?next=/portal/poptavka/${id}`);
-  }
+  guardVerifiedClientPortalPage(session, `/portal/poptavka/${id}`);
 
   const detail = await loadPoptavkaDetail(supabase, id, { logTiming: true });
   if (!detail) {
