@@ -5,8 +5,8 @@ import PoptavkaFotkaImage from "@/components/portal/PoptavkaFotkaImage";
 import {
   POPTAVKA_FOTKY_ACCEPT,
   POPTAVKA_FOTKA_TYP_LABELS,
-  validatePoptavkaPhotoFile,
 } from "@/lib/client-portal/poptavka-fotky-shared";
+import { preparePhotoFileForUpload } from "@/lib/photos/prepare-photo-upload-client";
 import {
   PHOTO_TECHNICAL_CAPTURE_HINT,
   PHOTO_UPLOAD_INFO_TEXT,
@@ -46,32 +46,41 @@ export default function PoptavkaTechnikaSectionPhoto({
   const captureInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
 
-  function addFiles(files: FileList | null) {
+  async function addFiles(files: FileList | null) {
     if (!files || readOnly) return;
     setError(null);
+    setProcessing(true);
 
     const nextPending = [...state.pending];
     const added: PendingPhoto[] = [];
-    for (const file of Array.from(files)) {
-      const validation = validatePoptavkaPhotoFile(file);
-      if (!validation.ok) {
-        setError(validation.message);
-        continue;
-      }
-      const photo: PendingPhoto = {
-        id: `${sectionKey}-${file.name}-${file.size}-${crypto.randomUUID()}`,
-        file,
-        previewUrl: URL.createObjectURL(file),
-        status: "pending",
-      };
-      nextPending.push(photo);
-      added.push(photo);
-    }
 
-    if (added.length > 0) {
-      onPendingChange({ ...state, pending: nextPending });
-      onPendingPhotosAdded?.(added);
+    try {
+      for (const file of Array.from(files)) {
+        const prepared = await preparePhotoFileForUpload(file);
+        if (!prepared.ok) {
+          setError(prepared.message);
+          continue;
+        }
+
+        const fileToUse = prepared.file;
+        const photo: PendingPhoto = {
+          id: `${sectionKey}-${fileToUse.name}-${fileToUse.size}-${crypto.randomUUID()}`,
+          file: fileToUse,
+          previewUrl: URL.createObjectURL(fileToUse),
+          status: "pending",
+        };
+        nextPending.push(photo);
+        added.push(photo);
+      }
+
+      if (added.length > 0) {
+        onPendingChange({ ...state, pending: nextPending });
+        onPendingPhotosAdded?.(added);
+      }
+    } finally {
+      setProcessing(false);
     }
   }
 
@@ -108,10 +117,20 @@ export default function PoptavkaTechnikaSectionPhoto({
       ) : null}
       {!readOnly ? (
         <div className="flex flex-wrap gap-2">
-          <button type="button" className={actionButtonClass} onClick={() => captureInputRef.current?.click()}>
+          <button
+            type="button"
+            className={actionButtonClass}
+            disabled={processing}
+            onClick={() => captureInputRef.current?.click()}
+          >
             {captureLabel}
           </button>
-          <button type="button" className={actionButtonClass} onClick={() => uploadInputRef.current?.click()}>
+          <button
+            type="button"
+            className={actionButtonClass}
+            disabled={processing}
+            onClick={() => uploadInputRef.current?.click()}
+          >
             {uploadLabel}
           </button>
           <input
@@ -137,6 +156,10 @@ export default function PoptavkaTechnikaSectionPhoto({
             }}
           />
         </div>
+      ) : null}
+
+      {processing ? (
+        <p className="text-xs text-blue-200/80">Zpracovávám fotku…</p>
       ) : null}
 
       {error ? <p className="text-xs text-red-300">{error}</p> : null}

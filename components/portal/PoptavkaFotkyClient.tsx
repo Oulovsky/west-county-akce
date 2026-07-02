@@ -9,10 +9,10 @@ import {
 import {
   POPTAVKA_FOTKY_ACCEPT,
   POPTAVKA_FOTKA_TYP_LABELS,
-  validatePoptavkaPhotoFile,
 } from "@/lib/client-portal/poptavka-fotky-shared";
-import { PHOTO_UPLOAD_INFO_TEXT } from "@/lib/photos/upload-limits";
 import { appendClientPhotoThumbnailToFormData } from "@/lib/client-portal/poptavka-fotky-thumbnail-client";
+import { PHOTO_UPLOAD_INFO_TEXT } from "@/lib/photos/upload-limits";
+import { preparePhotoFileForUpload } from "@/lib/photos/prepare-photo-upload-client";
 import type { PoptavkaFotkaTyp } from "@/lib/client-portal/types";
 import { POPTAVKA_FOTKA_TYPY } from "@/lib/client-portal/types";
 
@@ -33,7 +33,9 @@ type PendingPhoto = {
 };
 
 const UPLOAD_ERRORS: Record<string, string> = {
-  invalid_type: "Povolené formáty: JPG, PNG, WebP.",
+  invalid_type: "Povolené formáty: JPG, PNG, WebP nebo HEIC (iPhone).",
+  heic_unsupported:
+    "Fotka z iPhonu je ve formátu HEIC. Převeďte ji prosím na JPG, nebo v iPhonu nastavte Fotoaparát → Formáty → Nejkompatibilnější.",
   file_too_large: "Fotka je příliš velká. Maximální velikost jedné fotky je 20 MB.",
   upload_failed: "Nahrání fotek se nezdařilo.",
   no_files: "Vyberte alespoň jednu fotku.",
@@ -54,33 +56,40 @@ export default function PoptavkaFotkyClient({
   const [fotky, setFotky] = useState(initialFotky);
   const [pending, setPending] = useState<PendingPhoto[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const inputClass =
     "w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none ring-amber-500/40 focus:ring-2";
 
-  function addPending(files: FileList | null) {
+  async function addPending(files: FileList | null) {
     if (!files || readOnly) return;
     setError(null);
+    setProcessing(true);
 
     const next: PendingPhoto[] = [];
-    for (const file of Array.from(files)) {
-      const validation = validatePoptavkaPhotoFile(file);
-      if (!validation.ok) {
-        setError(validation.message);
-        continue;
+    try {
+      for (const file of Array.from(files)) {
+        const prepared = await preparePhotoFileForUpload(file);
+        if (!prepared.ok) {
+          setError(prepared.message);
+          continue;
+        }
+        const fileToUse = prepared.file;
+        next.push({
+          id: `${fileToUse.name}-${fileToUse.size}-${crypto.randomUUID()}`,
+          file: fileToUse,
+          previewUrl: URL.createObjectURL(fileToUse),
+          typ: "misto_akce",
+          popis: "",
+        });
       }
-      next.push({
-        id: `${file.name}-${file.size}-${crypto.randomUUID()}`,
-        file,
-        previewUrl: URL.createObjectURL(file),
-        typ: "misto_akce",
-        popis: "",
-      });
-    }
 
-    if (next.length) {
-      setPending((current) => [...current, ...next]);
+      if (next.length) {
+        setPending((current) => [...current, ...next]);
+      }
+    } finally {
+      setProcessing(false);
     }
   }
 

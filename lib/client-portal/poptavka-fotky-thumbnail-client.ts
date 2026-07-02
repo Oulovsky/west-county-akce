@@ -1,9 +1,6 @@
 "use client";
 
-import {
-  computeFitInsideDimensions,
-  preservesAspectRatio,
-} from "@/lib/photos/thumbnail-fit";
+import { decodeImageFileToJpeg } from "@/lib/photos/photo-decode-client";
 
 export const POPTAVKA_FOTKA_THUMBNAIL_MAX_SIDE = 1200;
 export const POPTAVKA_FOTKA_THUMBNAIL_QUALITY = 0.82;
@@ -13,45 +10,28 @@ function thumbnailFileName(originalName: string) {
   return `${base}-thumb.webp`;
 }
 
-/**
- * Vygeneruje WebP náhled v prohlížeči (canvas / createImageBitmap).
- * Režim „fit inside“ — zachová celý obraz a poměr stran, bez ořezu.
- * Při neúspěchu vrátí null — server pak uloží jen originál.
- */
-export async function generateClientPhotoThumbnail(
+async function encodeThumbnailWebP(
   file: File,
-  maxSide = POPTAVKA_FOTKA_THUMBNAIL_MAX_SIDE,
-  quality = POPTAVKA_FOTKA_THUMBNAIL_QUALITY
+  maxSide: number,
+  quality: number
 ): Promise<File | null> {
-  if (typeof window === "undefined" || typeof document === "undefined") {
+  const jpeg = await decodeImageFileToJpeg(file, { maxSide, quality });
+  if (!jpeg || typeof document === "undefined") {
     return null;
   }
 
   try {
-    const bitmap = await createImageBitmap(file);
-    const width = bitmap.width;
-    const height = bitmap.height;
-    if (width <= 0 || height <= 0) {
-      bitmap.close?.();
-      return null;
-    }
-
-    const { width: targetWidth, height: targetHeight } = computeFitInsideDimensions(
-      width,
-      height,
-      maxSide
-    );
-
+    const bitmap = await createImageBitmap(jpeg);
     const canvas = document.createElement("canvas");
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
     const context = canvas.getContext("2d");
     if (!context) {
       bitmap.close?.();
       return null;
     }
 
-    context.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
+    context.drawImage(bitmap, 0, 0);
     bitmap.close?.();
 
     const blob = await new Promise<Blob | null>((resolve) => {
@@ -67,7 +47,22 @@ export async function generateClientPhotoThumbnail(
   }
 }
 
-export { computeFitInsideDimensions, preservesAspectRatio };
+/**
+ * Vygeneruje WebP náhled v prohlížeči.
+ * Režim „fit inside“ — zachová celý obraz a poměr stran, bez ořezu.
+ * HEIC z iPhonu dekóduje přes decodeImageFileToJpeg (Safari) nebo selže tiše.
+ */
+export async function generateClientPhotoThumbnail(
+  file: File,
+  maxSide = POPTAVKA_FOTKA_THUMBNAIL_MAX_SIDE,
+  quality = POPTAVKA_FOTKA_THUMBNAIL_QUALITY
+): Promise<File | null> {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return encodeThumbnailWebP(file, maxSide, quality);
+}
 
 export async function appendClientPhotoThumbnailToFormData(
   formData: FormData,

@@ -30,6 +30,8 @@ export const POPTAVKA_FOTKY_ALLOWED_MIME_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp",
+  "image/heic",
+  "image/heif",
 ] as const;
 
 export const POPTAVKA_FOTKY_ACCEPT = PHOTO_UPLOAD_ACCEPT;

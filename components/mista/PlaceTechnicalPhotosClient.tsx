@@ -3,13 +3,10 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
-  getPhotoExtension,
-  mapStorageUploadErrorMessage,
   PHOTO_UPLOAD_ACCEPT,
   PHOTO_UPLOAD_INFO_TEXT,
-  PHOTO_UPLOAD_SIZE_MESSAGE,
-  validatePhotoUploadFile,
 } from "@/lib/photos/upload-limits";
+import { preparePhotoFileForUpload } from "@/lib/photos/prepare-photo-upload-client";
 import { uploadPlaceTechnicalPhotosAction } from "@/app/actions/place-technical-photos";
 
 export type PlaceTechnicalPhotoGalleryItem = {
@@ -77,6 +74,7 @@ export function PlaceTechnicalPhotoUpload({
 }) {
   const [photos, setPhotos] = useState<SelectedPhoto[]>([]);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [processingPhotos, setProcessingPhotos] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const photosRef = useRef<SelectedPhoto[]>([]);
@@ -98,31 +96,37 @@ export function PlaceTechnicalPhotoUpload({
     [photos]
   );
 
-  function addPhotos(files: FileList | null) {
+  async function addPhotos(files: FileList | null) {
     if (!files) return;
 
     setPhotoError(null);
+    setProcessingPhotos(true);
     const nextPhotos: SelectedPhoto[] = [];
 
-    for (const file of Array.from(files)) {
-      const validation = validatePhotoUploadFile(file);
-      if (!validation.ok) {
-        setPhotoError(validation.message);
-        continue;
+    try {
+      for (const file of Array.from(files)) {
+        const prepared = await preparePhotoFileForUpload(file);
+        if (!prepared.ok) {
+          setPhotoError(prepared.message);
+          continue;
+        }
+
+        const fileToUse = prepared.file;
+        nextPhotos.push({
+          id: `${fileToUse.name}-${fileToUse.size}-${crypto.randomUUID()}`,
+          file: fileToUse,
+          previewUrl: URL.createObjectURL(fileToUse),
+          typ: "rozvadec",
+          popis: "",
+          dulezite: false,
+        });
       }
 
-      nextPhotos.push({
-        id: `${file.name}-${file.size}-${crypto.randomUUID()}`,
-        file,
-        previewUrl: URL.createObjectURL(file),
-        typ: "rozvadec",
-        popis: "",
-        dulezite: false,
-      });
-    }
-
-    if (nextPhotos.length > 0) {
-      setPhotos((current) => [...current, ...nextPhotos]);
+      if (nextPhotos.length > 0) {
+        setPhotos((current) => [...current, ...nextPhotos]);
+      }
+    } finally {
+      setProcessingPhotos(false);
     }
   }
 
