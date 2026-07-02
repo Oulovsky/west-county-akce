@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { verifyInternalKlientiReadPage } from "@/lib/auth/admin-access-server";
 import { loadInternalKlientDetail } from "@/lib/admin/klienti-server";
+import {
+  formatClientPoptavkaCountsSecondary,
+  splitClientPoptavkaCounts,
+} from "@/lib/client-portal/poptavka-inbox-visibility";
 import { createClient } from "@/lib/supabase/server";
 import KlientPoptavkyDiagnosticPanel from "../KlientPoptavkyDiagnosticPanel";
 
@@ -72,6 +76,8 @@ export default async function AdminKlientDetailPage({
         ? "Koncept byl uvolněn do interního inboxu a klientovi odesláno potvrzení."
         : null;
 
+  const poptavkyCounts = splitClientPoptavkaCounts(detail.poptavky);
+
   return (
     <div className="space-y-6 p-6">
       {savedMessage ? (
@@ -119,8 +125,9 @@ export default async function AdminKlientDetailPage({
       <section className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
         <h2 className="text-lg font-semibold text-white">Poptávky</h2>
         <p className="mt-1 text-xs text-slate-500">
-          Počet v seznamu klientů zahrnuje i koncepty. Interní inbox /zakazky/poptavky zobrazuje
-          jen odeslané a další zpracovávané stavy.
+          {poptavkyCounts.total === 0
+            ? "Klient zatím nemá žádné poptávky."
+            : `${poptavkyCounts.total} celkem · ${formatClientPoptavkaCountsSecondary(poptavkyCounts)}. Interní inbox /zakazky/poptavky zobrazuje jen odeslané a zpracovávané stavy (ne koncepty ani legacy).`}
         </p>
         <KlientPoptavkyDiagnosticPanel klientId={id} poptavky={detail.poptavky} />
       </section>

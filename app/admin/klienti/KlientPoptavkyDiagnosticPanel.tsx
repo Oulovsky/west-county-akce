@@ -8,6 +8,7 @@ import {
   canAdminReleaseKonceptToInbox,
   canResendPoptavkaSubmittedConfirmation,
   getPoptavkaInboxVisibility,
+  getPoptavkaVisibilityReason,
 } from "@/lib/client-portal/poptavka-inbox-visibility";
 import type { PoptavkaStav } from "@/lib/client-portal/types";
 
@@ -48,6 +49,7 @@ export default function KlientPoptavkyDiagnosticPanel({
       {poptavky.map((row) => {
         const stav = row.stav as PoptavkaStav;
         const visibility = getPoptavkaInboxVisibility(row.stav, row.odeslano_at);
+        const visibilityReason = getPoptavkaVisibilityReason(row.stav);
         const canResend = canResendPoptavkaSubmittedConfirmation(stav);
         const canRelease = canAdminReleaseKonceptToInbox(stav);
 
@@ -61,8 +63,19 @@ export default function KlientPoptavkyDiagnosticPanel({
                 <div className="font-medium text-white">
                   {row.cislo_poptavky} · {row.misto_nazev ?? "—"}
                 </div>
-                <div className="text-slate-400">
-                  {POPTAVKA_STAV_LABELS[stav] ?? row.stav}
+                <div className="flex flex-wrap items-center gap-2 text-slate-400">
+                  <span>Stav: {POPTAVKA_STAV_LABELS[stav] ?? row.stav}</span>
+                  <span
+                    className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${
+                      visibility.shownInInternalInbox
+                        ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-100"
+                        : "border-amber-500/40 bg-amber-500/10 text-amber-100"
+                    }`}
+                  >
+                    {visibility.shownInInternalInbox
+                      ? "V interním inboxu"
+                      : "Mimo interní inbox"}
+                  </span>
                 </div>
                 <div className="text-xs text-slate-500">
                   Vytvořeno {formatDateTime(row.created_at)} · odesláno{" "}
@@ -75,7 +88,18 @@ export default function KlientPoptavkyDiagnosticPanel({
                       : "border-amber-500/30 bg-amber-950/20 text-amber-100"
                   }`}
                 >
-                  Interní inbox: {visibility.summary}
+                  {visibilityReason}
+                  {visibility.inboxTab === "active" && row.odeslano_at ? (
+                    <span className="text-emerald-200/80">
+                      {" "}
+                      · Odesláno {formatDateTime(row.odeslano_at)}
+                    </span>
+                  ) : null}
+                  {!visibility.shownInInternalInbox ? (
+                    <span className="block text-amber-200/70">
+                      V /zakazky/poptavky se nezobrazuje.
+                    </span>
+                  ) : null}
                 </div>
               </div>
               <div className="flex flex-col gap-2">

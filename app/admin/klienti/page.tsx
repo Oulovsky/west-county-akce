@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { verifyInternalKlientiReadPage } from "@/lib/auth/admin-access-server";
 import { loadInternalKlientiList } from "@/lib/admin/klienti-server";
+import { formatClientPoptavkaCountsSecondary } from "@/lib/client-portal/poptavka-inbox-visibility";
 import { createClient } from "@/lib/supabase/server";
 
 function formatDate(value: string | null) {
@@ -90,7 +91,18 @@ export default async function AdminKlientiPage() {
                     ) : null}
                   </td>
                   <td className="px-4 py-3">{row.accounts_count}</td>
-                  <td className="px-4 py-3">{row.poptavky_count}</td>
+                  <td className="px-4 py-3">
+                    {row.poptavky_counts.total === 0 ? (
+                      "0"
+                    ) : (
+                      <div>
+                        <div>{row.poptavky_counts.total} celkem</div>
+                        <div className="text-xs text-slate-500">
+                          {formatClientPoptavkaCountsSecondary(row.poptavky_counts)}
+                        </div>
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3">{row.zakazky_count}</td>
                   <td className="px-4 py-3">
                     <span

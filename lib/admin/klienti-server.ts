@@ -1,6 +1,10 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  splitClientPoptavkaCounts,
+  type ClientPoptavkaCounts,
+} from "@/lib/client-portal/poptavka-inbox-visibility";
 import { parseClientRegistrationSnapshot } from "@/lib/client-portal/registration-snapshot";
 
 export type KlientAccountStavLabel =
@@ -18,7 +22,7 @@ export type KlientListRow = {
   telefon: string | null;
   adresa: string | null;
   accounts_count: number;
-  poptavky_count: number;
+  poptavky_counts: ClientPoptavkaCounts;
   zakazky_count: number;
   account_stav: KlientAccountStavLabel;
   registered_at: string | null;
@@ -187,7 +191,7 @@ export async function loadInternalKlientiList(
       .from("client_accounts")
       .select("klient_id, stav, created_at, user_id")
       .in("klient_id", klientIds),
-    supabase.from("poptavky").select("klient_id").in("klient_id", klientIds),
+    supabase.from("poptavky").select("klient_id, stav").in("klient_id", klientIds),
     supabase.from("zakazky").select("klient_id").in("klient_id", klientIds),
     supabase
       .from("client_registrations")
@@ -216,7 +220,15 @@ export async function loadInternalKlientiList(
     return map;
   };
 
-  const poptavkyCount = countByKlient(poptavkyRaw);
+  const poptavkyByKlient = new Map<string, Array<{ stav: string }>>();
+  for (const row of poptavkyRaw ?? []) {
+    if (!row.klient_id) continue;
+    const klientId = row.klient_id as string;
+    const list = poptavkyByKlient.get(klientId) ?? [];
+    list.push({ stav: row.stav as string });
+    poptavkyByKlient.set(klientId, list);
+  }
+
   const zakazkyCount = countByKlient(zakazkyRaw);
 
   const registeredAtByKlient = new Map<string, string>();
@@ -244,7 +256,7 @@ export async function loadInternalKlientiList(
       telefon: row.telefon as string | null,
       adresa: formatAdresa(row),
       accounts_count: accounts.length,
-      poptavky_count: poptavkyCount.get(klientId) ?? 0,
+      poptavky_counts: splitClientPoptavkaCounts(poptavkyByKlient.get(klientId) ?? []),
       zakazky_count: zakazkyCount.get(klientId) ?? 0,
       account_stav: resolveAccountStav(accounts),
       registered_at: registeredAtByKlient.get(klientId) ?? null,
